@@ -9,17 +9,14 @@
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbwy8WQIb-WYK-FDq2CKcjvJ8BSkEk8Ew0K-b0s05qoyi9Q7-quaatgI9L_vkU7W3Xd93g/exec';
 
 /**
- * GASにPOSTリクエストを送る
+ * GASにGETリクエストを送る（CORS回避のためクエリパラメータで送信）
  * @param {string} action
  * @param {Object} data
  * @returns {Promise<Object>}
  */
 async function callGAS(action, data = {}) {
-  const res = await fetch(GAS_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action, data })
-  });
+  const params = new URLSearchParams({ action, data: JSON.stringify(data) });
+  const res = await fetch(`${GAS_URL}?${params}`, { method: 'GET' });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return await res.json();
 }
