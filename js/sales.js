@@ -242,7 +242,7 @@ async function handleSubmit() {
 
     setSubmitLoading(false);
     showToast('売上を登録しました ✓', 'success');
-    setTimeout(() => history.back(), 1200);
+    setTimeout(() => navigate('index.html'), 1200);
 
   } catch (e) {
     setSubmitLoading(false);
