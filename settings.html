@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#1a1a2e">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>設定 — ウルトラ財務くん</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/forms.css">
+  <link rel="stylesheet" href="css/pages.css">
+</head>
+<body>
+
+<div class="page-wrapper">
+
+  <!-- ページヘッダー -->
+  <header class="settings-header">
+    <span class="settings-header__title">設定</span>
+  </header>
+
+  <!-- スクロール本体 -->
+  <div style="padding-bottom:calc(var(--nav-height) + env(safe-area-inset-bottom) + 16px);">
+
+    <!-- ① 店舗情報 -->
+    <section class="settings-section" aria-labelledby="sec-store">
+      <div class="settings-section__title" id="sec-store">店舗情報</div>
+      <div class="settings-row">
+        <div class="settings-row__label">
+          <div>店舗名</div>
+          <div class="settings-row__sub">ホーム画面に表示されます</div>
+        </div>
+      </div>
+      <div style="padding:0 16px 14px; display:flex; gap:8px;">
+        <input type="text"
+               id="store-name-input"
+               class="settings-input"
+               placeholder="例：スナック LEO"
+               maxlength="30"
+               autocomplete="off"
+               aria-label="店舗名">
+        <button id="store-name-save"
+                class="settings-save-btn"
+                type="button">保存</button>
+      </div>
+    </section>
+
+    <!-- ② スタッフ管理 -->
+    <section class="settings-section" aria-labelledby="sec-staff">
+      <div class="settings-section__title" id="sec-staff">スタッフ管理</div>
+
+      <!-- スタッフ一覧 -->
+      <div id="staff-list-container" role="list" aria-label="登録スタッフ一覧">
+        <!-- settings.js が描画 -->
+      </div>
+
+      <!-- スタッフ追加 -->
+      <div class="staff-add-row">
+        <input type="text"
+               id="staff-add-input"
+               class="staff-add-input"
+               placeholder="名前を入力して追加"
+               maxlength="20"
+               autocomplete="off"
+               aria-label="追加するスタッフ名">
+        <button id="staff-add-btn"
+                class="staff-add-btn"
+                type="button">追加</button>
+      </div>
+    </section>
+
+    <!-- ③ サービスマスタ -->
+    <section class="settings-section" aria-labelledby="sec-service">
+      <div class="settings-section__title" id="sec-service">サービスマスタ（売上区分）</div>
+
+      <!-- サービス一覧 -->
+      <div id="service-list-container" role="list" aria-label="登録サービス一覧">
+        <!-- settings.js が描画 -->
+      </div>
+
+      <!-- 上限到達メッセージ -->
+      <p id="service-limit-hint"
+         hidden
+         style="padding:10px 16px 4px;font-size:12px;color:var(--uz-muted);">
+        最大3種まで登録済みです。削除してから追加してください。
+      </p>
+
+      <!-- サービス追加フォーム -->
+      <div id="service-add-row" class="staff-add-row" style="align-items:center;flex-wrap:wrap;gap:8px;">
+        <input type="text"
+               id="service-add-name"
+               class="staff-add-input"
+               style="flex:2;min-width:120px;"
+               placeholder="サービス名（例：店内売上）"
+               maxlength="20"
+               autocomplete="off"
+               aria-label="追加するサービス名">
+        <select id="service-add-tax"
+                class="form-select"
+                style="flex:1;min-width:80px;height:40px;"
+                aria-label="税率">
+          <option value="10">10%</option>
+          <option value="8">8%（軽減）</option>
+          <option value="0">0%（非課税）</option>
+        </select>
+        <button id="service-add-btn"
+                class="staff-add-btn"
+                type="button">追加</button>
+      </div>
+      <div style="padding:6px 16px 14px;">
+        <p style="font-size:12px;color:var(--uz-muted);line-height:1.6;">
+          事業単位で登録してください（例：店内売上・テイクアウト・ケータリング）。<br>
+          最大3種まで。「諸口」は自動で表示されます。
+        </p>
+      </div>
+    </section>
+
+    <!-- ④ 補助金対応チェック -->
+    <section class="settings-section" aria-labelledby="sec-subsidy">
+      <div class="settings-section__title" id="sec-subsidy">補助金対応状況</div>
+
+      <div class="info-row">
+        <span class="info-row__key">会計機能（損益計算書）</span>
+        <span class="info-row__val" style="color:var(--uz-green);">✓ 対応済み</span>
+      </div>
+      <div class="info-row">
+        <span class="info-row__key">受発注機能（売上・コスト管理）</span>
+        <span class="info-row__val" style="color:var(--uz-green);">✓ 対応済み</span>
+      </div>
+      <div class="info-row">
+        <span class="info-row__key">インボイス対応（税率記録）</span>
+        <span class="info-row__val" style="color:var(--uz-green);">✓ 対応済み</span>
+      </div>
+      <div style="padding:10px 16px 14px;">
+        <p style="font-size:12px;color:var(--uz-muted);line-height:1.6;">
+          デジタル化・AI導入補助金2026 インボイス枠のITツール登録要件を満たしています。
+        </p>
+      </div>
+    </section>
+
+    <!-- ④ GAS接続情報 -->
+    <section class="settings-section" aria-labelledby="sec-gas">
+      <div class="settings-section__title" id="sec-gas">GAS接続情報</div>
+      <div class="info-row">
+        <span class="info-row__key">接続状態</span>
+        <span class="info-row__val" style="color:var(--uz-muted);">未接続（ダミーデータ）</span>
+      </div>
+      <div class="info-row" style="flex-direction:column;align-items:flex-start;gap:4px;">
+        <span class="info-row__key">WebアプリURL</span>
+        <span class="info-row__url"
+              title="GAS WebアプリURL">
+          https://script.google.com/macros/s/AKfycbx...
+        </span>
+      </div>
+      <div style="padding:10px 16px 14px;">
+        <p style="font-size:12px;color:var(--uz-muted);line-height:1.6;">
+          GAS連携テスト完了後、接続を有効化してください。
+        </p>
+      </div>
+    </section>
+
+    <!-- ⑤ アプリ情報 -->
+    <section class="settings-section" aria-labelledby="sec-info">
+      <div class="settings-section__title" id="sec-info">アプリ情報</div>
+      <div class="info-row">
+        <span class="info-row__key">アプリ名</span>
+        <span class="info-row__val">ウルトラ財務くん LEO版</span>
+      </div>
+      <div class="info-row">
+        <span class="info-row__key">バージョン</span>
+        <span class="info-row__val">1.0.0</span>
+      </div>
+      <div class="info-row">
+        <span class="info-row__key">対応OS</span>
+        <span class="info-row__val">iOS / Android</span>
+      </div>
+    </section>
+
+    <!-- フッター -->
+    <div class="settings-footer">
+      ウルトラ財務くん LEO版<br>
+      © 2026 株式会社ターゲット<br>
+      <span style="font-size:10px;">AI提案の自動確定は行いません。すべての操作はユーザーが確定してください。</span>
+    </div>
+
+  </div><!-- /scroll body -->
+
+</div><!-- /page-wrapper -->
+
+<!-- ボトムナビゲーション -->
+<nav class="bottom-nav" aria-label="メインナビゲーション">
+
+  <a href="index.html" class="nav-item">
+    <span class="nav-item__icon" aria-hidden="true">🏠</span>
+    <span class="nav-item__label">ホーム</span>
+  </a>
+
+  <a href="pl.html" class="nav-item">
+    <span class="nav-item__icon" aria-hidden="true">📊</span>
+    <span class="nav-item__label">損益</span>
+  </a>
+
+  <a href="history.html" class="nav-item">
+    <span class="nav-item__icon" aria-hidden="true">📝</span>
+    <span class="nav-item__label">入力履歴</span>
+  </a>
+
+  <a href="settings.html" class="nav-item nav-item--active" aria-current="page">
+    <span class="nav-item__icon" aria-hidden="true">⚙️</span>
+    <span class="nav-item__label">設定</span>
+  </a>
+
+</nav>
+
+<!-- ローディングオーバーレイ -->
+<div id="loading-overlay" class="loading-overlay" aria-hidden="true">
+  <div class="spinner"></div>
+</div>
+
+<!-- AIフック（フェーズ3用・削除禁止） -->
+<div id="receipt-capture-area" style="display:none"></div>
+<div id="csv-import-area"      style="display:none"></div>
+<div id="ai-suggestion-area"   style="display:none"></div>
+
+<script src="js/app.js"></script>
+<script src="js/settings.js"></script>
+</body>
+</html>

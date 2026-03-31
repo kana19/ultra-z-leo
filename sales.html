@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#1a1a2e">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>売上入力 — ウルトラ財務くん</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/forms.css">
+</head>
+<body>
+
+<div class="page-wrapper">
+
+  <!-- サブページヘッダー -->
+  <header class="sub-header">
+    <a href="index.html" class="sub-header__back" aria-label="ホームに戻る">
+      ‹ 戻る
+    </a>
+    <span class="sub-header__title">売上入力</span>
+    <div style="width:60px;"></div><!-- バランス用 -->
+  </header>
+
+  <!-- フォーム本体 -->
+  <div class="form-body">
+
+    <!-- ① 発生日 -->
+    <div class="form-section">
+      <label class="form-section__label" for="date-input">発生日</label>
+      <input type="date"
+             id="date-input"
+             class="date-input"
+             aria-label="発生日">
+    </div>
+
+    <!-- ② サービス選択 -->
+    <div class="form-section">
+      <span class="form-section__label">サービス</span>
+      <div id="service-cards"
+           class="radio-card-group radio-card-group--last-full"
+           role="radiogroup"
+           aria-label="サービス選択">
+        <!-- sales.js が描画 -->
+      </div>
+    </div>
+
+    <!-- ③ 税率 -->
+    <div class="form-section">
+      <span class="form-section__label">税率</span>
+      <div class="tax-toggle" role="group" aria-label="税率選択">
+        <button class="tax-btn" data-rate="0"  type="button" aria-pressed="false"> 0%</button>
+        <button class="tax-btn" data-rate="8"  type="button" aria-pressed="false"> 8%</button>
+        <button class="tax-btn" data-rate="10" type="button" aria-pressed="false">10%</button>
+      </div>
+      <p class="form-hint">サービスのデフォルト税率が自動セットされます。変更は例外時のみ。</p>
+    </div>
+
+    <!-- ④ 金額入力 -->
+    <div class="form-section">
+      <span class="form-section__label">売上入力（税込み）</span>
+
+      <div class="amount-wrap amount-wrap--blue">
+        <span class="amount-prefix" aria-hidden="true">¥</span>
+        <input type="text"
+               id="amount-input"
+               class="amount-input"
+               inputmode="numeric"
+               pattern="[0-9]*"
+               placeholder="0"
+               maxlength="10"
+               autocomplete="off"
+               aria-label="税込金額">
+      </div>
+
+      <!-- 税計算表示 -->
+      <div class="tax-display" aria-live="polite">
+        <div class="tax-display-item">
+          <div class="tax-display-item__label">税抜金額</div>
+          <div id="tax-excluded"
+               class="tax-display-item__value tax-display-item__value--blue">¥—</div>
+        </div>
+        <div class="tax-display-item">
+          <div class="tax-display-item__label">消費税</div>
+          <div id="tax-amount"
+               class="tax-display-item__value tax-display-item__value--blue">¥—</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ⑤ 内訳（諸口品目名・諸口選択時のみ表示） -->
+    <div class="form-section" id="misc-section" hidden>
+      <label class="form-section__label" for="misc-name-input">品目名</label>
+      <input type="text"
+             id="misc-name-input"
+             class="text-input"
+             placeholder="品目名を入力（例：手土産代）"
+             maxlength="50"
+             autocomplete="off">
+      <p class="form-hint">マスタ未登録の品目を記録する場合に入力してください。</p>
+    </div>
+
+    <!-- ⑥ ロイヤル管理 -->
+    <div class="form-section">
+      <div class="toggle-row">
+        <div class="toggle-row__left">
+          <div class="toggle-row__title">ロイヤル管理</div>
+          <div class="toggle-row__desc">特定顧客への売上を記録する</div>
+        </div>
+        <label class="switch" aria-label="ロイヤル管理を使う">
+          <input type="checkbox" id="royal-toggle">
+          <span class="switch-slider"></span>
+        </label>
+      </div>
+
+      <!-- ロイヤル詳細（トグルON時のみ） -->
+      <div id="royal-detail-section" hidden style="margin-top:12px;">
+        <div class="royal-input-row">
+          <select id="royal-customer-select"
+                  class="form-select"
+                  aria-label="顧客選択">
+            <!-- sales.js が描画 -->
+          </select>
+          <div class="royal-amount-wrap">
+            <span class="royal-amount-prefix" aria-hidden="true">¥</span>
+            <input type="text"
+                   id="royal-amount-input"
+                   class="royal-amount-input"
+                   inputmode="numeric"
+                   pattern="[0-9]*"
+                   placeholder="金額"
+                   maxlength="10"
+                   aria-label="ロイヤル金額">
+          </div>
+        </div>
+        <p class="form-hint">売上全体の中でこの顧客に紐づく金額を入力してください。</p>
+      </div>
+    </div>
+
+    <!-- ⑦ 売掛トグル -->
+    <div class="form-section">
+      <div class="toggle-row">
+        <div class="toggle-row__left">
+          <div class="toggle-row__title">売掛</div>
+          <div class="toggle-row__desc">まだ入金されていない場合にON</div>
+        </div>
+        <label class="switch" aria-label="売掛としてマーク">
+          <input type="checkbox" id="uncollected-toggle">
+          <span class="switch-slider"></span>
+        </label>
+      </div>
+    </div>
+
+    <!-- ⑧ メモ -->
+    <div class="form-section">
+      <label class="form-section__label" for="memo-input">メモ（任意）</label>
+      <input type="text"
+             id="memo-input"
+             class="text-input"
+             placeholder="例：3名来店、ボトル持参"
+             maxlength="100"
+             autocomplete="off">
+    </div>
+
+  </div><!-- /form-body -->
+
+</div><!-- /page-wrapper -->
+
+<!-- 登録ボタン（固定） -->
+<div class="submit-bar">
+  <button id="submit-btn" class="submit-btn submit-btn--blue" type="button">
+    登録する
+  </button>
+</div>
+
+<!-- ローディングオーバーレイ -->
+<div id="loading-overlay" class="loading-overlay" aria-hidden="true">
+  <div class="spinner"></div>
+</div>
+
+<!-- AIフック（フェーズ3用・削除禁止） -->
+<div id="receipt-capture-area" style="display:none"></div>
+<div id="csv-import-area"      style="display:none"></div>
+<div id="ai-suggestion-area"   style="display:none"></div>
+
+<script src="js/app.js"></script>
+<script src="js/sales.js"></script>
+</body>
+</html>

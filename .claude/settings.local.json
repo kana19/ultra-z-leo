@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(start \"C:\\\\Users\\\\金光俊明\\\\OneDrive - 株式会社ターゲット\\\\ultrazaimu\\\\ultra_zaimu_pwa\\\\sales.html\")",
+      "Bash(start \"C:\\\\Users\\\\金光俊明\\\\OneDrive - 株式会社ターゲット\\\\ultrazaimu\\\\ultra_zaimu_pwa\\\\cost.html\")",
+      "Bash(start:*)"
+    ]
+  }
+}

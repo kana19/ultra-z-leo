@@ -1,0 +1,553 @@
+/* ============================================================
+   ウルトラ財務くん LEO版 PWA — base.css
+   CSS変数・リセット・共通スタイル
+   カラーコードの直書き禁止。必ず変数経由で参照すること。
+   ============================================================ */
+
+/* ── CSS変数（確定デザイン仕様） ────────────────────────── */
+:root {
+  /* 背景・サーフェス */
+  --uz-bg:       #1a1a2e;
+  --uz-surface:  #222240;
+  --uz-surface2: #2a2a50;
+
+  /* アクセントカラー */
+  --uz-red:      #e63946;
+  --uz-blue:     #4361ee;
+  --uz-green:    #4ade80;
+
+  /* テキスト */
+  --uz-text:     #f0f0f0;
+  --uz-muted:    #8888aa;
+
+  /* ボーダー */
+  --uz-border:   rgba(255, 255, 255, 0.07);
+
+  /* アラートドット縁 */
+  --uz-silver:   #b0b0b0;
+
+  /* 損益カラー */
+  --uz-sales:    #4361ee;   /* 売上 */
+  --uz-cost:     #e63946;   /* コスト */
+  --uz-profit:   #4ade80;   /* 利益（プラス） */
+  --uz-loss:     #e63946;   /* 損失（マイナス） */
+
+  /* 角丸 */
+  --radius-sm:   8px;
+  --radius-md:   12px;
+  --radius-lg:   16px;
+  --radius-xl:   20px;
+
+  /* フォント */
+  --font-main:   'Noto Sans JP', 'Hiragino Kaku Gothic ProN', sans-serif;
+
+  /* タップターゲット */
+  --btn-height:  56px;
+  --btn-height-sm: 44px;
+
+  /* ボトムナビ高さ */
+  --nav-height:  64px;
+}
+
+/* ── リセット ────────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html {
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  font-family: var(--font-main);
+  background-color: var(--uz-bg);
+  color: var(--uz-text);
+  min-height: 100dvh;
+  overscroll-behavior-y: none;
+}
+
+/* ── ページラッパー ──────────────────────────────────────── */
+.page-wrapper {
+  max-width: 430px;
+  margin: 0 auto;
+  min-height: 100dvh;
+  position: relative;
+  padding-bottom: calc(var(--nav-height) + env(safe-area-inset-bottom));
+}
+
+/* ── ヘッダー ────────────────────────────────────────────── */
+.app-header {
+  background: var(--uz-surface);
+  border-bottom: 1px solid var(--uz-border);
+  padding: 12px 16px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.app-header__store {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--uz-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.app-header__datetime {
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.app-header__date {
+  font-size: 12px;
+  color: var(--uz-muted);
+  line-height: 1.2;
+}
+
+.app-header__time {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--uz-text);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+/* ── スクロール領域 ──────────────────────────────────────── */
+.page-body {
+  padding: 16px 16px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ── カード ──────────────────────────────────────────────── */
+.card {
+  background: var(--uz-surface);
+  border: 1px solid var(--uz-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.card__header {
+  padding: 14px 16px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--uz-muted);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--uz-border);
+}
+
+.card__body {
+  padding: 12px 16px 14px;
+}
+
+/* ── 入力ボタン（売上・コスト） ──────────────────────────── */
+.action-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  height: var(--btn-height);
+  padding: 0 20px;
+  border: none;
+  border-radius: var(--radius-md);
+  font-family: var(--font-main);
+  font-size: 17px;
+  font-weight: 700;
+  cursor: pointer;
+  position: relative;
+  transition: filter 0.15s, transform 0.1s;
+  text-decoration: none;
+}
+
+.action-btn:active {
+  filter: brightness(0.85);
+  transform: scale(0.98);
+}
+
+.action-btn--sales {
+  background: var(--uz-blue);
+  color: #fff;
+}
+
+.action-btn--cost {
+  background: var(--uz-red);
+  color: #fff;
+}
+
+.action-btn--neutral {
+  background: var(--uz-surface2);
+  color: var(--uz-text);
+  border: 1px solid var(--uz-border);
+}
+
+.action-btn__icon {
+  font-size: 22px;
+  line-height: 1;
+}
+
+.action-btn__label {
+  flex: 1;
+  text-align: left;
+}
+
+/* アラートドット（ボタン右端） */
+.action-btn__dot {
+  position: absolute;
+  top: 50%;
+  right: 16px;
+  transform: translateY(-50%);
+}
+
+/* ── アラートドット ───────────────────────────────────────── */
+.adot {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+/* 通常：青丸＋シルバー縁 */
+.adot--blue {
+  background: var(--uz-blue);
+  border: 2px solid var(--uz-silver);
+}
+
+/* 緊急：赤点滅（縁は常時・赤fillのみ点滅） */
+.adot--red-blink {
+  background: transparent;
+  border: 2px solid var(--uz-silver);
+  position: relative;
+  overflow: hidden;
+}
+
+.adot--red-blink::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--uz-red);
+  animation: fillblink 1s ease-in-out infinite;
+}
+
+@keyframes fillblink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}
+
+/* ── 入店記録行 ──────────────────────────────────────────── */
+.clockin-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 4px;
+}
+
+.clockin-row .action-btn {
+  flex: 1;
+}
+
+/* ── 勤怠リスト ──────────────────────────────────────────── */
+.staff-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.staff-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--uz-surface);
+  transition: background 0.15s;
+}
+
+.staff-item:first-child {
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+}
+
+.staff-item:last-child {
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+}
+
+.staff-item:only-child {
+  border-radius: var(--radius-md);
+}
+
+.staff-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--uz-green);
+  flex-shrink: 0;
+  box-shadow: 0 0 6px var(--uz-green);
+}
+
+.staff-dot--off {
+  background: var(--uz-muted);
+  box-shadow: none;
+}
+
+.staff-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.staff-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--uz-text);
+}
+
+.staff-time {
+  font-size: 12px;
+  color: var(--uz-muted);
+  margin-top: 2px;
+}
+
+.staff-clockout-btn {
+  height: var(--btn-height-sm);
+  padding: 0 14px;
+  border: 1px solid var(--uz-border);
+  border-radius: var(--radius-sm);
+  background: var(--uz-surface2);
+  color: var(--uz-text);
+  font-family: var(--font-main);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: filter 0.15s;
+}
+
+.staff-clockout-btn:active {
+  filter: brightness(0.85);
+}
+
+.staff-more {
+  padding: 10px 16px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--uz-text);
+  cursor: pointer;
+  opacity: 0.7;
+}
+
+/* ── 損益サマリー ────────────────────────────────────────── */
+.pl-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--uz-border);
+}
+
+.pl-row:last-child {
+  border-bottom: none;
+}
+
+.pl-label {
+  font-size: 14px;
+  color: var(--uz-muted);
+}
+
+.pl-value {
+  font-size: 16px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--uz-text);
+}
+
+.pl-row--result {
+  background: var(--uz-surface2);
+  margin: 0 -16px;
+  padding: 10px 16px;
+}
+
+.pl-row--result .pl-label {
+  color: var(--uz-text);
+  font-weight: 600;
+}
+
+.pl-row--highlight {
+  background: rgba(74, 222, 128, 0.1);
+  margin: 0 -16px;
+  padding: 12px 16px;
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+}
+
+.pl-row--highlight .pl-label {
+  color: var(--uz-green);
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.pl-row--highlight .pl-value {
+  color: var(--uz-green);
+  font-size: 20px;
+}
+
+.pl-value--negative {
+  color: var(--uz-red);
+}
+
+.pl-month-label {
+  font-size: 13px;
+  color: var(--uz-muted);
+  margin-bottom: 12px;
+  text-align: right;
+}
+
+/* ── セクションタイトル ──────────────────────────────────── */
+.section-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--uz-muted);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0 4px;
+  margin-bottom: -4px;
+}
+
+/* ── ボトムナビ ──────────────────────────────────────────── */
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 430px;
+  height: calc(var(--nav-height) + env(safe-area-inset-bottom));
+  padding-bottom: env(safe-area-inset-bottom);
+  background: var(--uz-surface);
+  border-top: 1px solid var(--uz-border);
+  display: flex;
+  align-items: stretch;
+  z-index: 200;
+}
+
+.nav-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  text-decoration: none;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  padding: 0;
+  transition: background 0.15s;
+}
+
+.nav-item:active {
+  background: var(--uz-surface2);
+}
+
+.nav-item__icon {
+  font-size: 22px;
+  line-height: 1;
+}
+
+.nav-item__label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--uz-muted);
+  font-family: var(--font-main);
+}
+
+.nav-item--active .nav-item__icon,
+.nav-item--active .nav-item__label {
+  color: var(--uz-blue);
+}
+
+/* ── ユーティリティ ──────────────────────────────────────── */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* スピナー（GAS通信中） */
+.spinner {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--uz-border);
+  border-top-color: var(--uz-blue);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* トースト通知 */
+.toast {
+  position: fixed;
+  bottom: calc(var(--nav-height) + env(safe-area-inset-bottom) + 12px);
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: var(--uz-surface2);
+  color: var(--uz-text);
+  padding: 12px 20px;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+  opacity: 0;
+  transition: opacity 0.25s, transform 0.25s;
+  z-index: 300;
+  max-width: 320px;
+  text-align: center;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.toast--show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.toast--success {
+  border-left: 3px solid var(--uz-green);
+}
+
+.toast--error {
+  border-left: 3px solid var(--uz-red);
+}
+
+/* ローディングオーバーレイ */
+.loading-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(26, 26, 46, 0.7);
+  z-index: 400;
+  align-items: center;
+  justify-content: center;
+}
+
+.loading-overlay--show {
+  display: flex;
+}

@@ -1,0 +1,62 @@
+{
+  "name": "ウルトラ財務くん LEO版",
+  "short_name": "財務くん",
+  "description": "スナック・BAR向けスマホ財務管理アプリ。毎日ボタンを押すだけで損益が自動計算されます。",
+  "lang": "ja",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#1a1a2e",
+  "theme_color": "#1a1a2e",
+  "categories": ["finance", "business"],
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-192-maskable.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "icons/screenshot-home.png",
+      "sizes": "390x844",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "ホーム画面"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "売上を入れる",
+      "short_name": "売上入力",
+      "url": "./sales.html",
+      "icons": [{ "src": "icons/shortcut-sales.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "コストを入れる",
+      "short_name": "コスト入力",
+      "url": "./cost.html",
+      "icons": [{ "src": "icons/shortcut-cost.png", "sizes": "96x96" }]
+    }
+  ]
+}

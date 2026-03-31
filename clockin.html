@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#1a1a2e">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>入店記録 — ウルトラ財務くん</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/forms.css">
+  <link rel="stylesheet" href="css/pages.css">
+</head>
+<body>
+
+<div class="page-wrapper">
+
+  <!-- サブページヘッダー -->
+  <header class="sub-header">
+    <a href="index.html" class="sub-header__back" aria-label="ホームに戻る">‹ 戻る</a>
+    <span class="sub-header__title">入店記録</span>
+    <div style="width:60px;"></div>
+  </header>
+
+  <!-- スクロール本体 -->
+  <div style="padding:0 0 calc(80px + env(safe-area-inset-bottom));">
+
+    <!-- ① スタッフ選択（クイック） -->
+    <div class="form-section">
+      <span class="form-section__label">スタッフを選ぶ</span>
+      <div id="quick-staff"
+           class="quick-staff-group"
+           role="group"
+           aria-label="スタッフクイック選択">
+        <!-- clockin.js が描画 -->
+      </div>
+    </div>
+
+    <!-- ② 名前テキスト入力（マスタ外スタッフ対応） -->
+    <div class="form-section">
+      <label class="form-section__label" for="name-input">
+        または名前を入力
+      </label>
+      <input type="text"
+             id="name-input"
+             class="text-input"
+             placeholder="例：まりこ、アルバイトA"
+             maxlength="20"
+             autocomplete="off"
+             aria-label="スタッフ名">
+      <p class="form-hint">マスタ未登録のスタッフも記録できます。</p>
+    </div>
+
+    <!-- ③ 本日の勤怠リスト -->
+    <div class="form-section" style="padding-bottom:8px;">
+      <span class="form-section__label">本日の勤怠</span>
+    </div>
+    <div id="attendance-list"
+         class="attendance-list"
+         style="padding:0 16px 16px;"
+         aria-label="本日の勤怠一覧">
+      <!-- clockin.js が描画 -->
+    </div>
+
+  </div>
+
+</div><!-- /page-wrapper -->
+
+<!-- 入店記録ボタン（固定） -->
+<div class="clockin-submit-bar">
+  <button id="clockin-btn"
+          class="clockin-btn"
+          type="button"
+          disabled
+          aria-label="入店記録する">
+    👤 入店記録する
+  </button>
+</div>
+
+<!-- ローディングオーバーレイ -->
+<div id="loading-overlay" class="loading-overlay" aria-hidden="true">
+  <div class="spinner"></div>
+</div>
+
+<!-- AIフック（フェーズ3用・削除禁止） -->
+<div id="receipt-capture-area" style="display:none"></div>
+<div id="csv-import-area"      style="display:none"></div>
+<div id="ai-suggestion-area"   style="display:none"></div>
+
+<script src="js/app.js"></script>
+<script src="js/clockin.js"></script>
+</body>
+</html>

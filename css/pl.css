@@ -1,0 +1,347 @@
+/* ============================================================
+   ウルトラ財務くん LEO版 PWA — pl.css
+   損益サマリー画面専用スタイル
+   カラーコードの直書き禁止。変数経由のみ。
+   ============================================================ */
+
+/* ── 損益ページヘッダー ──────────────────────────────────── */
+.pl-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 52px;
+  background: var(--uz-surface);
+  border-bottom: 1px solid var(--uz-border);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.pl-header__title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--uz-text);
+}
+
+/* ── タブバー ────────────────────────────────────────────── */
+.pl-tab-bar {
+  display: flex;
+  background: var(--uz-surface);
+  border-bottom: 1px solid var(--uz-border);
+  position: sticky;
+  top: 52px;
+  z-index: 99;
+}
+
+.pl-tab {
+  flex: 1;
+  height: 44px;
+  border: none;
+  background: transparent;
+  color: var(--uz-muted);
+  font-family: var(--font-main);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  position: relative;
+  transition: color 0.2s;
+}
+
+.pl-tab::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 16px;
+  right: 16px;
+  height: 2px;
+  background: var(--uz-blue);
+  border-radius: 2px 2px 0 0;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.pl-tab--active {
+  color: var(--uz-blue);
+}
+
+.pl-tab--active::after {
+  opacity: 1;
+}
+
+/* ── 期間ナビゲーター ────────────────────────────────────── */
+.pl-period-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px 10px;
+  gap: 8px;
+}
+
+.pl-period-btn {
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--uz-border);
+  border-radius: var(--radius-sm);
+  background: var(--uz-surface2);
+  color: var(--uz-text);
+  font-size: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+
+.pl-period-btn:active { background: var(--uz-surface); }
+
+.pl-period-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.pl-period-label {
+  flex: 1;
+  text-align: center;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--uz-text);
+}
+
+/* ── 比較ボタン ──────────────────────────────────────────── */
+.pl-compare-wrap {
+  padding: 0 16px 14px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.pl-compare-btn {
+  height: 34px;
+  padding: 0 14px;
+  border: 1px solid var(--uz-border);
+  border-radius: 17px;
+  background: var(--uz-surface2);
+  color: var(--uz-muted);
+  font-family: var(--font-main);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+  white-space: nowrap;
+}
+
+.pl-compare-btn--active {
+  border-color: var(--uz-blue);
+  color: var(--uz-blue);
+  background: rgba(67, 97, 238, 0.12);
+}
+
+/* ── PLテーブル ──────────────────────────────────────────── */
+.pl-table {
+  padding: 0 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* ── PLメイン行 ──────────────────────────────────────────── */
+.pl-row-wrap {
+  background: var(--uz-surface);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+/* 展開可能な行（売上・仕入原価・販管費） */
+.pl-main-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  cursor: pointer;
+  transition: background 0.15s;
+  user-select: none;
+  -webkit-user-select: none;
+  gap: 12px;
+}
+
+.pl-main-row:active { background: var(--uz-surface2); }
+
+/* 展開不可の行（粗利・経常利益） */
+.pl-main-row--static {
+  cursor: default;
+}
+
+.pl-main-row--static:active { background: inherit; }
+
+.pl-main-row__left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.pl-main-row__label {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--uz-text);
+  white-space: nowrap;
+}
+
+/* 展開アイコン */
+.pl-expand-icon {
+  font-size: 14px;
+  color: var(--uz-muted);
+  transition: transform 0.25s;
+  display: inline-block;
+  line-height: 1;
+}
+
+.pl-expand-icon--open {
+  transform: rotate(90deg);
+}
+
+.pl-main-row__right {
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.pl-main-row__value {
+  font-size: 18px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--uz-text);
+  display: block;
+}
+
+/* 比較時のdiff */
+.pl-main-row__diff {
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  margin-top: 2px;
+  display: none;
+}
+
+.pl-main-row__diff--show { display: block; }
+
+.pl-main-row__diff--up   { color: var(--uz-green); }
+.pl-main-row__diff--down { color: var(--uz-red);   }
+.pl-main-row__diff--flat { color: var(--uz-muted); }
+
+/* ── 結果行（粗利） ──────────────────────────────────────── */
+.pl-row-wrap--result {
+  background: var(--uz-surface2);
+}
+
+.pl-row-wrap--result .pl-main-row__label {
+  font-weight: 700;
+}
+
+/* ── 経常利益ハイライト行 ────────────────────────────────── */
+.pl-row-wrap--profit {
+  background: rgba(74, 222, 128, 0.08);
+  border: 1px solid rgba(74, 222, 128, 0.2);
+}
+
+.pl-row-wrap--profit .pl-main-row__label {
+  color: var(--uz-green);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.pl-row-wrap--profit .pl-main-row__value {
+  font-size: 22px;
+  color: var(--uz-green);
+}
+
+.pl-row-wrap--loss {
+  background: rgba(230, 57, 70, 0.08);
+  border: 1px solid rgba(230, 57, 70, 0.2);
+}
+
+.pl-row-wrap--loss .pl-main-row__label {
+  color: var(--uz-red);
+}
+
+.pl-row-wrap--loss .pl-main-row__value {
+  color: var(--uz-red);
+}
+
+/* ── 内訳展開エリア ──────────────────────────────────────── */
+.pl-breakdown {
+  border-top: 1px solid var(--uz-border);
+  padding: 4px 0 8px;
+}
+
+.pl-breakdown[hidden] { display: none; }
+
+.pl-breakdown-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px 8px 28px;
+  gap: 12px;
+}
+
+.pl-breakdown-item__name {
+  font-size: 13px;
+  color: var(--uz-muted);
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pl-breakdown-item__value {
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--uz-text);
+  flex-shrink: 0;
+}
+
+/* ── 集計なしメッセージ ──────────────────────────────────── */
+.pl-empty {
+  text-align: center;
+  padding: 48px 24px;
+  color: var(--uz-muted);
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+/* ── 比較情報バナー ──────────────────────────────────────── */
+.pl-compare-info {
+  margin: 0 16px 8px;
+  padding: 10px 14px;
+  background: rgba(67, 97, 238, 0.1);
+  border: 1px solid rgba(67, 97, 238, 0.2);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  color: var(--uz-blue);
+  display: none;
+}
+
+.pl-compare-info--show { display: block; }
+
+/* ── 年度累計タブ用スタイル ──────────────────────────────── */
+.pl-ytd-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px 10px;
+  gap: 8px;
+}
+
+.pl-ytd-label {
+  flex: 1;
+  text-align: center;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--uz-text);
+}
+
+/* ── 下部余白（ボトムナビ分） ────────────────────────────── */
+.pl-footer-space {
+  height: 16px;
+}
