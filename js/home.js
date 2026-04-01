@@ -170,10 +170,10 @@ function _renderPLError() {
 async function loadPL() {
   const now = new Date();
   const year  = now.getFullYear();
-  const month = now.getMonth() + 1;
+  const month = String(now.getMonth() + 1).padStart(2, '0');
 
   try {
-    const res = await callGAS('getPL', { year, month });
+    const res = await callGAS('getSummary', { month: `${year}-${month}` });
     if (res && res.status === 'ok' && res.data) {
       _renderPLValues(res.data);
     } else {
