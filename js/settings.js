@@ -1,13 +1,16 @@
 /**
  * ウルトラ財務くん LEO版 PWA — settings.js
- * 設定画面ロジック（localStorageで永続化）
+ * 設定画面ロジック（localStorage + GAS双方向同期版）
+ *
+ * 起動時: GAS getSettings → localStorage上書き → UI描画
+ * 変更時: localStorage即時保存 → GAS saveSettings（バックグラウンド）
  */
 
 'use strict';
 
 /* ── ストレージキー ──────────────────────────────────────── */
-const STORE_NAME_KEY   = 'uz_store_name';
-const STAFF_MASTER_KEY = 'uz_staff_master';
+const STORE_NAME_KEY     = 'uz_store_name';
+const STAFF_MASTER_KEY   = 'uz_staff_master';
 const SERVICE_MASTER_KEY = 'uz_service_master';
 
 /* ── デフォルト値 ────────────────────────────────────────── */
@@ -18,27 +21,21 @@ const DEFAULT_STAFF = [
   { id: 3, name: 'みか'   },
   { id: 4, name: 'ゆき'   },
 ];
-
-// 諸口は常に自動付与のため設定不要（sales.jsと一致させること）
 const DEFAULT_SERVICES = [
   { code: 'S001', name: '店内売上',     taxRate: 10 },
   { code: 'S002', name: 'テイクアウト', taxRate:  8 },
 ];
-const MAX_SERVICES = 3; // 諸口を除く最大登録数
+const MAX_SERVICES = 3;
 
-/* ── ストア名 ────────────────────────────────────────────── */
+/* ── localStorage アクセサ ───────────────────────────────── */
 function getStoreName() {
   return localStorage.getItem(STORE_NAME_KEY) || DEFAULT_STORE_NAME;
 }
 
-function saveStoreName(name) {
-  const trimmed = name.trim();
-  if (!trimmed) return false;
-  localStorage.setItem(STORE_NAME_KEY, trimmed);
-  return true;
+function _saveStoreName(name) {
+  localStorage.setItem(STORE_NAME_KEY, name);
 }
 
-/* ── スタッフマスタ ──────────────────────────────────────── */
 function getStaffList() {
   try {
     const saved = localStorage.getItem(STAFF_MASTER_KEY);
@@ -46,15 +43,10 @@ function getStaffList() {
   } catch { return [...DEFAULT_STAFF]; }
 }
 
-function saveStaffList(list) {
+function _saveStaffList(list) {
   localStorage.setItem(STAFF_MASTER_KEY, JSON.stringify(list));
 }
 
-function generateStaffId(list) {
-  return list.length > 0 ? Math.max(...list.map(s => s.id)) + 1 : 1;
-}
-
-/* ── サービスマスタ ──────────────────────────────────────── */
 function getServiceList() {
   try {
     const saved = localStorage.getItem(SERVICE_MASTER_KEY);
@@ -62,50 +54,97 @@ function getServiceList() {
   } catch { return [...DEFAULT_SERVICES]; }
 }
 
-function saveServiceList(list) {
+function _saveServiceList(list) {
   localStorage.setItem(SERVICE_MASTER_KEY, JSON.stringify(list));
 }
 
-function generateServiceCode(list) {
-  const nums = list
-    .map(s => parseInt(s.code.replace('S', '')))
-    .filter(n => !isNaN(n) && n < 99); // S099（諸口）は除外
-  const max = nums.length > 0 ? Math.max(...nums) : 0;
-  return `S${String(max + 1).padStart(3, '0')}`;
+/* ── GAS 同期 ────────────────────────────────────────────── */
+
+/**
+ * 起動時にGASからマスタ設定を取得し、localStorageとUIを更新する。
+ * GAS失敗時はlocalStorageのデータをそのまま使用。
+ */
+async function loadSettingsFromGAS() {
+  try {
+    const res = await callGAS('getSettings', {});
+    if (res && res.status === 'ok' && res.data) {
+      const { storeName, staffList, serviceList } = res.data;
+      if (storeName   != null) _saveStoreName(storeName);
+      if (Array.isArray(staffList))   _saveStaffList(staffList);
+      if (Array.isArray(serviceList)) _saveServiceList(serviceList);
+      // UIを最新データで再描画
+      initStoreName();
+      renderStaffList();
+      renderServiceList();
+      updateGasStatus(true);
+    } else {
+      updateGasStatus(false);
+    }
+  } catch {
+    updateGasStatus(false);
+  }
+}
+
+/**
+ * 現在のlocalStorage全設定をGASに保存（バックグラウンド・失敗はサイレント）。
+ */
+async function saveSettingsToGAS() {
+  try {
+    await callGAS('saveSettings', {
+      storeName:   getStoreName(),
+      staffList:   getStaffList(),
+      serviceList: getServiceList(),
+    });
+  } catch {
+    // localStorageには保存済みのため、GAS失敗はサイレントフェイル
+  }
+}
+
+function updateGasStatus(connected) {
+  const el = document.getElementById('gas-status-val');
+  if (!el) return;
+  if (connected) {
+    el.textContent = '接続済み ✓';
+    el.style.color = 'var(--uz-green)';
+  } else {
+    el.textContent = '未接続（ローカル保存）';
+    el.style.color = 'var(--uz-muted)';
+  }
 }
 
 /* ── 初期化 ──────────────────────────────────────────────── */
 document.addEventListener('DOMContentLoaded', () => {
+  // まずlocalStorageで即時描画
   initStoreName();
   initStaffList();
   initServiceList();
   bindStoreSave();
   bindStaffAdd();
   bindServiceAdd();
+  // GASから最新データを取得して上書き
+  loadSettingsFromGAS();
 });
 
-/* ── 店舗名初期化 ────────────────────────────────────────── */
+/* ── 店舗名 ──────────────────────────────────────────────── */
 function initStoreName() {
   const input = document.getElementById('store-name-input');
   if (input) input.value = getStoreName();
 }
 
-/* ── 店舗名保存バインド ──────────────────────────────────── */
 function bindStoreSave() {
   document.getElementById('store-name-save')?.addEventListener('click', () => {
     const input = document.getElementById('store-name-input');
-    const name  = input?.value || '';
+    const name  = input?.value.trim() || '';
 
-    if (!name.trim()) {
-      return showToast('店舗名を入力してください', 'error');
-    }
+    if (!name) return showToast('店舗名を入力してください', 'error');
 
-    saveStoreName(name.trim());
+    _saveStoreName(name);
     showToast('店舗名を保存しました ✓', 'success');
+    saveSettingsToGAS();
   });
 }
 
-/* ── スタッフ一覧描画 ────────────────────────────────────── */
+/* ── スタッフマスタ ──────────────────────────────────────── */
 function initStaffList() {
   renderStaffList();
 }
@@ -137,7 +176,6 @@ function renderStaffList() {
   `).join('');
 }
 
-/* ── スタッフ削除 ────────────────────────────────────────── */
 function deleteStaff(id) {
   const list   = getStaffList();
   const target = list.find(s => s.id === id);
@@ -145,12 +183,13 @@ function deleteStaff(id) {
 
   if (!confirm(`「${target.name}」を削除しますか？\n入退店の記録済みデータには影響しません。`)) return;
 
-  saveStaffList(list.filter(s => s.id !== id));
+  const newList = list.filter(s => s.id !== id);
+  _saveStaffList(newList);
   renderStaffList();
   showToast(`${target.name}を削除しました`, 'success');
+  saveSettingsToGAS();
 }
 
-/* ── スタッフ追加バインド ────────────────────────────────── */
 function bindStaffAdd() {
   const btn   = document.getElementById('staff-add-btn');
   const input = document.getElementById('staff-add-input');
@@ -162,27 +201,25 @@ function bindStaffAdd() {
 
     const list = getStaffList();
 
-    // 重複チェック
     if (list.some(s => s.name === name)) {
       return showToast('同じ名前のスタッフが既に登録されています', 'error');
     }
 
-    const newStaff = { id: generateStaffId(list), name };
-    list.push(newStaff);
-    saveStaffList(list);
+    const maxId  = list.length > 0 ? Math.max(...list.map(s => s.id)) : 0;
+    const newList = [...list, { id: maxId + 1, name }];
+    _saveStaffList(newList);
 
     input.value = '';
     renderStaffList();
     showToast(`${name}を追加しました ✓`, 'success');
+    saveSettingsToGAS();
   };
 
   btn.addEventListener('click', doAdd);
-  input.addEventListener('keydown', e => {
-    if (e.key === 'Enter') doAdd();
-  });
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') doAdd(); });
 }
 
-/* ── サービス一覧描画 ────────────────────────────────────── */
+/* ── サービスマスタ ──────────────────────────────────────── */
 function initServiceList() {
   renderServiceList();
 }
@@ -204,7 +241,6 @@ function renderServiceList() {
     </div>
   `).join('');
 
-  // 諸口は固定表示（削除不可）
   html += `
     <div class="staff-row" style="opacity:0.5;">
       <span class="staff-row__name">諸口</span>
@@ -214,34 +250,29 @@ function renderServiceList() {
 
   container.innerHTML = html;
 
-  // 上限に達したら追加フォームを非表示
   const addRow = document.getElementById('service-add-row');
-  if (addRow) {
-    const atMax = list.length >= MAX_SERVICES;
-    addRow.hidden = atMax;
-    const hint = document.getElementById('service-limit-hint');
-    if (hint) hint.hidden = !atMax;
-  }
+  const hint   = document.getElementById('service-limit-hint');
+  const atMax  = list.length >= MAX_SERVICES;
+  if (addRow) addRow.hidden = atMax;
+  if (hint)   hint.hidden   = !atMax;
 }
 
-/* ── サービス削除 ────────────────────────────────────────── */
 function deleteService(code) {
   const list   = getServiceList();
   const target = list.find(s => s.code === code);
   if (!target) return;
 
-  if (list.length <= 1) {
-    return showToast('最低1種のサービスが必要です', 'error');
-  }
+  if (list.length <= 1) return showToast('最低1種のサービスが必要です', 'error');
 
   if (!confirm(`「${target.name}」を削除しますか？\n登録済みの売上データには影響しません。`)) return;
 
-  saveServiceList(list.filter(s => s.code !== code));
+  const newList = list.filter(s => s.code !== code);
+  _saveServiceList(newList);
   renderServiceList();
   showToast(`${target.name}を削除しました`, 'success');
+  saveSettingsToGAS();
 }
 
-/* ── サービス追加バインド ────────────────────────────────── */
 function bindServiceAdd() {
   const btn       = document.getElementById('service-add-btn');
   const nameInput = document.getElementById('service-add-name');
@@ -263,20 +294,24 @@ function bindServiceAdd() {
       return showToast('同じ名前のサービスが既に登録されています', 'error');
     }
 
-    const newService = { code: generateServiceCode(list), name, taxRate };
-    list.push(newService);
-    saveServiceList(list);
+    const nums = list
+      .map(s => parseInt(s.code.replace('S', '')))
+      .filter(n => !isNaN(n) && n < 99);
+    const nextNum = nums.length > 0 ? Math.max(...nums) + 1 : 1;
+    const code    = `S${String(nextNum).padStart(3, '0')}`;
 
-    nameInput.value  = '';
-    taxSelect.value  = '10';
+    const newList = [...list, { code, name, taxRate }];
+    _saveServiceList(newList);
+
+    nameInput.value = '';
+    taxSelect.value = '10';
     renderServiceList();
     showToast(`${name}を追加しました ✓`, 'success');
+    saveSettingsToGAS();
   };
 
   btn.addEventListener('click', doAdd);
-  nameInput.addEventListener('keydown', e => {
-    if (e.key === 'Enter') doAdd();
-  });
+  nameInput.addEventListener('keydown', e => { if (e.key === 'Enter') doAdd(); });
 }
 
 /* ── XSSエスケープ ───────────────────────────────────────── */
