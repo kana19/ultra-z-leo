@@ -1,76 +1,44 @@
 /**
  * ウルトラ財務くん LEO版 PWA — uncollected.js
- * 未収・買掛け一覧画面ロジック
+ * 未収・買掛け一覧画面ロジック（GAS getUncollected / reconcile 連携版）
  */
 
 'use strict';
 
-/* ── ダミーデータ（本番はcallGAS('getUncollected')で取得） ─ */
-let DUMMY_DATA = [
-  {
-    id:        1,
-    sheetName: '売上',
-    rowIndex:  15,
-    type:      'uncollected',
-    date:      '2026-03-15',
-    itemName:  'テーブルチャージ',
-    amount:    45_000,
-    memo:      '田中様 4名',
-  },
-  {
-    id:        2,
-    sheetName: '売上',
-    rowIndex:  22,
-    type:      'uncollected',
-    date:      '2026-03-20',
-    itemName:  'ボトルキープ',
-    amount:    28_000,
-    memo:      '鈴木様',
-  },
-  {
-    id:        3,
-    sheetName: '売上',
-    rowIndex:  30,
-    type:      'uncollected',
-    date:      '2026-03-22',
-    itemName:  'カラオケ',
-    amount:    15_000,
-    memo:      '',
-  },
-  {
-    id:        4,
-    sheetName: 'コスト',
-    rowIndex:  8,
-    type:      'payable',
-    date:      '2026-03-10',
-    itemName:  '酒類・飲料',
-    amount:    85_000,
-    memo:      '〇〇酒販 月末払い',
-  },
-  {
-    id:        5,
-    sheetName: 'コスト',
-    rowIndex:  12,
-    type:      'payable',
-    date:      '2026-03-18',
-    itemName:  '光熱費',
-    amount:    42_000,
-    memo:      '電気代3月分',
-  },
-];
-
 /* ── 状態 ────────────────────────────────────────────────── */
+let liveData   = [];   // GASから取得したデータ
 let openFormId = null; // 現在展開中の消込フォームのID
 
 /* ── 初期化 ──────────────────────────────────────────────── */
 document.addEventListener('DOMContentLoaded', () => {
-  renderAll();
+  loadData();
 });
 
-/* ── 全体描画 ────────────────────────────────────────────── */
+/* ── GASからデータ取得 ───────────────────────────────────── */
+async function loadData() {
+  showLoading();
+  try {
+    const res = await callGAS('getUncollected', {});
+    if (res && res.status === 'ok' && Array.isArray(res.data)) {
+      // クライアント側でIDを付与（sheetName+rowIndexの組み合わせは一意）
+      liveData = res.data.map((item, idx) => ({ ...item, id: idx + 1 }));
+    } else {
+      liveData = [];
+      showToast('データの取得に失敗しました', 'error');
+    }
+  } catch (e) {
+    liveData = [];
+    showToast('GAS接続エラー：' + e.message, 'error');
+  } finally {
+    hideLoading();
+    renderAll();
+  }
+}
+
+/* ── 全体描画（liveDataから描画・GAS再取得なし） ─────────── */
 function renderAll() {
-  const uncollected = DUMMY_DATA.filter(d => d.type === 'uncollected');
-  const payable     = DUMMY_DATA.filter(d => d.type === 'payable');
+  const uncollected = liveData.filter(d => d.type === 'uncollected');
+  const payable     = liveData.filter(d => d.type === 'payable');
 
   renderSummary(uncollected, payable);
   renderList('uncollected-list', uncollected, 'uncollected');
@@ -113,9 +81,9 @@ function renderList(containerId, items, type) {
 
 /* ── アイテムHTML生成 ────────────────────────────────────── */
 function buildItemHTML(item, type) {
-  const dateStr = formatDate(item.date);
-  const isOpen  = openFormId === item.id;
-  const btnLabel = type === 'uncollected' ? '入金消込' : '支払消込';
+  const dateStr      = formatDate(item.date);
+  const isOpen       = openFormId === item.id;
+  const btnLabel     = type === 'uncollected' ? '入金消込' : '支払消込';
   const confirmLabel = type === 'uncollected' ? '入金消込を確定する' : '支払消込を確定する';
   const formTitle    = type === 'uncollected' ? '入金情報を入力してください' : '支払情報を入力してください';
   const dateLabel    = type === 'uncollected' ? '入金日' : '支払日';
@@ -187,25 +155,23 @@ function toggleReconcileForm(id) {
   openFormId = openFormId === id ? null : id;
   renderAll();
 
-  // 展開時はフォームにスクロール
   if (openFormId === id) {
     setTimeout(() => {
-      const formEl = document.getElementById(`reconcile-form-${id}`);
-      formEl?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      document.getElementById(`reconcile-form-${id}`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }, 50);
   }
 }
 
 /* ── 消込処理 ────────────────────────────────────────────── */
 async function handleReconcile(id, type) {
-  const item      = DUMMY_DATA.find(d => d.id === id);
+  const item = liveData.find(d => d.id === id);
   if (!item) return;
 
   const paidDate   = document.getElementById(`paid-date-${id}`)?.value || '';
   const paidAmtRaw = document.getElementById(`paid-amount-${id}`)?.value.replace(/,/g, '') || '0';
   const paidAmount = parseInt(paidAmtRaw) || 0;
 
-  // バリデーション
   if (!paidDate)       return showToast('日付を入力してください', 'error');
   if (paidAmount <= 0) return showToast('金額を入力してください', 'error');
 
@@ -219,25 +185,27 @@ async function handleReconcile(id, type) {
   if (btn) { btn.disabled = true; btn.textContent = '処理中...'; }
 
   try {
-    // ★ GAS未接続期間はダミー動作
-    // await callGAS('reconcile', {
-    //   sheetName: item.sheetName,
-    //   rowIndex:  item.rowIndex,
-    //   paidAmount,
-    //   paidDate,
-    // });
-    await new Promise(r => setTimeout(r, 600));
+    const res = await callGAS('reconcile', {
+      sheetName:  item.sheetName,
+      rowIndex:   item.rowIndex,
+      paidAmount,
+      paidDate,
+    });
 
-    // ローカルデータから削除
-    DUMMY_DATA = DUMMY_DATA.filter(d => d.id !== id);
+    if (!res || res.status !== 'ok') {
+      throw new Error(res?.message || '消込に失敗しました');
+    }
+
+    // 消込成功 → liveDataから除外して再描画
+    liveData   = liveData.filter(d => d.id !== id);
     openFormId = null;
-
     renderAll();
+
     const msg = type === 'uncollected' ? '入金消込を完了しました ✓' : '支払消込を完了しました ✓';
     showToast(msg, 'success');
 
   } catch (e) {
-    if (btn) { btn.disabled = false; btn.textContent = '消込を確定する'; }
+    if (btn) { btn.disabled = false; btn.textContent = type === 'uncollected' ? '入金消込を確定する' : '支払消込を確定する'; }
     showToast('消込に失敗しました：' + e.message, 'error');
   }
 }
@@ -246,7 +214,7 @@ async function handleReconcile(id, type) {
 function formatDate(dateStr) {
   if (!dateStr) return '';
   const [y, m, d] = dateStr.split('-').map(Number);
-  return `${y}/${String(m).padStart(2,'0')}/${String(d).padStart(2,'0')}`;
+  return `${y}/${String(m).padStart(2, '0')}/${String(d).padStart(2, '0')}`;
 }
 
 /* ── XSSエスケープ ───────────────────────────────────────── */
