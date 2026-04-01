@@ -135,8 +135,10 @@ function renderStaffList() {
 /* ── 損益サマリー描画 ────────────────────────────────────── */
 function _renderPLValues(pl) {
   const now = new Date();
-  const year  = pl.year  ?? now.getFullYear();
-  const month = pl.month ?? (now.getMonth() + 1);
+  const monthRaw = pl.month ?? `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const [year, month] = String(monthRaw).includes('-')
+    ? String(monthRaw).split('-').map(Number)
+    : [pl.year ?? now.getFullYear(), Number(monthRaw)];
 
   const monthLabel = document.getElementById('pl-month-label');
   if (monthLabel) monthLabel.textContent = `${year}年${month}月（当月累計）`;
