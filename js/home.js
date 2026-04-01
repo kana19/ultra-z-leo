@@ -5,16 +5,7 @@
 
 'use strict';
 
-/* ── ダミーデータ ────────────────────────────────────────── */
-const DUMMY_PL = {
-  year: 2026,
-  month: 3,
-  sales:           1_248_000,
-  cogs:              392_000,
-  grossProfit:       856_000,
-  sga:               480_000,
-  operatingProfit:   376_000,
-};
+/* ── 損益サマリー（GAS取得） ─────────────────────────────── */
 
 const DUMMY_STAFF = [
   { id: 1, name: 'さくら',   clockIn: '20:30', clockOut: null,    isActive: true  },
@@ -142,26 +133,57 @@ function renderStaffList() {
 }
 
 /* ── 損益サマリー描画 ────────────────────────────────────── */
-function renderPL() {
-  const pl = DUMMY_PL;
+function _renderPLValues(pl) {
+  const now = new Date();
+  const year  = pl.year  ?? now.getFullYear();
+  const month = pl.month ?? (now.getMonth() + 1);
 
   const monthLabel = document.getElementById('pl-month-label');
-  if (monthLabel) monthLabel.textContent = `${pl.year}年${pl.month}月（当月累計）`;
+  if (monthLabel) monthLabel.textContent = `${year}年${month}月（当月累計）`;
 
   const rows = [
-    { id: 'pl-sales',    label: '売上',     value: pl.sales,           isResult: false },
-    { id: 'pl-cogs',     label: '仕入原価', value: pl.cogs,            isResult: false },
-    { id: 'pl-gross',    label: '粗利',     value: pl.grossProfit,     isResult: true  },
-    { id: 'pl-sga',      label: '販管費',   value: pl.sga,             isResult: false },
-    { id: 'pl-profit',   label: '経常利益', value: pl.operatingProfit, isResult: true, isHighlight: true },
+    { id: 'pl-sales',  value: pl.sales           },
+    { id: 'pl-cogs',   value: pl.cogs             },
+    { id: 'pl-gross',  value: pl.grossProfit      },
+    { id: 'pl-sga',    value: pl.sga              },
+    { id: 'pl-profit', value: pl.operatingProfit  },
   ];
 
-  rows.forEach(row => {
-    const el = document.getElementById(row.id);
+  rows.forEach(({ id, value }) => {
+    const el = document.getElementById(id);
     if (!el) return;
-    el.textContent = formatYen(row.value);
-    if (row.value < 0) el.classList.add('pl-value--negative');
+    el.textContent = formatYen(value);
+    el.classList.toggle('pl-value--negative', value < 0);
   });
+}
+
+function _renderPLError() {
+  const monthLabel = document.getElementById('pl-month-label');
+  if (monthLabel) monthLabel.textContent = 'データ取得エラー';
+
+  ['pl-sales', 'pl-cogs', 'pl-gross', 'pl-sga', 'pl-profit'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = '¥—';
+  });
+}
+
+async function loadPL() {
+  const now = new Date();
+  const year  = now.getFullYear();
+  const month = now.getMonth() + 1;
+
+  try {
+    const res = await callGAS('getPL', { year, month });
+    if (res && res.status === 'ok' && res.data) {
+      _renderPLValues(res.data);
+    } else {
+      _renderPLError();
+      showToast('損益データの取得に失敗しました', 'error');
+    }
+  } catch (e) {
+    _renderPLError();
+    showToast('通信エラー：損益データを取得できません', 'error');
+  }
 }
 
 /* ── 退店処理（ダミー） ──────────────────────────────────── */
@@ -195,5 +217,5 @@ document.addEventListener('DOMContentLoaded', () => {
   startClock();
   renderAlerts();
   renderStaffList();
-  renderPL();
+  loadPL();
 });
