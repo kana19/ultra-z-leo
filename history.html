@@ -23,90 +23,24 @@
     <span class="history-header__title">入力履歴</span>
   </header>
 
-  <!-- 直近の入力履歴（ダミーデータ） -->
-  <div style="padding:16px 0 calc(var(--nav-height) + env(safe-area-inset-bottom) + 16px);"
+  <!-- 月選択ナビゲーター -->
+  <div class="pl-period-nav" style="padding:8px 16px;">
+    <button id="hist-prev"
+            class="pl-period-btn"
+            type="button"
+            aria-label="前の月">‹</button>
+    <span id="hist-label" class="pl-period-label">読み込み中...</span>
+    <button id="hist-next"
+            class="pl-period-btn"
+            type="button"
+            aria-label="次の月">›</button>
+  </div>
+
+  <!-- 履歴リスト（history.js が描画） -->
+  <div id="history-list"
+       style="padding:0 0 calc(var(--nav-height) + env(safe-area-inset-bottom) + 16px);"
        role="region"
        aria-label="入力履歴一覧">
-
-    <!-- 日付グループ：2026/03/25 -->
-    <div style="padding:12px 20px 6px;">
-      <span style="font-size:12px;font-weight:700;color:var(--uz-muted);letter-spacing:0.06em;">
-        2026年3月25日（水）
-      </span>
-    </div>
-
-    <div class="history-item">
-      <div class="history-item__type history-item__type--sales">💰</div>
-      <div class="history-item__info">
-        <div class="history-item__name">テーブルチャージ</div>
-        <div class="history-item__date">3名来店</div>
-      </div>
-      <span class="history-item__amount history-item__amount--sales">¥33,000</span>
-    </div>
-
-    <div class="history-item">
-      <div class="history-item__type history-item__type--cost">💸</div>
-      <div class="history-item__info">
-        <div class="history-item__name">酒類・飲料（仕入原価）</div>
-        <div class="history-item__date">〇〇酒販</div>
-      </div>
-      <span class="history-item__amount history-item__amount--cost">¥42,000</span>
-    </div>
-
-    <!-- 日付グループ：2026/03/24 -->
-    <div style="padding:16px 20px 6px;">
-      <span style="font-size:12px;font-weight:700;color:var(--uz-muted);letter-spacing:0.06em;">
-        2026年3月24日（火）
-      </span>
-    </div>
-
-    <div class="history-item">
-      <div class="history-item__type history-item__type--sales">💰</div>
-      <div class="history-item__info">
-        <div class="history-item__name">ボトルキープ</div>
-        <div class="history-item__date">鈴木様</div>
-      </div>
-      <span class="history-item__amount history-item__amount--sales">¥55,000</span>
-    </div>
-
-    <div class="history-item">
-      <div class="history-item__type history-item__type--sales">💰</div>
-      <div class="history-item__info">
-        <div class="history-item__name">カラオケ</div>
-        <div class="history-item__date">2名</div>
-      </div>
-      <span class="history-item__amount history-item__amount--sales">¥22,000</span>
-    </div>
-
-    <div class="history-item">
-      <div class="history-item__type history-item__type--cost">💸</div>
-      <div class="history-item__info">
-        <div class="history-item__name">光熱費（販管費）</div>
-        <div class="history-item__date">電気代3月分</div>
-      </div>
-      <span class="history-item__amount history-item__amount--cost">¥42,000</span>
-    </div>
-
-    <!-- 日付グループ：2026/03/23 -->
-    <div style="padding:16px 20px 6px;">
-      <span style="font-size:12px;font-weight:700;color:var(--uz-muted);letter-spacing:0.06em;">
-        2026年3月23日（月）
-      </span>
-    </div>
-
-    <div class="history-item">
-      <div class="history-item__type history-item__type--sales">💰</div>
-      <div class="history-item__info">
-        <div class="history-item__name">テーブルチャージ</div>
-        <div class="history-item__date">田中様 4名</div>
-      </div>
-      <span class="history-item__amount history-item__amount--sales">¥44,000</span>
-    </div>
-
-    <p style="text-align:center;padding:20px;font-size:12px;color:var(--uz-muted);">
-      GAS接続後に実際の履歴が表示されます
-    </p>
-
   </div>
 
 </div><!-- /page-wrapper -->
@@ -136,11 +70,17 @@
 
 </nav>
 
+<!-- ローディングオーバーレイ -->
+<div id="loading-overlay" class="loading-overlay" aria-hidden="true">
+  <div class="spinner"></div>
+</div>
+
 <!-- AIフック（フェーズ3用・削除禁止） -->
 <div id="receipt-capture-area" style="display:none"></div>
 <div id="csv-import-area"      style="display:none"></div>
 <div id="ai-suggestion-area"   style="display:none"></div>
 
 <script src="js/app.js"></script>
+<script src="js/history.js"></script>
 </body>
 </html>
