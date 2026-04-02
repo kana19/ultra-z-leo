@@ -230,11 +230,8 @@ async function handleSubmit() {
   setSubmitLoading(true);
 
   try {
-    // ★ GAS未接続期間はダミー動作。接続後は下のコメントを外す。
-    // const result = await callGAS('addCost', payload);
-    // if (result.status !== 'ok') throw new Error(result.message || '登録エラー');
-    await dummyDelay(700);
-    console.log('[addCost] payload:', payload);
+    const result = await callGAS('addCost', payload);
+    if (result.status !== 'ok') throw new Error(result.message || '登録エラー');
 
     setSubmitLoading(false);
     showToast('コストを登録しました ✓', 'success');
@@ -256,10 +253,6 @@ function setSubmitLoading(loading) {
   btn.innerHTML = loading
     ? '<span class="spinner" style="width:20px;height:20px;border-top-color:#fff;"></span>'
     : '登録する';
-}
-
-function dummyDelay(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 function escHtml(str) {
