@@ -1,26 +1,16 @@
 /**
  * ウルトラ財務くん LEO版 PWA — home.js
- * ホーム画面ロジック（ダミーデータ動作版）
+ * ホーム画面ロジック
  */
 
 'use strict';
 
-/* ── 損益サマリー（GAS取得） ─────────────────────────────── */
+/* ── ストレージキー（clockin.js と共有） ─────────────────── */
+const ATTENDANCE_DATE_KEY = 'uz_attendance_date';
+const ATTENDANCE_DATA_KEY = 'uz_attendance_data';
 
-const DUMMY_STAFF = [
-  { id: 1, name: 'さくら',   clockIn: '20:30', clockOut: null,    isActive: true  },
-  { id: 2, name: 'あかね',   clockIn: '20:00', clockOut: null,    isActive: true  },
-  { id: 3, name: 'みか',     clockIn: '19:45', clockOut: '23:00', isActive: false },
-];
-
-// アラート状態（本番ではGASから取得）
-const DUMMY_ALERTS = {
-  hasUncollected:       true,   // 未収あり
-  uncollectedUrgent:    false,  // 月末3日前ではない
-  hasPayable:           true,   // 買掛あり
-  payableUrgent:        false,
-  hasUnrecordedClockOut: false, // 退店未記録なし
-};
+/* ── 状態 ────────────────────────────────────────────────── */
+let todayAttendance = []; // { id, name, clockIn, clockOut, isActive, rowIndex }
 
 /* ── 時計（リアルタイム） ────────────────────────────────── */
 function updateClock() {
@@ -51,11 +41,6 @@ function renderHeaderDate() {
 }
 
 /* ── アラートドット描画 ──────────────────────────────────── */
-/**
- * アラートドット要素を生成
- * @param {boolean} urgent 月末3日前フラグ
- * @returns {HTMLElement|null}
- */
 function createAlertDot(urgent) {
   const dot = document.createElement('span');
   dot.className = urgent ? 'adot adot--red-blink' : 'adot adot--blue';
@@ -63,30 +48,31 @@ function createAlertDot(urgent) {
   return dot;
 }
 
-function renderAlerts() {
-  const { hasUncollected, uncollectedUrgent, hasPayable, payableUrgent, hasUnrecordedClockOut } = DUMMY_ALERTS;
+function renderAlerts(alerts) {
+  const { hasUncollected, uncollectedUrgent, hasPayable, payableUrgent, hasUnrecordedClockOut } = alerts;
+  const nearEnd = isNearMonthEnd();
 
-  // 売上ボタン：未収ドット
   const salesDot = document.getElementById('dot-uncollected');
   if (salesDot) {
+    salesDot.innerHTML = '';
     if (hasUncollected) {
-      salesDot.appendChild(createAlertDot(uncollectedUrgent));
-      salesDot.setAttribute('title', uncollectedUrgent ? '未収あり（緊急）' : '未収あり');
+      salesDot.appendChild(createAlertDot(uncollectedUrgent ?? nearEnd));
+      salesDot.setAttribute('title', (uncollectedUrgent ?? nearEnd) ? '未収あり（緊急）' : '未収あり');
     }
   }
 
-  // コストボタン：買掛ドット
   const costDot = document.getElementById('dot-payable');
   if (costDot) {
+    costDot.innerHTML = '';
     if (hasPayable) {
-      costDot.appendChild(createAlertDot(payableUrgent));
-      costDot.setAttribute('title', payableUrgent ? '買掛あり（緊急）' : '買掛あり');
+      costDot.appendChild(createAlertDot(payableUrgent ?? nearEnd));
+      costDot.setAttribute('title', (payableUrgent ?? nearEnd) ? '買掛あり（緊急）' : '買掛あり');
     }
   }
 
-  // 入店記録ボタン：退店未記録ドット
   const clockDot = document.getElementById('dot-clockout');
   if (clockDot) {
+    clockDot.innerHTML = '';
     if (hasUnrecordedClockOut) {
       clockDot.appendChild(createAlertDot(true));
       clockDot.setAttribute('title', '退店未記録（24時間経過）');
@@ -99,11 +85,11 @@ function renderStaffList() {
   const container = document.getElementById('staff-list');
   if (!container) return;
 
-  const activeStaff = DUMMY_STAFF.filter(s => s.isActive);
-  const inactiveStaff = DUMMY_STAFF.filter(s => !s.isActive);
-  const displayStaff = [...activeStaff, ...inactiveStaff].slice(0, 3);
+  const active   = todayAttendance.filter(s => s.isActive);
+  const inactive = todayAttendance.filter(s => !s.isActive);
+  const display  = [...active, ...inactive].slice(0, 3);
 
-  if (displayStaff.length === 0) {
+  if (display.length === 0) {
     container.innerHTML = `
       <div class="staff-item">
         <span class="staff-dot staff-dot--off"></span>
@@ -114,7 +100,7 @@ function renderStaffList() {
     return;
   }
 
-  container.innerHTML = displayStaff.map(s => `
+  container.innerHTML = display.map(s => `
     <div class="staff-item">
       <span class="staff-dot${s.isActive ? '' : ' staff-dot--off'}"></span>
       <div class="staff-info">
@@ -126,10 +112,90 @@ function renderStaffList() {
         </div>
       </div>
       ${s.isActive
-        ? `<button class="staff-clockout-btn" data-id="${s.id}" onclick="handleClockOut(${s.id})">退店</button>`
+        ? `<button class="staff-clockout-btn" type="button" onclick="handleClockOut(${s.id})">退店</button>`
         : ''}
     </div>
   `).join('');
+}
+
+/* ── 勤怠データをlocalStorageから即時描画 ────────────────── */
+function renderStaffFromLocalStorage() {
+  const savedDate = localStorage.getItem(ATTENDANCE_DATE_KEY);
+  if (savedDate !== todayStr()) return; // 日付違いは無視
+
+  try {
+    const saved = JSON.parse(localStorage.getItem(ATTENDANCE_DATA_KEY)) || [];
+    todayAttendance = saved;
+    renderStaffList();
+  } catch { /* localStorageが壊れていても無視 */ }
+}
+
+/* ── GAS から勤怠データを取得 ────────────────────────────── */
+async function loadAttendance() {
+  try {
+    const res = await callGAS('getAttendance', { date: todayStr() });
+    if (res && res.status === 'ok' && res.data) {
+      const { attendance, hasUnrecordedClockOut } = res.data;
+
+      // GASデータで todayAttendance を上書き
+      todayAttendance = attendance.map(r => ({
+        id:       r.staffId,
+        name:     r.staffName,
+        clockIn:  r.clockIn,
+        clockOut: r.clockOut || null,
+        isActive: r.isActive,
+        rowIndex: r.rowIndex ?? null,
+      }));
+
+      // localStorageを最新データで更新（clockin.jsと共有）
+      localStorage.setItem(ATTENDANCE_DATE_KEY, todayStr());
+      localStorage.setItem(ATTENDANCE_DATA_KEY, JSON.stringify(todayAttendance));
+
+      renderStaffList();
+
+      // 退店未記録フラグをアラートに反映（他フラグは既描画のまま更新）
+      if (hasUnrecordedClockOut) {
+        const clockDot = document.getElementById('dot-clockout');
+        if (clockDot && !clockDot.hasChildNodes()) {
+          clockDot.appendChild(createAlertDot(true));
+          clockDot.setAttribute('title', '退店未記録（24時間経過）');
+        }
+      }
+    }
+  } catch {
+    // GAS失敗時はlocalStorageの描画をそのまま維持
+  }
+}
+
+/* ── GAS から未収・買掛フラグを取得してアラート描画 ─────── */
+async function loadAlerts() {
+  // まず退店未記録なし・未収なし・買掛なしで初期描画
+  renderAlerts({
+    hasUncollected:        false,
+    uncollectedUrgent:     false,
+    hasPayable:            false,
+    payableUrgent:         false,
+    hasUnrecordedClockOut: false,
+  });
+
+  try {
+    const res = await callGAS('getUncollected', {});
+    if (res && res.status === 'ok' && Array.isArray(res.data)) {
+      const nearEnd       = isNearMonthEnd();
+      const hasUncollected = res.data.some(r => r.type === 'uncollected');
+      const hasPayable     = res.data.some(r => r.type === 'payable');
+
+      renderAlerts({
+        hasUncollected,
+        uncollectedUrgent:     hasUncollected && nearEnd,
+        hasPayable,
+        payableUrgent:         hasPayable && nearEnd,
+        hasUnrecordedClockOut: false, // loadAttendance 側で更新
+      });
+    }
+  } catch {
+    // GAS失敗時はアラートなし表示のまま
+  }
 }
 
 /* ── 損益サマリー描画 ────────────────────────────────────── */
@@ -170,7 +236,7 @@ function _renderPLError() {
 }
 
 async function loadPL() {
-  const now = new Date();
+  const now   = new Date();
   const year  = now.getFullYear();
   const month = String(now.getMonth() + 1).padStart(2, '0');
 
@@ -180,28 +246,43 @@ async function loadPL() {
       _renderPLValues(res.data);
     } else {
       _renderPLError();
-      showToast('損益データの取得に失敗しました', 'error');
     }
-  } catch (e) {
+  } catch {
     _renderPLError();
-    showToast('通信エラー：損益データを取得できません', 'error');
   }
 }
 
-/* ── 退店処理（ダミー） ──────────────────────────────────── */
-function handleClockOut(staffId) {
-  const staff = DUMMY_STAFF.find(s => s.id === staffId);
-  if (!staff) return;
+/* ── 退店処理（ホーム画面から） ──────────────────────────── */
+async function handleClockOut(staffId) {
+  const record = todayAttendance.find(s => s.id === staffId);
+  if (!record) return;
 
-  if (!confirm(`${staff.name}さんを退店記録しますか？`)) return;
+  if (!confirm(`${record.name}さんを退店記録しますか？`)) return;
 
-  // ダミー：本番はcallGAS('clockOut', { staffId })
   const now = new Date();
-  staff.clockOut = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
-  staff.isActive = false;
+  const clockOutTime = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
 
-  renderStaffList();
-  showToast(`${staff.name}さんの退店を記録しました`, 'success');
+  try {
+    const result = await callGAS('clockOut', {
+      staffId:     record.id,
+      clockOutTime,
+      rowIndex:    record.rowIndex ?? null,
+    });
+    if (result.status !== 'ok') throw new Error(result.message || '登録エラー');
+
+    record.clockOut = clockOutTime;
+    record.isActive = false;
+
+    // localStorageを更新してclockIn画面と同期
+    localStorage.setItem(ATTENDANCE_DATE_KEY, todayStr());
+    localStorage.setItem(ATTENDANCE_DATA_KEY, JSON.stringify(todayAttendance));
+
+    renderStaffList();
+    showToast(`${record.name}さんの退店を記録しました`, 'success');
+
+  } catch (e) {
+    showToast('退店記録に失敗しました：' + e.message, 'error');
+  }
 }
 
 /* ── XSSエスケープ ───────────────────────────────────────── */
@@ -217,7 +298,10 @@ function escapeHtml(str) {
 document.addEventListener('DOMContentLoaded', () => {
   renderHeaderDate();
   startClock();
-  renderAlerts();
-  renderStaffList();
+
+  // localStorageで即時描画 → GASで上書き
+  renderStaffFromLocalStorage();
+  loadAttendance();
+  loadAlerts();
   loadPL();
 });
