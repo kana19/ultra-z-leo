@@ -10,21 +10,25 @@ const STAFF_MASTER_KEY    = 'uz_staff_master';
 const ATTENDANCE_DATE_KEY = 'uz_attendance_date';
 const ATTENDANCE_DATA_KEY = 'uz_attendance_data';
 
-/* ── スタッフマスタ ──────────────────────────────────────── */
+/* ── スタッフマスタ（localStorageから読む） ──────────────── */
 function getStaffMaster() {
   try {
     const saved = localStorage.getItem(STAFF_MASTER_KEY);
-    return saved ? JSON.parse(saved) : getDefaultStaff();
-  } catch { return getDefaultStaff(); }
+    return saved ? JSON.parse(saved) : [];
+  } catch { return []; }
 }
 
-function getDefaultStaff() {
-  return [
-    { id: 1, name: 'さくら' },
-    { id: 2, name: 'あかね' },
-    { id: 3, name: 'みか'   },
-    { id: 4, name: 'ゆき'   },
-  ];
+/* ── GASからスタッフマスタを取得してlocalStorageに保存 ───── */
+async function loadStaffFromGAS() {
+  try {
+    const res = await callGAS('getSettings', {});
+    if (res && res.status === 'ok' && Array.isArray(res.data?.staffList)) {
+      localStorage.setItem(STAFF_MASTER_KEY, JSON.stringify(res.data.staffList));
+      renderQuickSelect();
+    }
+  } catch {
+    // GAS失敗時はlocalStorageのデータをそのまま使用
+  }
 }
 
 /* ── 勤怠データ（日付をまたいだらリセット） ─────────────── */
@@ -33,15 +37,9 @@ function loadAttendance() {
   const today     = todayStr();
 
   if (savedDate !== today) {
-    // 日付が変わっていたらリセット（ダミーデータで初期化）
-    const dummy = [
-      { id: 1, name: 'さくら', clockIn: '20:30', clockOut: null,    isActive: true  },
-      { id: 2, name: 'あかね', clockIn: '20:00', clockOut: null,    isActive: true  },
-      { id: 3, name: 'みか',   clockIn: '19:45', clockOut: '23:00', isActive: false },
-    ];
     localStorage.setItem(ATTENDANCE_DATE_KEY, today);
-    localStorage.setItem(ATTENDANCE_DATA_KEY, JSON.stringify(dummy));
-    return dummy;
+    localStorage.setItem(ATTENDANCE_DATA_KEY, JSON.stringify([]));
+    return [];
   }
 
   try {
@@ -66,6 +64,8 @@ document.addEventListener('DOMContentLoaded', () => {
   renderAttendanceList();
   bindNameInput();
   bindClockInBtn();
+  // GASから最新スタッフリストを取得（バックグラウンド）
+  loadStaffFromGAS();
 });
 
 /* ── クイック選択（未入店スタッフ） ─────────────────────── */
@@ -73,12 +73,16 @@ function renderQuickSelect() {
   const container = document.getElementById('quick-staff');
   if (!container) return;
 
-  const staffMaster  = getStaffMaster();
-  const activeIds    = todayAttendance.filter(a => a.isActive).map(a => a.id);
-  const allTodayIds  = todayAttendance.map(a => a.id);
+  const staffMaster = getStaffMaster();
+  const allTodayIds = todayAttendance.map(a => a.id);
 
   // 今日まだ入店記録がないスタッフのみ表示
   const available = staffMaster.filter(s => !allTodayIds.includes(s.id));
+
+  if (staffMaster.length === 0) {
+    container.innerHTML = `<p style="font-size:13px;color:var(--uz-muted);">設定からスタッフを登録してください</p>`;
+    return;
+  }
 
   if (available.length === 0) {
     container.innerHTML = `<p style="font-size:13px;color:var(--uz-muted);">全スタッフが入店済みです</p>`;
@@ -100,12 +104,10 @@ function renderQuickSelect() {
 function selectQuickStaff(id, name) {
   selectedName = name;
 
-  // ボタンUI更新
   document.querySelectorAll('.quick-staff-btn').forEach(btn => {
     btn.classList.toggle('quick-staff-btn--selected', btn.dataset.name === name);
   });
 
-  // テキストインプットを同期
   const nameInput = document.getElementById('name-input');
   if (nameInput) nameInput.value = name;
 
@@ -120,7 +122,6 @@ function bindNameInput() {
   nameInput.addEventListener('input', () => {
     selectedName = nameInput.value.trim();
 
-    // クイック選択ボタンとの同期（一致するものをハイライト）
     document.querySelectorAll('.quick-staff-btn').forEach(btn => {
       btn.classList.toggle('quick-staff-btn--selected', btn.dataset.name === selectedName);
     });
@@ -145,38 +146,36 @@ function bindClockInBtn() {
 async function handleClockIn() {
   if (isSubmitting || !selectedName) return;
 
-  // 重複チェック（同名の在店中スタッフ）
   if (todayAttendance.some(a => a.name === selectedName && a.isActive)) {
     return showToast(`${selectedName}さんはすでに在店中です`, 'error');
   }
 
   const now = new Date();
+  const date        = todayStr();
   const clockInTime = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
 
-  // IDを採番（スタッフマスタ照合 → なければ臨時ID）
   const master = getStaffMaster().find(s => s.name === selectedName);
-  const newId  = master?.id ?? Date.now();
-
-  const newRecord = {
-    id:       newId,
-    name:     selectedName,
-    clockIn:  clockInTime,
-    clockOut: null,
-    isActive: true,
-  };
+  const staffId = master?.id ?? Date.now();
 
   isSubmitting = true;
   setClockInBtnLoading(true);
 
   try {
-    // ★ GAS未接続期間はダミー動作
-    // await callGAS('clockIn', { staffId: newId, staffName: selectedName });
-    await new Promise(r => setTimeout(r, 500));
+    const result = await callGAS('clockIn', { staffId, staffName: selectedName, clockInTime, date });
+    if (result.status !== 'ok') throw new Error(result.message || '登録エラー');
+
+    const newRecord = {
+      id:       staffId,
+      name:     selectedName,
+      clockIn:  clockInTime,
+      clockOut: null,
+      isActive: true,
+      rowIndex: result.rowIndex ?? null,
+    };
 
     todayAttendance.unshift(newRecord);
     saveAttendance(todayAttendance);
 
-    // UI更新
     resetSelection();
     renderQuickSelect();
     renderAttendanceList();
@@ -201,9 +200,8 @@ async function handleClockOut(id) {
   const clockOutTime = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
 
   try {
-    // ★ GAS未接続期間はダミー動作
-    // await callGAS('clockOut', { staffId: id });
-    await new Promise(r => setTimeout(r, 400));
+    const result = await callGAS('clockOut', { staffId: record.id, clockOutTime, rowIndex: record.rowIndex ?? null });
+    if (result.status !== 'ok') throw new Error(result.message || '登録エラー');
 
     record.clockOut = clockOutTime;
     record.isActive = false;
@@ -228,7 +226,6 @@ function renderAttendanceList() {
     return;
   }
 
-  // 在店中を先に、退店済みをあとに
   const sorted = [
     ...todayAttendance.filter(a => a.isActive),
     ...todayAttendance.filter(a => !a.isActive),
