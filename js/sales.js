@@ -212,6 +212,13 @@ function addIndividualRow() {
         </label>
       </div>
     </div>
+    <input type="text"
+           id="indiv-memo-${id}"
+           class="text-input indiv-memo-input"
+           placeholder="メモ（任意）"
+           maxlength="100"
+           autocomplete="off"
+           aria-label="メモ">
   `;
   container.appendChild(div);
 }
@@ -234,11 +241,12 @@ function removeIndividualRow(id) {
 function collectIndividualRows() {
   const rows = [];
   document.querySelectorAll('.indiv-row').forEach(row => {
-    const id     = row.dataset.id;
-    const sel    = row.querySelector('.indiv-customer-select');
-    const manual = document.getElementById(`indiv-manual-${id}`);
-    const amtEl  = document.getElementById(`indiv-amount-${id}`);
-    const ucEl   = document.getElementById(`indiv-uc-${id}`);
+    const id      = row.dataset.id;
+    const sel     = row.querySelector('.indiv-customer-select');
+    const manual  = document.getElementById(`indiv-manual-${id}`);
+    const amtEl   = document.getElementById(`indiv-amount-${id}`);
+    const ucEl    = document.getElementById(`indiv-uc-${id}`);
+    const memoEl  = document.getElementById(`indiv-memo-${id}`);
 
     let customerName = sel?.value || '';
     if (customerName === '__misc__')   customerName = '諸口';
@@ -248,6 +256,7 @@ function collectIndividualRows() {
       customerName,
       amount:      parseInt((amtEl?.value || '0').replace(/[^0-9]/g, '')) || 0,
       uncollected: ucEl?.checked ?? false,
+      memo:        memoEl?.value.trim() || '',
     });
   });
   return rows;
@@ -324,7 +333,7 @@ async function handleSubmit() {
             taxRate:      currentTaxRate,
             tax:          rTax,
             amountInTax:  r.amount,
-            memo:         r.customerName,
+            memo:         [r.customerName, r.memo].filter(Boolean).join('　'),
             uncollected:  r.uncollected ? 1 : 0,
           });
         })

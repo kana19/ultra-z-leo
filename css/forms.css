@@ -502,6 +502,8 @@
 
 .indiv-manual-input { margin-bottom: 8px; }
 
+.indiv-memo-input { margin-top: 8px; }
+
 /* 2行目：金額入力 ＋ 売掛ラベル付きトグル */
 .indiv-row-body {
   display: flex;
