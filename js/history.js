@@ -69,13 +69,17 @@ async function loadHistory() {
 
   try {
     const res = await callGAS('getHistory', { month: monthParam });
+    console.log('[history] GASレスポンス:', JSON.stringify(res));
     if (res && res.status === 'ok' && Array.isArray(res.data)) {
+      console.log('[history] renderHistory呼び出し, 件数:', res.data.length);
       renderHistory(res.data);
     } else {
+      console.warn('[history] レスポンス異常:', res);
       renderError();
       showToast('履歴の取得に失敗しました', 'error');
     }
   } catch (e) {
+    console.error('[history] GAS接続エラー:', e);
     renderError();
     showToast('GAS接続エラー：' + e.message, 'error');
   } finally {
