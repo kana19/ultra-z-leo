@@ -24,19 +24,26 @@
       ‹ 戻る
     </a>
     <span class="sub-header__title">売上入力</span>
-    <div style="width:60px;"></div><!-- バランス用 -->
+    <div style="width:60px;"></div>
   </header>
 
-  <!-- フォーム本体 -->
-  <div class="form-body">
+  <!-- タブバー -->
+  <div class="sales-tab-bar" role="tablist">
+    <button id="tab-new"   class="sales-tab sales-tab--active"
+            role="tab" aria-selected="true"  tabindex="0"
+            onclick="switchTab('new')">新規売上入力</button>
+    <button id="tab-indiv" class="sales-tab"
+            role="tab" aria-selected="false" tabindex="-1"
+            onclick="switchTab('indiv')">個別管理を追加</button>
+  </div>
+
+  <!-- ══════ タブ1：新規売上入力 ══════ -->
+  <div id="panel-new" class="form-body" role="tabpanel" aria-labelledby="tab-new">
 
     <!-- ① 発生日 -->
     <div class="form-section">
       <label class="form-section__label" for="date-input">発生日</label>
-      <input type="date"
-             id="date-input"
-             class="date-input"
-             aria-label="発生日">
+      <input type="date" id="date-input" class="date-input" aria-label="発生日">
     </div>
 
     <!-- ② サービス選択 -->
@@ -44,21 +51,16 @@
       <span class="form-section__label">サービス</span>
       <div id="service-cards"
            class="radio-card-group radio-card-group--last-full"
-           role="radiogroup"
-           aria-label="サービス選択">
+           role="radiogroup" aria-label="サービス選択">
         <!-- sales.js が描画 -->
       </div>
     </div>
 
-    <!-- ③ 諸口品目名（諸口選択時のみ表示） -->
+    <!-- ③ 諸口品目名（諸口選択時のみ） -->
     <div class="form-section" id="misc-section" hidden>
       <label class="form-section__label" for="misc-name-input">品目名</label>
-      <input type="text"
-             id="misc-name-input"
-             class="text-input"
-             placeholder="品目名を入力（例：手土産代）"
-             maxlength="50"
-             autocomplete="off">
+      <input type="text" id="misc-name-input" class="text-input"
+             placeholder="品目名を入力（例：手土産代）" maxlength="50" autocomplete="off">
       <p class="form-hint">マスタ未登録の品目を記録する場合に入力してください。</p>
     </div>
 
@@ -73,39 +75,28 @@
       <p class="form-hint">サービスのデフォルト税率が自動セットされます。変更は例外時のみ。</p>
     </div>
 
-    <!-- ④ 金額入力 -->
+    <!-- ⑤ 金額入力 -->
     <div class="form-section">
       <span class="form-section__label">売上入力（税込み）</span>
-
       <div class="amount-wrap amount-wrap--blue">
         <span class="amount-prefix" aria-hidden="true">¥</span>
-        <input type="text"
-               id="amount-input"
-               class="amount-input"
-               inputmode="numeric"
-               pattern="[0-9]*"
-               placeholder="0"
-               maxlength="10"
-               autocomplete="off"
-               aria-label="税込金額">
+        <input type="text" id="amount-input" class="amount-input"
+               inputmode="numeric" pattern="[0-9]*" placeholder="0"
+               maxlength="10" autocomplete="off" aria-label="税込金額">
       </div>
-
-      <!-- 税計算表示 -->
       <div class="tax-display" aria-live="polite">
         <div class="tax-display-item">
           <div class="tax-display-item__label">税抜金額</div>
-          <div id="tax-excluded"
-               class="tax-display-item__value tax-display-item__value--blue">¥—</div>
+          <div id="tax-excluded" class="tax-display-item__value tax-display-item__value--blue">¥—</div>
         </div>
         <div class="tax-display-item">
           <div class="tax-display-item__label">消費税</div>
-          <div id="tax-amount"
-               class="tax-display-item__value tax-display-item__value--blue">¥—</div>
+          <div id="tax-amount" class="tax-display-item__value tax-display-item__value--blue">¥—</div>
         </div>
       </div>
     </div>
 
-    <!-- ⑤ 個別管理 -->
+    <!-- ⑥ 個別管理 -->
     <div class="form-section">
       <div class="toggle-row">
         <div class="toggle-row__left">
@@ -117,8 +108,6 @@
           <span class="switch-slider"></span>
         </label>
       </div>
-
-      <!-- 個別管理詳細（トグルON時のみ） -->
       <div id="individual-section" hidden style="margin-top:12px;">
         <div id="indiv-rows"></div>
         <div id="indiv-unallocated"
@@ -130,7 +119,7 @@
       </div>
     </div>
 
-    <!-- ⑥ 売掛トグル -->
+    <!-- ⑦ 売掛トグル -->
     <div class="form-section">
       <div class="toggle-row">
         <div class="toggle-row__left">
@@ -147,15 +136,30 @@
     <!-- ⑧ メモ -->
     <div class="form-section">
       <label class="form-section__label" for="memo-input">メモ（任意）</label>
-      <input type="text"
-             id="memo-input"
-             class="text-input"
-             placeholder="例：3名来店、ボトル持参"
-             maxlength="100"
-             autocomplete="off">
+      <input type="text" id="memo-input" class="text-input"
+             placeholder="例：3名来店、ボトル持参" maxlength="100" autocomplete="off">
     </div>
 
-  </div><!-- /form-body -->
+  </div><!-- /panel-new -->
+
+  <!-- ══════ タブ2：個別管理を追加 ══════ -->
+  <div id="panel-indiv" class="form-body" role="tabpanel" aria-labelledby="tab-indiv" hidden>
+
+    <!-- 発生日 -->
+    <div class="form-section">
+      <label class="form-section__label" for="indiv-date-input">発生日</label>
+      <input type="date" id="indiv-date-input" class="date-input" aria-label="発生日">
+    </div>
+
+    <!-- 個別行 -->
+    <div class="form-section" style="border-bottom:none;">
+      <div id="indiv-tab-rows"></div>
+      <button type="button" class="indiv-add-btn" onclick="addTabIndivRow()">
+        ＋ 行を追加
+      </button>
+    </div>
+
+  </div><!-- /panel-indiv -->
 
 </div><!-- /page-wrapper -->
 

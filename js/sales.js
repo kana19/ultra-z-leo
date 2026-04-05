@@ -36,7 +36,9 @@ function getStaffMaster() {
 let selectedServiceCode = null;
 let currentTaxRate      = 10;
 let isSubmitting        = false;
-let nextRowId           = 1;
+let currentTab          = 'new';  // 'new' | 'indiv'
+let nextRowId           = 1;      // タブ1 個別行
+let nextTabRowId        = 1;      // タブ2 個別行
 
 /* ── 初期化 ──────────────────────────────────────────────── */
 document.addEventListener('DOMContentLoaded', () => {
@@ -47,7 +49,31 @@ document.addEventListener('DOMContentLoaded', () => {
   bindIndividualToggle();
   bindSubmit();
   selectService(getServiceMaster()[0].code);
+
+  const indivDateEl = document.getElementById('indiv-date-input');
+  if (indivDateEl) indivDateEl.value = todayStr();
 });
+
+/* ── タブ切替 ────────────────────────────────────────────── */
+function switchTab(tab) {
+  currentTab = tab;
+
+  document.getElementById('panel-new').hidden   = tab !== 'new';
+  document.getElementById('panel-indiv').hidden = tab !== 'indiv';
+
+  document.getElementById('tab-new').classList.toggle('sales-tab--active',   tab === 'new');
+  document.getElementById('tab-indiv').classList.toggle('sales-tab--active', tab === 'indiv');
+  document.getElementById('tab-new').setAttribute('aria-selected',   String(tab === 'new'));
+  document.getElementById('tab-indiv').setAttribute('aria-selected', String(tab === 'indiv'));
+
+  const btn = document.getElementById('submit-btn');
+  if (btn) btn.textContent = tab === 'indiv' ? '追加登録する' : '登録する';
+
+  // タブ2に初期行がなければ1行追加
+  if (tab === 'indiv' && !document.querySelector('.indiv-tab-row')) {
+    addTabIndivRow();
+  }
+}
 
 /* ── 日付初期化 ──────────────────────────────────────────── */
 function initDate() {
@@ -136,10 +162,98 @@ function bindTaxButtons() {
 }
 
 /* ════════════════════════════════════════════════════════════
-   個別管理
+   個別行（タブ1・タブ2 共通）
    ════════════════════════════════════════════════════════════ */
 
-/* ── 個別管理トグルバインド ──────────────────────────────── */
+/* ── 顧客オプションHTML ──────────────────────────────────── */
+function buildCustomerOptions() {
+  const staffList = getStaffMaster();
+  const opts = staffList.map(s =>
+    `<option value="${escHtml(s.name)}">${escHtml(s.name)}</option>`
+  ).join('');
+  return `<option value="">顧客を選択</option>` +
+         opts +
+         `<option value="__misc__">諸口</option>` +
+         `<option value="__manual__">手入力...</option>`;
+}
+
+/**
+ * 個別行の内部HTMLを生成（タブ1・タブ2で共用）
+ * @param {number} id        - 行ID
+ * @param {string} prefix    - 要素IDプレフィックス（'indiv' or 'trow'）
+ * @param {string} changeFn  - select変更時の関数名
+ * @param {string} removeFn  - 削除ボタンの関数名
+ */
+function buildIndivRowHTML(id, prefix, changeFn, removeFn) {
+  return `
+    <div class="indiv-row-header">
+      <select class="form-select indiv-customer-select"
+              onchange="${changeFn}(${id})"
+              aria-label="顧客選択">
+        ${buildCustomerOptions()}
+      </select>
+      <button class="indiv-remove-btn" type="button"
+              onclick="${removeFn}(${id})"
+              aria-label="行を削除">✕</button>
+    </div>
+    <input type="text"
+           id="${prefix}-manual-${id}"
+           class="text-input indiv-manual-input"
+           placeholder="顧客名を入力"
+           maxlength="30"
+           autocomplete="off"
+           hidden>
+    <div class="indiv-row-body">
+      <div class="amount-wrap amount-wrap--blue indiv-amount-wrap">
+        <span class="amount-prefix" aria-hidden="true">¥</span>
+        <input type="text"
+               id="${prefix}-amount-${id}"
+               class="amount-input indiv-amount-input"
+               inputmode="numeric"
+               pattern="[0-9]*"
+               placeholder="0"
+               maxlength="10"
+               oninput="this.value=this.value.replace(/[^0-9]/g,'');recalcUnallocated()"
+               aria-label="金額">
+      </div>
+      <div class="indiv-uncollected-label">
+        <span class="indiv-uncollected-text">売掛</span>
+        <label class="switch switch--small">
+          <input type="checkbox" id="${prefix}-uc-${id}" class="indiv-uncollected-chk">
+          <span class="switch-slider"></span>
+        </label>
+      </div>
+    </div>
+  `;
+}
+
+/* ── 個別行データ収集（共通） ────────────────────────────── */
+function collectRows(rowClass, prefix) {
+  const rows = [];
+  document.querySelectorAll(`.${rowClass}`).forEach(row => {
+    const id     = row.dataset.id;
+    const sel    = row.querySelector('.indiv-customer-select');
+    const manual = document.getElementById(`${prefix}-manual-${id}`);
+    const amtEl  = document.getElementById(`${prefix}-amount-${id}`);
+    const ucEl   = document.getElementById(`${prefix}-uc-${id}`);
+
+    let customerName = sel?.value || '';
+    if (customerName === '__misc__')   customerName = '諸口';
+    if (customerName === '__manual__') customerName = manual?.value.trim() || '';
+
+    rows.push({
+      customerName,
+      amount:      parseInt((amtEl?.value || '0').replace(/[^0-9]/g, '')) || 0,
+      uncollected: ucEl?.checked ?? false,
+    });
+  });
+  return rows;
+}
+
+/* ════════════════════════════════════════════════════════════
+   タブ1：個別管理
+   ════════════════════════════════════════════════════════════ */
+
 function bindIndividualToggle() {
   const toggle  = document.getElementById('individual-toggle');
   const section = document.getElementById('individual-section');
@@ -157,72 +271,18 @@ function bindIndividualToggle() {
   });
 }
 
-/* ── 顧客オプションHTML生成 ──────────────────────────────── */
-function buildCustomerOptions() {
-  const staffList = getStaffMaster();
-  const opts = staffList.map(s =>
-    `<option value="${escHtml(s.name)}">${escHtml(s.name)}</option>`
-  ).join('');
-  return `<option value="">顧客を選択</option>` +
-         opts +
-         `<option value="__misc__">諸口</option>` +
-         `<option value="__manual__">手入力...</option>`;
-}
-
-/* ── 個別行追加 ──────────────────────────────────────────── */
 function addIndividualRow() {
   const container = document.getElementById('indiv-rows');
   if (!container) return;
-
   const id  = nextRowId++;
   const div = document.createElement('div');
   div.className  = 'indiv-row';
   div.dataset.id = id;
-  div.innerHTML  = `
-    <div class="indiv-row-header">
-      <select class="form-select indiv-customer-select"
-              onchange="onCustomerSelectChange(${id})"
-              aria-label="顧客選択">
-        ${buildCustomerOptions()}
-      </select>
-      <button class="indiv-remove-btn" type="button"
-              onclick="removeIndividualRow(${id})"
-              aria-label="行を削除">✕</button>
-    </div>
-    <input type="text"
-           id="indiv-manual-${id}"
-           class="text-input indiv-manual-input"
-           placeholder="顧客名を入力"
-           maxlength="30"
-           autocomplete="off"
-           hidden>
-    <div class="indiv-row-body">
-      <div class="amount-wrap amount-wrap--blue indiv-amount-wrap">
-        <span class="amount-prefix" aria-hidden="true">¥</span>
-        <input type="text"
-               id="indiv-amount-${id}"
-               class="amount-input indiv-amount-input"
-               inputmode="numeric"
-               pattern="[0-9]*"
-               placeholder="0"
-               maxlength="10"
-               oninput="this.value=this.value.replace(/[^0-9]/g,'');recalcUnallocated()"
-               aria-label="金額">
-      </div>
-      <label class="indiv-uncollected-label">
-        <span class="indiv-uncollected-text">売掛</span>
-        <label class="switch switch--small">
-          <input type="checkbox" id="indiv-uc-${id}" class="indiv-uncollected-chk">
-          <span class="switch-slider"></span>
-        </label>
-      </label>
-    </div>
-  `;
+  div.innerHTML  = buildIndivRowHTML(id, 'indiv', 'onCustomerSelectChange', 'removeIndividualRow');
   container.appendChild(div);
   recalcUnallocated();
 }
 
-/* ── 顧客プルダウン変更 ──────────────────────────────────── */
 function onCustomerSelectChange(id) {
   const sel    = document.querySelector(`.indiv-row[data-id="${id}"] .indiv-customer-select`);
   const manual = document.getElementById(`indiv-manual-${id}`);
@@ -231,10 +291,13 @@ function onCustomerSelectChange(id) {
   if (manual.hidden) manual.value = '';
 }
 
-/* ── 個別行削除 ──────────────────────────────────────────── */
 function removeIndividualRow(id) {
   document.querySelector(`.indiv-row[data-id="${id}"]`)?.remove();
   recalcUnallocated();
+}
+
+function collectIndividualRows() {
+  return collectRows('indiv-row', 'indiv');
 }
 
 /* ── 残り未割当計算 ──────────────────────────────────────── */
@@ -247,7 +310,7 @@ function recalcUnallocated() {
   ) || 0;
 
   let rowTotal = 0;
-  document.querySelectorAll('.indiv-amount-input').forEach(inp => {
+  document.querySelectorAll('.indiv-row .indiv-amount-input').forEach(inp => {
     rowTotal += parseInt(inp.value.replace(/[^0-9]/g, '') || '0') || 0;
   });
 
@@ -258,33 +321,52 @@ function recalcUnallocated() {
   el.style.color = unallocated < 0 ? 'var(--uz-red)' : 'var(--uz-muted)';
 }
 
-/* ── 個別行データ収集 ────────────────────────────────────── */
-function collectIndividualRows() {
-  const rows = [];
-  document.querySelectorAll('.indiv-row').forEach(row => {
-    const id     = row.dataset.id;
-    const sel    = row.querySelector('.indiv-customer-select');
-    const manual = document.getElementById(`indiv-manual-${id}`);
-    const amtEl  = document.getElementById(`indiv-amount-${id}`);
-    const ucEl   = document.getElementById(`indiv-uc-${id}`);
+/* ════════════════════════════════════════════════════════════
+   タブ2：個別管理を追加
+   ════════════════════════════════════════════════════════════ */
 
-    let customerName = sel?.value || '';
-    if (customerName === '__misc__')  customerName = '諸口';
-    if (customerName === '__manual__') customerName = manual?.value.trim() || '';
-
-    const amount      = parseInt((amtEl?.value || '0').replace(/[^0-9]/g, '')) || 0;
-    const uncollected = ucEl?.checked ?? false;
-
-    rows.push({ customerName, amount, uncollected });
-  });
-  return rows;
+function addTabIndivRow() {
+  const container = document.getElementById('indiv-tab-rows');
+  if (!container) return;
+  const id  = nextTabRowId++;
+  const div = document.createElement('div');
+  div.className  = 'indiv-tab-row';
+  div.dataset.id = id;
+  div.innerHTML  = buildIndivRowHTML(id, 'trow', 'onTabCustomerSelectChange', 'removeTabIndivRow');
+  container.appendChild(div);
 }
 
-/* ── 送信処理 ────────────────────────────────────────────── */
+function onTabCustomerSelectChange(id) {
+  const sel    = document.querySelector(`.indiv-tab-row[data-id="${id}"] .indiv-customer-select`);
+  const manual = document.getElementById(`trow-manual-${id}`);
+  if (!sel || !manual) return;
+  manual.hidden = sel.value !== '__manual__';
+  if (manual.hidden) manual.value = '';
+}
+
+function removeTabIndivRow(id) {
+  document.querySelector(`.indiv-tab-row[data-id="${id}"]`)?.remove();
+}
+
+function collectTabIndivRows() {
+  return collectRows('indiv-tab-row', 'trow');
+}
+
+/* ════════════════════════════════════════════════════════════
+   送信処理
+   ════════════════════════════════════════════════════════════ */
+
 function bindSubmit() {
-  document.getElementById('submit-btn')?.addEventListener('click', handleSubmit);
+  document.getElementById('submit-btn')?.addEventListener('click', () => {
+    if (currentTab === 'indiv') {
+      handleSubmitIndiv();
+    } else {
+      handleSubmit();
+    }
+  });
 }
 
+/* ── タブ1：新規売上登録 ─────────────────────────────────── */
 async function handleSubmit() {
   if (isSubmitting) return;
 
@@ -297,7 +379,6 @@ async function handleSubmit() {
   const mainUC   = document.getElementById('uncollected-toggle')?.checked ?? false;
   const indivOn  = document.getElementById('individual-toggle')?.checked ?? false;
 
-  // ── バリデーション ──
   if (!date)       return showToast('日付を入力してください', 'error');
   if (!svc)        return showToast('サービスを選択してください', 'error');
   if (amount <= 0) return showToast('金額を入力してください', 'error');
@@ -316,33 +397,28 @@ async function handleSubmit() {
     }
   }
 
-  // 売掛フラグ：メイントグル OR 個別行に1件でもON
   const anyRowUC = indivRows.some(r => r.uncollected);
   const finalUC  = mainUC || anyRowUC;
   const { taxExcluded, tax } = calcTax(amount, currentTaxRate);
-
-  const mainPayload = {
-    date,
-    serviceCode:  svc.code,
-    serviceName:  svc.name,
-    miscItemName: miscName,
-    amountExTax:  taxExcluded,
-    taxRate:      currentTaxRate,
-    tax,
-    amountInTax:  amount,
-    memo,
-    uncollected:  finalUC ? 1 : 0,
-  };
 
   isSubmitting = true;
   setSubmitLoading(true);
 
   try {
-    // 1. 売上本体を登録
-    const mainRes = await callGAS('addSales', mainPayload);
+    const mainRes = await callGAS('addSales', {
+      date,
+      serviceCode:  svc.code,
+      serviceName:  svc.name,
+      miscItemName: miscName,
+      amountExTax:  taxExcluded,
+      taxRate:      currentTaxRate,
+      tax,
+      amountInTax:  amount,
+      memo,
+      uncollected:  finalUC ? 1 : 0,
+    });
     if (mainRes.status !== 'ok') throw new Error(mainRes.message || '売上登録エラー');
 
-    // 2. 個別行を並列登録
     if (indivOn && indivRows.length > 0) {
       const results = await Promise.all(
         indivRows.map(r => {
@@ -361,12 +437,63 @@ async function handleSubmit() {
           });
         })
       );
-      const failed = results.filter(r => r.status !== 'ok');
-      if (failed.length > 0) throw new Error('個別行の登録中にエラーが発生しました');
+      if (results.some(r => r.status !== 'ok')) throw new Error('個別行の登録中にエラーが発生しました');
     }
 
     setSubmitLoading(false);
     showToast('売上を登録しました ✓', 'success');
+    setTimeout(() => navigate('index.html'), 1200);
+
+  } catch (e) {
+    setSubmitLoading(false);
+    showToast('登録に失敗しました：' + e.message, 'error');
+  } finally {
+    isSubmitting = false;
+  }
+}
+
+/* ── タブ2：個別管理追加登録 ─────────────────────────────── */
+async function handleSubmitIndiv() {
+  if (isSubmitting) return;
+
+  const date = document.getElementById('indiv-date-input')?.value || '';
+  if (!date) return showToast('日付を入力してください', 'error');
+
+  const rows = collectTabIndivRows();
+  if (rows.length === 0) return showToast('行を追加してください', 'error');
+  for (const r of rows) {
+    if (!r.customerName) return showToast('顧客名を選択または入力してください', 'error');
+    if (r.amount <= 0)   return showToast('金額を入力してください', 'error');
+  }
+
+  // タブ2はサービスマスタ先頭を使用（サービス選択なし）
+  const svc = getServiceMaster()[0];
+
+  isSubmitting = true;
+  setSubmitLoading(true);
+
+  try {
+    const results = await Promise.all(
+      rows.map(r => {
+        const { taxExcluded, tax } = calcTax(r.amount, currentTaxRate);
+        return callGAS('addSales', {
+          date,
+          serviceCode:  svc.code,
+          serviceName:  svc.name,
+          miscItemName: '',
+          amountExTax:  taxExcluded,
+          taxRate:      currentTaxRate,
+          tax,
+          amountInTax:  r.amount,
+          memo:         r.customerName,
+          uncollected:  r.uncollected ? 1 : 0,
+        });
+      })
+    );
+    if (results.some(r => r.status !== 'ok')) throw new Error('登録中にエラーが発生しました');
+
+    setSubmitLoading(false);
+    showToast(`${rows.length}件を追加登録しました ✓`, 'success');
     setTimeout(() => navigate('index.html'), 1200);
 
   } catch (e) {
@@ -384,7 +511,7 @@ function setSubmitLoading(loading) {
   btn.disabled = loading;
   btn.innerHTML = loading
     ? '<span class="spinner" style="width:20px;height:20px;border-top-color:#fff;"></span>'
-    : '登録する';
+    : (currentTab === 'indiv' ? '追加登録する' : '登録する');
 }
 
 function escHtml(str) {

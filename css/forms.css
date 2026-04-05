@@ -44,6 +44,37 @@
   transform: translateX(-50%);
 }
 
+/* ── 売上タブバー ────────────────────────────────────────── */
+.sales-tab-bar {
+  display: flex;
+  background: var(--uz-surface);
+  border-bottom: 1px solid var(--uz-border);
+  position: sticky;
+  top: 56px;
+  z-index: 90;
+}
+
+.sales-tab {
+  flex: 1;
+  height: 44px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--uz-muted);
+  font-family: var(--font-main);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.sales-tab:active { filter: brightness(0.85); }
+
+.sales-tab--active {
+  color: var(--uz-blue);
+  border-bottom-color: var(--uz-blue);
+}
+
 /* ── フォームボディ ──────────────────────────────────────── */
 .form-body {
   padding: 0 0 calc(80px + env(safe-area-inset-bottom));
@@ -421,8 +452,9 @@
 .submit-btn--blue { background: var(--uz-blue); color: #fff; }
 .submit-btn--red  { background: var(--uz-red);  color: #fff; }
 
-/* ── 個別管理行 ──────────────────────────────────────────── */
-.indiv-row {
+/* ── 個別管理行（タブ1・タブ2共通） ─────────────────────── */
+.indiv-row,
+.indiv-tab-row {
   background: var(--uz-surface2);
   border: 1px solid var(--uz-border);
   border-radius: var(--radius-md);
@@ -430,6 +462,7 @@
   margin-bottom: 8px;
 }
 
+/* 1行目：顧客選択 ＋ 削除ボタン */
 .indiv-row-header {
   display: flex;
   gap: 8px;
@@ -437,7 +470,7 @@
   margin-bottom: 8px;
 }
 
-.indiv-row-header .form-select { flex: 1; }
+.indiv-row-header .form-select { flex: 1; min-width: 0; }
 
 .indiv-remove-btn {
   flex-shrink: 0;
@@ -453,38 +486,46 @@
   align-items: center;
   justify-content: center;
   padding: 0;
+  line-height: 1;
 }
 
 .indiv-remove-btn:active { filter: brightness(0.8); }
 
 .indiv-manual-input { margin-bottom: 8px; }
 
+/* 2行目：金額入力 ＋ 売掛ラベル付きトグル */
 .indiv-row-body {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 
 .indiv-amount-wrap {
   flex: 1;
-  padding: 4px 0 2px;
+  min-width: 0;
+  padding: 2px 0 2px;
   border-bottom: 1.5px solid var(--uz-border);
+  transition: border-color 0.2s;
 }
 
+.indiv-amount-wrap:focus-within { border-color: var(--uz-blue); }
+
 .indiv-amount-wrap .amount-prefix { font-size: 18px; }
-.indiv-amount-wrap .amount-input  { font-size: 22px; }
+.indiv-amount-wrap .amount-input  { font-size: 24px; }
 
 .indiv-uncollected-label {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   flex-shrink: 0;
 }
 
 .indiv-uncollected-text {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--uz-muted);
-  font-weight: 600;
+  font-weight: 700;
+  letter-spacing: 0.05em;
 }
 
 /* スモールスイッチ */
@@ -504,6 +545,7 @@
   transform: translateX(16px) translateY(-50%);
 }
 
+/* ＋行追加ボタン */
 .indiv-add-btn {
   width: 100%;
   height: 36px;
