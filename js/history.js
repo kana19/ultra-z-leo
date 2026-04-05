@@ -65,7 +65,8 @@ async function loadHistory() {
   updateNavUI();
   showLoading();
 
-  const monthParam = `${currentYear}-${String(currentMonth).padStart(2, '0')}`;
+  // GASのdateフィールドはYYYY/MM/DD形式のため、スラッシュ区切りで送る
+  const monthParam = `${currentYear}/${String(currentMonth).padStart(2, '0')}`;
 
   try {
     const res = await callGAS('getHistory', { month: monthParam });
@@ -118,7 +119,7 @@ function renderHistory(items) {
 }
 
 function buildDateHeader(dateStr) {
-  const [y, m, d] = dateStr.split('-').map(Number);
+  const [y, m, d] = dateStr.split(/[-\/]/).map(Number);
   const dow = WEEKDAYS[new Date(y, m - 1, d).getDay()];
   return `
     <div style="padding:12px 20px 6px;">
