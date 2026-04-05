@@ -19,8 +19,6 @@ const THIS_YEAR  = _now.getFullYear();
 const THIS_MONTH = _now.getMonth() + 1;
 const MIN_YEAR   = 2025;
 
-const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
-
 /* ── 状態 ────────────────────────────────────────────────── */
 let currentYear  = THIS_YEAR;
 let currentMonth = THIS_MONTH;
