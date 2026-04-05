@@ -5,54 +5,47 @@
 
 'use strict';
 
-/* ── サービスマスタ（設定画面で登録・localStorageで管理） ── */
+/* ── マスタキー ──────────────────────────────────────────── */
 const SERVICE_MASTER_KEY = 'uz_service_master';
+const STAFF_MASTER_KEY   = 'uz_staff_master';
 
-// 諸口は常に末尾に自動付与（削除・変更不可）
 const MISC_SERVICE = { code: 'S099', name: '諸口', taxRate: 10 };
-
 const DEFAULT_SERVICES = [
   { code: 'S001', name: '店内売上',     taxRate: 10 },
   { code: 'S002', name: 'テイクアウト', taxRate:  8 },
 ];
 
-/**
- * サービスマスタを取得（最大3種 + 諸口を末尾に付与）
- * @returns {{ code: string, name: string, taxRate: number }[]}
- */
 function getServiceMaster() {
   try {
     const saved = localStorage.getItem(SERVICE_MASTER_KEY);
     const list  = saved ? JSON.parse(saved) : DEFAULT_SERVICES;
-    return [...list, MISC_SERVICE]; // 諸口は常に末尾に固定
+    return [...list, MISC_SERVICE];
   } catch {
     return [...DEFAULT_SERVICES, MISC_SERVICE];
   }
 }
 
-const ROYAL_CUSTOMERS = [
-  { code: 'R001', name: '田中様' },
-  { code: 'R002', name: '鈴木様' },
-  { code: 'R003', name: '佐藤様' },
-  { code: 'R004', name: '高橋様' },
-];
+function getStaffMaster() {
+  try {
+    const saved = localStorage.getItem(STAFF_MASTER_KEY);
+    return saved ? JSON.parse(saved) : [];
+  } catch { return []; }
+}
 
 /* ── 状態 ────────────────────────────────────────────────── */
-let selectedServiceCode = null; // DOMContentLoaded時にマスタ先頭で初期化
+let selectedServiceCode = null;
 let currentTaxRate      = 10;
 let isSubmitting        = false;
+let nextRowId           = 1;
 
 /* ── 初期化 ──────────────────────────────────────────────── */
 document.addEventListener('DOMContentLoaded', () => {
   initDate();
   renderServiceCards();
-  renderRoyalOptions();
   bindAmountInput();
   bindTaxButtons();
-  bindRoyalToggle();
+  bindIndividualToggle();
   bindSubmit();
-
-  // 最初のサービスを選択状態にする
   selectService(getServiceMaster()[0].code);
 });
 
@@ -66,7 +59,6 @@ function initDate() {
 function renderServiceCards() {
   const container = document.getElementById('service-cards');
   if (!container) return;
-
   container.innerHTML = getServiceMaster().map(svc => `
     <div class="radio-card"
          data-code="${svc.code}"
@@ -85,20 +77,16 @@ function renderServiceCards() {
 function selectService(code) {
   const svc = getServiceMaster().find(s => s.code === code);
   if (!svc) return;
-
   selectedServiceCode = code;
 
-  // カードUI更新
   document.querySelectorAll('#service-cards .radio-card').forEach(card => {
     const checked = card.dataset.code === code;
     card.classList.toggle('radio-card--checked-blue', checked);
     card.setAttribute('aria-checked', String(checked));
   });
 
-  // 税率をサービスデフォルトに戻す
   setTaxRate(svc.taxRate);
 
-  // 諸口フィールドの表示切替
   const miscSection = document.getElementById('misc-section');
   if (miscSection) {
     miscSection.hidden = code !== 'S099';
@@ -112,35 +100,29 @@ function selectService(code) {
 /* ── 税率セット ──────────────────────────────────────────── */
 function setTaxRate(rate) {
   currentTaxRate = rate;
-
   document.querySelectorAll('.tax-btn').forEach(btn => {
-    const active = parseInt(btn.dataset.rate) === rate;
-    btn.classList.toggle('tax-btn--active-blue', active);
+    btn.classList.toggle('tax-btn--active-blue', parseInt(btn.dataset.rate) === rate);
   });
-
   recalcTax();
 }
 
 /* ── 税計算・表示更新 ────────────────────────────────────── */
 function recalcTax() {
-  const amountInput = document.getElementById('amount-input');
-  const raw = amountInput ? amountInput.value.replace(/,/g, '') : '0';
+  const raw = (document.getElementById('amount-input')?.value || '0').replace(/,/g, '');
   const taxIncluded = parseInt(raw) || 0;
   const { taxExcluded, tax } = calcTax(taxIncluded, currentTaxRate);
-
   const exEl  = document.getElementById('tax-excluded');
   const taxEl = document.getElementById('tax-amount');
   if (exEl)  exEl.textContent  = taxIncluded > 0 ? formatYen(taxExcluded) : '¥—';
   if (taxEl) taxEl.textContent = taxIncluded > 0 ? formatYen(tax)         : '¥—';
+  recalcUnallocated();
 }
 
 /* ── 金額入力バインド ────────────────────────────────────── */
 function bindAmountInput() {
   const el = document.getElementById('amount-input');
   if (!el) return;
-
   el.addEventListener('input', () => {
-    // 数字以外を除去
     el.value = el.value.replace(/[^0-9]/g, '');
     recalcTax();
   });
@@ -153,38 +135,154 @@ function bindTaxButtons() {
   });
 }
 
-/* ── ロイヤル顧客プルダウン生成 ─────────────────────────── */
-function renderRoyalOptions() {
-  const sel = document.getElementById('royal-customer-select');
-  if (!sel) return;
+/* ════════════════════════════════════════════════════════════
+   個別管理
+   ════════════════════════════════════════════════════════════ */
 
-  sel.innerHTML = `<option value="">顧客を選択</option>` +
-    ROYAL_CUSTOMERS.map(c =>
-      `<option value="${escHtml(c.code)}">${escHtml(c.name)}</option>`
-    ).join('');
-}
-
-/* ── ロイヤルトグル ──────────────────────────────────────── */
-function bindRoyalToggle() {
-  const toggle  = document.getElementById('royal-toggle');
-  const section = document.getElementById('royal-detail-section');
+/* ── 個別管理トグルバインド ──────────────────────────────── */
+function bindIndividualToggle() {
+  const toggle  = document.getElementById('individual-toggle');
+  const section = document.getElementById('individual-section');
   if (!toggle || !section) return;
 
   toggle.addEventListener('change', () => {
     section.hidden = !toggle.checked;
-    if (!toggle.checked) {
-      const sel = document.getElementById('royal-customer-select');
-      const amt = document.getElementById('royal-amount-input');
-      if (sel) sel.value = '';
-      if (amt) amt.value = '';
+    if (toggle.checked) {
+      if (!document.querySelector('.indiv-row')) addIndividualRow();
+      recalcUnallocated();
+    } else {
+      document.getElementById('indiv-rows').innerHTML = '';
+      nextRowId = 1;
     }
   });
 }
 
+/* ── 顧客オプションHTML生成 ──────────────────────────────── */
+function buildCustomerOptions() {
+  const staffList = getStaffMaster();
+  const opts = staffList.map(s =>
+    `<option value="${escHtml(s.name)}">${escHtml(s.name)}</option>`
+  ).join('');
+  return `<option value="">顧客を選択</option>` +
+         opts +
+         `<option value="__misc__">諸口</option>` +
+         `<option value="__manual__">手入力...</option>`;
+}
+
+/* ── 個別行追加 ──────────────────────────────────────────── */
+function addIndividualRow() {
+  const container = document.getElementById('indiv-rows');
+  if (!container) return;
+
+  const id  = nextRowId++;
+  const div = document.createElement('div');
+  div.className  = 'indiv-row';
+  div.dataset.id = id;
+  div.innerHTML  = `
+    <div class="indiv-row-header">
+      <select class="form-select indiv-customer-select"
+              onchange="onCustomerSelectChange(${id})"
+              aria-label="顧客選択">
+        ${buildCustomerOptions()}
+      </select>
+      <button class="indiv-remove-btn" type="button"
+              onclick="removeIndividualRow(${id})"
+              aria-label="行を削除">✕</button>
+    </div>
+    <input type="text"
+           id="indiv-manual-${id}"
+           class="text-input indiv-manual-input"
+           placeholder="顧客名を入力"
+           maxlength="30"
+           autocomplete="off"
+           hidden>
+    <div class="indiv-row-body">
+      <div class="amount-wrap amount-wrap--blue indiv-amount-wrap">
+        <span class="amount-prefix" aria-hidden="true">¥</span>
+        <input type="text"
+               id="indiv-amount-${id}"
+               class="amount-input indiv-amount-input"
+               inputmode="numeric"
+               pattern="[0-9]*"
+               placeholder="0"
+               maxlength="10"
+               oninput="this.value=this.value.replace(/[^0-9]/g,'');recalcUnallocated()"
+               aria-label="金額">
+      </div>
+      <label class="indiv-uncollected-label">
+        <span class="indiv-uncollected-text">売掛</span>
+        <label class="switch switch--small">
+          <input type="checkbox" id="indiv-uc-${id}" class="indiv-uncollected-chk">
+          <span class="switch-slider"></span>
+        </label>
+      </label>
+    </div>
+  `;
+  container.appendChild(div);
+  recalcUnallocated();
+}
+
+/* ── 顧客プルダウン変更 ──────────────────────────────────── */
+function onCustomerSelectChange(id) {
+  const sel    = document.querySelector(`.indiv-row[data-id="${id}"] .indiv-customer-select`);
+  const manual = document.getElementById(`indiv-manual-${id}`);
+  if (!sel || !manual) return;
+  manual.hidden = sel.value !== '__manual__';
+  if (manual.hidden) manual.value = '';
+}
+
+/* ── 個別行削除 ──────────────────────────────────────────── */
+function removeIndividualRow(id) {
+  document.querySelector(`.indiv-row[data-id="${id}"]`)?.remove();
+  recalcUnallocated();
+}
+
+/* ── 残り未割当計算 ──────────────────────────────────────── */
+function recalcUnallocated() {
+  const toggle = document.getElementById('individual-toggle');
+  if (!toggle?.checked) return;
+
+  const total = parseInt(
+    (document.getElementById('amount-input')?.value || '0').replace(/,/g, '')
+  ) || 0;
+
+  let rowTotal = 0;
+  document.querySelectorAll('.indiv-amount-input').forEach(inp => {
+    rowTotal += parseInt(inp.value.replace(/[^0-9]/g, '') || '0') || 0;
+  });
+
+  const unallocated = total - rowTotal;
+  const el = document.getElementById('indiv-unallocated');
+  if (!el) return;
+  el.textContent = `残り未割当: ${formatYen(unallocated)}`;
+  el.style.color = unallocated < 0 ? 'var(--uz-red)' : 'var(--uz-muted)';
+}
+
+/* ── 個別行データ収集 ────────────────────────────────────── */
+function collectIndividualRows() {
+  const rows = [];
+  document.querySelectorAll('.indiv-row').forEach(row => {
+    const id     = row.dataset.id;
+    const sel    = row.querySelector('.indiv-customer-select');
+    const manual = document.getElementById(`indiv-manual-${id}`);
+    const amtEl  = document.getElementById(`indiv-amount-${id}`);
+    const ucEl   = document.getElementById(`indiv-uc-${id}`);
+
+    let customerName = sel?.value || '';
+    if (customerName === '__misc__')  customerName = '諸口';
+    if (customerName === '__manual__') customerName = manual?.value.trim() || '';
+
+    const amount      = parseInt((amtEl?.value || '0').replace(/[^0-9]/g, '')) || 0;
+    const uncollected = ucEl?.checked ?? false;
+
+    rows.push({ customerName, amount, uncollected });
+  });
+  return rows;
+}
+
 /* ── 送信処理 ────────────────────────────────────────────── */
 function bindSubmit() {
-  const btn = document.getElementById('submit-btn');
-  if (btn) btn.addEventListener('click', handleSubmit);
+  document.getElementById('submit-btn')?.addEventListener('click', handleSubmit);
 }
 
 async function handleSubmit() {
@@ -195,29 +293,35 @@ async function handleSubmit() {
   const amount   = parseInt(rawAmt) || 0;
   const memo     = document.getElementById('memo-input')?.value.trim() || '';
   const miscName = document.getElementById('misc-name-input')?.value.trim() || '';
-
-  const svc = getServiceMaster().find(s => s.code === selectedServiceCode);
+  const svc      = getServiceMaster().find(s => s.code === selectedServiceCode);
+  const mainUC   = document.getElementById('uncollected-toggle')?.checked ?? false;
+  const indivOn  = document.getElementById('individual-toggle')?.checked ?? false;
 
   // ── バリデーション ──
-  if (!date)   return showToast('日付を入力してください', 'error');
-  if (!svc)    return showToast('サービスを選択してください', 'error');
+  if (!date)       return showToast('日付を入力してください', 'error');
+  if (!svc)        return showToast('サービスを選択してください', 'error');
   if (amount <= 0) return showToast('金額を入力してください', 'error');
   if (svc.code === 'S099' && !miscName) return showToast('品目名を入力してください', 'error');
 
-  // ロイヤル
-  const royalEnabled    = document.getElementById('royal-toggle')?.checked ?? false;
-  const customerCode    = royalEnabled ? (document.getElementById('royal-customer-select')?.value || '') : '';
-  const royalAmtRaw     = (document.getElementById('royal-amount-input')?.value || '0').replace(/,/g, '');
-  const royalAmount     = royalEnabled ? (parseInt(royalAmtRaw) || 0) : 0;
-  const uncollected     = document.getElementById('uncollected-toggle')?.checked ?? false;
+  let indivRows = [];
+  if (indivOn) {
+    indivRows = collectIndividualRows();
+    for (const r of indivRows) {
+      if (!r.customerName) return showToast('顧客名を選択または入力してください', 'error');
+      if (r.amount <= 0)   return showToast('個別行の金額を入力してください', 'error');
+    }
+    const rowTotal = indivRows.reduce((s, r) => s + r.amount, 0);
+    if (rowTotal > amount) {
+      return showToast(`個別合計（${formatYen(rowTotal)}）が売上合計を超えています`, 'error');
+    }
+  }
 
-  if (royalEnabled && !customerCode) return showToast('ロイヤル顧客を選択してください', 'error');
-  if (royalEnabled && royalAmount <= 0) return showToast('ロイヤル金額を入力してください', 'error');
-  if (royalEnabled && royalAmount > amount) return showToast('ロイヤル金額が売上を超えています', 'error');
-
+  // 売掛フラグ：メイントグル OR 個別行に1件でもON
+  const anyRowUC = indivRows.some(r => r.uncollected);
+  const finalUC  = mainUC || anyRowUC;
   const { taxExcluded, tax } = calcTax(amount, currentTaxRate);
 
-  const payload = {
+  const mainPayload = {
     date,
     serviceCode:  svc.code,
     serviceName:  svc.name,
@@ -227,18 +331,39 @@ async function handleSubmit() {
     tax,
     amountInTax:  amount,
     memo,
-    uncollected:  uncollected ? 1 : 0,
-    customerCode,
-    royalAmount,
+    uncollected:  finalUC ? 1 : 0,
   };
 
-  // ── GAS送信 ──
   isSubmitting = true;
   setSubmitLoading(true);
 
   try {
-    const result = await callGAS('addSales', payload);
-    if (result.status !== 'ok') throw new Error(result.message || '登録エラー');
+    // 1. 売上本体を登録
+    const mainRes = await callGAS('addSales', mainPayload);
+    if (mainRes.status !== 'ok') throw new Error(mainRes.message || '売上登録エラー');
+
+    // 2. 個別行を並列登録
+    if (indivOn && indivRows.length > 0) {
+      const results = await Promise.all(
+        indivRows.map(r => {
+          const { taxExcluded: rEx, tax: rTax } = calcTax(r.amount, currentTaxRate);
+          return callGAS('addSales', {
+            date,
+            serviceCode:  svc.code,
+            serviceName:  svc.name,
+            miscItemName: '',
+            amountExTax:  rEx,
+            taxRate:      currentTaxRate,
+            tax:          rTax,
+            amountInTax:  r.amount,
+            memo:         r.customerName,
+            uncollected:  r.uncollected ? 1 : 0,
+          });
+        })
+      );
+      const failed = results.filter(r => r.status !== 'ok');
+      if (failed.length > 0) throw new Error('個別行の登録中にエラーが発生しました');
+    }
 
     setSubmitLoading(false);
     showToast('売上を登録しました ✓', 'success');

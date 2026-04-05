@@ -421,46 +421,106 @@
 .submit-btn--blue { background: var(--uz-blue); color: #fff; }
 .submit-btn--red  { background: var(--uz-red);  color: #fff; }
 
-/* ── ロイヤル顧客行（金額入力つき） ─────────────────────── */
-.royal-input-row {
-  display: flex;
-  gap: 8px;
-  align-items: flex-end;
-}
-
-.royal-input-row .form-select { flex: 2; }
-
-.royal-amount-wrap {
-  flex: 1;
-  position: relative;
-}
-
-.royal-amount-prefix {
-  position: absolute;
-  left: 10px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: var(--uz-muted);
-  font-size: 15px;
-  pointer-events: none;
-}
-
-.royal-amount-input {
-  width: 100%;
-  height: var(--btn-height-sm);
-  padding: 0 10px 0 24px;
+/* ── 個別管理行 ──────────────────────────────────────────── */
+.indiv-row {
   background: var(--uz-surface2);
   border: 1px solid var(--uz-border);
   border-radius: var(--radius-md);
-  color: var(--uz-text);
-  font-family: var(--font-main);
-  font-size: 15px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+}
+
+.indiv-row-header {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.indiv-row-header .form-select { flex: 1; }
+
+.indiv-remove-btn {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: rgba(230, 57, 70, 0.15);
+  color: var(--uz-red);
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.indiv-remove-btn:active { filter: brightness(0.8); }
+
+.indiv-manual-input { margin-bottom: 8px; }
+
+.indiv-row-body {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.indiv-amount-wrap {
+  flex: 1;
+  padding: 4px 0 2px;
+  border-bottom: 1.5px solid var(--uz-border);
+}
+
+.indiv-amount-wrap .amount-prefix { font-size: 18px; }
+.indiv-amount-wrap .amount-input  { font-size: 22px; }
+
+.indiv-uncollected-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.indiv-uncollected-text {
+  font-size: 12px;
+  color: var(--uz-muted);
   font-weight: 600;
 }
 
-.royal-amount-input:focus {
-  outline: none;
+/* スモールスイッチ */
+.switch--small {
+  width: 40px;
+  height: 24px;
+}
+
+.switch--small .switch-slider { border-radius: 12px; }
+
+.switch--small .switch-slider::before {
+  width: 18px;
+  height: 18px;
+}
+
+.switch--small input:checked + .switch-slider::before {
+  transform: translateX(16px) translateY(-50%);
+}
+
+.indiv-add-btn {
+  width: 100%;
+  height: 36px;
+  border: 1.5px dashed var(--uz-border);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--uz-muted);
+  font-family: var(--font-main);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.indiv-add-btn:active {
   border-color: var(--uz-blue);
+  color: var(--uz-blue);
 }
 
 /* ── 区分セレクタ（2択） ─────────────────────────────────── */

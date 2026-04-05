@@ -105,44 +105,32 @@
       </div>
     </div>
 
-    <!-- ⑤ ロイヤル管理 -->
+    <!-- ⑤ 個別管理 -->
     <div class="form-section">
       <div class="toggle-row">
         <div class="toggle-row__left">
-          <div class="toggle-row__title">ロイヤル管理</div>
-          <div class="toggle-row__desc">特定顧客への売上を記録する</div>
+          <div class="toggle-row__title">個別管理</div>
+          <div class="toggle-row__desc">顧客ごとに金額・売掛を記録する</div>
         </div>
-        <label class="switch" aria-label="ロイヤル管理を使う">
-          <input type="checkbox" id="royal-toggle">
+        <label class="switch" aria-label="個別管理を使う">
+          <input type="checkbox" id="individual-toggle">
           <span class="switch-slider"></span>
         </label>
       </div>
 
-      <!-- ロイヤル詳細（トグルON時のみ） -->
-      <div id="royal-detail-section" hidden style="margin-top:12px;">
-        <div class="royal-input-row">
-          <select id="royal-customer-select"
-                  class="form-select"
-                  aria-label="顧客選択">
-            <!-- sales.js が描画 -->
-          </select>
-          <div class="royal-amount-wrap">
-            <span class="royal-amount-prefix" aria-hidden="true">¥</span>
-            <input type="text"
-                   id="royal-amount-input"
-                   class="royal-amount-input"
-                   inputmode="numeric"
-                   pattern="[0-9]*"
-                   placeholder="金額"
-                   maxlength="10"
-                   aria-label="ロイヤル金額">
-          </div>
-        </div>
-        <p class="form-hint">売上全体の中でこの顧客に紐づく金額を入力してください。</p>
+      <!-- 個別管理詳細（トグルON時のみ） -->
+      <div id="individual-section" hidden style="margin-top:12px;">
+        <div id="indiv-rows"></div>
+        <div id="indiv-unallocated"
+             style="font-size:12px;color:var(--uz-muted);margin:8px 0 10px;"
+             aria-live="polite"></div>
+        <button type="button" class="indiv-add-btn" onclick="addIndividualRow()">
+          ＋ 行を追加
+        </button>
       </div>
     </div>
 
-    <!-- ⑦ 売掛トグル -->
+    <!-- ⑥ 売掛トグル -->
     <div class="form-section">
       <div class="toggle-row">
         <div class="toggle-row__left">
