@@ -44,35 +44,44 @@
   transform: translateX(-50%);
 }
 
-/* ── 売上タブバー ────────────────────────────────────────── */
-.sales-tab-bar {
-  display: flex;
-  background: var(--uz-surface);
+/* ── 個別管理アコーディオン ──────────────────────────────── */
+.accordion-section {
   border-bottom: 1px solid var(--uz-border);
-  position: sticky;
-  top: 56px;
-  z-index: 90;
 }
 
-.sales-tab {
-  flex: 1;
-  height: 44px;
+.accordion-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
   background: transparent;
   border: none;
-  border-bottom: 2px solid transparent;
   color: var(--uz-muted);
   font-family: var(--font-main);
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 700;
   cursor: pointer;
-  transition: color 0.15s, border-color 0.15s;
+  text-align: left;
+  gap: 8px;
+  letter-spacing: 0.03em;
 }
 
-.sales-tab:active { filter: brightness(0.85); }
+.accordion-header:active { filter: brightness(0.85); }
 
-.sales-tab--active {
-  color: var(--uz-blue);
-  border-bottom-color: var(--uz-blue);
+.accordion-chevron {
+  font-size: 20px;
+  line-height: 1;
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+
+.accordion-header[aria-expanded="true"] .accordion-chevron {
+  transform: rotate(90deg);
+}
+
+.accordion-body {
+  padding: 0 16px 16px;
 }
 
 /* ── フォームボディ ──────────────────────────────────────── */
