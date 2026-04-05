@@ -124,7 +124,22 @@ function bindAmountInput() {
   el.addEventListener('input', () => {
     el.value = el.value.replace(/[^0-9]/g, '');
     recalcTax();
+    updateAccordionHint();
   });
+}
+
+/* ── アコーディオン注釈のリアルタイム更新 ───────────────── */
+function updateAccordionHint() {
+  const el = document.getElementById('indiv-accordion-hint');
+  if (!el) return;
+  const amount = parseInt(
+    (document.getElementById('amount-input')?.value || '0').replace(/,/g, '')
+  ) || 0;
+  if (amount === 0) {
+    el.textContent = '💡 売上金額が0円です。個別管理のみで登録できます。損益集計には個別管理分のみが反映されます。';
+  } else {
+    el.textContent = '⚠ 個別管理分は売上入力とは別に追加登録されます。売上入力時に個別分を差し引いて入力してください。';
+  }
 }
 
 /* ── 税率ボタンバインド ──────────────────────────────────── */
@@ -151,6 +166,7 @@ function toggleAccordion() {
   if (accordionOpen && !document.querySelector('.indiv-row')) {
     addIndividualRow();
   }
+  if (accordionOpen) updateAccordionHint();
 }
 
 /* ── 顧客オプションHTML ──────────────────────────────────── */
@@ -281,10 +297,16 @@ async function handleSubmit() {
   const svc      = getServiceMaster().find(s => s.code === selectedServiceCode);
   const mainUC   = document.getElementById('uncollected-toggle')?.checked ?? false;
 
-  if (!date)       return showToast('日付を入力してください', 'error');
-  if (!svc)        return showToast('サービスを選択してください', 'error');
-  if (amount <= 0) return showToast('金額を入力してください', 'error');
-  if (svc.code === 'S099' && !miscName) return showToast('品目名を入力してください', 'error');
+  if (!date) return showToast('日付を入力してください', 'error');
+  if (!svc)  return showToast('サービスを選択してください', 'error');
+
+  // amount=0かつアコーディオンが開いている場合は個別行のみ登録モード
+  const indivOnlyMode = (amount === 0 && accordionOpen);
+
+  if (!indivOnlyMode) {
+    if (amount <= 0) return showToast('金額を入力してください', 'error');
+    if (svc.code === 'S099' && !miscName) return showToast('品目名を入力してください', 'error');
+  }
 
   // アコーディオンが開いている場合のみ個別行を処理
   let indivRows = [];
@@ -294,9 +316,11 @@ async function handleSubmit() {
       if (!r.customerName) return showToast('顧客名を選択または入力してください', 'error');
       if (r.amount <= 0)   return showToast('個別行の金額を入力してください', 'error');
     }
+    if (indivOnlyMode && indivRows.length === 0) {
+      return showToast('個別行を1件以上入力してください', 'error');
+    }
   }
 
-  // 個別行は別レコードのため、主レコードの売掛フラグはメイントグルのみで決定
   const finalUC = mainUC;
   const { taxExcluded, tax } = calcTax(amount, currentTaxRate);
 
@@ -304,20 +328,22 @@ async function handleSubmit() {
   setSubmitLoading(true);
 
   try {
-    // 売上本体を登録
-    const mainRes = await callGAS('addSales', {
-      date,
-      serviceCode:  svc.code,
-      serviceName:  svc.name,
-      miscItemName: miscName,
-      amountExTax:  taxExcluded,
-      taxRate:      currentTaxRate,
-      tax,
-      amountInTax:  amount,
-      memo,
-      uncollected:  finalUC ? 1 : 0,
-    });
-    if (mainRes.status !== 'ok') throw new Error(mainRes.message || '売上登録エラー');
+    // 売上金額が0の個別管理モードは本体を送信しない
+    if (!indivOnlyMode) {
+      const mainRes = await callGAS('addSales', {
+        date,
+        serviceCode:  svc.code,
+        serviceName:  svc.name,
+        miscItemName: miscName,
+        amountExTax:  taxExcluded,
+        taxRate:      currentTaxRate,
+        tax,
+        amountInTax:  amount,
+        memo,
+        uncollected:  finalUC ? 1 : 0,
+      });
+      if (mainRes.status !== 'ok') throw new Error(mainRes.message || '売上登録エラー');
+    }
 
     // 個別行を並列登録（アコーディオンが開いている場合のみ）
     if (accordionOpen && indivRows.length > 0) {
