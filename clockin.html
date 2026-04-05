@@ -55,6 +55,23 @@
       <p class="form-hint">マスタ未登録のスタッフも記録できます。</p>
     </div>
 
+    <!-- ② 入店日時（スタッフ選択後に表示） -->
+    <div class="form-section" id="clockin-datetime-section" hidden>
+      <span class="form-section__label">入店日時</span>
+      <div style="display:flex;gap:8px;margin-top:4px;">
+        <input type="date"
+               id="clockin-date-input"
+               class="date-input"
+               style="flex:1;"
+               aria-label="入店日">
+        <input type="time"
+               id="clockin-time-input"
+               class="date-input"
+               style="flex:1;"
+               aria-label="入店時刻">
+      </div>
+    </div>
+
     <!-- ③ 本日の勤怠リスト -->
     <div class="form-section" style="padding-bottom:8px;">
       <span class="form-section__label">本日の勤怠</span>

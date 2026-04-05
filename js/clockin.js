@@ -111,6 +111,7 @@ function selectQuickStaff(id, name) {
   const nameInput = document.getElementById('name-input');
   if (nameInput) nameInput.value = name;
 
+  showClockInDatetime();
   updateClockInBtn();
 }
 
@@ -120,12 +121,15 @@ function bindNameInput() {
   if (!nameInput) return;
 
   nameInput.addEventListener('input', () => {
+    const wasEmpty = !selectedName;
     selectedName = nameInput.value.trim();
 
     document.querySelectorAll('.quick-staff-btn').forEach(btn => {
       btn.classList.toggle('quick-staff-btn--selected', btn.dataset.name === selectedName);
     });
 
+    if (selectedName && wasEmpty) showClockInDatetime();
+    if (!selectedName) hideClockInDatetime();
     updateClockInBtn();
   });
 }
@@ -150,9 +154,10 @@ async function handleClockIn() {
     return showToast(`${selectedName}さんはすでに在店中です`, 'error');
   }
 
-  const now = new Date();
-  const date        = todayStr();
-  const clockInTime = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+  const now         = new Date();
+  const date        = document.getElementById('clockin-date-input')?.value || todayStr();
+  const clockInTime = document.getElementById('clockin-time-input')?.value ||
+    `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
 
   const master = getStaffMaster().find(s => s.name === selectedName);
   const staffId = master?.id ?? Date.now();
@@ -260,7 +265,30 @@ function resetSelection() {
   document.querySelectorAll('.quick-staff-btn').forEach(btn => {
     btn.classList.remove('quick-staff-btn--selected');
   });
+  hideClockInDatetime();
   updateClockInBtn();
+}
+
+/* ── 入店日時セクション 表示/非表示 ──────────────────────── */
+function showClockInDatetime() {
+  const section = document.getElementById('clockin-datetime-section');
+  if (!section) return;
+  const now = new Date();
+  const dateEl = document.getElementById('clockin-date-input');
+  const timeEl = document.getElementById('clockin-time-input');
+  if (dateEl) dateEl.value = todayStr();
+  if (timeEl) timeEl.value =
+    `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+  section.hidden = false;
+}
+
+function hideClockInDatetime() {
+  const section = document.getElementById('clockin-datetime-section');
+  if (section) section.hidden = true;
+  const dateEl = document.getElementById('clockin-date-input');
+  const timeEl = document.getElementById('clockin-time-input');
+  if (dateEl) dateEl.value = '';
+  if (timeEl) timeEl.value = '';
 }
 
 /* ── ヘルパー ────────────────────────────────────────────── */

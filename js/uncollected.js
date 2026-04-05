@@ -94,12 +94,10 @@ function buildItemHTML(item, type) {
       <div class="uc-item-main">
         <div class="uc-item-info">
           <div class="uc-item-name">${escHtml(item.itemName)}</div>
-          <div class="uc-item-meta">${escHtml(dateStr)}${item.memo ? '　' + escHtml(item.memo) : ''}</div>
+          <div class="uc-item-meta">${escHtml(dateStr)} ・ ${formatYen(item.amount)}</div>
+          ${item.memo ? `<div class="uc-item-meta" style="font-size:11px;margin-top:2px;">${escHtml(item.memo)}</div>` : ''}
         </div>
         <div class="uc-item-right">
-          <span class="uc-item-amount uc-item-amount--${type}">
-            ${formatYen(item.amount)}
-          </span>
           <button class="uc-reconcile-btn uc-reconcile-btn--${type} ${isOpen ? 'active' : ''}"
                   type="button"
                   onclick="toggleReconcileForm(${item.id})"

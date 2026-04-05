@@ -50,7 +50,19 @@
       </div>
     </div>
 
-    <!-- ③ 税率 -->
+    <!-- ③ 諸口品目名（諸口選択時のみ表示） -->
+    <div class="form-section" id="misc-section" hidden>
+      <label class="form-section__label" for="misc-name-input">品目名</label>
+      <input type="text"
+             id="misc-name-input"
+             class="text-input"
+             placeholder="品目名を入力（例：手土産代）"
+             maxlength="50"
+             autocomplete="off">
+      <p class="form-hint">マスタ未登録の品目を記録する場合に入力してください。</p>
+    </div>
+
+    <!-- ④ 税率 -->
     <div class="form-section">
       <span class="form-section__label">税率</span>
       <div class="tax-toggle" role="group" aria-label="税率選択">
@@ -93,19 +105,7 @@
       </div>
     </div>
 
-    <!-- ⑤ 内訳（諸口品目名・諸口選択時のみ表示） -->
-    <div class="form-section" id="misc-section" hidden>
-      <label class="form-section__label" for="misc-name-input">品目名</label>
-      <input type="text"
-             id="misc-name-input"
-             class="text-input"
-             placeholder="品目名を入力（例：手土産代）"
-             maxlength="50"
-             autocomplete="off">
-      <p class="form-hint">マスタ未登録の品目を記録する場合に入力してください。</p>
-    </div>
-
-    <!-- ⑥ ロイヤル管理 -->
+    <!-- ⑤ ロイヤル管理 -->
     <div class="form-section">
       <div class="toggle-row">
         <div class="toggle-row__left">
