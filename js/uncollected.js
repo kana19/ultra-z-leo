@@ -213,7 +213,9 @@ async function handleReconcile(id, type) {
 /* ── 日付フォーマット ────────────────────────────────────── */
 function formatDate(dateStr) {
   if (!dateStr) return '';
-  const [y, m, d] = dateStr.split('-').map(Number);
+  // GASは YYYY/MM/DD または YYYY-MM-DD で返す場合がある
+  const [y, m, d] = String(dateStr).split(/[-\/]/).map(Number);
+  if (!y || !m || !d) return String(dateStr);
   return `${y}/${String(m).padStart(2, '0')}/${String(d).padStart(2, '0')}`;
 }
 
