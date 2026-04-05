@@ -115,7 +115,6 @@ function recalcTax() {
   const taxEl = document.getElementById('tax-amount');
   if (exEl)  exEl.textContent  = taxIncluded > 0 ? formatYen(taxExcluded) : '¥—';
   if (taxEl) taxEl.textContent = taxIncluded > 0 ? formatYen(tax)         : '¥—';
-  recalcUnallocated();
 }
 
 /* ── 金額入力バインド ────────────────────────────────────── */
@@ -152,7 +151,6 @@ function toggleAccordion() {
   if (accordionOpen && !document.querySelector('.indiv-row')) {
     addIndividualRow();
   }
-  if (accordionOpen) recalcUnallocated();
 }
 
 /* ── 顧客オプションHTML ──────────────────────────────────── */
@@ -203,7 +201,7 @@ function addIndividualRow() {
                pattern="[0-9]*"
                placeholder="0"
                maxlength="10"
-               oninput="this.value=this.value.replace(/[^0-9]/g,'');recalcUnallocated()"
+               oninput="this.value=this.value.replace(/[^0-9]/g,'')"
                aria-label="金額">
       </div>
       <div class="indiv-uncollected-label">
@@ -216,7 +214,6 @@ function addIndividualRow() {
     </div>
   `;
   container.appendChild(div);
-  recalcUnallocated();
 }
 
 /* ── 顧客プルダウン変更 ──────────────────────────────────── */
@@ -231,7 +228,6 @@ function onCustomerSelectChange(id) {
 /* ── 個別行削除 ──────────────────────────────────────────── */
 function removeIndividualRow(id) {
   document.querySelector(`.indiv-row[data-id="${id}"]`)?.remove();
-  recalcUnallocated();
 }
 
 /* ── 個別行データ収集 ────────────────────────────────────── */
@@ -255,26 +251,6 @@ function collectIndividualRows() {
     });
   });
   return rows;
-}
-
-/* ── 残り未割当計算 ──────────────────────────────────────── */
-function recalcUnallocated() {
-  if (!accordionOpen) return;
-
-  const total = parseInt(
-    (document.getElementById('amount-input')?.value || '0').replace(/,/g, '')
-  ) || 0;
-
-  let rowTotal = 0;
-  document.querySelectorAll('.indiv-row .indiv-amount-input').forEach(inp => {
-    rowTotal += parseInt(inp.value.replace(/[^0-9]/g, '') || '0') || 0;
-  });
-
-  const unallocated = total - rowTotal;
-  const el = document.getElementById('indiv-unallocated');
-  if (!el) return;
-  el.textContent = `残り未割当: ${formatYen(unallocated)}`;
-  el.style.color = unallocated < 0 ? 'var(--uz-red)' : 'var(--uz-muted)';
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -309,14 +285,10 @@ async function handleSubmit() {
       if (!r.customerName) return showToast('顧客名を選択または入力してください', 'error');
       if (r.amount <= 0)   return showToast('個別行の金額を入力してください', 'error');
     }
-    const rowTotal = indivRows.reduce((s, r) => s + r.amount, 0);
-    if (rowTotal > amount) {
-      return showToast(`個別合計（${formatYen(rowTotal)}）が売上合計を超えています`, 'error');
-    }
   }
 
-  const anyRowUC = indivRows.some(r => r.uncollected);
-  const finalUC  = mainUC || anyRowUC;
+  // 個別行は別レコードのため、主レコードの売掛フラグはメイントグルのみで決定
+  const finalUC = mainUC;
   const { taxExcluded, tax } = calcTax(amount, currentTaxRate);
 
   isSubmitting = true;
