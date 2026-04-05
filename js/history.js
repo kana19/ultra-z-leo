@@ -65,8 +65,7 @@ async function loadHistory() {
   updateNavUI();
   showLoading();
 
-  // GASのdateフィールドはYYYY/MM/DD形式のため、スラッシュ区切りで送る
-  const monthParam = `${currentYear}/${String(currentMonth).padStart(2, '0')}`;
+  const monthParam = `${currentYear}-${String(currentMonth).padStart(2, '0')}`;
 
   try {
     const res = await callGAS('getHistory', { month: monthParam });
