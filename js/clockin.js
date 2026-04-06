@@ -1,6 +1,9 @@
 /**
  * ウルトラ財務くん LEO版 PWA — clockin.js
  * 入店記録画面ロジック
+ *
+ * 目的：スタッフの記録忘れ修正・未登録スタッフの手動記録
+ * 入店・退店を1画面で同時設定・修正できる仕様
  */
 
 'use strict';
@@ -10,7 +13,7 @@ const STAFF_MASTER_KEY    = 'uz_staff_master';
 const ATTENDANCE_DATE_KEY = 'uz_attendance_date';
 const ATTENDANCE_DATA_KEY = 'uz_attendance_data';
 
-/* ── スタッフマスタ（localStorageから読む） ──────────────── */
+/* ── スタッフマスタ ──────────────────────────────────────── */
 function getStaffMaster() {
   try {
     const saved = localStorage.getItem(STAFF_MASTER_KEY);
@@ -18,13 +21,12 @@ function getStaffMaster() {
   } catch { return []; }
 }
 
-/* ── GASからスタッフマスタを取得してlocalStorageに保存 ───── */
 async function loadStaffFromGAS() {
   try {
     const res = await callGAS('getSettings', {});
-    if (res && res.status === 'ok' && Array.isArray(res.data?.staffList)) {
+    if (res?.status === 'ok' && Array.isArray(res.data?.staffList)) {
       localStorage.setItem(STAFF_MASTER_KEY, JSON.stringify(res.data.staffList));
-      renderQuickSelect();
+      renderStaffButtons();
     }
   } catch {
     // GAS失敗時はlocalStorageのデータをそのまま使用
@@ -51,331 +53,279 @@ function saveAttendance(data) {
 }
 
 /* ── 状態 ────────────────────────────────────────────────── */
-let todayAttendance   = [];
-let selectedName      = '';
-let pendingClockOutId = null;
-let isSubmitting      = false;
+let todayAttendance      = [];
+let selectedStaffId      = null;
+let selectedName         = '';
+let editingAttendanceIdx = null; // null=新規, number=修正中のインデックス
+let isSubmitting         = false;
 
 /* ── 初期化 ──────────────────────────────────────────────── */
 document.addEventListener('DOMContentLoaded', () => {
   todayAttendance = loadAttendance();
-  renderQuickSelect();
+  renderStaffButtons();
   renderAttendanceList();
-  bindQuickStaffSelect();
-  bindAttendanceListActions();
   bindNameInput();
-  bindDatetimeInputs();
-  bindClockInBtn();
-  bindClockOutBtns();
+  bindFormInputs();
+  bindSubmitBtn();
   loadStaffFromGAS();
 });
 
-/* ── クイック選択（未入店スタッフ） ─────────────────────── */
-function renderQuickSelect() {
-  const container = document.getElementById('quick-staff');
+/* ══════════════════════════════════════════════════════════
+   スタッフ選択ボタン
+   ══════════════════════════════════════════════════════════ */
+
+function renderStaffButtons() {
+  const container = document.getElementById('staff-btns');
   if (!container) return;
 
-  const staffMaster = getStaffMaster();
-  const allTodayIds = todayAttendance.map(a => a.id);
-  const available   = staffMaster.filter(s => !allTodayIds.includes(s.id));
-
-  if (staffMaster.length === 0) {
+  const master = getStaffMaster();
+  if (master.length === 0) {
     container.innerHTML = `<p style="font-size:13px;color:var(--uz-muted);">設定からスタッフを登録してください</p>`;
     return;
   }
-  if (available.length === 0) {
-    container.innerHTML = `<p style="font-size:13px;color:var(--uz-muted);">全スタッフが入店済みです</p>`;
-    return;
-  }
 
-  container.innerHTML = available.map(s => `
+  container.innerHTML = master.map(s => `
     <button class="quick-staff-btn"
+            type="button"
             data-id="${escHtml(String(s.id))}"
-            data-name="${escHtml(s.name)}"
-            type="button">
+            data-name="${escHtml(s.name)}">
       ${escHtml(s.name)}
     </button>
   `).join('');
-}
 
-/* ── クイック選択イベント（委譲・1回のみ登録） ────────────── */
-function bindQuickStaffSelect() {
-  const container = document.getElementById('quick-staff');
-  if (!container) return;
-  container.addEventListener('click', (e) => {
+  container.addEventListener('click', e => {
     const btn = e.target.closest('.quick-staff-btn');
     if (!btn) return;
-    selectQuickStaff(btn.dataset.id, btn.dataset.name);
+    selectStaff(btn.dataset.id, btn.dataset.name);
   });
 }
 
-/* ── クイック選択タップ ──────────────────────────────────── */
-function selectQuickStaff(id, name) {
-  selectedName = name;
+function selectStaff(id, name) {
+  selectedStaffId      = id;
+  selectedName         = name;
+  editingAttendanceIdx = null;
+
+  // ボタンハイライト
   document.querySelectorAll('.quick-staff-btn').forEach(btn => {
-    btn.classList.toggle('quick-staff-btn--selected', btn.dataset.name === name);
+    btn.classList.toggle('quick-staff-btn--selected', btn.dataset.id === id);
   });
+
+  // テキスト入力欄に反映
   const nameInput = document.getElementById('name-input');
   if (nameInput) nameInput.value = name;
-  showClockInDatetime();
-  updateClockInBtn();
+
+  showFormSection();
+  setFormDefaults();
+  updateSubmitBtn();
 }
 
-/* ── 名前テキスト入力 ────────────────────────────────────── */
+/* ── テキスト入力（マスタ外スタッフ） ───────────────────── */
 function bindNameInput() {
   const nameInput = document.getElementById('name-input');
   if (!nameInput) return;
   nameInput.addEventListener('input', () => {
-    const wasEmpty = !selectedName;
-    selectedName   = nameInput.value.trim();
+    selectedName         = nameInput.value.trim();
+    selectedStaffId      = null;
+    editingAttendanceIdx = null;
+
+    // ボタンハイライト解除
     document.querySelectorAll('.quick-staff-btn').forEach(btn => {
-      btn.classList.toggle('quick-staff-btn--selected', btn.dataset.name === selectedName);
+      btn.classList.remove('quick-staff-btn--selected');
     });
-    if (selectedName && wasEmpty) showClockInDatetime();
-    if (!selectedName) hideClockInDatetime();
-    updateClockInBtn();
+
+    if (selectedName) {
+      showFormSection();
+      // フォームが空の場合のみデフォルトをセット
+      if (!document.getElementById('form-date')?.value) {
+        setFormDefaults();
+      }
+    } else {
+      hideFormSection();
+    }
+    updateSubmitBtn();
   });
 }
 
 /* ══════════════════════════════════════════════════════════
-   入店 — 日時セクション・ボタン
+   入力フォーム
    ══════════════════════════════════════════════════════════ */
 
-function buildClockInBtnText() {
-  const dateVal  = document.getElementById('clockin-date-input')?.value || todayStr();
-  const timeVal  = document.getElementById('clockin-time-input')?.value || '';
-  const dispDate = dateVal.replace(/-/g, '/');
-  return timeVal
-    ? `入店日時 ${dispDate} ${timeVal}　記録する`
-    : `入店日時 ${dispDate}　記録する`;
+function showFormSection() {
+  document.getElementById('entry-form-section')?.removeAttribute('hidden');
+  document.getElementById('submit-bar')?.removeAttribute('hidden');
 }
 
-function updateClockInBtn() {
-  const btn = document.getElementById('clockin-btn');
-  if (!btn) return;
-  btn.disabled  = !selectedName;
-  btn.innerHTML = selectedName ? buildClockInBtnText() : '👤 記録する';
+function hideFormSection() {
+  document.getElementById('entry-form-section')?.setAttribute('hidden', '');
+  document.getElementById('submit-bar')?.setAttribute('hidden', '');
 }
 
-/* ── 日付・時刻変更リスナー（入店・退店両方） ────────────── */
-function bindDatetimeInputs() {
-  document.getElementById('clockin-date-input')?.addEventListener('change', () => {
-    if (selectedName) updateClockInBtn();
+function setFormDefaults() {
+  const now  = new Date();
+  const hhmm = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+  const dateEl = document.getElementById('form-date');
+  const inEl   = document.getElementById('form-clockin');
+  const outEl  = document.getElementById('form-clockout');
+  if (dateEl) dateEl.value = todayStr();
+  if (inEl)   inEl.value   = hhmm;
+  if (outEl)  outEl.value  = '';
+}
+
+function loadRecordIntoForm(record, idx) {
+  selectedStaffId      = String(record.id);
+  selectedName         = record.name;
+  editingAttendanceIdx = idx;
+
+  // ボタンハイライト
+  document.querySelectorAll('.quick-staff-btn').forEach(btn => {
+    btn.classList.toggle('quick-staff-btn--selected', btn.dataset.id === selectedStaffId);
   });
-  document.getElementById('clockin-time-input')?.addEventListener('change', () => {
-    if (selectedName) updateClockInBtn();
-  });
-  document.getElementById('clockout-date-input')?.addEventListener('change', updateClockOutBtn);
-  document.getElementById('clockout-time-input')?.addEventListener('change', updateClockOutBtn);
+  const nameInput = document.getElementById('name-input');
+  if (nameInput) nameInput.value = record.name;
+
+  const dateEl = document.getElementById('form-date');
+  const inEl   = document.getElementById('form-clockin');
+  const outEl  = document.getElementById('form-clockout');
+  if (dateEl) dateEl.value = record.date     || todayStr();
+  if (inEl)   inEl.value   = record.clockIn  || '';
+  if (outEl)  outEl.value  = record.clockOut || '';
+
+  showFormSection();
+  updateSubmitBtn();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-function bindClockInBtn() {
-  document.getElementById('clockin-btn')?.addEventListener('click', handleClockIn);
-}
-
-function showClockInDatetime() {
-  const section = document.getElementById('clockin-datetime-section');
-  if (!section) return;
-
-  const wasHidden = section.hasAttribute('hidden');
-  section.removeAttribute('hidden');
-
-  // 非表示→表示の初回のみ現在日時をセット（ユーザーが変更した値を上書きしない）
-  if (wasHidden) {
-    const now    = new Date();
-    const dateEl = document.getElementById('clockin-date-input');
-    const timeEl = document.getElementById('clockin-time-input');
-    if (dateEl) dateEl.value = todayStr();
-    if (timeEl) timeEl.value =
-      `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+function loadRecordForClockOut(record, idx) {
+  loadRecordIntoForm(record, idx);
+  // 退店時刻が未設定なら現在時刻をデフォルトセット
+  const outEl = document.getElementById('form-clockout');
+  if (outEl && !outEl.value) {
+    const now  = new Date();
+    outEl.value = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
   }
-
-  updateClockInBtn();
+  updateSubmitBtn();
 }
 
-function hideClockInDatetime() {
-  const section = document.getElementById('clockin-datetime-section');
-  if (section) section.setAttribute('hidden', '');
-  const dateEl = document.getElementById('clockin-date-input');
-  const timeEl = document.getElementById('clockin-time-input');
-  if (dateEl) dateEl.value = '';
-  if (timeEl) timeEl.value = '';
+function bindFormInputs() {
+  document.getElementById('form-date')?.addEventListener('change',    updateSubmitBtn);
+  document.getElementById('form-clockin')?.addEventListener('change', updateSubmitBtn);
+  document.getElementById('form-clockout')?.addEventListener('change', updateSubmitBtn);
 }
 
-/* ── 入店処理 ────────────────────────────────────────────── */
-async function handleClockIn() {
+/* ── 登録ボタンテキスト生成 ──────────────────────────────── */
+function buildSubmitBtnText() {
+  const date    = document.getElementById('form-date')?.value    || todayStr();
+  const clockIn = document.getElementById('form-clockin')?.value || '';
+  const clockOut= document.getElementById('form-clockout')?.value || '';
+  const dispDate = date.replace(/-/g, '/');
+  const inStr   = clockIn  || '--:--';
+  const outStr  = clockOut ? `${clockOut} 退店` : '退店未記録';
+  return `${dispDate} ${inStr} 入店 / ${outStr}　登録する`;
+}
+
+function updateSubmitBtn() {
+  const btn = document.getElementById('submit-btn');
+  if (!btn) return;
+  btn.disabled    = !selectedName;
+  btn.textContent = selectedName ? buildSubmitBtnText() : '登録する';
+}
+
+function bindSubmitBtn() {
+  document.getElementById('submit-btn')?.addEventListener('click', handleSubmit);
+}
+
+/* ══════════════════════════════════════════════════════════
+   登録処理
+   ══════════════════════════════════════════════════════════ */
+
+async function handleSubmit() {
   if (isSubmitting || !selectedName) return;
 
-  if (todayAttendance.some(a => a.name === selectedName && a.isActive)) {
-    return showToast(`${selectedName}さんはすでに在店中です`, 'error');
+  const date     = document.getElementById('form-date')?.value    || todayStr();
+  const clockIn  = document.getElementById('form-clockin')?.value  || '';
+  const clockOut = document.getElementById('form-clockout')?.value || '';
+
+  if (!clockIn) {
+    showToast('入店時刻を入力してください', 'error');
+    return;
   }
 
-  const now         = new Date();
-  const date        = document.getElementById('clockin-date-input')?.value || todayStr();
-  const clockInTime = document.getElementById('clockin-time-input')?.value ||
-    `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
-
-  const master  = getStaffMaster().find(s => s.name === selectedName);
-  const staffId = master?.id ?? Date.now();
+  const master  = getStaffMaster().find(s => String(s.id) === String(selectedStaffId));
+  const staffId = master?.id ?? (selectedStaffId || Date.now());
+  const isEdit  = editingAttendanceIdx !== null;
+  const existingRecord = isEdit ? todayAttendance[editingAttendanceIdx] : null;
 
   isSubmitting = true;
-  setClockInBtnLoading(true);
+  const btn = document.getElementById('submit-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '登録中...'; }
 
   try {
-    const result = await callGAS('clockIn', { staffId, staffName: selectedName, clockInTime, date });
+    const result = await callGAS('clockIn', {
+      staffId,
+      staffName:    selectedName,
+      clockInTime:  clockIn,
+      clockOutTime: clockOut || null,
+      date,
+      rowIndex:     existingRecord?.rowIndex ?? null,
+    });
     if (result.status !== 'ok') throw new Error(result.message || '登録エラー');
 
-    todayAttendance.unshift({
+    const newRecord = {
       id:       staffId,
       name:     selectedName,
-      clockIn:  clockInTime,
-      clockOut: null,
-      isActive: true,
-      rowIndex: result.rowIndex ?? null,
-    });
+      date,
+      clockIn,
+      clockOut:  clockOut || null,
+      isActive:  !clockOut,
+      rowIndex:  result.rowIndex ?? existingRecord?.rowIndex ?? null,
+    };
+
+    if (isEdit) {
+      todayAttendance[editingAttendanceIdx] = newRecord;
+    } else {
+      todayAttendance.unshift(newRecord);
+    }
     saveAttendance(todayAttendance);
 
     const nameToShow = selectedName;
-    resetSelection();
-    renderQuickSelect();
+    resetForm();
     renderAttendanceList();
-    showToast(`${nameToShow}さんの入店を記録しました ✓`, 'success');
+    showToast(`${nameToShow}さんの記録を登録しました ✓`, 'success');
 
   } catch (e) {
     showToast('登録に失敗しました：' + e.message, 'error');
   } finally {
-    setClockInBtnLoading(false);
     isSubmitting = false;
+    updateSubmitBtn();
   }
 }
 
-function setClockInBtnLoading(loading) {
-  const btn = document.getElementById('clockin-btn');
-  if (!btn) return;
-  if (loading) {
-    btn.disabled  = true;
-    btn.innerHTML = '<span class="spinner" style="width:20px;height:20px;border-top-color:#fff;"></span>';
-  } else {
-    btn.disabled  = !selectedName;
-    btn.innerHTML = selectedName ? buildClockInBtnText() : '👤 記録する';
-  }
+function resetForm() {
+  selectedStaffId      = null;
+  selectedName         = '';
+  editingAttendanceIdx = null;
+
+  document.querySelectorAll('.quick-staff-btn').forEach(btn => {
+    btn.classList.remove('quick-staff-btn--selected');
+  });
+  const nameInput = document.getElementById('name-input');
+  if (nameInput) nameInput.value = '';
+
+  const dateEl = document.getElementById('form-date');
+  const inEl   = document.getElementById('form-clockin');
+  const outEl  = document.getElementById('form-clockout');
+  if (dateEl) dateEl.value = '';
+  if (inEl)   inEl.value   = '';
+  if (outEl)  outEl.value  = '';
+
+  hideFormSection();
+  updateSubmitBtn();
 }
 
 /* ══════════════════════════════════════════════════════════
-   退店 — 日時セクション・ボタン
+   本日の勤怠一覧
    ══════════════════════════════════════════════════════════ */
 
-function buildClockOutBtnText() {
-  const dateVal  = document.getElementById('clockout-date-input')?.value || todayStr();
-  const timeVal  = document.getElementById('clockout-time-input')?.value || '';
-  const dispDate = dateVal.replace(/-/g, '/');
-  return timeVal
-    ? `退店日時 ${dispDate} ${timeVal}　退店記録する`
-    : `退店日時 ${dispDate}　退店記録する`;
-}
-
-function updateClockOutBtn() {
-  const btn = document.getElementById('clockout-btn');
-  if (!btn) return;
-  btn.innerHTML = buildClockOutBtnText();
-}
-
-function bindClockOutBtns() {
-  document.getElementById('clockout-btn')?.addEventListener('click', executeClockOut);
-  document.getElementById('clockout-cancel-btn')?.addEventListener('click', cancelClockOut);
-}
-
-/* ── 退店記録開始（勤怠リストの「退店記録」ボタンから呼ばれる） */
-function startClockOut(id) {
-  pendingClockOutId = id;
-  const record = todayAttendance.find(a => String(a.id) === String(id));
-  if (!record) return;
-
-  const section = document.getElementById('clockout-datetime-section');
-  if (!section) return;
-  section.removeAttribute('hidden');
-
-  const nameEl = document.getElementById('clockout-staff-name');
-  if (nameEl) nameEl.textContent = `${record.name}さん`;
-
-  // 現在日時をセット
-  const now    = new Date();
-  const dateEl = document.getElementById('clockout-date-input');
-  const timeEl = document.getElementById('clockout-time-input');
-  if (dateEl) dateEl.value = todayStr();
-  if (timeEl) timeEl.value =
-    `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
-
-  // ボタンバー切り替え：入店→退店
-  document.getElementById('clockin-submit-bar')?.setAttribute('hidden', '');
-  document.getElementById('clockout-submit-bar')?.removeAttribute('hidden');
-  updateClockOutBtn();
-}
-
-/* ── 退店記録キャンセル ──────────────────────────────────── */
-function cancelClockOut() {
-  pendingClockOutId = null;
-  const section = document.getElementById('clockout-datetime-section');
-  if (section) section.setAttribute('hidden', '');
-  const dateEl = document.getElementById('clockout-date-input');
-  const timeEl = document.getElementById('clockout-time-input');
-  if (dateEl) dateEl.value = '';
-  if (timeEl) timeEl.value = '';
-  document.getElementById('clockout-submit-bar')?.setAttribute('hidden', '');
-  document.getElementById('clockin-submit-bar')?.removeAttribute('hidden');
-}
-
-/* ── 退店処理実行 ────────────────────────────────────────── */
-async function executeClockOut() {
-  if (isSubmitting || !pendingClockOutId) return;
-
-  const id     = pendingClockOutId;
-  const record = todayAttendance.find(a => String(a.id) === String(id));
-  if (!record) return;
-
-  const now          = new Date();
-  const date         = document.getElementById('clockout-date-input')?.value || todayStr();
-  const clockOutTime = document.getElementById('clockout-time-input')?.value ||
-    `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
-
-  isSubmitting = true;
-  const btn = document.getElementById('clockout-btn');
-  if (btn) {
-    btn.disabled  = true;
-    btn.innerHTML = '<span class="spinner" style="width:20px;height:20px;border-top-color:#fff;"></span>';
-  }
-
-  try {
-    const result = await callGAS('clockOut', {
-      staffId:     record.id,
-      clockOutTime,
-      date,
-      rowIndex:    record.rowIndex ?? null,
-    });
-    if (result.status !== 'ok') throw new Error(result.message || '登録エラー');
-
-    record.clockOut = clockOutTime;
-    record.isActive = false;
-    saveAttendance(todayAttendance);
-
-    const nameToShow = record.name;
-    cancelClockOut();
-    renderQuickSelect();
-    renderAttendanceList();
-    showToast(`${nameToShow}さんの退店を記録しました`, 'success');
-
-  } catch (e) {
-    showToast('退店記録に失敗しました：' + e.message, 'error');
-    if (btn) {
-      btn.disabled  = false;
-      btn.innerHTML = buildClockOutBtnText();
-    }
-  } finally {
-    isSubmitting = false;
-  }
-}
-
-/* ── 勤怠リスト描画 ──────────────────────────────────────── */
 function renderAttendanceList() {
   const container = document.getElementById('attendance-list');
   if (!container) return;
@@ -385,53 +335,65 @@ function renderAttendanceList() {
     return;
   }
 
+  // 在店中を先に表示
   const sorted = [
-    ...todayAttendance.filter(a => a.isActive),
-    ...todayAttendance.filter(a => !a.isActive),
+    ...todayAttendance.filter(a => a.isActive || !a.clockOut),
+    ...todayAttendance.filter(a => !a.isActive && a.clockOut),
   ];
 
-  container.innerHTML = sorted.map(a => `
-    <div class="attendance-item">
-      <span class="attendance-dot ${a.isActive ? 'attendance-dot--active' : 'attendance-dot--out'}"
-            aria-hidden="true"></span>
-      <div class="attendance-info">
-        <div class="attendance-name">${escHtml(a.name)}</div>
-        <div class="attendance-time">
-          ${a.isActive
-            ? `入店 ${escHtml(a.clockIn)} — 在店中`
-            : `${escHtml(a.clockIn)} → ${escHtml(a.clockOut)}`}
+  container.innerHTML = sorted.map(a => {
+    const realIdx      = todayAttendance.indexOf(a);
+    const isActive     = a.isActive || !a.clockOut;
+    const clockOutDisp = a.clockOut || '未記録';
+    const dotClass     = isActive ? 'attendance-dot--active' : 'attendance-dot--out';
+
+    return `
+      <div class="attendance-item">
+        <span class="attendance-dot ${dotClass}" aria-hidden="true"></span>
+        <div class="attendance-info">
+          <div class="attendance-name">${escHtml(a.name)}</div>
+          <div class="attendance-time">
+            入店 ${escHtml(a.clockIn)}&nbsp;&nbsp;/&nbsp;&nbsp;退店 ${escHtml(clockOutDisp)}
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;flex-shrink:0;">
+          <button class="attendance-edit-btn"
+                  type="button"
+                  data-idx="${realIdx}"
+                  style="font-size:12px;padding:4px 10px;border-radius:6px;
+                         background:var(--uz-surface2);color:var(--uz-text);
+                         border:1px solid var(--uz-border);cursor:pointer;
+                         font-family:var(--font-main);white-space:nowrap;">
+            修正
+          </button>
+          ${isActive ? `
+          <button class="attendance-clockout-btn"
+                  type="button"
+                  data-idx="${realIdx}"
+                  style="font-size:12px;padding:4px 10px;border-radius:6px;
+                         background:var(--uz-red);color:#fff;
+                         border:none;cursor:pointer;
+                         font-family:var(--font-main);white-space:nowrap;">
+            退店を記録
+          </button>` : ''}
         </div>
       </div>
-      ${a.isActive
-        ? `<button class="attendance-clockout-btn"
-                   type="button"
-                   data-id="${escHtml(String(a.id))}">退店記録</button>`
-        : `<span style="font-size:12px;color:var(--uz-muted);">退店済み</span>`}
-    </div>
-  `).join('');
-}
+    `;
+  }).join('');
 
-/* ── 勤怠リストのアクション（委譲・1回のみ登録） ─────────── */
-function bindAttendanceListActions() {
-  const container = document.getElementById('attendance-list');
-  if (!container) return;
-  container.addEventListener('click', (e) => {
-    const btn = e.target.closest('.attendance-clockout-btn');
-    if (!btn) return;
-    startClockOut(btn.dataset.id);
+  container.querySelectorAll('.attendance-edit-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = parseInt(btn.dataset.idx, 10);
+      loadRecordIntoForm(todayAttendance[idx], idx);
+    });
   });
-}
 
-/* ── UIリセット ──────────────────────────────────────────── */
-function resetSelection() {
-  selectedName = '';
-  const nameInput = document.getElementById('name-input');
-  if (nameInput) nameInput.value = '';
-  document.querySelectorAll('.quick-staff-btn').forEach(btn => {
-    btn.classList.remove('quick-staff-btn--selected');
+  container.querySelectorAll('.attendance-clockout-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = parseInt(btn.dataset.idx, 10);
+      loadRecordForClockOut(todayAttendance[idx], idx);
+    });
   });
-  hideClockInDatetime();
-  updateClockInBtn();
 }
 
 /* ── XSSエスケープ ───────────────────────────────────────── */

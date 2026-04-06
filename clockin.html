@@ -29,22 +29,20 @@
   <!-- スクロール本体 -->
   <div style="padding:0 0 calc(80px + env(safe-area-inset-bottom));">
 
-    <!-- ① スタッフ選択（クイック） -->
+    <!-- ① スタッフ選択 -->
     <div class="form-section">
       <span class="form-section__label">スタッフを選ぶ</span>
-      <div id="quick-staff"
+      <div id="staff-btns"
            class="quick-staff-group"
            role="group"
-           aria-label="スタッフクイック選択">
+           aria-label="スタッフ選択">
         <!-- clockin.js が描画 -->
       </div>
     </div>
 
     <!-- ② 名前テキスト入力（マスタ外スタッフ対応） -->
     <div class="form-section">
-      <label class="form-section__label" for="name-input">
-        または名前を入力
-      </label>
+      <label class="form-section__label" for="name-input">または名前を入力</label>
       <input type="text"
              id="name-input"
              class="text-input"
@@ -55,24 +53,42 @@
       <p class="form-hint">マスタ未登録のスタッフも記録できます。</p>
     </div>
 
-    <!-- ② 入店日時（スタッフ選択後に表示） -->
-    <div class="form-section" id="clockin-datetime-section" hidden>
-      <span class="form-section__label">入店日時</span>
-      <div style="display:flex;gap:8px;margin-top:4px;">
+    <!-- ③ 入店・退店入力フォーム（スタッフ選択後に表示） -->
+    <div id="entry-form-section" hidden>
+
+      <div class="form-section">
+        <span class="form-section__label">日付</span>
         <input type="date"
-               id="clockin-date-input"
+               id="form-date"
                class="date-input"
-               style="flex:1;"
-               aria-label="入店日">
+               style="width:100%;margin-top:4px;"
+               aria-label="日付">
+      </div>
+
+      <div class="form-section">
+        <span class="form-section__label">入店時刻</span>
         <input type="time"
-               id="clockin-time-input"
+               id="form-clockin"
                class="date-input"
-               style="flex:1;"
+               style="width:100%;margin-top:4px;"
                aria-label="入店時刻">
       </div>
+
+      <div class="form-section">
+        <span class="form-section__label">退店時刻
+          <span style="font-size:11px;font-weight:400;color:var(--uz-muted);margin-left:6px;">任意</span>
+        </span>
+        <input type="time"
+               id="form-clockout"
+               class="date-input"
+               style="width:100%;margin-top:4px;"
+               aria-label="退店時刻">
+        <p class="form-hint">空欄のままにすると「退店未記録」で登録されます。</p>
+      </div>
+
     </div>
 
-    <!-- ③ 本日の勤怠リスト -->
+    <!-- ④ 本日の勤怠一覧 -->
     <div class="form-section" style="padding-bottom:8px;">
       <span class="form-section__label">本日の勤怠</span>
     </div>
@@ -83,54 +99,18 @@
       <!-- clockin.js が描画 -->
     </div>
 
-    <!-- ④ 退店日時（退店記録ボタン押下後に表示） -->
-    <div class="form-section" id="clockout-datetime-section" hidden>
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-        <span class="form-section__label" style="margin-bottom:0;">退店日時</span>
-        <button type="button" id="clockout-cancel-btn"
-                style="font-size:12px;color:var(--uz-muted);background:none;border:none;padding:4px 8px;cursor:pointer;font-family:var(--font-main);">
-          キャンセル
-        </button>
-      </div>
-      <div id="clockout-staff-name"
-           style="font-size:15px;font-weight:700;color:var(--uz-text);margin-bottom:10px;"></div>
-      <div style="display:flex;gap:8px;">
-        <input type="date"
-               id="clockout-date-input"
-               class="date-input"
-               style="flex:1;"
-               aria-label="退店日">
-        <input type="time"
-               id="clockout-time-input"
-               class="date-input"
-               style="flex:1;"
-               aria-label="退店時刻">
-      </div>
-    </div>
-
   </div>
 
 </div><!-- /page-wrapper -->
 
-<!-- 入店記録ボタン（固定） -->
-<div id="clockin-submit-bar" class="clockin-submit-bar">
-  <button id="clockin-btn"
+<!-- 登録ボタン（固定） -->
+<div id="submit-bar" class="clockin-submit-bar" hidden>
+  <button id="submit-btn"
           class="clockin-btn"
           type="button"
           disabled
-          aria-label="入店記録する">
-    👤 記録する
-  </button>
-</div>
-
-<!-- 退店記録ボタン（固定・退店操作中のみ表示） -->
-<div id="clockout-submit-bar" class="clockin-submit-bar" hidden>
-  <button id="clockout-btn"
-          class="clockin-btn"
-          type="button"
-          style="background:var(--uz-red);"
-          aria-label="退店記録する">
-    退店記録する
+          aria-label="記録する">
+    登録する
   </button>
 </div>
 

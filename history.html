@@ -13,6 +13,89 @@
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/base.css">
   <link rel="stylesheet" href="css/pages.css">
+  <style>
+    /* タブUI */
+    .hist-tabs {
+      display: flex;
+      border-bottom: 1px solid var(--uz-border);
+      background: var(--uz-surface);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .hist-tab {
+      flex: 1;
+      padding: 12px 4px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--uz-muted);
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      cursor: pointer;
+      font-family: var(--font-main);
+      transition: color .15s, border-color .15s;
+    }
+    .hist-tab--active {
+      color: var(--uz-text);
+      border-bottom-color: var(--uz-blue);
+    }
+    .hist-tab-content { display: none; }
+    .hist-tab-content--active { display: block; }
+
+    /* 入店履歴スタッフカード */
+    .attend-staff-card {
+      margin: 8px 16px;
+      background: var(--uz-surface);
+      border-radius: 10px;
+      overflow: hidden;
+      border: 1px solid var(--uz-border);
+    }
+    .attend-staff-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--uz-border);
+    }
+    .attend-staff-name {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--uz-text);
+    }
+    .attend-record-row {
+      display: flex;
+      align-items: center;
+      padding: 8px 14px;
+      gap: 8px;
+      border-bottom: 1px solid var(--uz-border);
+    }
+    .attend-record-row:last-child { border-bottom: none; }
+    .attend-record-date {
+      font-size: 12px;
+      color: var(--uz-muted);
+      min-width: 80px;
+    }
+    .attend-record-times {
+      font-size: 13px;
+      color: var(--uz-text);
+      flex: 1;
+    }
+    .attend-status {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 20px;
+      font-weight: 600;
+    }
+    .attend-status--active {
+      background: rgba(74,222,128,.15);
+      color: #4ade80;
+    }
+    .attend-status--out {
+      background: rgba(136,136,170,.12);
+      color: var(--uz-muted);
+    }
+  </style>
 </head>
 <body>
 
@@ -23,7 +106,27 @@
     <span class="history-header__title">入力履歴</span>
   </header>
 
-  <!-- 月選択ナビゲーター -->
+  <!-- タブナビゲーション -->
+  <div class="hist-tabs" role="tablist">
+    <button id="tab-salescost"
+            class="hist-tab hist-tab--active"
+            type="button"
+            role="tab"
+            aria-selected="true"
+            aria-controls="panel-salescost">
+      売上・コスト
+    </button>
+    <button id="tab-attendance"
+            class="hist-tab"
+            type="button"
+            role="tab"
+            aria-selected="false"
+            aria-controls="panel-attendance">
+      入店履歴
+    </button>
+  </div>
+
+  <!-- 月選択ナビゲーター（共通） -->
   <div class="pl-period-nav" style="padding:8px 16px;">
     <button id="hist-prev"
             class="pl-period-btn"
@@ -36,11 +139,28 @@
             aria-label="次の月">›</button>
   </div>
 
-  <!-- 履歴リスト（history.js が描画） -->
-  <div id="history-list"
-       style="padding:0 0 calc(var(--nav-height) + env(safe-area-inset-bottom) + 16px);"
-       role="region"
-       aria-label="入力履歴一覧">
+  <!-- タブ1：売上・コスト -->
+  <div id="panel-salescost"
+       class="hist-tab-content hist-tab-content--active"
+       role="tabpanel"
+       aria-labelledby="tab-salescost">
+    <div id="history-list"
+         style="padding:0 0 calc(var(--nav-height) + env(safe-area-inset-bottom) + 16px);"
+         role="region"
+         aria-label="売上・コスト履歴">
+    </div>
+  </div>
+
+  <!-- タブ2：入店履歴 -->
+  <div id="panel-attendance"
+       class="hist-tab-content"
+       role="tabpanel"
+       aria-labelledby="tab-attendance">
+    <div id="attendance-list"
+         style="padding:0 0 calc(var(--nav-height) + env(safe-area-inset-bottom) + 16px);"
+         role="region"
+         aria-label="入店履歴">
+    </div>
   </div>
 
 </div><!-- /page-wrapper -->
