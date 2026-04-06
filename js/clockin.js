@@ -64,6 +64,7 @@ document.addEventListener('DOMContentLoaded', () => {
   renderAttendanceList();
   bindQuickStaffSelect();
   bindNameInput();
+  bindDatetimeInputs();
   bindClockInBtn();
   // GASから最新スタッフリストを取得（バックグラウンド）
   loadStaffFromGAS();
@@ -145,11 +146,32 @@ function bindNameInput() {
   });
 }
 
+/* ── 入店ボタンテキスト生成 ──────────────────────────────── */
+function buildClockInBtnText() {
+  const dateVal = document.getElementById('clockin-date-input')?.value || todayStr();
+  const timeVal = document.getElementById('clockin-time-input')?.value || '';
+  const dispDate = dateVal.replace(/-/g, '/');
+  return timeVal
+    ? `入店日時 ${dispDate} ${timeVal}　記録する`
+    : `入店日時 ${dispDate}　記録する`;
+}
+
 /* ── 入店ボタン有効化制御 ────────────────────────────────── */
 function updateClockInBtn() {
   const btn = document.getElementById('clockin-btn');
   if (!btn) return;
   btn.disabled = !selectedName;
+  btn.innerHTML = selectedName ? buildClockInBtnText() : '👤 記録する';
+}
+
+/* ── 日付・時刻変更リスナー ──────────────────────────────── */
+function bindDatetimeInputs() {
+  document.getElementById('clockin-date-input')?.addEventListener('change', () => {
+    if (selectedName) updateClockInBtn();
+  });
+  document.getElementById('clockin-time-input')?.addEventListener('change', () => {
+    if (selectedName) updateClockInBtn();
+  });
 }
 
 /* ── 入店ボタンバインド ──────────────────────────────────── */
@@ -192,10 +214,11 @@ async function handleClockIn() {
     todayAttendance.unshift(newRecord);
     saveAttendance(todayAttendance);
 
+    const nameToShow = selectedName;   // resetSelection()前に保存
     resetSelection();
     renderQuickSelect();
     renderAttendanceList();
-    showToast(`${selectedName}さんの入店を記録しました ✓`, 'success');
+    showToast(`${nameToShow}さんの入店を記録しました ✓`, 'success');
 
   } catch (e) {
     showToast('登録に失敗しました：' + e.message, 'error');
@@ -284,18 +307,19 @@ function resetSelection() {
 function showClockInDatetime() {
   const section = document.getElementById('clockin-datetime-section');
   if (!section) return;
-  const now = new Date();
+  const now    = new Date();
   const dateEl = document.getElementById('clockin-date-input');
   const timeEl = document.getElementById('clockin-time-input');
   if (dateEl) dateEl.value = todayStr();
   if (timeEl) timeEl.value =
     `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
-  section.hidden = false;
+  section.removeAttribute('hidden');   // section.hidden = false より確実
+  updateClockInBtn();                  // ボタンテキストを日時付きに更新
 }
 
 function hideClockInDatetime() {
   const section = document.getElementById('clockin-datetime-section');
-  if (section) section.hidden = true;
+  if (section) section.setAttribute('hidden', '');
   const dateEl = document.getElementById('clockin-date-input');
   const timeEl = document.getElementById('clockin-time-input');
   if (dateEl) dateEl.value = '';
@@ -306,10 +330,14 @@ function hideClockInDatetime() {
 function setClockInBtnLoading(loading) {
   const btn = document.getElementById('clockin-btn');
   if (!btn) return;
-  btn.disabled = loading;
-  btn.innerHTML = loading
-    ? '<span class="spinner" style="width:20px;height:20px;border-top-color:#fff;"></span>'
-    : '👤 入店記録する';
+  if (loading) {
+    btn.disabled  = true;
+    btn.innerHTML = '<span class="spinner" style="width:20px;height:20px;border-top-color:#fff;"></span>';
+  } else {
+    // selectedName の状態に合わせて復元（resetSelection後に呼ばれる場合も考慮）
+    btn.disabled  = !selectedName;
+    btn.innerHTML = selectedName ? buildClockInBtnText() : '👤 記録する';
+  }
 }
 
 function escHtml(str) {

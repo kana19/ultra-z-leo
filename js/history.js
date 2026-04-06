@@ -1,14 +1,12 @@
 /**
  * ウルトラ財務くん LEO版 PWA — history.js
- * 入力履歴画面ロジック（GAS getHistory 連携版）
+ * 入力履歴画面ロジック（GAS getHistory / getAttendance 連携版）
  *
- * GASレスポンス期待形式:
- * {
- *   status: 'ok',
- *   data: [
- *     { type: 'sales'|'cost', date: 'YYYY-MM-DD', itemName: string, memo: string, amount: number }
- *   ]
- * }
+ * getHistory レスポンス期待形式:
+ * { status:'ok', data:[{ type:'sales'|'cost', date:'YYYY-MM-DD', itemName:string, memo:string, amount:number }] }
+ *
+ * getAttendance レスポンス期待形式:
+ * { status:'ok', data:[{ type:'attendance', date:'YYYY-MM-DD', itemName:string, clockIn:string, clockOut:string|null }] }
  */
 
 'use strict';
@@ -60,7 +58,7 @@ function updateNavUI() {
   if (nextBtn) nextBtn.disabled = isMax;
 }
 
-/* ── GASからデータ取得 ───────────────────────────────────── */
+/* ── GASからデータ取得（売上・コスト ＋ 入店履歴をマージ） ── */
 async function loadHistory() {
   updateNavUI();
   showLoading();
@@ -68,13 +66,35 @@ async function loadHistory() {
   const monthParam = `${currentYear}-${String(currentMonth).padStart(2, '0')}`;
 
   try {
-    const res = await callGAS('getHistory', { month: monthParam });
-    if (res && res.status === 'ok' && Array.isArray(res.data)) {
-      renderHistory(res.data);
-    } else {
+    // 売上/コスト履歴 と 入店履歴を並列取得
+    const [histResult, attendResult] = await Promise.allSettled([
+      callGAS('getHistory',    { month: monthParam }),
+      callGAS('getAttendance', { month: monthParam }),
+    ]);
+
+    // 売上/コスト履歴（必須）
+    if (
+      histResult.status !== 'fulfilled' ||
+      histResult.value?.status !== 'ok' ||
+      !Array.isArray(histResult.value.data)
+    ) {
       renderError();
       showToast('履歴の取得に失敗しました', 'error');
+      return;
     }
+
+    let items = [...histResult.value.data];
+
+    // 入店履歴（任意：失敗しても売上/コストは表示する）
+    if (
+      attendResult.status === 'fulfilled' &&
+      attendResult.value?.status === 'ok' &&
+      Array.isArray(attendResult.value.data)
+    ) {
+      items = items.concat(attendResult.value.data);
+    }
+
+    renderHistory(items);
   } catch (e) {
     renderError();
     showToast('GAS接続エラー：' + e.message, 'error');
@@ -129,6 +149,8 @@ function buildDateHeader(dateStr) {
 }
 
 function buildItemHTML(item) {
+  if (item.type === 'attendance') return buildAttendanceItemHTML(item);
+
   const isSales = item.type === 'sales';
   const icon    = isSales ? '💰' : '💸';
   const typeClass = isSales ? 'sales' : 'cost';
@@ -142,6 +164,27 @@ function buildItemHTML(item) {
       </div>
       <span class="history-item__amount history-item__amount--${typeClass}">
         ${formatYen(item.amount)}
+      </span>
+    </div>`;
+}
+
+function buildAttendanceItemHTML(item) {
+  const clockOut = item.clockOut || null;
+  const timeStr  = clockOut
+    ? `${escHtml(item.clockIn)} → ${escHtml(clockOut)}`
+    : `${escHtml(item.clockIn)} — 在店中`;
+  const statusLabel = clockOut ? '退店済み' : '在店中';
+  const statusClass = clockOut ? 'history-item__amount--attendance-out' : 'history-item__amount--attendance-active';
+
+  return `
+    <div class="history-item">
+      <div class="history-item__type history-item__type--attendance">👤</div>
+      <div class="history-item__info">
+        <div class="history-item__name">${escHtml(item.itemName)}</div>
+        <div class="history-item__date">${timeStr}</div>
+      </div>
+      <span class="history-item__amount ${statusClass}">
+        ${statusLabel}
       </span>
     </div>`;
 }

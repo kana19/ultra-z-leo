@@ -682,5 +682,8 @@
   flex-shrink: 0;
 }
 
-.history-item__amount--sales { color: var(--uz-blue); }
-.history-item__amount--cost  { color: var(--uz-red);  }
+.history-item__amount--sales            { color: var(--uz-blue); }
+.history-item__amount--cost             { color: var(--uz-red);  }
+.history-item__amount--attendance-active { color: var(--uz-green); font-size: 12px; font-weight: 700; }
+.history-item__amount--attendance-out   { color: var(--uz-muted); font-size: 12px; }
+.history-item__type--attendance         { background: rgba(74, 222, 128, 0.15); }
