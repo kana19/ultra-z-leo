@@ -307,14 +307,18 @@ function resetSelection() {
 function showClockInDatetime() {
   const section = document.getElementById('clockin-datetime-section');
   if (!section) return;
+
+  // 先にセクションを表示してから値をセット（hiddenのままだとモバイルで反映されない場合がある）
+  section.removeAttribute('hidden');
+
   const now    = new Date();
   const dateEl = document.getElementById('clockin-date-input');
   const timeEl = document.getElementById('clockin-time-input');
   if (dateEl) dateEl.value = todayStr();
   if (timeEl) timeEl.value =
     `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
-  section.removeAttribute('hidden');   // section.hidden = false より確実
-  updateClockInBtn();                  // ボタンテキストを日時付きに更新
+
+  updateClockInBtn();   // ボタンテキストを日時付きに更新
 }
 
 function hideClockInDatetime() {
