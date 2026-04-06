@@ -264,8 +264,17 @@ async function handleSubmit() {
   const clockIn  = document.getElementById('form-clockin')?.value  || '';
   const clockOut = document.getElementById('form-clockout')?.value || '';
 
+  const timeRe = /^\d{2}:\d{2}$/;
   if (!clockIn) {
     showToast('入店時刻を入力してください', 'error');
+    return;
+  }
+  if (!timeRe.test(clockIn)) {
+    showToast('入店時刻はHH:MM形式で入力してください（例：21:30）', 'error');
+    return;
+  }
+  if (clockOut && !timeRe.test(clockOut)) {
+    showToast('退店時刻はHH:MM形式で入力してください（例：23:00）', 'error');
     return;
   }
 
@@ -415,11 +424,14 @@ function renderAttendanceList() {
              data-idx="${realIdx}"
              style="width:100%;display:flex;gap:8px;align-items:center;
                     padding-top:8px;border-top:1px solid var(--uz-border);margin-top:2px;">
-          <input type="time"
+          <input type="text"
                  id="inline-clockout-${realIdx}"
                  class="date-input"
                  value="${escHtml(nowHHMM())}"
                  style="flex:1;"
+                 placeholder="例：23:00"
+                 pattern="^\\d{2}:\\d{2}$"
+                 inputmode="numeric"
                  aria-label="退店時刻">
           <button class="clockout-inline-submit"
                   type="button"
@@ -472,6 +484,10 @@ function renderAttendanceList() {
       const idx      = parseInt(btn.dataset.idx, 10);
       const timeEl   = document.getElementById(`inline-clockout-${idx}`);
       const timeVal  = timeEl?.value || nowHHMM();
+      if (!/^\d{2}:\d{2}$/.test(timeVal)) {
+        showToast('退店時刻はHH:MM形式で入力してください（例：23:00）', 'error');
+        return;
+      }
       handleInlineClockOut(idx, timeVal);
     });
   });

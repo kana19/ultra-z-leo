@@ -67,10 +67,13 @@
 
       <div class="form-section">
         <span class="form-section__label">入店時刻</span>
-        <input type="time"
+        <input type="text"
                id="form-clockin"
                class="date-input"
                style="width:100%;margin-top:4px;"
+               placeholder="例：21:30"
+               pattern="^\d{2}:\d{2}$"
+               inputmode="numeric"
                aria-label="入店時刻">
       </div>
 
@@ -78,10 +81,13 @@
         <span class="form-section__label">退店時刻
           <span style="font-size:11px;font-weight:400;color:var(--uz-muted);margin-left:6px;">任意</span>
         </span>
-        <input type="time"
+        <input type="text"
                id="form-clockout"
                class="date-input"
                style="width:100%;margin-top:4px;"
+               placeholder="例：23:00（空欄可）"
+               pattern="^\d{2}:\d{2}$"
+               inputmode="numeric"
                aria-label="退店時刻">
         <p class="form-hint">空欄のままにすると「退店未記録」で登録されます。</p>
       </div>
