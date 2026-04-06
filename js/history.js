@@ -6,7 +6,7 @@
  *   getHistory レスポンス: { status:'ok', data:[{ type:'sales'|'cost', date:'YYYY-MM-DD', itemName:string, memo:string, amount:number }] }
  *
  * タブ2：入店履歴
- *   getAttendance レスポンス: { status:'ok', data:[{ type:'attendance', date:'YYYY-MM-DD', staffName:string, clockIn:string, clockOut:string|null }] }
+ *   getAttendanceByMonth レスポンス: { status:'ok', data:[{ date:'YYYY-MM-DD', staffId, staffName:string, clockIn:string, clockOut:string|null }] }
  */
 
 'use strict';
@@ -89,8 +89,8 @@ async function loadAll() {
 
   try {
     const [histResult, attendResult] = await Promise.allSettled([
-      callGAS('getHistory',    { month: monthParam }),
-      callGAS('getAttendance', { month: monthParam }),
+      callGAS('getHistory',            { month: monthParam }),
+      callGAS('getAttendanceByMonth',  { month: monthParam }),
     ]);
 
     // タブ1：売上・コスト
