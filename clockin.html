@@ -83,18 +83,54 @@
       <!-- clockin.js が描画 -->
     </div>
 
+    <!-- ④ 退店日時（退店記録ボタン押下後に表示） -->
+    <div class="form-section" id="clockout-datetime-section" hidden>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <span class="form-section__label" style="margin-bottom:0;">退店日時</span>
+        <button type="button" id="clockout-cancel-btn"
+                style="font-size:12px;color:var(--uz-muted);background:none;border:none;padding:4px 8px;cursor:pointer;font-family:var(--font-main);">
+          キャンセル
+        </button>
+      </div>
+      <div id="clockout-staff-name"
+           style="font-size:15px;font-weight:700;color:var(--uz-text);margin-bottom:10px;"></div>
+      <div style="display:flex;gap:8px;">
+        <input type="date"
+               id="clockout-date-input"
+               class="date-input"
+               style="flex:1;"
+               aria-label="退店日">
+        <input type="time"
+               id="clockout-time-input"
+               class="date-input"
+               style="flex:1;"
+               aria-label="退店時刻">
+      </div>
+    </div>
+
   </div>
 
 </div><!-- /page-wrapper -->
 
 <!-- 入店記録ボタン（固定） -->
-<div class="clockin-submit-bar">
+<div id="clockin-submit-bar" class="clockin-submit-bar">
   <button id="clockin-btn"
           class="clockin-btn"
           type="button"
           disabled
           aria-label="入店記録する">
     👤 記録する
+  </button>
+</div>
+
+<!-- 退店記録ボタン（固定・退店操作中のみ表示） -->
+<div id="clockout-submit-bar" class="clockin-submit-bar" hidden>
+  <button id="clockout-btn"
+          class="clockin-btn"
+          type="button"
+          style="background:var(--uz-red);"
+          aria-label="退店記録する">
+    退店記録する
   </button>
 </div>
 
