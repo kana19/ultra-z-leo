@@ -236,10 +236,11 @@ function renderAttendance(items) {
       const [y, m, d] = r.date.split(/[-\/]/).map(Number);
       const dow       = WEEKDAYS[new Date(y, m - 1, d).getDay()];
       const dateLabel = `${m}/${d}（${dow}）`;
-      const clockOut  = r.clockOut || null;
+      const clockIn   = parseTimeStr(r.clockIn);
+      const clockOut  = parseTimeStr(r.clockOut);
       const timeStr   = clockOut
-        ? `${escHtml(r.clockIn)} → ${escHtml(clockOut)}`
-        : `${escHtml(r.clockIn)} — 退店未記録`;
+        ? `${escHtml(clockIn)} → ${escHtml(clockOut)}`
+        : `${escHtml(clockIn)} — 退店未記録`;
       const isActive  = !clockOut;
 
       html += `
@@ -278,6 +279,47 @@ function buildDateHeader(dateStr) {
         ${y}年${m}月${d}日（${dow}）
       </span>
     </div>`;
+}
+
+/* ── 時刻文字列正規化（GASのシリアル日時対応） ──────────── */
+/**
+ * GASから返ってくる時刻値を "HH:MM" 形式に正規化する
+ *   "HH:MM" / "HH:MM:SS"             → そのままスライス
+ *   "Sat Dec 30 1899 00:14:00 GMT+09" → Date.toString()形式 → getHours/getMinutes（ローカル時刻）
+ *   "1899-12-29T15:14:00.000Z"        → ISO文字列 → getUTCHours/getUTCMinutes（UTC時刻が実際の時刻）
+ *   null / "" / undefined             → ""
+ */
+function parseTimeStr(val) {
+  if (!val) return '';
+  const s = String(val).trim();
+  if (!s) return '';
+
+  // すでに "HH:MM" または "HH:MM:SS" 形式
+  if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(s)) {
+    return s.slice(0, 5);
+  }
+
+  // ISO文字列形式（例: "1899-12-29T15:14:00.000Z"）
+  // GASのシリアル時刻はUTC時刻が実際の時刻になる
+  if (/^\d{4}-\d{2}-\d{2}T/.test(s)) {
+    const d = new Date(s);
+    if (!isNaN(d.getTime())) {
+      const h = d.getUTCHours();
+      const m = d.getUTCMinutes();
+      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    }
+  }
+
+  // Date.toString()形式（例: "Sat Dec 30 1899 00:14:00 GMT+0900"）
+  // JSがローカル時刻として解釈するのでgetHours/getMinutesでOK
+  const d = new Date(s);
+  if (!isNaN(d.getTime())) {
+    const h = d.getHours();
+    const m = d.getMinutes();
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  }
+
+  return '';
 }
 
 /* ── XSSエスケープ ───────────────────────────────────────── */
