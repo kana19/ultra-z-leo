@@ -1,12 +1,15 @@
 /**
  * ウルトラ財務くん LEO版 PWA — history.js
- * 入力履歴画面ロジック（タブ分け対応版）
+ * 履歴・修正画面ロジック
  *
- * タブ1：売上・コスト
- *   getHistory レスポンス: { status:'ok', data:[{ type:'sales'|'cost', date:'YYYY-MM-DD', itemName:string, memo:string, amount:number }] }
+ * タブ1：売上・コスト（getHistory）
+ *   ※ GAS側で以下のフィールドを含めてください：
+ *   { type, rowIndex, date, serviceCode?, divisionCode?, divisionName?, itemCode?,
+ *     itemName, taxRate, amount(=taxIncluded), memo, uncollected?(売上) / unpaid?(コスト) }
  *
- * タブ2：入店履歴
- *   getAttendanceByMonth レスポンス: { status:'ok', data:[{ date:'YYYY-MM-DD', staffId, staffName:string, clockIn:string, clockOut:string|null }] }
+ * タブ2：入店履歴（getAttendanceByMonth）
+ *   ※ GAS側で rowIndex を含めてください：
+ *   { rowIndex, date, staffId, staffName, clockIn, clockOut }
  */
 
 'use strict';
@@ -20,32 +23,40 @@ const MIN_YEAR   = 2025;
 /* ── 状態 ────────────────────────────────────────────────── */
 let currentYear  = THIS_YEAR;
 let currentMonth = THIS_MONTH;
-let activeTab    = 'salescost'; // 'salescost' | 'attendance'
+let activeTab    = 'salescost';
+
+// 修正フォーム用キャッシュ（renderのたびに再構築）
+let editableItems = []; // 売上・コスト行
+let attendItems   = []; // 入店履歴行
+
+// 修正フォームの状態
+let currentEditItem = null;
+let isEditSaving    = false;
 
 /* ── 初期化 ──────────────────────────────────────────────── */
 document.addEventListener('DOMContentLoaded', () => {
   bindTabs();
   bindNav();
+  bindEditPanel();
+  bindListClicks(); // 委譲リスナーは1回だけ登録
   loadAll();
 });
 
 /* ── タブ切り替え ────────────────────────────────────────── */
 function bindTabs() {
-  document.getElementById('tab-salescost')?.addEventListener('click', () => switchTab('salescost'));
+  document.getElementById('tab-salescost')?.addEventListener('click',  () => switchTab('salescost'));
   document.getElementById('tab-attendance')?.addEventListener('click', () => switchTab('attendance'));
 }
 
 function switchTab(tab) {
   activeTab = tab;
-
   document.querySelectorAll('.hist-tab').forEach(btn => {
-    const isActive = btn.id === `tab-${tab}`;
-    btn.classList.toggle('hist-tab--active', isActive);
-    btn.setAttribute('aria-selected', String(isActive));
+    const on = btn.id === `tab-${tab}`;
+    btn.classList.toggle('hist-tab--active', on);
+    btn.setAttribute('aria-selected', String(on));
   });
   document.querySelectorAll('.hist-tab-content').forEach(panel => {
-    const isActive = panel.id === `panel-${tab}`;
-    panel.classList.toggle('hist-tab-content--active', isActive);
+    panel.classList.toggle('hist-tab-content--active', panel.id === `panel-${tab}`);
   });
 }
 
@@ -68,48 +79,40 @@ function moveMonth(dir) {
 }
 
 function updateNavUI() {
-  const monthStr = `${currentYear}年${currentMonth}月`;
-  const labelEl  = document.getElementById('hist-label');
-  if (labelEl) labelEl.textContent = monthStr;
-
-  const isMin   = currentYear === MIN_YEAR  && currentMonth === 1;
-  const isMax   = currentYear === THIS_YEAR && currentMonth === THIS_MONTH;
-  const prevBtn = document.getElementById('hist-prev');
-  const nextBtn = document.getElementById('hist-next');
-  if (prevBtn) prevBtn.disabled = isMin;
-  if (nextBtn) nextBtn.disabled = isMax;
+  const labelEl = document.getElementById('hist-label');
+  if (labelEl) labelEl.textContent = `${currentYear}年${currentMonth}月`;
+  const isMin = currentYear === MIN_YEAR  && currentMonth === 1;
+  const isMax = currentYear === THIS_YEAR && currentMonth === THIS_MONTH;
+  if (document.getElementById('hist-prev')) document.getElementById('hist-prev').disabled = isMin;
+  if (document.getElementById('hist-next')) document.getElementById('hist-next').disabled = isMax;
 }
 
 /* ── GASからデータ取得 ───────────────────────────────────── */
 async function loadAll() {
   updateNavUI();
   showLoading();
+  editableItems = [];
+  attendItems   = [];
 
   const monthParam = `${currentYear}-${String(currentMonth).padStart(2, '0')}`;
 
   try {
     const [histResult, attendResult] = await Promise.allSettled([
-      callGAS('getHistory',            { month: monthParam }),
-      callGAS('getAttendanceByMonth',  { month: monthParam }),
+      callGAS('getHistory',           { month: monthParam }),
+      callGAS('getAttendanceByMonth', { month: monthParam }),
     ]);
 
-    // タブ1：売上・コスト
-    if (
-      histResult.status === 'fulfilled' &&
-      histResult.value?.status === 'ok' &&
-      Array.isArray(histResult.value.data)
-    ) {
+    if (histResult.status === 'fulfilled' &&
+        histResult.value?.status === 'ok' &&
+        Array.isArray(histResult.value.data)) {
       renderSalesCost(histResult.value.data);
     } else {
       renderSalesCostError();
     }
 
-    // タブ2：入店履歴
-    if (
-      attendResult.status === 'fulfilled' &&
-      attendResult.value?.status === 'ok' &&
-      Array.isArray(attendResult.value.data)
-    ) {
+    if (attendResult.status === 'fulfilled' &&
+        attendResult.value?.status === 'ok' &&
+        Array.isArray(attendResult.value.data)) {
       renderAttendance(attendResult.value.data);
     } else {
       renderAttendanceError();
@@ -125,12 +128,91 @@ async function loadAll() {
 }
 
 /* ══════════════════════════════════════════════════════════
+   ロック判定
+   ══════════════════════════════════════════════════════════ */
+
+/**
+ * 指定日付のロック状態を返す
+ * @param {string} dateStr - YYYY-MM-DD
+ * @returns {{ locked:boolean, grace:boolean, daysLeft:number|null }}
+ *
+ * ロックルール:
+ *   当月         → 自由に修正可（locked:false, grace:false）
+ *   翌月1〜3日   → 猶予期間（locked:false, grace:true, daysLeft:残日数）
+ *   翌月4日以降  → 完全ロック（locked:true）
+ */
+function getLockStatus(dateStr) {
+  if (!dateStr) return { locked: true, grace: false, daysLeft: null };
+  const [dy, dm] = dateStr.split('-').map(Number);
+  const now = new Date();
+  const ty  = now.getFullYear();
+  const tm  = now.getMonth() + 1;
+  const td  = now.getDate();
+
+  // 当月
+  if (dy === ty && dm === tm) return { locked: false, grace: false, daysLeft: null };
+
+  // データ月の翌月を計算
+  const ny = dm === 12 ? dy + 1 : dy;
+  const nm = dm === 12 ? 1       : dm + 1;
+
+  // 今日がデータ月の翌月1〜3日
+  if (ty === ny && tm === nm && td <= 3) {
+    return { locked: false, grace: true, daysLeft: 4 - td };
+  }
+
+  return { locked: true, grace: false, daysLeft: null };
+}
+
+/**
+ * ロック状態に応じたボタン/バッジHTMLを返す
+ * @param {object} ls  - getLockStatus()の戻り値
+ * @param {number} idx - キャッシュ配列のインデックス
+ * @param {string} scope - 'sc'（売上コスト）| 'at'（入店）
+ */
+function buildLockWidget(ls, idx, scope) {
+  if (ls.locked) {
+    return `<span class="hist-locked-badge">修正不可</span>`;
+  }
+  const btnClass = ls.grace ? 'hist-edit-btn hist-edit-btn--grace' : 'hist-edit-btn';
+  const badge    = ls.grace
+    ? `<span class="hist-grace-badge">期限まであと${ls.daysLeft}日</span>`
+    : '';
+  return `
+    <div style="display:flex;flex-direction:column;align-items:flex-end;">
+      <button class="${btnClass}"
+              type="button"
+              data-idx="${idx}"
+              data-scope="${scope}">修正</button>
+      ${badge}
+    </div>`;
+}
+
+/* ── リストのクリック委譲（1回だけ登録） ────────────────── */
+function bindListClicks() {
+  document.getElementById('history-list')?.addEventListener('click', e => {
+    const btn = e.target.closest('.hist-edit-btn[data-scope="sc"]');
+    if (!btn) return;
+    const idx = parseInt(btn.dataset.idx, 10);
+    if (!isNaN(idx) && editableItems[idx]) openEditForm(editableItems[idx]);
+  });
+
+  document.getElementById('attendance-list')?.addEventListener('click', e => {
+    const btn = e.target.closest('.hist-edit-btn[data-scope="at"]');
+    if (!btn) return;
+    const idx = parseInt(btn.dataset.idx, 10);
+    if (!isNaN(idx) && attendItems[idx]) openEditForm(attendItems[idx]);
+  });
+}
+
+/* ══════════════════════════════════════════════════════════
    タブ1：売上・コスト描画
    ══════════════════════════════════════════════════════════ */
 
 function renderSalesCost(items) {
   const container = document.getElementById('history-list');
   if (!container) return;
+  editableItems = [];
 
   if (items.length === 0) {
     container.innerHTML = `
@@ -140,7 +222,6 @@ function renderSalesCost(items) {
     return;
   }
 
-  // 日付降順ソート→グループ化
   const sorted = [...items].sort((a, b) => b.date.localeCompare(a.date));
   const groups = {};
   sorted.forEach(item => {
@@ -151,7 +232,10 @@ function renderSalesCost(items) {
   let html = '';
   Object.keys(groups).forEach(date => {
     html += buildDateHeader(date);
-    groups[date].forEach(item => { html += buildSalesCostItemHTML(item); });
+    groups[date].forEach(item => {
+      const idx = editableItems.push(item) - 1;
+      html += buildSalesCostItemHTML(item, idx);
+    });
   });
 
   container.innerHTML = html;
@@ -159,18 +243,18 @@ function renderSalesCost(items) {
 
 function renderSalesCostError() {
   const container = document.getElementById('history-list');
-  if (container) {
-    container.innerHTML = `
-      <p style="text-align:center;padding:40px 20px;font-size:13px;color:var(--uz-muted);">
-        データの取得に失敗しました。<br>通信状態を確認してください。
-      </p>`;
-  }
+  if (container) container.innerHTML = `
+    <p style="text-align:center;padding:40px 20px;font-size:13px;color:var(--uz-muted);">
+      データの取得に失敗しました。<br>通信状態を確認してください。
+    </p>`;
 }
 
-function buildSalesCostItemHTML(item) {
+function buildSalesCostItemHTML(item, idx) {
   const isSales   = item.type === 'sales';
   const icon      = isSales ? '💰' : '💸';
   const typeClass = isSales ? 'sales' : 'cost';
+  const ls        = getLockStatus(item.date);
+  const widget    = buildLockWidget(ls, idx, 'sc');
 
   return `
     <div class="history-item">
@@ -179,19 +263,23 @@ function buildSalesCostItemHTML(item) {
         <div class="history-item__name">${escHtml(item.itemName)}</div>
         ${item.memo ? `<div class="history-item__date">${escHtml(item.memo)}</div>` : ''}
       </div>
-      <span class="history-item__amount history-item__amount--${typeClass}">
-        ${formatYen(item.amount)}
-      </span>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0;">
+        <span class="history-item__amount history-item__amount--${typeClass}">
+          ${formatYen(item.amount)}
+        </span>
+        ${widget}
+      </div>
     </div>`;
 }
 
 /* ══════════════════════════════════════════════════════════
-   タブ2：入店履歴描画（スタッフ単位・日付グループ）
+   タブ2：入店履歴描画
    ══════════════════════════════════════════════════════════ */
 
 function renderAttendance(items) {
   const container = document.getElementById('attendance-list');
   if (!container) return;
+  attendItems = [];
 
   if (items.length === 0) {
     container.innerHTML = `
@@ -201,28 +289,23 @@ function renderAttendance(items) {
     return;
   }
 
-  // スタッフ名でグループ化 → 各スタッフ内は日付降順
+  // スタッフ名でグループ化
   const staffMap = {};
   items.forEach(item => {
-    const name = item.staffName || item.itemName || '不明';
+    const name = item.staffName || '不明';
     if (!staffMap[name]) staffMap[name] = [];
     staffMap[name].push(item);
   });
 
-  // スタッフ内日付降順ソート
-  Object.values(staffMap).forEach(records => {
-    records.sort((a, b) => b.date.localeCompare(a.date));
-  });
+  Object.values(staffMap).forEach(recs => recs.sort((a, b) => b.date.localeCompare(a.date)));
 
-  // スタッフを最新入店日降順で並べる
-  const staffNames = Object.keys(staffMap).sort((a, b) => {
-    return staffMap[b][0].date.localeCompare(staffMap[a][0].date);
-  });
+  const staffNames = Object.keys(staffMap).sort((a, b) =>
+    staffMap[b][0].date.localeCompare(staffMap[a][0].date));
 
   let html = '';
   staffNames.forEach(name => {
-    const records = staffMap[name];
-    const hasActive = records.some(r => !r.clockOut);
+    const recs      = staffMap[name];
+    const hasActive = recs.some(r => !parseTimeStr(r.clockOut));
 
     html += `
       <div class="attend-staff-card">
@@ -232,16 +315,22 @@ function renderAttendance(items) {
           <span class="attend-staff-name">${escHtml(name)}</span>
         </div>`;
 
-    records.forEach(r => {
+    recs.forEach(r => {
+      // type: 'attendance' を付与してキャッシュに積む
+      const enriched = { ...r, type: 'attendance' };
+      const atIdx    = attendItems.push(enriched) - 1;
+
       const [y, m, d] = r.date.split(/[-\/]/).map(Number);
-      const dow       = WEEKDAYS[new Date(y, m - 1, d).getDay()];
-      const dateLabel = `${m}/${d}（${dow}）`;
-      const clockIn   = parseTimeStr(r.clockIn);
-      const clockOut  = parseTimeStr(r.clockOut);
-      const timeStr   = clockOut
+      const dow        = WEEKDAYS[new Date(y, m - 1, d).getDay()];
+      const dateLabel  = `${m}/${d}（${dow}）`;
+      const clockIn    = parseTimeStr(r.clockIn);
+      const clockOut   = parseTimeStr(r.clockOut);
+      const timeStr    = clockOut
         ? `${escHtml(clockIn)} → ${escHtml(clockOut)}`
         : `${escHtml(clockIn)} — 退店未記録`;
-      const isActive  = !clockOut;
+      const isActive   = !clockOut;
+      const ls         = getLockStatus(r.date);
+      const widget     = buildLockWidget(ls, atIdx, 'at');
 
       html += `
         <div class="attend-record-row">
@@ -250,6 +339,7 @@ function renderAttendance(items) {
           <span class="attend-status ${isActive ? 'attend-status--active' : 'attend-status--out'}">
             ${isActive ? '在店中' : '退店済'}
           </span>
+          ${widget}
         </div>`;
     });
 
@@ -261,11 +351,294 @@ function renderAttendance(items) {
 
 function renderAttendanceError() {
   const container = document.getElementById('attendance-list');
-  if (container) {
-    container.innerHTML = `
-      <p style="text-align:center;padding:40px 20px;font-size:13px;color:var(--uz-muted);">
-        入店履歴の取得に失敗しました。<br>通信状態を確認してください。
-      </p>`;
+  if (container) container.innerHTML = `
+    <p style="text-align:center;padding:40px 20px;font-size:13px;color:var(--uz-muted);">
+      入店履歴の取得に失敗しました。<br>通信状態を確認してください。
+    </p>`;
+}
+
+/* ══════════════════════════════════════════════════════════
+   修正フォーム
+   ══════════════════════════════════════════════════════════ */
+
+function bindEditPanel() {
+  document.getElementById('edit-cancel-btn')?.addEventListener('click', closeEditForm);
+  document.getElementById('edit-backdrop')?.addEventListener('click',   closeEditForm);
+  document.getElementById('edit-save-btn')?.addEventListener('click',   saveEdit);
+}
+
+function openEditForm(item) {
+  if (!item) return;
+
+  // rowIndex チェック（GAS未更新の場合に案内）
+  if (!item.rowIndex) {
+    showToast(
+      'rowIndex が取得できません。GAS の getHistory / getAttendanceByMonth に rowIndex を追加してください。',
+      'error', 5000
+    );
+    return;
+  }
+
+  currentEditItem = item;
+
+  const titleEl = document.getElementById('edit-panel-title');
+  const bodyEl  = document.getElementById('edit-form-body');
+  if (!titleEl || !bodyEl) return;
+
+  if (item.type === 'sales') {
+    titleEl.textContent = '売上を修正';
+    bodyEl.innerHTML    = buildSalesFormHTML(item);
+  } else if (item.type === 'cost') {
+    titleEl.textContent = 'コストを修正';
+    bodyEl.innerHTML    = buildCostFormHTML(item);
+  } else {
+    // attendance
+    titleEl.textContent = '入店記録を修正';
+    bodyEl.innerHTML    = buildAttendanceFormHTML(item);
+  }
+
+  bindTaxCalc();
+
+  document.getElementById('edit-backdrop')?.classList.add('edit-backdrop--show');
+  document.getElementById('edit-panel')?.classList.add('edit-panel--open');
+  document.getElementById('edit-save-btn').disabled = false;
+  document.getElementById('edit-save-btn').textContent = '保存する';
+}
+
+function closeEditForm() {
+  currentEditItem = null;
+  document.getElementById('edit-backdrop')?.classList.remove('edit-backdrop--show');
+  document.getElementById('edit-panel')?.classList.remove('edit-panel--open');
+}
+
+/* ── フォームHTML生成 ────────────────────────────────────── */
+
+function taxToggleGroupHTML(taxRate) {
+  return `<div class="tax-toggle-group" role="group" aria-label="税率">
+    ${[0, 8, 10].map(r => `
+      <button type="button"
+              class="tax-toggle${r === taxRate ? ' tax-toggle--active' : ''}"
+              data-rate="${r}">${r}%</button>
+    `).join('')}
+  </div>`;
+}
+
+function buildSalesFormHTML(item) {
+  const rate = Number(item.taxRate) || 10;
+  return `
+    <div class="edit-field">
+      <label class="edit-label">日付</label>
+      <input type="date" id="ef-date" class="edit-input"
+             value="${escHtml(item.date || '')}">
+    </div>
+    <div class="edit-field">
+      <label class="edit-label">サービス名</label>
+      <input type="text" id="ef-name" class="edit-input"
+             value="${escHtml(item.itemName || '')}" maxlength="40">
+    </div>
+    <div class="edit-field">
+      <label class="edit-label">税率</label>
+      ${taxToggleGroupHTML(rate)}
+    </div>
+    <div class="edit-field">
+      <label class="edit-label">税込金額</label>
+      <input type="number" id="ef-amount" class="edit-input"
+             value="${Number(item.amount) || 0}" inputmode="numeric" min="0">
+      <div id="ef-tax-note" class="edit-tax-note"></div>
+    </div>
+    <div class="edit-field">
+      <label class="edit-label">メモ</label>
+      <input type="text" id="ef-memo" class="edit-input"
+             value="${escHtml(item.memo || '')}" maxlength="100">
+    </div>
+    <div class="edit-field">
+      <label class="edit-label">未収</label>
+      <label class="edit-toggle-wrap">
+        <input type="checkbox" id="ef-flag" ${Number(item.uncollected) ? 'checked' : ''}>
+        <span class="edit-toggle-label">未収あり</span>
+      </label>
+    </div>`;
+}
+
+function buildCostFormHTML(item) {
+  const rate = Number(item.taxRate) || 10;
+  return `
+    <div class="edit-field">
+      <label class="edit-label">日付</label>
+      <input type="date" id="ef-date" class="edit-input"
+             value="${escHtml(item.date || '')}">
+    </div>
+    <div class="edit-field">
+      <label class="edit-label">科目名</label>
+      <input type="text" id="ef-name" class="edit-input"
+             value="${escHtml(item.itemName || '')}" maxlength="40">
+    </div>
+    <div class="edit-field">
+      <label class="edit-label">税率</label>
+      ${taxToggleGroupHTML(rate)}
+    </div>
+    <div class="edit-field">
+      <label class="edit-label">税込金額</label>
+      <input type="number" id="ef-amount" class="edit-input"
+             value="${Number(item.amount) || 0}" inputmode="numeric" min="0">
+      <div id="ef-tax-note" class="edit-tax-note"></div>
+    </div>
+    <div class="edit-field">
+      <label class="edit-label">メモ</label>
+      <input type="text" id="ef-memo" class="edit-input"
+             value="${escHtml(item.memo || '')}" maxlength="100">
+    </div>
+    <div class="edit-field">
+      <label class="edit-label">未払</label>
+      <label class="edit-toggle-wrap">
+        <input type="checkbox" id="ef-flag" ${Number(item.unpaid) ? 'checked' : ''}>
+        <span class="edit-toggle-label">未払あり</span>
+      </label>
+    </div>`;
+}
+
+function buildAttendanceFormHTML(item) {
+  return `
+    <div class="edit-field">
+      <label class="edit-label">スタッフ名</label>
+      <div class="edit-readonly">${escHtml(item.staffName || '')}</div>
+    </div>
+    <div class="edit-field">
+      <label class="edit-label">日付</label>
+      <input type="date" id="ef-date" class="edit-input"
+             value="${escHtml(item.date || '')}">
+    </div>
+    <div class="edit-field">
+      <label class="edit-label">入店時刻</label>
+      <input type="time" id="ef-clockin" class="edit-input"
+             value="${escHtml(parseTimeStr(item.clockIn))}">
+    </div>
+    <div class="edit-field">
+      <label class="edit-label">退店時刻
+        <span style="font-size:11px;font-weight:400;color:var(--uz-muted);margin-left:4px;">任意</span>
+      </label>
+      <input type="time" id="ef-clockout" class="edit-input"
+             value="${escHtml(parseTimeStr(item.clockOut) || '')}">
+    </div>`;
+}
+
+/* ── 税率トグル・税額リアルタイム表示 ───────────────────── */
+function bindTaxCalc() {
+  document.querySelectorAll('.tax-toggle').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tax-toggle').forEach(b => b.classList.remove('tax-toggle--active'));
+      btn.classList.add('tax-toggle--active');
+      updateTaxNote();
+    });
+  });
+  document.getElementById('ef-amount')?.addEventListener('input', updateTaxNote);
+  updateTaxNote();
+}
+
+function getSelectedTaxRate() {
+  return Number(document.querySelector('.tax-toggle--active')?.dataset.rate ?? 10);
+}
+
+function updateTaxNote() {
+  const el = document.getElementById('ef-tax-note');
+  if (!el) return;
+  const taxInc = parseInt(document.getElementById('ef-amount')?.value || '0', 10) || 0;
+  const rate   = getSelectedTaxRate();
+  if (rate === 0) {
+    el.textContent = `税抜 ¥${taxInc.toLocaleString()}  /  消費税 ¥0`;
+  } else {
+    const taxExc = Math.floor(taxInc / (1 + rate / 100));
+    el.textContent = `税抜 ¥${taxExc.toLocaleString()}  /  消費税 ¥${(taxInc - taxExc).toLocaleString()}`;
+  }
+}
+
+/* ── 保存処理 ─────────────────────────────────────────────── */
+async function saveEdit() {
+  if (isEditSaving || !currentEditItem) return;
+
+  const item = currentEditItem;
+  isEditSaving = true;
+  const saveBtn = document.getElementById('edit-save-btn');
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = '保存中...'; }
+
+  try {
+    let result;
+
+    if (item.type === 'sales') {
+      const date        = document.getElementById('ef-date')?.value         || item.date;
+      const serviceName = document.getElementById('ef-name')?.value?.trim() || item.itemName;
+      const taxRate     = getSelectedTaxRate();
+      const taxInc      = parseInt(document.getElementById('ef-amount')?.value || '0', 10) || 0;
+      const taxExc      = taxRate === 0 ? taxInc : Math.floor(taxInc / (1 + taxRate / 100));
+      const tax         = taxInc - taxExc;
+      const memo        = document.getElementById('ef-memo')?.value        || '';
+      const uncollected = document.getElementById('ef-flag')?.checked      ? 1 : 0;
+
+      result = await callGAS('updateSales', {
+        rowIndex:    item.rowIndex,
+        date,
+        serviceName,
+        serviceCode: item.serviceCode  || '',
+        amountExTax: taxExc,
+        taxRate,
+        tax,
+        amountInTax: taxInc,
+        memo,
+        uncollected,
+      });
+
+    } else if (item.type === 'cost') {
+      const date      = document.getElementById('ef-date')?.value         || item.date;
+      const itemName  = document.getElementById('ef-name')?.value?.trim() || item.itemName;
+      const taxRate   = getSelectedTaxRate();
+      const taxInc    = parseInt(document.getElementById('ef-amount')?.value || '0', 10) || 0;
+      const taxExc    = taxRate === 0 ? taxInc : Math.floor(taxInc / (1 + taxRate / 100));
+      const tax       = taxInc - taxExc;
+      const memo      = document.getElementById('ef-memo')?.value      || '';
+      const unpaid    = document.getElementById('ef-flag')?.checked    ? 1 : 0;
+
+      result = await callGAS('updateCost', {
+        rowIndex:     item.rowIndex,
+        date,
+        divisionCode: item.divisionCode || '',
+        divisionName: item.divisionName || '',
+        itemCode:     item.itemCode     || '',
+        itemName,
+        taxExcluded:  taxExc,
+        taxRate,
+        tax,
+        taxIncluded:  taxInc,
+        memo,
+        unpaid,
+      });
+
+    } else {
+      // attendance
+      const date     = document.getElementById('ef-date')?.value     || item.date;
+      const clockIn  = document.getElementById('ef-clockin')?.value  || '';
+      const clockOut = document.getElementById('ef-clockout')?.value || '';
+
+      result = await callGAS('updateAttendance', {
+        rowIndex:  item.rowIndex,
+        date,
+        staffId:   item.staffId   || '',
+        staffName: item.staffName || '',
+        clockIn,
+        clockOut,
+      });
+    }
+
+    if (result?.status !== 'ok') throw new Error(result?.message || '登録エラー');
+
+    closeEditForm();
+    showToast('修正を保存しました ✓', 'success');
+    await loadAll(); // 一覧をリロード
+
+  } catch (e) {
+    showToast('保存に失敗しました：' + e.message, 'error');
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = '保存する'; }
+  } finally {
+    isEditSaving = false;
   }
 }
 
@@ -282,43 +655,19 @@ function buildDateHeader(dateStr) {
 }
 
 /* ── 時刻文字列正規化（GASのシリアル日時対応） ──────────── */
-/**
- * GASから返ってくる時刻値を "HH:MM" 形式に正規化する
- *   "HH:MM" / "HH:MM:SS"             → そのままスライス
- *   "Sat Dec 30 1899 00:14:00 GMT+09" → Date.toString()形式 → getHours/getMinutes（ローカル時刻）
- *   "1899-12-29T15:14:00.000Z"        → ISO文字列 → getUTCHours/getUTCMinutes（UTC時刻が実際の時刻）
- *   null / "" / undefined             → ""
- */
 function parseTimeStr(val) {
   if (!val) return '';
   const s = String(val).trim();
   if (!s) return '';
-
-  // すでに "HH:MM" または "HH:MM:SS" 形式
-  if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(s)) {
-    return s.slice(0, 5);
-  }
-
-  // ISO文字列形式（例: "1899-12-29T15:14:00.000Z"）
-  // GASのシリアル時刻はUTC時刻が実際の時刻になる
+  if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(s)) return s.slice(0, 5);
   if (/^\d{4}-\d{2}-\d{2}T/.test(s)) {
     const d = new Date(s);
-    if (!isNaN(d.getTime())) {
-      const h = d.getUTCHours();
-      const m = d.getUTCMinutes();
-      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-    }
+    if (!isNaN(d.getTime()))
+      return `${String(d.getUTCHours()).padStart(2,'0')}:${String(d.getUTCMinutes()).padStart(2,'0')}`;
   }
-
-  // Date.toString()形式（例: "Sat Dec 30 1899 00:14:00 GMT+0900"）
-  // JSがローカル時刻として解釈するのでgetHours/getMinutesでOK
   const d = new Date(s);
-  if (!isNaN(d.getTime())) {
-    const h = d.getHours();
-    const m = d.getMinutes();
-    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-  }
-
+  if (!isNaN(d.getTime()))
+    return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
   return '';
 }
 

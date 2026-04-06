@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#1a1a2e">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>入力履歴 — ウルトラ財務くん</title>
+  <title>履歴・修正 — ウルトラ財務くん</title>
   <link rel="manifest" href="manifest.json">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -14,7 +14,7 @@
   <link rel="stylesheet" href="css/base.css">
   <link rel="stylesheet" href="css/pages.css">
   <style>
-    /* タブUI */
+    /* ── タブ ── */
     .hist-tabs {
       display: flex;
       border-bottom: 1px solid var(--uz-border);
@@ -36,14 +36,11 @@
       font-family: var(--font-main);
       transition: color .15s, border-color .15s;
     }
-    .hist-tab--active {
-      color: var(--uz-text);
-      border-bottom-color: var(--uz-blue);
-    }
+    .hist-tab--active { color: var(--uz-text); border-bottom-color: var(--uz-blue); }
     .hist-tab-content { display: none; }
     .hist-tab-content--active { display: block; }
 
-    /* 入店履歴スタッフカード */
+    /* ── 入店履歴スタッフカード ── */
     .attend-staff-card {
       margin: 8px 16px;
       background: var(--uz-surface);
@@ -58,43 +55,153 @@
       padding: 10px 14px;
       border-bottom: 1px solid var(--uz-border);
     }
-    .attend-staff-name {
-      font-size: 14px;
-      font-weight: 700;
-      color: var(--uz-text);
-    }
+    .attend-staff-name { font-size: 14px; font-weight: 700; color: var(--uz-text); }
     .attend-record-row {
       display: flex;
       align-items: center;
+      flex-wrap: wrap;
       padding: 8px 14px;
-      gap: 8px;
+      gap: 6px;
       border-bottom: 1px solid var(--uz-border);
     }
     .attend-record-row:last-child { border-bottom: none; }
-    .attend-record-date {
-      font-size: 12px;
-      color: var(--uz-muted);
-      min-width: 80px;
-    }
-    .attend-record-times {
-      font-size: 13px;
-      color: var(--uz-text);
-      flex: 1;
-    }
+    .attend-record-date { font-size: 12px; color: var(--uz-muted); min-width: 72px; }
+    .attend-record-times { font-size: 13px; color: var(--uz-text); flex: 1; min-width: 0; }
     .attend-status {
+      font-size: 11px; padding: 2px 8px; border-radius: 20px; font-weight: 600;
+    }
+    .attend-status--active { background: rgba(74,222,128,.15); color: #4ade80; }
+    .attend-status--out    { background: rgba(136,136,170,.12); color: var(--uz-muted); }
+
+    /* ── 修正ボタン・ロックバッジ ── */
+    .hist-edit-btn {
       font-size: 11px;
-      padding: 2px 8px;
+      padding: 3px 10px;
       border-radius: 20px;
+      border: none;
+      cursor: pointer;
+      font-family: var(--font-main);
       font-weight: 600;
+      background: var(--uz-blue);
+      color: #fff;
+      white-space: nowrap;
+      flex-shrink: 0;
     }
-    .attend-status--active {
-      background: rgba(74,222,128,.15);
-      color: #4ade80;
+    .hist-edit-btn--grace { background: var(--uz-red); }
+    .hist-grace-badge {
+      font-size: 10px;
+      color: var(--uz-red);
+      white-space: nowrap;
+      display: block;
+      text-align: right;
+      margin-top: 1px;
     }
-    .attend-status--out {
-      background: rgba(136,136,170,.12);
+    .hist-locked-badge {
+      font-size: 11px;
       color: var(--uz-muted);
+      white-space: nowrap;
+      flex-shrink: 0;
     }
+
+    /* ── 修正フォーム バックドロップ ── */
+    .edit-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.55);
+      z-index: 300;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s;
+    }
+    .edit-backdrop--show { opacity: 1; pointer-events: auto; }
+
+    /* ── 修正フォーム パネル（上部スライドイン） ── */
+    .edit-panel {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      max-width: 480px;
+      margin: 0 auto;
+      background: var(--uz-surface);
+      border-bottom-left-radius: 16px;
+      border-bottom-right-radius: 16px;
+      box-shadow: 0 8px 32px rgba(0,0,0,.55);
+      z-index: 301;
+      max-height: 92vh;
+      overflow-y: auto;
+      transform: translateY(-100%);
+      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .edit-panel--open { transform: translateY(0); }
+
+    .edit-panel__header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px 12px;
+      border-bottom: 1px solid var(--uz-border);
+      position: sticky;
+      top: 0;
+      background: var(--uz-surface);
+      z-index: 1;
+    }
+    .edit-panel__title { font-size: 16px; font-weight: 700; color: var(--uz-text); }
+    .edit-cancel-btn {
+      background: none; border: none; color: var(--uz-muted);
+      font-size: 20px; cursor: pointer; padding: 4px 8px;
+      font-family: var(--font-main); line-height: 1;
+    }
+    .edit-form-body { padding: 12px 20px 4px; }
+
+    .edit-field { margin-bottom: 14px; }
+    .edit-label {
+      display: block; font-size: 12px; font-weight: 600;
+      color: var(--uz-muted); margin-bottom: 6px;
+    }
+    .edit-input {
+      width: 100%; padding: 10px 12px;
+      background: var(--uz-surface2);
+      border: 1px solid var(--uz-border);
+      border-radius: 8px; color: var(--uz-text);
+      font-size: 15px; font-family: var(--font-main);
+      box-sizing: border-box; -webkit-appearance: none;
+    }
+    .edit-input:focus { outline: none; border-color: var(--uz-blue); }
+    .edit-readonly {
+      padding: 10px 12px; background: var(--uz-surface2);
+      border-radius: 8px; color: var(--uz-muted); font-size: 14px;
+    }
+    .edit-tax-note {
+      font-size: 12px; color: var(--uz-muted); margin-top: 4px; padding: 0 2px;
+    }
+    .edit-toggle-wrap {
+      display: flex; align-items: center; gap: 8px; cursor: pointer;
+    }
+    .edit-toggle-label { font-size: 14px; color: var(--uz-text); }
+
+    .tax-toggle-group { display: flex; gap: 8px; }
+    .tax-toggle {
+      padding: 6px 16px; border-radius: 20px;
+      border: 1px solid var(--uz-border);
+      background: var(--uz-surface2); color: var(--uz-muted);
+      font-size: 13px; font-family: var(--font-main); cursor: pointer;
+    }
+    .tax-toggle--active {
+      background: var(--uz-blue); color: #fff; border-color: var(--uz-blue);
+    }
+
+    .edit-panel__footer {
+      padding: 12px 20px calc(16px + env(safe-area-inset-bottom));
+      border-top: 1px solid var(--uz-border);
+      position: sticky; bottom: 0; background: var(--uz-surface);
+    }
+    .edit-save-btn {
+      width: 100%; padding: 14px;
+      background: var(--uz-blue); color: #fff;
+      border: none; border-radius: 10px;
+      font-size: 15px; font-weight: 700; font-family: var(--font-main);
+      cursor: pointer;
+    }
+    .edit-save-btn:disabled { opacity: 0.6; cursor: not-allowed; }
   </style>
 </head>
 <body>
@@ -103,91 +210,85 @@
 
   <!-- ページヘッダー -->
   <header class="history-header">
-    <span class="history-header__title">入力履歴</span>
+    <span class="history-header__title">履歴・修正</span>
   </header>
 
   <!-- タブナビゲーション -->
   <div class="hist-tabs" role="tablist">
     <button id="tab-salescost"
             class="hist-tab hist-tab--active"
-            type="button"
-            role="tab"
-            aria-selected="true"
-            aria-controls="panel-salescost">
+            type="button" role="tab"
+            aria-selected="true" aria-controls="panel-salescost">
       売上・コスト
     </button>
     <button id="tab-attendance"
             class="hist-tab"
-            type="button"
-            role="tab"
-            aria-selected="false"
-            aria-controls="panel-attendance">
+            type="button" role="tab"
+            aria-selected="false" aria-controls="panel-attendance">
       入店履歴
     </button>
   </div>
 
   <!-- 月選択ナビゲーター（共通） -->
   <div class="pl-period-nav" style="padding:8px 16px;">
-    <button id="hist-prev"
-            class="pl-period-btn"
-            type="button"
-            aria-label="前の月">‹</button>
+    <button id="hist-prev" class="pl-period-btn" type="button" aria-label="前の月">‹</button>
     <span id="hist-label" class="pl-period-label">読み込み中...</span>
-    <button id="hist-next"
-            class="pl-period-btn"
-            type="button"
-            aria-label="次の月">›</button>
+    <button id="hist-next" class="pl-period-btn" type="button" aria-label="次の月">›</button>
   </div>
 
   <!-- タブ1：売上・コスト -->
-  <div id="panel-salescost"
-       class="hist-tab-content hist-tab-content--active"
-       role="tabpanel"
-       aria-labelledby="tab-salescost">
+  <div id="panel-salescost" class="hist-tab-content hist-tab-content--active"
+       role="tabpanel" aria-labelledby="tab-salescost">
     <div id="history-list"
          style="padding:0 0 calc(var(--nav-height) + env(safe-area-inset-bottom) + 16px);"
-         role="region"
-         aria-label="売上・コスト履歴">
+         role="region" aria-label="売上・コスト履歴">
     </div>
   </div>
 
   <!-- タブ2：入店履歴 -->
-  <div id="panel-attendance"
-       class="hist-tab-content"
-       role="tabpanel"
-       aria-labelledby="tab-attendance">
+  <div id="panel-attendance" class="hist-tab-content"
+       role="tabpanel" aria-labelledby="tab-attendance">
     <div id="attendance-list"
          style="padding:0 0 calc(var(--nav-height) + env(safe-area-inset-bottom) + 16px);"
-         role="region"
-         aria-label="入店履歴">
+         role="region" aria-label="入店履歴">
     </div>
   </div>
 
 </div><!-- /page-wrapper -->
 
+<!-- ── 修正フォーム ── -->
+<div id="edit-backdrop" class="edit-backdrop" aria-hidden="true"></div>
+<div id="edit-panel" class="edit-panel" role="dialog" aria-modal="true" aria-labelledby="edit-panel-title">
+  <div class="edit-panel__header">
+    <span id="edit-panel-title" class="edit-panel__title">修正</span>
+    <button id="edit-cancel-btn" type="button" class="edit-cancel-btn" aria-label="閉じる">✕</button>
+  </div>
+  <div id="edit-form-body" class="edit-form-body">
+    <!-- history.js が描画 -->
+  </div>
+  <div class="edit-panel__footer">
+    <button id="edit-save-btn" type="button" class="edit-save-btn">保存する</button>
+  </div>
+</div>
+
 <!-- ボトムナビゲーション -->
 <nav class="bottom-nav" aria-label="メインナビゲーション">
-
   <a href="index.html" class="nav-item">
     <span class="nav-item__icon" aria-hidden="true">🏠</span>
     <span class="nav-item__label">ホーム</span>
   </a>
-
   <a href="pl.html" class="nav-item">
     <span class="nav-item__icon" aria-hidden="true">📊</span>
     <span class="nav-item__label">損益</span>
   </a>
-
   <a href="history.html" class="nav-item nav-item--active" aria-current="page">
     <span class="nav-item__icon" aria-hidden="true">📝</span>
-    <span class="nav-item__label">入力履歴</span>
+    <span class="nav-item__label">履歴・修正</span>
   </a>
-
   <a href="settings.html" class="nav-item">
     <span class="nav-item__icon" aria-hidden="true">⚙️</span>
     <span class="nav-item__label">設定</span>
   </a>
-
 </nav>
 
 <!-- ローディングオーバーレイ -->
