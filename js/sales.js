@@ -52,7 +52,22 @@ document.addEventListener('DOMContentLoaded', () => {
 /* ── 日付初期化 ──────────────────────────────────────────── */
 function initDate() {
   const el = document.getElementById('date-input');
-  if (el) el.value = todayStr();
+  if (el) {
+    el.value = todayStr();
+    el.addEventListener('change', updateSubmitBtnDate);
+  }
+  updateSubmitBtnDate();
+}
+
+function buildSubmitBtnText() {
+  const dateVal = document.getElementById('date-input')?.value || todayStr();
+  return `発生日 ${dateVal.replace(/-/g, '/')}　登録する`;
+}
+
+function updateSubmitBtnDate() {
+  const btn = document.getElementById('submit-btn');
+  if (!btn || btn.disabled) return;
+  btn.innerHTML = buildSubmitBtnText();
 }
 
 /* ── サービスカード描画 ───────────────────────────────────── */
@@ -386,7 +401,7 @@ function setSubmitLoading(loading) {
   btn.disabled = loading;
   btn.innerHTML = loading
     ? '<span class="spinner" style="width:20px;height:20px;border-top-color:#fff;"></span>'
-    : '登録する';
+    : buildSubmitBtnText();
 }
 
 function escHtml(str) {

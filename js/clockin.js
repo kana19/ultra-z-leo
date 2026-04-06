@@ -62,6 +62,7 @@ document.addEventListener('DOMContentLoaded', () => {
   todayAttendance = loadAttendance();
   renderQuickSelect();
   renderAttendanceList();
+  bindQuickStaffSelect();
   bindNameInput();
   bindClockInBtn();
   // GASから最新スタッフリストを取得（バックグラウンド）
@@ -91,13 +92,23 @@ function renderQuickSelect() {
 
   container.innerHTML = available.map(s => `
     <button class="quick-staff-btn"
-            data-id="${s.id}"
+            data-id="${escHtml(String(s.id))}"
             data-name="${escHtml(s.name)}"
-            type="button"
-            onclick="selectQuickStaff(${s.id}, '${escHtml(s.name)}')">
+            type="button">
       ${escHtml(s.name)}
     </button>
   `).join('');
+}
+
+/* ── クイック選択イベント（委譲・1回のみ登録） ────────────── */
+function bindQuickStaffSelect() {
+  const container = document.getElementById('quick-staff');
+  if (!container) return;
+  container.addEventListener('click', (e) => {
+    const btn = e.target.closest('.quick-staff-btn');
+    if (!btn) return;
+    selectQuickStaff(btn.dataset.id, btn.dataset.name);
+  });
 }
 
 /* ── クイック選択タップ ──────────────────────────────────── */
