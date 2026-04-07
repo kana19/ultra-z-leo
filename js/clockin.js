@@ -85,6 +85,7 @@ let isSubmitting         = false;
 /* ── 初期化 ──────────────────────────────────────────────── */
 document.addEventListener('DOMContentLoaded', () => {
   todayAttendance = loadAttendance();
+  initFormSelects();
   renderStaffButtons();
   renderAttendanceList();
   bindNameInput();
@@ -92,6 +93,22 @@ document.addEventListener('DOMContentLoaded', () => {
   bindSubmitBtn();
   loadStaffFromGAS();
 });
+
+/* ── 時刻セレクト初期化（オプション注入） ───────────────── */
+function initFormSelects() {
+  const hInEl  = document.getElementById('form-clockin-h');
+  const mInEl  = document.getElementById('form-clockin-m');
+  const hOutEl = document.getElementById('form-clockout-h');
+  const mOutEl = document.getElementById('form-clockout-m');
+
+  const hourOpts = _TIME_HOURS.map(v => `<option value="${v}">${v}</option>`).join('');
+  const minOpts  = _TIME_MINS.map(v  => `<option value="${v}">${v}</option>`).join('');
+
+  if (hInEl)  hInEl.innerHTML  = hourOpts;
+  if (mInEl)  mInEl.innerHTML  = minOpts;
+  if (hOutEl) hOutEl.innerHTML = `<option value="">--</option>${hourOpts}`;
+  if (mOutEl) mOutEl.innerHTML = `<option value="">--</option>${minOpts}`;
+}
 
 /* ══════════════════════════════════════════════════════════
    スタッフ選択ボタン
@@ -190,15 +207,15 @@ function hideFormSection() {
  */
 function setFormDefaults(forceReset = false) {
   const dateEl = document.getElementById('form-date');
-  const inEl   = document.getElementById('form-clockin');
-  const outEl  = document.getElementById('form-clockout');
   if (forceReset || !dateEl?.value) {
     if (dateEl) dateEl.value = todayStr();
   }
-  if (forceReset || !inEl?.value) {
-    if (inEl) inEl.value = nowHHMM();
+  if (forceReset || !getTimeSelectValue('form-clockin')) {
+    setTimeSelect('form-clockin', nowHHMM());
   }
-  if (outEl && forceReset) outEl.value = '';
+  if (forceReset) {
+    setTimeSelect('form-clockout', '');
+  }
 }
 
 function loadRecordIntoForm(record, idx) {
@@ -214,11 +231,9 @@ function loadRecordIntoForm(record, idx) {
   if (nameInput) nameInput.value = record.name;
 
   const dateEl = document.getElementById('form-date');
-  const inEl   = document.getElementById('form-clockin');
-  const outEl  = document.getElementById('form-clockout');
-  if (dateEl) dateEl.value = record.date                  || todayStr();
-  if (inEl)   inEl.value   = parseTimeStr(record.clockIn) || '';
-  if (outEl)  outEl.value  = parseTimeStr(record.clockOut)|| '';
+  if (dateEl) dateEl.value = record.date || todayStr();
+  setTimeSelect('form-clockin',  parseTimeStr(record.clockIn)  || '');
+  setTimeSelect('form-clockout', parseTimeStr(record.clockOut) || '');
 
   showFormSection();
   updateSubmitBtn();
@@ -226,16 +241,18 @@ function loadRecordIntoForm(record, idx) {
 }
 
 function bindFormInputs() {
-  document.getElementById('form-date')?.addEventListener('change',     updateSubmitBtn);
-  document.getElementById('form-clockin')?.addEventListener('change',  updateSubmitBtn);
-  document.getElementById('form-clockout')?.addEventListener('change', updateSubmitBtn);
+  document.getElementById('form-date')?.addEventListener('change',       updateSubmitBtn);
+  document.getElementById('form-clockin-h')?.addEventListener('change',  updateSubmitBtn);
+  document.getElementById('form-clockin-m')?.addEventListener('change',  updateSubmitBtn);
+  document.getElementById('form-clockout-h')?.addEventListener('change', updateSubmitBtn);
+  document.getElementById('form-clockout-m')?.addEventListener('change', updateSubmitBtn);
 }
 
 /* ── 登録ボタンテキスト生成 ──────────────────────────────── */
 function buildSubmitBtnText() {
-  const date     = document.getElementById('form-date')?.value    || todayStr();
-  const clockIn  = document.getElementById('form-clockin')?.value || '';
-  const clockOut = document.getElementById('form-clockout')?.value || '';
+  const date     = document.getElementById('form-date')?.value || todayStr();
+  const clockIn  = getTimeSelectValue('form-clockin');
+  const clockOut = getTimeSelectValue('form-clockout');
   const dispDate = date.replace(/-/g, '/');
   const inStr    = clockIn  || '--:--';
   const outStr   = clockOut ? `${clockOut} 退店` : '退店未記録';
@@ -260,21 +277,12 @@ function bindSubmitBtn() {
 async function handleSubmit() {
   if (isSubmitting || !selectedName) return;
 
-  const date     = document.getElementById('form-date')?.value    || todayStr();
-  const clockIn  = document.getElementById('form-clockin')?.value  || '';
-  const clockOut = document.getElementById('form-clockout')?.value || '';
+  const date     = document.getElementById('form-date')?.value || todayStr();
+  const clockIn  = getTimeSelectValue('form-clockin');
+  const clockOut = getTimeSelectValue('form-clockout');
 
-  const timeRe = /^\d{2}:\d{2}$/;
   if (!clockIn) {
-    showToast('入店時刻を入力してください', 'error');
-    return;
-  }
-  if (!timeRe.test(clockIn)) {
-    showToast('入店時刻はHH:MM形式で入力してください（例：21:30）', 'error');
-    return;
-  }
-  if (clockOut && !timeRe.test(clockOut)) {
-    showToast('退店時刻はHH:MM形式で入力してください（例：23:00）', 'error');
+    showToast('入店時刻を選択してください', 'error');
     return;
   }
 
@@ -340,11 +348,9 @@ function resetForm() {
   if (nameInput) nameInput.value = '';
 
   const dateEl = document.getElementById('form-date');
-  const inEl   = document.getElementById('form-clockin');
-  const outEl  = document.getElementById('form-clockout');
   if (dateEl) dateEl.value = '';
-  if (inEl)   inEl.value   = '';
-  if (outEl)  outEl.value  = '';
+  setTimeSelect('form-clockin',  '');
+  setTimeSelect('form-clockout', '');
 
   hideFormSection();
   updateSubmitBtn();
@@ -422,17 +428,9 @@ function renderAttendanceList() {
         ${isExpanded ? `
         <div class="clockout-inline-form"
              data-idx="${realIdx}"
-             style="width:100%;display:flex;gap:8px;align-items:center;
+             style="width:100%;display:flex;gap:8px;align-items:center;flex-wrap:wrap;
                     padding-top:8px;border-top:1px solid var(--uz-border);margin-top:2px;">
-          <input type="text"
-                 id="inline-clockout-${realIdx}"
-                 class="date-input"
-                 value="${escHtml(nowHHMM())}"
-                 style="flex:1;"
-                 placeholder="例：23:00"
-                 pattern="^\\d{2}:\\d{2}$"
-                 inputmode="numeric"
-                 aria-label="退店時刻">
+          ${timeSelectHTML(`inline-clockout-${realIdx}`, nowHHMM(), true)}
           <button class="clockout-inline-submit"
                   type="button"
                   data-idx="${realIdx}"
@@ -472,7 +470,7 @@ function renderAttendanceList() {
       // 展開したインプットにフォーカス
       if (clockoutExpandedIdx === idx) {
         setTimeout(() => {
-          document.getElementById(`inline-clockout-${idx}`)?.focus();
+          document.getElementById(`inline-clockout-${idx}-h`)?.focus();
         }, 50);
       }
     });
@@ -481,11 +479,10 @@ function renderAttendanceList() {
   // カード内「記録する」ボタン
   container.querySelectorAll('.clockout-inline-submit').forEach(btn => {
     btn.addEventListener('click', () => {
-      const idx      = parseInt(btn.dataset.idx, 10);
-      const timeEl   = document.getElementById(`inline-clockout-${idx}`);
-      const timeVal  = timeEl?.value || nowHHMM();
-      if (!/^\d{2}:\d{2}$/.test(timeVal)) {
-        showToast('退店時刻はHH:MM形式で入力してください（例：23:00）', 'error');
+      const idx     = parseInt(btn.dataset.idx, 10);
+      const timeVal = getTimeSelectValue(`inline-clockout-${idx}`);
+      if (!timeVal) {
+        showToast('退店時刻を選択してください', 'error');
         return;
       }
       handleInlineClockOut(idx, timeVal);

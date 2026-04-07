@@ -67,29 +67,23 @@
 
       <div class="form-section">
         <span class="form-section__label">入店時刻</span>
-        <input type="text"
-               id="form-clockin"
-               class="date-input"
-               style="width:100%;margin-top:4px;"
-               placeholder="例：21:30"
-               pattern="^\d{2}:\d{2}$"
-               inputmode="numeric"
-               aria-label="入店時刻">
+        <div style="display:flex;align-items:center;gap:6px;margin-top:4px;">
+          <select id="form-clockin-h" class="date-input" style="width:72px;" aria-label="入店時刻（時）"></select>
+          <span style="color:var(--uz-text);font-weight:600;font-size:16px;">:</span>
+          <select id="form-clockin-m" class="date-input" style="width:72px;" aria-label="入店時刻（分）"></select>
+        </div>
       </div>
 
       <div class="form-section">
         <span class="form-section__label">退店時刻
           <span style="font-size:11px;font-weight:400;color:var(--uz-muted);margin-left:6px;">任意</span>
         </span>
-        <input type="text"
-               id="form-clockout"
-               class="date-input"
-               style="width:100%;margin-top:4px;"
-               placeholder="例：23:00（空欄可）"
-               pattern="^\d{2}:\d{2}$"
-               inputmode="numeric"
-               aria-label="退店時刻">
-        <p class="form-hint">空欄のままにすると「退店未記録」で登録されます。</p>
+        <div style="display:flex;align-items:center;gap:6px;margin-top:4px;">
+          <select id="form-clockout-h" class="date-input" style="width:72px;" aria-label="退店時刻（時）"></select>
+          <span style="color:var(--uz-text);font-weight:600;font-size:16px;">:</span>
+          <select id="form-clockout-m" class="date-input" style="width:72px;" aria-label="退店時刻（分）"></select>
+        </div>
+        <p class="form-hint">未選択のままにすると「退店未記録」で登録されます。</p>
       </div>
 
     </div>

@@ -122,6 +122,73 @@ function hideLoading() {
   if (el) el.classList.remove('loading-overlay--show');
 }
 
+/* ── 時刻セレクト ────────────────────────────────────────── */
+const _TIME_HOURS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
+const _TIME_MINS  = ['00','05','10','15','20','25','30','35','40','45','50','55'];
+
+/**
+ * 時・分セレクト2つのHTML断片を返す
+ * @param {string}  idPrefix  'form-clockin' など（-h / -m が付く）
+ * @param {string}  value     'HH:MM' または ''
+ * @param {boolean} required  false なら先頭に空選択肢を追加
+ */
+function timeSelectHTML(idPrefix, value, required = false) {
+  const parts = (value || '').split(':');
+  const selH  = (parts[0] || '').padStart(2, '0');
+  const mRaw  = parseInt(parts[1] || '', 10);
+  const selM  = isNaN(mRaw) ? '' : String(Math.floor(mRaw / 5) * 5).padStart(2, '0');
+
+  const blankH = required ? '' : '<option value="">--</option>';
+  const blankM = required ? '' : '<option value="">--</option>';
+
+  const optsH = blankH + _TIME_HOURS.map(v =>
+    `<option value="${v}"${v === selH ? ' selected' : ''}>${v}</option>`
+  ).join('');
+  const optsM = blankM + _TIME_MINS.map(v =>
+    `<option value="${v}"${v === selM ? ' selected' : ''}>${v}</option>`
+  ).join('');
+
+  return `<div style="display:flex;align-items:center;gap:6px;">` +
+    `<select id="${idPrefix}-h" class="date-input" style="width:72px;">${optsH}</select>` +
+    `<span style="color:var(--uz-text);font-weight:600;font-size:16px;">:</span>` +
+    `<select id="${idPrefix}-m" class="date-input" style="width:72px;">${optsM}</select>` +
+    `</div>`;
+}
+
+/**
+ * 時刻セレクトの現在値を "HH:MM" で返す（未選択なら ''）
+ * @param {string} idPrefix
+ * @returns {string}
+ */
+function getTimeSelectValue(idPrefix) {
+  const h = document.getElementById(`${idPrefix}-h`)?.value || '';
+  const m = document.getElementById(`${idPrefix}-m`)?.value || '';
+  if (!h || !m) return '';
+  return `${h}:${m}`;
+}
+
+/**
+ * 時刻セレクトに値をセット
+ * @param {string} idPrefix
+ * @param {string} value 'HH:MM' または ''
+ */
+function setTimeSelect(idPrefix, value) {
+  const hEl = document.getElementById(`${idPrefix}-h`);
+  const mEl = document.getElementById(`${idPrefix}-m`);
+  if (!hEl || !mEl) return;
+  if (!value) {
+    hEl.value = '';
+    mEl.value = '';
+    return;
+  }
+  const parts = value.split(':');
+  const h     = (parts[0] || '').padStart(2, '0');
+  const mRaw  = parseInt(parts[1] || '', 10);
+  const m     = isNaN(mRaw) ? '00' : String(Math.floor(mRaw / 5) * 5).padStart(2, '0');
+  hEl.value = h;
+  mEl.value = m;
+}
+
 /* ── ページナビゲーション ────────────────────────────────── */
 /**
  * 指定URLに遷移

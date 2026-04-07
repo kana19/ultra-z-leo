@@ -498,6 +498,8 @@ function buildCostFormHTML(item) {
 }
 
 function buildAttendanceFormHTML(item) {
+  const clockIn  = parseTimeStr(item.clockIn)  || '';
+  const clockOut = parseTimeStr(item.clockOut) || '';
   return `
     <div class="edit-field">
       <label class="edit-label">スタッフ名</label>
@@ -510,21 +512,13 @@ function buildAttendanceFormHTML(item) {
     </div>
     <div class="edit-field">
       <label class="edit-label">入店時刻</label>
-      <input type="text" id="ef-clockin" class="edit-input"
-             value="${escHtml(parseTimeStr(item.clockIn))}"
-             placeholder="例：21:30"
-             pattern="^\\d{2}:\\d{2}$"
-             inputmode="numeric">
+      ${timeSelectHTML('ef-clockin', clockIn, true)}
     </div>
     <div class="edit-field">
       <label class="edit-label">退店時刻
         <span style="font-size:11px;font-weight:400;color:var(--uz-muted);margin-left:4px;">任意</span>
       </label>
-      <input type="text" id="ef-clockout" class="edit-input"
-             value="${escHtml(parseTimeStr(item.clockOut) || '')}"
-             placeholder="例：23:00（空欄可）"
-             pattern="^\\d{2}:\\d{2}$"
-             inputmode="numeric">
+      ${timeSelectHTML('ef-clockout', clockOut, false)}
     </div>`;
 }
 
@@ -620,25 +614,12 @@ async function saveEdit() {
 
     } else {
       // attendance
-      const date     = document.getElementById('ef-date')?.value     || item.date;
-      const clockIn  = document.getElementById('ef-clockin')?.value  || '';
-      const clockOut = document.getElementById('ef-clockout')?.value || '';
+      const date     = document.getElementById('ef-date')?.value || item.date;
+      const clockIn  = getTimeSelectValue('ef-clockin');
+      const clockOut = getTimeSelectValue('ef-clockout');
 
-      const timeRe = /^\d{2}:\d{2}$/;
       if (!clockIn) {
-        showToast('入店時刻を入力してください', 'error');
-        isEditSaving = false;
-        if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = '保存する'; }
-        return;
-      }
-      if (!timeRe.test(clockIn)) {
-        showToast('入店時刻はHH:MM形式で入力してください（例：21:30）', 'error');
-        isEditSaving = false;
-        if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = '保存する'; }
-        return;
-      }
-      if (clockOut && !timeRe.test(clockOut)) {
-        showToast('退店時刻はHH:MM形式で入力してください（例：23:00）', 'error');
+        showToast('入店時刻を選択してください', 'error');
         isEditSaving = false;
         if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = '保存する'; }
         return;
