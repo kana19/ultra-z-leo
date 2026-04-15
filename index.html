@@ -15,6 +15,31 @@
 </head>
 <body>
 
+<!-- iPad サイドバーナビ（スマホでは非表示） -->
+<nav class="nav-sidebar" aria-label="メインナビゲーション">
+  <div class="nav-sidebar__logo">ウルトラ財務くん</div>
+  <a href="index.html" class="sidebar-item sidebar-item--active" aria-current="page">
+    <span class="sidebar-item__icon" aria-hidden="true">🏠</span>
+    <span>ホーム</span>
+  </a>
+  <a href="sales.html" class="sidebar-item">
+    <span class="sidebar-item__icon" aria-hidden="true">💰</span>
+    <span>売上コスト入力</span>
+  </a>
+  <a href="clockin.html" class="sidebar-item">
+    <span class="sidebar-item__icon" aria-hidden="true">🕐</span>
+    <span>入店記録</span>
+  </a>
+  <a href="history.html" class="sidebar-item">
+    <span class="sidebar-item__icon" aria-hidden="true">📝</span>
+    <span>履歴・修正</span>
+  </a>
+  <a href="settings.html" class="sidebar-item">
+    <span class="sidebar-item__icon" aria-hidden="true">⚙️</span>
+    <span>設定</span>
+  </a>
+</nav>
+
 <div class="page-wrapper">
 
   <!-- ヘッダー -->
@@ -29,108 +54,116 @@
   <!-- メインコンテンツ -->
   <main class="page-body">
 
-    <!-- ── 入力セクション ─────────────────────────── -->
-    <section aria-label="入力ボタン">
-      <div style="display:flex; flex-direction:column; gap:10px;">
+    <!-- ── 左カラム（iPad）/ 通常表示（スマホ） ─── -->
+    <div class="ipad-col--left">
 
-        <!-- 売上入力ボタン -->
-        <div style="position:relative;">
-          <a href="sales.html" class="action-btn action-btn--sales" role="button">
-            <span class="action-btn__icon" aria-hidden="true">💰</span>
-            <span class="action-btn__label">売上を入れる</span>
-          </a>
-          <span id="dot-uncollected"
-                class="action-btn__dot"
-                style="display:flex; align-items:center; gap:4px;"
-                aria-label="未収あり">
-          </span>
+      <!-- 入力セクション -->
+      <section aria-label="入力ボタン">
+        <div style="display:flex; flex-direction:column; gap:10px;">
+
+          <!-- 売上入力ボタン -->
+          <div style="position:relative;">
+            <a href="sales.html" class="action-btn action-btn--sales" role="button">
+              <span class="action-btn__icon" aria-hidden="true">💰</span>
+              <span class="action-btn__label">売上を入れる</span>
+            </a>
+            <span id="dot-uncollected"
+                  class="action-btn__dot"
+                  style="display:flex; align-items:center; gap:4px;"
+                  aria-label="未収あり">
+            </span>
+          </div>
+
+          <!-- コスト入力ボタン -->
+          <div style="position:relative;">
+            <a href="cost.html" class="action-btn action-btn--cost" role="button">
+              <span class="action-btn__icon" aria-hidden="true">💸</span>
+              <span class="action-btn__label">コストを入れる</span>
+            </a>
+            <span id="dot-payable"
+                  class="action-btn__dot"
+                  style="display:flex; align-items:center; gap:4px;"
+                  aria-label="買掛あり">
+            </span>
+          </div>
+
         </div>
+      </section>
 
-        <!-- コスト入力ボタン -->
-        <div style="position:relative;">
-          <a href="cost.html" class="action-btn action-btn--cost" role="button">
-            <span class="action-btn__icon" aria-hidden="true">💸</span>
-            <span class="action-btn__label">コストを入れる</span>
-          </a>
-          <span id="dot-payable"
-                class="action-btn__dot"
-                style="display:flex; align-items:center; gap:4px;"
-                aria-label="買掛あり">
-          </span>
+      <!-- 今月の損益 -->
+      <section aria-label="今月の損益">
+        <div class="card">
+          <div class="card__header">今月の損益</div>
+          <div class="card__body">
+            <div id="pl-month-label" class="pl-month-label">読み込み中...</div>
+
+            <!-- 売上 -->
+            <div class="pl-row">
+              <span class="pl-label">売上</span>
+              <span id="pl-sales" class="pl-value">¥—</span>
+            </div>
+
+            <!-- 仕入原価 -->
+            <div class="pl-row">
+              <span class="pl-label">仕入原価</span>
+              <span id="pl-cogs" class="pl-value">¥—</span>
+            </div>
+
+            <!-- 粗利 -->
+            <div class="pl-row pl-row--result">
+              <span class="pl-label">粗利</span>
+              <span id="pl-gross" class="pl-value">¥—</span>
+            </div>
+
+            <!-- 販管費 -->
+            <div class="pl-row">
+              <span class="pl-label">販管費</span>
+              <span id="pl-sga" class="pl-value">¥—</span>
+            </div>
+
+            <!-- 経常利益 -->
+            <div class="pl-row pl-row--highlight">
+              <span class="pl-label">経常利益</span>
+              <span id="pl-profit" class="pl-value">¥—</span>
+            </div>
+
+          </div>
         </div>
+        <div style="text-align:right; padding:6px 4px 0;">
+          <a href="pl.html"
+             style="font-size:12px; color:var(--uz-muted); text-decoration:none;">
+            詳細を見る ›
+          </a>
+        </div>
+      </section>
 
-      </div>
-    </section>
+    </div><!-- /ipad-col--left -->
 
-    <!-- ── 今月の損益 ──────────────────────────────── -->
-    <section aria-label="今月の損益">
+    <!-- ── 右カラム（iPad）/ 通常表示（スマホ） ─── -->
+    <div class="ipad-col--right">
+
       <!-- 確定申告タイマー -->
       <div id="tax-timer" style="display:none"></div>
-      <div class="card">
-        <div class="card__header">今月の損益</div>
-        <div class="card__body">
-          <div id="pl-month-label" class="pl-month-label">読み込み中...</div>
 
-          <!-- 売上 -->
-          <div class="pl-row">
-            <span class="pl-label">売上</span>
-            <span id="pl-sales" class="pl-value">¥—</span>
-          </div>
-
-          <!-- 仕入原価 -->
-          <div class="pl-row">
-            <span class="pl-label">仕入原価</span>
-            <span id="pl-cogs" class="pl-value">¥—</span>
-          </div>
-
-          <!-- 粗利 -->
-          <div class="pl-row pl-row--result">
-            <span class="pl-label">粗利</span>
-            <span id="pl-gross" class="pl-value">¥—</span>
-          </div>
-
-          <!-- 販管費 -->
-          <div class="pl-row">
-            <span class="pl-label">販管費</span>
-            <span id="pl-sga" class="pl-value">¥—</span>
-          </div>
-
-          <!-- 経常利益 -->
-          <div class="pl-row pl-row--highlight">
-            <span class="pl-label">経常利益</span>
-            <span id="pl-profit" class="pl-value">¥—</span>
-          </div>
-
-        </div>
-      </div>
-      <div style="text-align:right; padding:6px 4px 0;">
-        <a href="pl.html"
-           style="font-size:12px; color:var(--uz-muted); text-decoration:none;">
-          詳細を見る ›
+      <!-- 未収・買掛けショートカット -->
+      <section aria-label="未収・買掛け">
+        <a href="uncollected.html"
+           class="action-btn action-btn--neutral"
+           style="height:var(--btn-height-sm); font-size:15px;"
+           role="button">
+          <span class="action-btn__icon" aria-hidden="true">📋</span>
+          <span class="action-btn__label">未収・買掛けを確認する</span>
+          <span style="font-size:18px; color:var(--uz-muted);" aria-hidden="true">›</span>
         </a>
-      </div>
-    </section>
+      </section>
 
-    <!-- ── 未収・買掛けショートカット ────────────────── -->
-    <section aria-label="未収・買掛け">
-      <a href="uncollected.html"
-         class="action-btn action-btn--neutral"
-         style="height:var(--btn-height-sm); font-size:15px;"
-         role="button">
-        <span class="action-btn__icon" aria-hidden="true">📋</span>
-        <span class="action-btn__label">未収・買掛けを確認する</span>
-        <span style="font-size:18px; color:var(--uz-muted);" aria-hidden="true">›</span>
-      </a>
-    </section>
-
-    <!-- 余白（ボトムナビ分） -->
-    <div style="height:8px;"></div>
+    </div><!-- /ipad-col--right -->
 
   </main>
 
 </div><!-- /page-wrapper -->
 
-<!-- ── ボトムナビゲーション ───────────────────────────── -->
+<!-- ── ボトムナビゲーション（スマホ用） ──────────────────── -->
 <nav class="bottom-nav" aria-label="メインナビゲーション">
 
   <a href="index.html" class="nav-item nav-item--active" aria-current="page">

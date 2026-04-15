@@ -601,3 +601,201 @@ body {
   0%, 100% { opacity: 1; }
   50%       { opacity: 0.5; }
 }
+
+/* ═══════════════════════════════════════════════════════════
+   iPad 2カラム・サイドバーナビ対応（768px〜1024px）
+   スマホ幅（〜767px）には一切影響しない
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── iPad左/右カラム：モバイルでは縦積みのflex列として振る舞う ── */
+.ipad-col--left,
+.ipad-col--right {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ── サイドバーナビ：モバイルでは非表示 ── */
+.nav-sidebar { display: none; }
+
+/* ── iPad専用右パネル・右カラム：モバイルでは非表示 ── */
+.ipad-form-right,
+.ipad-hist-right { display: none; }
+
+/* ── clockin 勤怠リスト：モバイルではsubmitバー分の余白を確保 ── */
+.ipad-clockin-right {
+  padding-bottom: calc(80px + env(safe-area-inset-bottom));
+}
+
+/* ════════════════════════════════════════════════════════════
+   iPad メディアクエリ（768px〜1024px）
+   ════════════════════════════════════════════════════════════ */
+@media (min-width: 768px) and (max-width: 1024px) {
+
+  /* ── サイドバーナビ ───────────────────────────────────── */
+  .nav-sidebar {
+    display: flex;
+    flex-direction: column;
+    width: 200px;
+    background: var(--uz-surface);
+    border-right: 1px solid var(--uz-border);
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    z-index: 200;
+    overflow-y: auto;
+  }
+
+  .nav-sidebar__logo {
+    padding: 20px 16px 16px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--uz-gold);
+    letter-spacing: 0.05em;
+    border-bottom: 1px solid var(--uz-border);
+  }
+
+  .sidebar-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 16px;
+    text-decoration: none;
+    color: var(--uz-muted);
+    font-size: 14px;
+    font-weight: 600;
+    font-family: var(--font-main);
+    transition: background 0.15s, color 0.15s;
+  }
+
+  .sidebar-item:hover { background: var(--uz-surface2); }
+  .sidebar-item--active { color: var(--uz-gold); }
+  .sidebar-item__icon { font-size: 20px; line-height: 1; flex-shrink: 0; }
+
+  /* ── ボトムナビ非表示 ─────────────────────────────────── */
+  .bottom-nav { display: none !important; }
+
+  /* ── ページラッパー：サイドバー幅分右オフセット ──────── */
+  .page-wrapper {
+    max-width: none;
+    margin-left: 200px;
+    width: calc(100% - 200px);
+    padding-bottom: 24px;
+    min-height: 100dvh;
+  }
+
+  /* ── ホーム page-body：2カラムグリッド化 ────────────── */
+  .page-body {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    padding: 0;
+    align-items: start;
+  }
+
+  .ipad-col--left,
+  .ipad-col--right {
+    padding: 16px;
+  }
+
+  .ipad-col--left {
+    border-right: 1px solid var(--uz-border);
+    min-height: calc(100dvh - 52px);
+  }
+
+  /* ── フォーム画面（sales/cost/clockin）2カラム化 ──────── */
+  .ipad-form-wrap {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    align-items: start;
+  }
+
+  .ipad-form-wrap > .form-body {
+    border-right: 1px solid var(--uz-border);
+    min-height: calc(100dvh - 56px);
+  }
+
+  .ipad-form-right {
+    display: block;
+    padding: 16px;
+  }
+
+  /* ── clockin専用左カラム ──────────────────────────────── */
+  .ipad-clockin-left {
+    border-right: 1px solid var(--uz-border);
+    min-height: calc(100dvh - 56px);
+    padding-bottom: calc(80px + env(safe-area-inset-bottom));
+  }
+
+  .ipad-clockin-right {
+    padding: 16px;
+  }
+
+  /* ── 履歴画面 2カラム化 ──────────────────────────────── */
+  .ipad-hist-wrap {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    align-items: start;
+  }
+
+  .ipad-hist-left {
+    border-right: 1px solid var(--uz-border);
+  }
+
+  .ipad-hist-right {
+    display: block;
+    padding: 16px;
+  }
+
+  /* ── 右パネル共通 ─────────────────────────────────────── */
+  .ipad-right-panel {
+    background: var(--uz-surface);
+    border: 1px solid var(--uz-border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+  }
+
+  .ipad-right-panel__header {
+    padding: 14px 16px 10px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--uz-muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--uz-border);
+  }
+
+  .ipad-right-panel__body {
+    padding: 12px 16px 14px;
+  }
+
+  .ipad-placeholder {
+    color: var(--uz-muted);
+    font-size: 13px;
+    text-align: center;
+    padding: 40px 16px;
+    line-height: 1.7;
+  }
+
+  /* ── 登録ボタンバー：サイドバー分右オフセット ────────── */
+  .submit-bar,
+  .clockin-submit-bar {
+    left: 200px;
+    transform: none;
+    max-width: none;
+    width: calc(100% - 200px);
+  }
+
+  /* ── トースト位置補正 ──────────────────────────────────── */
+  .toast {
+    left: calc(200px + (100% - 200px) / 2);
+    bottom: 20px;
+  }
+
+  /* ── 設定画面：コンテンツ中央寄せ ────────────────────── */
+  .ipad-settings-wrap {
+    max-width: 600px;
+    margin: 0 auto;
+  }
+}

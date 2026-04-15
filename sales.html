@@ -16,6 +16,31 @@
 </head>
 <body>
 
+<!-- iPad サイドバーナビ（スマホでは非表示） -->
+<nav class="nav-sidebar" aria-label="メインナビゲーション">
+  <div class="nav-sidebar__logo">ウルトラ財務くん</div>
+  <a href="index.html" class="sidebar-item">
+    <span class="sidebar-item__icon" aria-hidden="true">🏠</span>
+    <span>ホーム</span>
+  </a>
+  <a href="sales.html" class="sidebar-item sidebar-item--active" aria-current="page">
+    <span class="sidebar-item__icon" aria-hidden="true">💰</span>
+    <span>売上コスト入力</span>
+  </a>
+  <a href="clockin.html" class="sidebar-item">
+    <span class="sidebar-item__icon" aria-hidden="true">🕐</span>
+    <span>入店記録</span>
+  </a>
+  <a href="history.html" class="sidebar-item">
+    <span class="sidebar-item__icon" aria-hidden="true">📝</span>
+    <span>履歴・修正</span>
+  </a>
+  <a href="settings.html" class="sidebar-item">
+    <span class="sidebar-item__icon" aria-hidden="true">⚙️</span>
+    <span>設定</span>
+  </a>
+</nav>
+
 <div class="page-wrapper">
 
   <!-- サブページヘッダー -->
@@ -27,7 +52,10 @@
     <div style="width:60px;"></div>
   </header>
 
-  <!-- フォーム本体 -->
+  <!-- iPad 2カラムラッパー -->
+  <div class="ipad-form-wrap">
+
+  <!-- フォーム本体（左カラム） -->
   <div class="form-body">
 
     <!-- ① 発生日 -->
@@ -129,6 +157,24 @@
     </div>
 
   </div><!-- /form-body -->
+
+  <!-- 右カラム（iPad専用：当月入力済み一覧） -->
+  <div class="ipad-form-right">
+    <div class="ipad-right-panel">
+      <div class="ipad-right-panel__header">当月の売上入力済み（直近10件）</div>
+      <div id="ipad-sales-recent" class="ipad-right-panel__body">
+        <p class="ipad-placeholder">登録すると<br>ここに一覧が表示されます</p>
+      </div>
+    </div>
+    <div class="ipad-right-panel" style="margin-top:16px;">
+      <div class="ipad-right-panel__header">未収一覧</div>
+      <div id="ipad-sales-uncollected" class="ipad-right-panel__body">
+        <p class="ipad-placeholder">未収データがあれば<br>ここに表示されます</p>
+      </div>
+    </div>
+  </div><!-- /ipad-form-right -->
+
+  </div><!-- /ipad-form-wrap -->
 
 </div><!-- /page-wrapper -->
 

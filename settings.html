@@ -17,6 +17,31 @@
 </head>
 <body>
 
+<!-- iPad サイドバーナビ（スマホでは非表示） -->
+<nav class="nav-sidebar" aria-label="メインナビゲーション">
+  <div class="nav-sidebar__logo">ウルトラ財務くん</div>
+  <a href="index.html" class="sidebar-item">
+    <span class="sidebar-item__icon" aria-hidden="true">🏠</span>
+    <span>ホーム</span>
+  </a>
+  <a href="sales.html" class="sidebar-item">
+    <span class="sidebar-item__icon" aria-hidden="true">💰</span>
+    <span>売上コスト入力</span>
+  </a>
+  <a href="clockin.html" class="sidebar-item">
+    <span class="sidebar-item__icon" aria-hidden="true">🕐</span>
+    <span>入店記録</span>
+  </a>
+  <a href="history.html" class="sidebar-item">
+    <span class="sidebar-item__icon" aria-hidden="true">📝</span>
+    <span>履歴・修正</span>
+  </a>
+  <a href="settings.html" class="sidebar-item sidebar-item--active" aria-current="page">
+    <span class="sidebar-item__icon" aria-hidden="true">⚙️</span>
+    <span>設定</span>
+  </a>
+</nav>
+
 <div class="page-wrapper">
 
   <!-- ページヘッダー -->
@@ -24,8 +49,8 @@
     <span class="settings-header__title">設定</span>
   </header>
 
-  <!-- スクロール本体 -->
-  <div style="padding-bottom:calc(var(--nav-height) + env(safe-area-inset-bottom) + 16px);">
+  <!-- スクロール本体（iPad：600px中央寄せ） -->
+  <div class="ipad-settings-wrap" style="padding-bottom:calc(var(--nav-height) + env(safe-area-inset-bottom) + 16px);">
 
     <!-- ① 店舗情報 -->
     <section class="settings-section" aria-labelledby="sec-store">
@@ -210,7 +235,7 @@
 
 </div><!-- /page-wrapper -->
 
-<!-- ボトムナビゲーション -->
+<!-- ボトムナビゲーション（スマホ用） -->
 <nav class="bottom-nav" aria-label="メインナビゲーション">
 
   <a href="index.html" class="nav-item">

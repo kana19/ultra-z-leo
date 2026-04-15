@@ -17,6 +17,31 @@
 </head>
 <body>
 
+<!-- iPad サイドバーナビ（スマホでは非表示） -->
+<nav class="nav-sidebar" aria-label="メインナビゲーション">
+  <div class="nav-sidebar__logo">ウルトラ財務くん</div>
+  <a href="index.html" class="sidebar-item">
+    <span class="sidebar-item__icon" aria-hidden="true">🏠</span>
+    <span>ホーム</span>
+  </a>
+  <a href="sales.html" class="sidebar-item">
+    <span class="sidebar-item__icon" aria-hidden="true">💰</span>
+    <span>売上コスト入力</span>
+  </a>
+  <a href="clockin.html" class="sidebar-item sidebar-item--active" aria-current="page">
+    <span class="sidebar-item__icon" aria-hidden="true">🕐</span>
+    <span>入店記録</span>
+  </a>
+  <a href="history.html" class="sidebar-item">
+    <span class="sidebar-item__icon" aria-hidden="true">📝</span>
+    <span>履歴・修正</span>
+  </a>
+  <a href="settings.html" class="sidebar-item">
+    <span class="sidebar-item__icon" aria-hidden="true">⚙️</span>
+    <span>設定</span>
+  </a>
+</nav>
+
 <div class="page-wrapper">
 
   <!-- サブページヘッダー -->
@@ -26,77 +51,84 @@
     <div style="width:60px;"></div>
   </header>
 
-  <!-- スクロール本体 -->
-  <div style="padding:0 0 calc(80px + env(safe-area-inset-bottom));">
+  <!-- iPad 2カラムラッパー -->
+  <div class="ipad-form-wrap">
 
-    <!-- ① スタッフ選択 -->
-    <div class="form-section">
-      <span class="form-section__label">スタッフを選ぶ</span>
-      <div id="staff-btns"
-           class="quick-staff-group"
-           role="group"
-           aria-label="スタッフ選択">
+    <!-- 左カラム：入退店登録フォーム -->
+    <div class="ipad-clockin-left">
+
+      <!-- ① スタッフ選択 -->
+      <div class="form-section">
+        <span class="form-section__label">スタッフを選ぶ</span>
+        <div id="staff-btns"
+             class="quick-staff-group"
+             role="group"
+             aria-label="スタッフ選択">
+          <!-- clockin.js が描画 -->
+        </div>
+      </div>
+
+      <!-- ② 名前テキスト入力（マスタ外スタッフ対応） -->
+      <div class="form-section">
+        <label class="form-section__label" for="name-input">または名前を入力</label>
+        <input type="text"
+               id="name-input"
+               class="text-input"
+               placeholder="例：まりこ、アルバイトA"
+               maxlength="20"
+               autocomplete="off"
+               aria-label="スタッフ名">
+        <p class="form-hint">マスタ未登録のスタッフも記録できます。</p>
+      </div>
+
+      <!-- ③ 入店・退店入力フォーム（スタッフ選択後に表示） -->
+      <div id="entry-form-section" hidden>
+
+        <div class="form-section">
+          <span class="form-section__label">日付</span>
+          <input type="date"
+                 id="form-date"
+                 class="date-input"
+                 style="width:100%;margin-top:4px;"
+                 aria-label="日付">
+        </div>
+
+        <div class="form-section">
+          <span class="form-section__label">入店時刻</span>
+          <div style="display:flex;align-items:center;gap:6px;margin-top:4px;">
+            <select id="form-clockin-h" class="date-input" style="width:72px;" aria-label="入店時刻（時）"></select>
+            <span style="color:var(--uz-text);font-weight:600;font-size:16px;">:</span>
+            <select id="form-clockin-m" class="date-input" style="width:72px;" aria-label="入店時刻（分）"></select>
+          </div>
+        </div>
+
+        <div class="form-section">
+          <span class="form-section__label">退店時刻
+            <span style="font-size:11px;font-weight:400;color:var(--uz-muted);margin-left:6px;">任意</span>
+          </span>
+          <div style="display:flex;align-items:center;gap:6px;margin-top:4px;">
+            <select id="form-clockout-h" class="date-input" style="width:72px;" aria-label="退店時刻（時）"></select>
+            <span style="color:var(--uz-text);font-weight:600;font-size:16px;">:</span>
+            <select id="form-clockout-m" class="date-input" style="width:72px;" aria-label="退店時刻（分）"></select>
+          </div>
+          <p class="form-hint">未選択のままにすると「退店未記録」で登録されます。</p>
+        </div>
+
+      </div><!-- /entry-form-section -->
+
+    </div><!-- /ipad-clockin-left -->
+
+    <!-- 右カラム：本日の出退勤状況 -->
+    <div class="ipad-clockin-right">
+      <div id="attendance-list"
+           class="attendance-list"
+           style="padding:0 0 16px;"
+           aria-label="本日の勤怠一覧">
         <!-- clockin.js が描画 -->
       </div>
-    </div>
+    </div><!-- /ipad-clockin-right -->
 
-    <!-- ② 名前テキスト入力（マスタ外スタッフ対応） -->
-    <div class="form-section">
-      <label class="form-section__label" for="name-input">または名前を入力</label>
-      <input type="text"
-             id="name-input"
-             class="text-input"
-             placeholder="例：まりこ、アルバイトA"
-             maxlength="20"
-             autocomplete="off"
-             aria-label="スタッフ名">
-      <p class="form-hint">マスタ未登録のスタッフも記録できます。</p>
-    </div>
-
-    <!-- ③ 入店・退店入力フォーム（スタッフ選択後に表示） -->
-    <div id="entry-form-section" hidden>
-
-      <div class="form-section">
-        <span class="form-section__label">日付</span>
-        <input type="date"
-               id="form-date"
-               class="date-input"
-               style="width:100%;margin-top:4px;"
-               aria-label="日付">
-      </div>
-
-      <div class="form-section">
-        <span class="form-section__label">入店時刻</span>
-        <div style="display:flex;align-items:center;gap:6px;margin-top:4px;">
-          <select id="form-clockin-h" class="date-input" style="width:72px;" aria-label="入店時刻（時）"></select>
-          <span style="color:var(--uz-text);font-weight:600;font-size:16px;">:</span>
-          <select id="form-clockin-m" class="date-input" style="width:72px;" aria-label="入店時刻（分）"></select>
-        </div>
-      </div>
-
-      <div class="form-section">
-        <span class="form-section__label">退店時刻
-          <span style="font-size:11px;font-weight:400;color:var(--uz-muted);margin-left:6px;">任意</span>
-        </span>
-        <div style="display:flex;align-items:center;gap:6px;margin-top:4px;">
-          <select id="form-clockout-h" class="date-input" style="width:72px;" aria-label="退店時刻（時）"></select>
-          <span style="color:var(--uz-text);font-weight:600;font-size:16px;">:</span>
-          <select id="form-clockout-m" class="date-input" style="width:72px;" aria-label="退店時刻（分）"></select>
-        </div>
-        <p class="form-hint">未選択のままにすると「退店未記録」で登録されます。</p>
-      </div>
-
-    </div>
-
-    <!-- ④ 本日の勤怠一覧 -->
-    <div id="attendance-list"
-         class="attendance-list"
-         style="padding:0 16px 16px;"
-         aria-label="本日の勤怠一覧">
-      <!-- clockin.js が描画 -->
-    </div>
-
-  </div>
+  </div><!-- /ipad-form-wrap -->
 
 </div><!-- /page-wrapper -->
 
