@@ -83,6 +83,8 @@ async function loadSettingsFromGAS() {
   } catch {
     updateGasStatus(false);
   }
+  // コスト科目マスタも並行取得
+  loadCostMasterFromGAS();
 }
 
 /**
@@ -98,6 +100,23 @@ async function saveSettingsToGAS() {
   } catch {
     // localStorageには保存済みのため、GAS失敗はサイレントフェイル
   }
+}
+
+/* ── コスト科目マスタ GAS同期 ──────────────────────────── */
+async function loadCostMasterFromGAS() {
+  try {
+    const res = await callGAS('getCostMaster', {});
+    if (res && res.status === 'ok' && Array.isArray(res.data)) {
+      saveCostMasterToStorage(res.data);
+      renderCostMaster();
+    }
+  } catch { /* サイレントフェイル */ }
+}
+
+async function saveCostMasterToGAS(list) {
+  try {
+    await callGAS('saveCostMaster', { costMasterList: list });
+  } catch { /* サイレントフェイル */ }
 }
 
 function updateGasStatus(connected) {
@@ -118,9 +137,11 @@ document.addEventListener('DOMContentLoaded', () => {
   initStoreName();
   initStaffList();
   initServiceList();
+  initCostMaster();
   bindStoreSave();
   bindStaffAdd();
   bindServiceAdd();
+  bindCostMasterSave();
   // GASから最新データを取得して上書き
   loadSettingsFromGAS();
 });
@@ -312,6 +333,110 @@ function bindServiceAdd() {
 
   btn.addEventListener('click', doAdd);
   nameInput.addEventListener('keydown', e => { if (e.key === 'Enter') doAdd(); });
+}
+
+/* ── コスト科目マスタ UI ─────────────────────────────────── */
+function initCostMaster() {
+  renderCostMaster();
+}
+
+function renderCostMaster() {
+  const container = document.getElementById('cost-master-container');
+  if (!container) return;
+
+  const master = getCostMaster();
+
+  const TAX_OPTIONS = [
+    { value: 10, label: '10%'       },
+    { value:  8, label: '8%（軽減）' },
+    { value:  0, label: '0%（非課税）' },
+  ];
+
+  function taxSelect(id, current) {
+    const opts = TAX_OPTIONS.map(o =>
+      `<option value="${o.value}"${o.value === current ? ' selected' : ''}>${o.label}</option>`
+    ).join('');
+    return `<select id="${id}" class="form-select" style="width:120px;height:36px;font-size:13px;">${opts}</select>`;
+  }
+
+  // 仕入原価
+  const costItems   = master.filter(i => i.divisionCode === '1');
+  // 販管費 固定
+  const fixedItems  = master.filter(i => i.divisionCode === '2' && i.type === 'fixed');
+  // 販管費 任意（行26〜30）
+  const customItems = master.filter(i => i.divisionCode === '2' && i.type === 'custom');
+
+  function fixedRow(item) {
+    const rowLabel = item.taxRow ? `行${item.taxRow}　` : '';
+    return `
+      <div class="staff-row" style="align-items:center;gap:8px;flex-wrap:wrap;">
+        <span class="staff-row__name" style="flex:1;min-width:120px;font-size:13px;">
+          ${rowLabel}${escHtml(item.name)}
+        </span>
+        ${taxSelect(`cm-tax-${item.code}`, item.taxRate)}
+      </div>`;
+  }
+
+  function customRow(item) {
+    return `
+      <div class="staff-row" style="align-items:center;gap:8px;flex-wrap:wrap;">
+        <span style="font-size:12px;color:var(--uz-muted);min-width:32px;flex-shrink:0;">行${item.taxRow}</span>
+        <input type="text"
+               id="cm-name-${item.code}"
+               class="settings-input"
+               style="flex:1;min-width:100px;height:36px;font-size:13px;"
+               placeholder="任意科目名（空欄で非表示）"
+               maxlength="20"
+               autocomplete="off"
+               value="${escHtml(item.name)}">
+        ${taxSelect(`cm-tax-${item.code}`, item.taxRate)}
+      </div>`;
+  }
+
+  let html = '';
+
+  html += `<div style="padding:8px 16px 4px;font-size:12px;font-weight:700;color:var(--uz-muted);">▸ 仕入原価</div>`;
+  html += costItems.map(fixedRow).join('');
+
+  html += `<div style="padding:12px 16px 4px;font-size:12px;font-weight:700;color:var(--uz-muted);">▸ 販管費（固定科目）</div>`;
+  html += fixedItems.map(fixedRow).join('');
+
+  html += `<div style="padding:12px 16px 4px;font-size:12px;font-weight:700;color:var(--uz-muted);">▸ 販管費（任意科目 行26〜30）</div>`;
+  html += customItems.map(customRow).join('');
+
+  html += `
+    <div style="padding:8px 16px 10px;">
+      <p style="font-size:12px;color:var(--uz-muted);line-height:1.6;">
+        固定科目は名称変更不可・税率のみ変更可。<br>
+        任意科目は科目名を入力すると有効になります。<br>
+        行番号は確定申告書（収支内訳書）の行番号に対応しています。
+      </p>
+    </div>`;
+
+  container.innerHTML = html;
+}
+
+function bindCostMasterSave() {
+  document.getElementById('cost-master-save-btn')?.addEventListener('click', () => {
+    const master = getCostMaster();
+
+    const updated = master.map(item => {
+      const taxEl  = document.getElementById(`cm-tax-${item.code}`);
+      const nameEl = document.getElementById(`cm-name-${item.code}`);
+
+      const taxRate = taxEl ? parseInt(taxEl.value) : item.taxRate;
+      const name    = item.type === 'custom' && nameEl
+        ? nameEl.value.trim()
+        : item.name;
+
+      return { ...item, name, taxRate };
+    });
+
+    saveCostMasterToStorage(updated);
+    showToast('科目マスタを保存しました ✓', 'success');
+    renderCostMaster();
+    saveCostMasterToGAS(updated);
+  });
 }
 
 /* ── XSSエスケープ ───────────────────────────────────────── */

@@ -242,6 +242,7 @@ async function renderYTD() {
   }
 
   renderPLTable(plData, prevPlData, 'ytd-pl-table');
+  renderTaxDeclaration(current);
 }
 
 /* ── 年度集計（月別にfetchして合算） ────────────────────── */
@@ -442,6 +443,84 @@ function escHtml(str) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+/* ── 確定申告サマリー描画 ────────────────────────────────── */
+function renderTaxDeclaration(yearData) {
+  const section = document.getElementById('tax-declaration-section');
+  const table   = document.getElementById('tax-declaration-table');
+  if (!section || !table) return;
+
+  if (!yearData || (yearData.sales === 0 && yearData.cogs === 0 && yearData.sga === 0)) {
+    section.hidden = true;
+    return;
+  }
+
+  const master = getCostMaster();
+
+  // 内訳名 → taxRow マップ（名前で検索）
+  const nameToRow = {};
+  master.forEach(item => {
+    if (item.name && item.taxRow != null) nameToRow[item.name] = item.taxRow;
+  });
+
+  // 仕入原価内訳
+  const cogsItems = (yearData.cogsBreakdown || []).map(i => ({
+    row:    nameToRow[i.name] ?? null,
+    name:   i.name,
+    amount: i.amount,
+  }));
+
+  // 販管費内訳（taxRowでソート）
+  const sgaItems = (yearData.sgaBreakdown || []).map(i => ({
+    row:    nameToRow[i.name] ?? null,
+    name:   i.name,
+    amount: i.amount,
+  })).sort((a, b) => {
+    if (a.row == null && b.row == null) return 0;
+    if (a.row == null) return 1;
+    if (b.row == null) return -1;
+    return a.row - b.row;
+  });
+
+  const gross  = yearData.sales - yearData.cogs;
+  const profit = gross - yearData.sga;
+
+  function rowHTML(label, amount, rowNo, isTotal) {
+    const rowLabel = rowNo != null ? `<span style="font-size:11px;color:var(--uz-muted);margin-right:4px;">行${rowNo}</span>` : '';
+    const style    = isTotal
+      ? 'font-weight:700;border-top:1px solid var(--uz-border);padding-top:6px;'
+      : '';
+    return `
+      <div class="pl-breakdown-item" style="${style}">
+        <span class="pl-breakdown-item__name" style="font-size:13px;">
+          ${rowLabel}${escHtml(label)}
+        </span>
+        <span class="pl-breakdown-item__value">${formatYen(amount)}</span>
+      </div>`;
+  }
+
+  let html = '';
+
+  html += `<div style="padding:4px 0 2px;font-size:12px;color:var(--uz-muted);padding-left:4px;">▸ 売上金額</div>`;
+  html += rowHTML('売上（収入）金額', yearData.sales, 1, true);
+
+  html += `<div style="padding:8px 0 2px;font-size:12px;color:var(--uz-muted);padding-left:4px;">▸ 仕入原価</div>`;
+  cogsItems.forEach(i => { html += rowHTML(i.name, i.amount, i.row, false); });
+  html += rowHTML('仕入原価　合計', yearData.cogs, null, true);
+
+  html += `<div style="padding:8px 0 2px;font-size:12px;color:var(--uz-muted);padding-left:4px;">▸ 粗利</div>`;
+  html += rowHTML('粗利', gross, null, true);
+
+  html += `<div style="padding:8px 0 2px;font-size:12px;color:var(--uz-muted);padding-left:4px;">▸ 販管費</div>`;
+  sgaItems.forEach(i => { html += rowHTML(i.name, i.amount, i.row, false); });
+  html += rowHTML('販管費　合計', yearData.sga, null, true);
+
+  html += `<div style="padding:8px 0 2px;font-size:12px;color:var(--uz-muted);padding-left:4px;">▸ 経常利益</div>`;
+  html += rowHTML('経常利益', profit, 43, true);
+
+  table.innerHTML = html;
+  section.hidden  = false;
 }
 
 /* ── 税理士用DLボタン ────────────────────────────────────── */

@@ -1,57 +1,69 @@
 /**
  * ウルトラ財務くん LEO版 PWA — cost.js
- * コスト入力画面ロジック
+ * コスト入力画面ロジック（科目マスタ連携版）
  */
 
 'use strict';
 
-/* ── マスタデータ（本番はGASから取得） ──────────────────── */
-const DIVISION_MASTER = {
-  '1': {
-    code: '1',
-    name: '仕入原価',
-    items: [
-      { code: 'C101', name: '酒類・飲料',   taxRate:  8 },
-      { code: 'C102', name: 'フード材料',   taxRate:  8 },
-      { code: 'C103', name: '消耗品',       taxRate: 10 },
-      { code: 'C104', name: 'その他仕入',   taxRate: 10 },
-      { code: 'C199', name: '諸口',         taxRate: 10 },
-    ],
-  },
-  '2': {
-    code: '2',
-    name: '販管費',
-    items: [
-      { code: 'C201', name: '家賃',         taxRate:  0 },
-      { code: 'C202', name: '人件費',       taxRate:  0 },
-      { code: 'C203', name: '光熱費',       taxRate: 10 },
-      { code: 'C204', name: '広告宣伝費',   taxRate: 10 },
-      { code: 'C205', name: '通信費',       taxRate: 10 },
-      { code: 'C206', name: '消耗品費',     taxRate: 10 },
-      { code: 'C207', name: '修繕費',       taxRate: 10 },
-      { code: 'C299', name: '諸口',         taxRate: 10 },
-    ],
-  },
-};
-
 /* ── 状態 ────────────────────────────────────────────────── */
+let costMaster           = [];  // getCostMaster()（app.js）から読み込む
 let selectedDivisionCode = '1';
 let selectedItemCode     = null;
-let currentTaxRate       = 8;
+let currentTaxRate       = 10;
 let isSubmitting         = false;
+
+/* ── 区分ごとの選択可能科目リスト ────────────────────────── */
+/**
+ * 指定区分の科目リストを返す（空のcustom除外・末尾に諸口追加）
+ * @param {string} divCode
+ * @returns {Array}
+ */
+function getDivisionItems(divCode) {
+  const items = costMaster
+    .filter(i => i.divisionCode === divCode)
+    .filter(i => i.name && i.name.trim() !== '');
+
+  items.push({
+    code:         `MISC_${divCode}`,
+    taxRow:       null,
+    name:         '諸口',
+    taxRate:      10,
+    type:         'misc',
+    divisionCode: divCode,
+  });
+
+  return items;
+}
+
+function divisionLabel(code) {
+  return code === '1' ? '仕入原価' : '販管費';
+}
 
 /* ── 初期化 ──────────────────────────────────────────────── */
 document.addEventListener('DOMContentLoaded', () => {
+  costMaster = getCostMaster();   // app.js の共通関数
+  loadCostMasterFromGAS();        // バックグラウンドで最新取得
+
   initDate();
   bindDivisionButtons();
   bindAmountInput();
   bindTaxButtons();
   bindUnpaidToggle();
   bindSubmit();
-
-  // 初期区分を選択
   selectDivision('1');
 });
+
+/* ── GASから最新マスタを取得（バックグラウンド） ─────────── */
+async function loadCostMasterFromGAS() {
+  try {
+    const res = await callGAS('getCostMaster', {});
+    if (res && res.status === 'ok' && Array.isArray(res.data)) {
+      saveCostMasterToStorage(res.data);
+      costMaster = res.data;
+      renderItemCards(selectedDivisionCode);
+    }
+  } catch { /* サイレントフェイル */ }
+}
 
 /* ── 日付初期化 ──────────────────────────────────────────── */
 function initDate() {
@@ -85,12 +97,10 @@ function selectDivision(code) {
   selectedDivisionCode = code;
   selectedItemCode     = null;
 
-  // ボタンUI更新
   document.querySelectorAll('.division-btn').forEach(btn => {
     btn.classList.toggle('division-btn--active', btn.dataset.div === code);
   });
 
-  // 科目カードを再描画
   renderItemCards(code);
   recalcTax();
 }
@@ -100,46 +110,41 @@ function renderItemCards(divCode) {
   const container = document.getElementById('item-cards');
   if (!container) return;
 
-  const items = DIVISION_MASTER[divCode]?.items || [];
+  const items = getDivisionItems(divCode);
 
   container.innerHTML = items.map(item => `
     <div class="radio-card"
-         data-code="${item.code}"
+         data-code="${escHtml(item.code)}"
          role="radio"
          aria-checked="false"
          tabindex="0"
-         onclick="selectItem('${item.code}')"
-         onkeydown="if(event.key==='Enter'||event.key===' ')selectItem('${item.code}')">
+         onclick="selectItem('${escHtml(item.code)}')"
+         onkeydown="if(event.key==='Enter'||event.key===' ')selectItem('${escHtml(item.code)}')">
       <div class="radio-card__label">${escHtml(item.name)}</div>
-      <div class="radio-card__sub">税率 ${item.taxRate}%</div>
+      <div class="radio-card__sub">${item.taxRow ? `行${item.taxRow}　` : ''}税率 ${item.taxRate}%</div>
     </div>
   `).join('');
 }
 
 /* ── 科目選択 ────────────────────────────────────────────── */
 function selectItem(code) {
-  const division = DIVISION_MASTER[selectedDivisionCode];
-  if (!division) return;
-
-  const item = division.items.find(i => i.code === code);
+  const items = getDivisionItems(selectedDivisionCode);
+  const item  = items.find(i => i.code === code);
   if (!item) return;
 
   selectedItemCode = code;
 
-  // カードUI更新
   document.querySelectorAll('#item-cards .radio-card').forEach(card => {
     const checked = card.dataset.code === code;
     card.classList.toggle('radio-card--checked-red', checked);
     card.setAttribute('aria-checked', String(checked));
   });
 
-  // 税率をアイテムデフォルトに合わせる
   setTaxRate(item.taxRate);
 
-  // 諸口フィールドの表示切替
   const miscSection = document.getElementById('misc-section');
   if (miscSection) {
-    const isMisc = code === 'C199' || code === 'C299';
+    const isMisc = item.type === 'misc';
     miscSection.hidden = !isMisc;
     if (!isMisc) {
       const miscInput = document.getElementById('misc-name-input');
@@ -163,7 +168,7 @@ function setTaxRate(rate) {
 /* ── 税計算・表示更新 ────────────────────────────────────── */
 function recalcTax() {
   const amountInput = document.getElementById('amount-input');
-  const raw = amountInput ? amountInput.value.replace(/,/g, '') : '0';
+  const raw         = amountInput ? amountInput.value.replace(/,/g, '') : '0';
   const taxIncluded = parseInt(raw) || 0;
   const { taxExcluded, tax } = calcTax(taxIncluded, currentTaxRate);
 
@@ -177,7 +182,6 @@ function recalcTax() {
 function bindAmountInput() {
   const el = document.getElementById('amount-input');
   if (!el) return;
-
   el.addEventListener('input', () => {
     el.value = el.value.replace(/[^0-9]/g, '');
     recalcTax();
@@ -191,15 +195,12 @@ function bindTaxButtons() {
   });
 }
 
-/* ── 未払トグル（UIのみ、値はsubmit時に読む） ───────────── */
-function bindUnpaidToggle() {
-  // 現時点ではsubmit時に読み取るだけ
-}
+/* ── 未払トグル ──────────────────────────────────────────── */
+function bindUnpaidToggle() { /* submit時に読み取り */ }
 
 /* ── 送信処理 ────────────────────────────────────────────── */
 function bindSubmit() {
-  const btn = document.getElementById('submit-btn');
-  if (btn) btn.addEventListener('click', handleSubmit);
+  document.getElementById('submit-btn')?.addEventListener('click', handleSubmit);
 }
 
 async function handleSubmit() {
@@ -212,46 +213,41 @@ async function handleSubmit() {
   const miscName = document.getElementById('misc-name-input')?.value.trim() || '';
   const unpaid   = document.getElementById('unpaid-toggle')?.checked ?? false;
 
-  const division = DIVISION_MASTER[selectedDivisionCode];
-  const item     = division?.items.find(i => i.code === selectedItemCode);
+  const items = getDivisionItems(selectedDivisionCode);
+  const item  = items.find(i => i.code === selectedItemCode);
 
-  // ── バリデーション ──
-  if (!date)   return showToast('日付を入力してください', 'error');
-  if (!item)   return showToast('科目を選択してください', 'error');
+  if (!date)       return showToast('日付を入力してください', 'error');
+  if (!item)       return showToast('科目を選択してください', 'error');
   if (amount <= 0) return showToast('金額を入力してください', 'error');
-
-  const isMisc = selectedItemCode === 'C199' || selectedItemCode === 'C299';
-  if (isMisc && !miscName) return showToast('科目名を入力してください', 'error');
+  if (item.type === 'misc' && !miscName) return showToast('科目名を入力してください', 'error');
 
   const { taxExcluded, tax } = calcTax(amount, currentTaxRate);
 
   const payload = {
     date,
-    divisionCode:  division.code,
-    divisionName:  division.name,
-    itemCode:      item.code,
-    itemName:      item.name,
-    miscItemName:  miscName,
+    divisionCode: selectedDivisionCode,
+    divisionName: divisionLabel(selectedDivisionCode),
+    itemCode:     item.code,
+    itemName:     item.name,
+    taxRow:       item.taxRow ?? null,
+    miscItemName: miscName,
     taxExcluded,
-    taxRate:       currentTaxRate,
+    taxRate:      currentTaxRate,
     tax,
-    taxIncluded:   amount,
+    taxIncluded:  amount,
     memo,
-    unpaid:        unpaid ? 1 : 0,
+    unpaid:       unpaid ? 1 : 0,
   };
 
-  // ── GAS送信 ──
   isSubmitting = true;
   setSubmitLoading(true);
 
   try {
     const result = await callGAS('addCost', payload);
     if (result.status !== 'ok') throw new Error(result.message || '登録エラー');
-
     setSubmitLoading(false);
     showToast('コストを登録しました ✓', 'success');
     setTimeout(() => navigate('index.html'), 1200);
-
   } catch (e) {
     setSubmitLoading(false);
     showToast('登録に失敗しました：' + e.message, 'error');
@@ -264,9 +260,9 @@ async function handleSubmit() {
 function setSubmitLoading(loading) {
   const btn = document.getElementById('submit-btn');
   if (!btn) return;
-  btn.disabled = loading;
+  btn.disabled  = loading;
   btn.innerHTML = loading
-    ? '<span class="spinner" style="width:20px;height:20px;border-top-color:#fff;"></span>'
+    ? '<span class="spinner" style="width:20px;height:20px;border-top-color:var(--uz-gold);"></span>'
     : buildSubmitBtnText();
 }
 
