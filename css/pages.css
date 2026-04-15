@@ -33,9 +33,9 @@
 .quick-staff-btn:active { filter: brightness(0.85); }
 
 .quick-staff-btn--selected {
-  border-color: var(--uz-blue);
-  background: rgba(67, 97, 238, 0.2);
-  color: var(--uz-blue);
+  border-color: var(--uz-gold);
+  background: var(--uz-amber-bg);
+  color: var(--uz-gold);
 }
 
 /* 選択中スタッフ表示 */
@@ -44,12 +44,12 @@
   align-items: center;
   gap: 6px;
   padding: 6px 14px;
-  background: rgba(67, 97, 238, 0.15);
-  border: 1px solid var(--uz-blue);
+  background: var(--uz-amber-bg);
+  border: 1px solid var(--uz-border2);
   border-radius: 20px;
   font-size: 15px;
   font-weight: 700;
-  color: var(--uz-blue);
+  color: var(--uz-gold);
 }
 
 /* 勤怠リスト（フル） */
@@ -103,7 +103,7 @@
   padding: 0 14px;
   border: 1px solid var(--uz-red);
   border-radius: var(--radius-sm);
-  background: rgba(230, 57, 70, 0.1);
+  background: var(--uz-red-bg);
   color: var(--uz-red);
   font-family: var(--font-main);
   font-size: 13px;
@@ -114,7 +114,7 @@
   flex-shrink: 0;
 }
 
-.attendance-clockout-btn:active { background: rgba(230, 57, 70, 0.2); }
+.attendance-clockout-btn:active { background: rgba(224,80,80,0.2); }
 
 /* 入店ボタン（画面下固定） */
 .clockin-submit-bar {
@@ -135,8 +135,8 @@
   height: var(--btn-height);
   border: none;
   border-radius: var(--radius-md);
-  background: var(--uz-blue);
-  color: #fff;
+  background: var(--uz-gold);
+  color: var(--uz-bg);
   font-family: var(--font-main);
   font-size: 17px;
   font-weight: 700;
@@ -185,7 +185,7 @@
   font-variant-numeric: tabular-nums;
 }
 
-.uc-summary-card--uncollected .uc-summary-card__value { color: var(--uz-blue); }
+.uc-summary-card--uncollected .uc-summary-card__value { color: var(--uz-gold); }
 .uc-summary-card--payable     .uc-summary-card__value { color: var(--uz-red);  }
 
 /* セクションヘッダー */
@@ -211,13 +211,15 @@
 }
 
 .uc-badge--uncollected {
-  background: rgba(67, 97, 238, 0.15);
-  color: var(--uz-blue);
+  background: var(--uz-amber-bg);
+  color: var(--uz-gold);
+  border: 0.5px solid var(--uz-border2);
 }
 
 .uc-badge--payable {
-  background: rgba(230, 57, 70, 0.15);
+  background: var(--uz-red-bg);
   color: var(--uz-red);
+  border: 0.5px solid rgba(224,80,80,0.3);
 }
 
 /* アイテムカード */
@@ -264,7 +266,7 @@
   display: block;
 }
 
-.uc-item-amount--uncollected { color: var(--uz-blue); }
+.uc-item-amount--uncollected { color: var(--uz-gold); }
 .uc-item-amount--payable     { color: var(--uz-red);  }
 
 /* 消込ボタン */
@@ -284,13 +286,13 @@
 }
 
 .uc-reconcile-btn--uncollected {
-  border-color: var(--uz-blue);
-  color: var(--uz-blue);
+  border-color: var(--uz-border2);
+  color: var(--uz-gold);
 }
 
 .uc-reconcile-btn--uncollected:active,
 .uc-reconcile-btn--uncollected.active {
-  background: rgba(67, 97, 238, 0.15);
+  background: var(--uz-amber-bg);
 }
 
 .uc-reconcile-btn--payable {
@@ -300,7 +302,7 @@
 
 .uc-reconcile-btn--payable:active,
 .uc-reconcile-btn--payable.active {
-  background: rgba(230, 57, 70, 0.15);
+  background: var(--uz-red-bg);
 }
 
 /* 消込インラインフォーム */
@@ -343,7 +345,7 @@
   font-weight: 600;
 }
 
-.uc-reconcile-input:focus { outline: none; border-color: var(--uz-blue); }
+.uc-reconcile-input:focus { outline: none; border-color: var(--uz-gold); }
 
 .uc-reconcile-confirm-btn {
   width: 100%;
@@ -358,8 +360,8 @@
 }
 
 .uc-reconcile-confirm-btn--uncollected {
-  background: var(--uz-blue);
-  color: #fff;
+  background: var(--uz-gold);
+  color: var(--uz-bg);
 }
 
 .uc-reconcile-confirm-btn--payable {
@@ -448,7 +450,7 @@
   height: 42px;
   padding: 0 12px;
   background: var(--uz-surface2);
-  border: 1px solid var(--uz-border);
+  border: 1px solid var(--uz-border2);
   border-radius: var(--radius-sm);
   color: var(--uz-text);
   font-family: var(--font-main);
@@ -458,7 +460,7 @@
 
 .settings-input:focus {
   outline: none;
-  border-color: var(--uz-blue);
+  border-color: var(--uz-gold);
 }
 
 .settings-save-btn {
@@ -466,8 +468,8 @@
   padding: 0 18px;
   border: none;
   border-radius: var(--radius-sm);
-  background: var(--uz-blue);
-  color: #fff;
+  background: var(--uz-gold);
+  color: var(--uz-bg);
   font-family: var(--font-main);
   font-size: 13px;
   font-weight: 700;
@@ -540,18 +542,18 @@
   height: 40px;
   padding: 0 12px;
   background: var(--uz-surface2);
-  border: 1px solid var(--uz-border);
+  border: 1px solid var(--uz-border2);
   border-radius: var(--radius-sm);
   color: var(--uz-text);
   font-family: var(--font-main);
   font-size: 14px;
 }
 
-.staff-add-input::placeholder { color: var(--uz-muted); }
+.staff-add-input::placeholder { color: var(--uz-text3); }
 
 .staff-add-input:focus {
   outline: none;
-  border-color: var(--uz-blue);
+  border-color: var(--uz-gold);
 }
 
 .staff-add-btn {
@@ -559,8 +561,8 @@
   padding: 0 16px;
   border: none;
   border-radius: var(--radius-sm);
-  background: var(--uz-blue);
-  color: #fff;
+  background: var(--uz-gold);
+  color: var(--uz-bg);
   font-family: var(--font-main);
   font-size: 14px;
   font-weight: 700;
@@ -655,8 +657,9 @@
   flex-shrink: 0;
 }
 
-.history-item__type--sales { background: rgba(67, 97, 238, 0.15); }
-.history-item__type--cost  { background: rgba(230, 57, 70, 0.15);  }
+.history-item__type--sales      { background: var(--uz-green-bg); }
+.history-item__type--cost       { background: var(--uz-amber-bg); }
+.history-item__type--attendance { background: var(--uz-green-bg); }
 
 .history-item__info { flex: 1; min-width: 0; }
 
@@ -682,8 +685,81 @@
   flex-shrink: 0;
 }
 
-.history-item__amount--sales            { color: var(--uz-blue); }
-.history-item__amount--cost             { color: var(--uz-red);  }
+.history-item__amount--sales             { color: var(--uz-green); }
+.history-item__amount--cost              { color: var(--uz-gold);  }
 .history-item__amount--attendance-active { color: var(--uz-green); font-size: 12px; font-weight: 700; }
-.history-item__amount--attendance-out   { color: var(--uz-muted); font-size: 12px; }
-.history-item__type--attendance         { background: rgba(74, 222, 128, 0.15); }
+.history-item__amount--attendance-out    { color: var(--uz-muted); font-size: 12px; }
+
+/* ══════════════════════════════════════════════════════════
+   承認バナー（history.html）
+   ══════════════════════════════════════════════════════════ */
+
+.approval-banner {
+  background: var(--uz-amber-bg);
+  border: 0.5px solid rgba(212,175,55,0.35);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin: 8px 16px;
+}
+
+.approval-banner__title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--uz-gold);
+  margin-bottom: 4px;
+}
+
+.approval-banner__detail {
+  font-size: 11px;
+  color: var(--uz-text2);
+  margin-bottom: 10px;
+}
+
+.approval-banner__btns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.btn-reject {
+  height: 40px;
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 500;
+  background: var(--uz-red-bg);
+  border: 0.5px solid rgba(224,80,80,0.3);
+  color: var(--uz-red);
+  cursor: pointer;
+  font-family: var(--font-main);
+}
+
+.btn-approve {
+  height: 40px;
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 500;
+  background: var(--uz-green-bg);
+  border: 0.5px solid rgba(76,175,128,0.3);
+  color: var(--uz-green);
+  cursor: pointer;
+  font-family: var(--font-main);
+}
+
+/* ══════════════════════════════════════════════════════════
+   税理士用DLボタン（pl.html）
+   ══════════════════════════════════════════════════════════ */
+
+.btn-tax-dl {
+  height: 40px;
+  border-radius: 9px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  background: var(--uz-green-bg);
+  border: 0.5px solid rgba(76,175,128,0.3);
+  color: var(--uz-green);
+  font-family: var(--font-main);
+  flex: 1;
+}
+
+.btn-tax-dl:active { filter: brightness(0.85); }

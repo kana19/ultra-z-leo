@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <meta name="theme-color" content="#1a1a2e">
+  <meta name="theme-color" content="#12100E">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>損益サマリー — ウルトラ財務くん</title>
@@ -13,6 +13,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/base.css">
   <link rel="stylesheet" href="css/pl.css">
+  <link rel="stylesheet" href="css/pages.css">
 </head>
 <body>
 
@@ -59,12 +60,15 @@
               aria-label="次の月">›</button>
     </div>
 
-    <!-- 前年同月比ボタン -->
+    <!-- 前年同月比ボタン・税理士用DLボタン -->
     <div class="pl-compare-wrap">
       <button id="compare-btn"
               class="pl-compare-btn"
               type="button"
               aria-pressed="false">前年同月比</button>
+      <button id="tax-download-btn"
+              class="btn-tax-dl"
+              type="button">税理士用スプレッドシートをDL</button>
     </div>
 
     <!-- PLテーブル（月次） -->

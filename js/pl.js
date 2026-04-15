@@ -40,6 +40,7 @@ document.addEventListener('DOMContentLoaded', () => {
   bindPeriodNav();
   bindCompareBtn();
   bindYtdCompareBtn();
+  bindTaxDownload();
   renderAll();
 });
 
@@ -441,4 +442,83 @@ function escHtml(str) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+/* ── 税理士用DLボタン ────────────────────────────────────── */
+function bindTaxDownload() {
+  document.getElementById('tax-download-btn')?.addEventListener('click', downloadTaxCSV);
+}
+
+async function downloadTaxCSV() {
+  const btn = document.getElementById('tax-download-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '取得中...'; }
+
+  try {
+    const year = currentYear;
+    const months = [];
+    for (let m = 1; m <= 12; m++) {
+      months.push(`${year}-${String(m).padStart(2, '0')}`);
+    }
+
+    const results = await Promise.all(months.map(fetchSummary));
+
+    // 科目マスタ（確定申告行番号対応）
+    const subjects = [
+      { name: '売上（収入）金額', row: '行1',  key: 'sales'   },
+      { name: '仕入金額',         row: '-',    key: 'cogs'    },
+      { name: '租税公課',         row: '行8',  key: null      },
+      { name: '水道光熱費',       row: '行10', key: null      },
+      { name: '旅費交通費',       row: '行11', key: null      },
+      { name: '通信費',           row: '行12', key: null      },
+      { name: '広告宣伝費',       row: '行13', key: null      },
+      { name: '接待交際費',       row: '行14', key: null      },
+      { name: '損害保険料',       row: '行15', key: null      },
+      { name: '修繕費',           row: '行16', key: null      },
+      { name: '消耗品費',         row: '行17', key: null      },
+      { name: '減価償却費',       row: '行18', key: null      },
+      { name: '給料賃金',         row: '行19', key: null      },
+      { name: '外注工賃',         row: '行20', key: null      },
+      { name: '地代家賃',         row: '行22', key: null      },
+      { name: '利子割引料',       row: '行23', key: null      },
+      { name: '雑費',             row: '行24', key: null      },
+      { name: '販管費合計',       row: '-',    key: 'sga'     },
+      { name: '経常利益',         row: '行43', key: 'profit'  },
+    ];
+
+    const header = ['科目', '行番号', ...Array.from({length:12},(_,i)=>`${i+1}月`), '年計'];
+    const rows   = [header];
+
+    subjects.forEach(s => {
+      const monthly = results.map((d, i) => {
+        if (!d) return 0;
+        if (s.key === 'sales')  return d.sales  || 0;
+        if (s.key === 'cogs')   return d.cogs   || 0;
+        if (s.key === 'sga')    return d.sga    || 0;
+        if (s.key === 'profit') return (d.sales - d.cogs - d.sga) || 0;
+        // 科目別内訳から検索（sgaBreakdown）
+        const items = [...(d.sgaBreakdown||[]), ...(d.cogsBreakdown||[])];
+        const found = items.find(it => it.name === s.name);
+        return found ? found.amount : 0;
+      });
+      const total = monthly.reduce((a, b) => a + b, 0);
+      rows.push([s.name, s.row, ...monthly, total]);
+    });
+
+    const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\r\n');
+    const bom  = '\uFEFF';
+    const blob = new Blob([bom + csv], { type: 'text/csv;charset=utf-8;' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `ultra_zaimu_申告用_${year}年度.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+  } catch (e) {
+    alert('ダウンロードに失敗しました: ' + e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '税理士用スプレッドシートをDL'; }
+  }
 }

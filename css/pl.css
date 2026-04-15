@@ -54,14 +54,14 @@
   left: 16px;
   right: 16px;
   height: 2px;
-  background: var(--uz-blue);
+  background: var(--uz-gold);
   border-radius: 2px 2px 0 0;
   opacity: 0;
   transition: opacity 0.2s;
 }
 
 .pl-tab--active {
-  color: var(--uz-blue);
+  color: var(--uz-gold);
 }
 
 .pl-tab--active::after {
@@ -112,7 +112,7 @@
 .pl-compare-wrap {
   padding: 0 16px 14px;
   display: flex;
-  justify-content: flex-end;
+  gap: 8px;
 }
 
 .pl-compare-btn {
@@ -131,9 +131,9 @@
 }
 
 .pl-compare-btn--active {
-  border-color: var(--uz-blue);
-  color: var(--uz-blue);
-  background: rgba(67, 97, 238, 0.12);
+  border-color: var(--uz-border2);
+  color: var(--uz-gold);
+  background: var(--uz-amber-bg);
 }
 
 /* ── PLテーブル ──────────────────────────────────────────── */
@@ -239,8 +239,8 @@
 
 /* ── 経常利益ハイライト行 ────────────────────────────────── */
 .pl-row-wrap--profit {
-  background: rgba(74, 222, 128, 0.08);
-  border: 1px solid rgba(74, 222, 128, 0.2);
+  background: var(--uz-green-bg);
+  border: 1px solid rgba(76,175,128,0.25);
 }
 
 .pl-row-wrap--profit .pl-main-row__label {
@@ -255,8 +255,8 @@
 }
 
 .pl-row-wrap--loss {
-  background: rgba(230, 57, 70, 0.08);
-  border: 1px solid rgba(230, 57, 70, 0.2);
+  background: var(--uz-red-bg);
+  border: 1px solid rgba(224,80,80,0.25);
 }
 
 .pl-row-wrap--loss .pl-main-row__label {
@@ -314,11 +314,11 @@
 .pl-compare-info {
   margin: 0 16px 8px;
   padding: 10px 14px;
-  background: rgba(67, 97, 238, 0.1);
-  border: 1px solid rgba(67, 97, 238, 0.2);
+  background: var(--uz-info-bg);
+  border: 1px solid rgba(106,159,212,0.25);
   border-radius: var(--radius-sm);
   font-size: 12px;
-  color: var(--uz-blue);
+  color: var(--uz-info);
   display: none;
 }
 

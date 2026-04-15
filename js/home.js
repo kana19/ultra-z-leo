@@ -294,10 +294,36 @@ function escapeHtml(str) {
     .replace(/"/g, '&quot;');
 }
 
+/* ── 確定申告タイマー ────────────────────────────────────── */
+function renderTaxTimer() {
+  const now   = new Date();
+  const month = now.getMonth() + 1;
+  const day   = now.getDate();
+  const el    = document.getElementById('tax-timer');
+  if (!el) return;
+
+  const inPeriod = (month === 2 && day >= 16) || (month === 3 && day <= 15);
+  if (!inPeriod) { el.style.display = 'none'; return; }
+
+  const deadline = new Date(now.getFullYear(), 2, 15); // 3/15
+  const diffMs   = deadline - now;
+  const diffDays = Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+
+  if (diffDays <= 3) {
+    el.className = 'tax-timer-red';
+    el.textContent = `確定申告期限まであと ${diffDays}日！（3/15締切）`;
+  } else {
+    el.className = 'tax-timer-blue';
+    el.textContent = `確定申告受付中　あと ${diffDays}日（3/15締切）`;
+  }
+  el.style.display = 'block';
+}
+
 /* ── 初期化 ──────────────────────────────────────────────── */
 document.addEventListener('DOMContentLoaded', () => {
   renderHeaderDate();
   startClock();
+  renderTaxTimer();
 
   // localStorageで即時描画 → GASで上書き
   renderStaffFromLocalStorage();

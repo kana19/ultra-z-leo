@@ -4,33 +4,49 @@
    カラーコードの直書き禁止。必ず変数経由で参照すること。
    ============================================================ */
 
-/* ── CSS変数（確定デザイン仕様） ────────────────────────── */
+/* ── CSS変数（ダーク系・ゴールドアクセント） ──────────────── */
 :root {
   /* 背景・サーフェス */
-  --uz-bg:       #1a1a2e;
-  --uz-surface:  #222240;
-  --uz-surface2: #2a2a50;
+  --uz-bg:       #12100E;
+  --uz-surface:  #1C1916;
+  --uz-surface2: #252118;
 
-  /* アクセントカラー */
-  --uz-red:      #e63946;
-  --uz-blue:     #4361ee;
-  --uz-green:    #4ade80;
+  /* アクセントカラー（ゴールド） */
+  --uz-gold:     #D4AF37;
+  --uz-gold-lt:  #F0D060;
+  --uz-gold-dk:  #9A7C1A;
+  --uz-blue:     #D4AF37;   /* 後方互換用 → gold */
+  --uz-amber:    #D4AF37;   /* 警告・未収 */
+
+  /* ステータスカラー */
+  --uz-red:      #E05050;
+  --uz-green:    #4CAF80;
+  --uz-info:     #6A9FD4;   /* 情報・比較表示 */
 
   /* テキスト */
-  --uz-text:     #f0f0f0;
-  --uz-muted:    #8888aa;
+  --uz-text:     #E8E0CC;
+  --uz-text2:    #A09070;
+  --uz-text3:    #6A5A40;
+  --uz-muted:    #A09070;   /* 後方互換用 → text2 */
 
   /* ボーダー */
-  --uz-border:   rgba(255, 255, 255, 0.07);
+  --uz-border:   rgba(212,175,55,0.18);
+  --uz-border2:  rgba(212,175,55,0.35);
+
+  /* 背景色変種 */
+  --uz-green-bg:   rgba(76,175,128,0.12);
+  --uz-red-bg:     rgba(224,80,80,0.12);
+  --uz-amber-bg:   rgba(212,175,55,0.12);
+  --uz-info-bg:    rgba(106,159,212,0.12);
 
   /* アラートドット縁 */
   --uz-silver:   #b0b0b0;
 
-  /* 損益カラー */
-  --uz-sales:    #4361ee;   /* 売上 */
-  --uz-cost:     #e63946;   /* コスト */
-  --uz-profit:   #4ade80;   /* 利益（プラス） */
-  --uz-loss:     #e63946;   /* 損失（マイナス） */
+  /* 損益カラー（後方互換） */
+  --uz-sales:    #D4AF37;
+  --uz-cost:     #E05050;
+  --uz-profit:   #4CAF80;
+  --uz-loss:     #E05050;
 
   /* 角丸 */
   --radius-sm:   8px;
@@ -42,7 +58,7 @@
   --font-main:   'Noto Sans JP', 'Hiragino Kaku Gothic ProN', sans-serif;
 
   /* タップターゲット */
-  --btn-height:  56px;
+  --btn-height:    56px;
   --btn-height-sm: 44px;
 
   /* ボトムナビ高さ */
@@ -69,6 +85,11 @@ body {
   min-height: 100dvh;
   overscroll-behavior-y: none;
 }
+
+/* スクロールバー */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: #2A2520; }
+::-webkit-scrollbar-thumb { background: var(--uz-border2); border-radius: 2px; }
 
 /* ── ページラッパー ──────────────────────────────────────── */
 .page-wrapper {
@@ -176,8 +197,8 @@ body {
 }
 
 .action-btn--sales {
-  background: var(--uz-blue);
-  color: #fff;
+  background: var(--uz-gold);
+  color: var(--uz-bg);
 }
 
 .action-btn--cost {
@@ -218,9 +239,9 @@ body {
   flex-shrink: 0;
 }
 
-/* 通常：青丸＋シルバー縁 */
+/* 通常：金丸＋シルバー縁 */
 .adot--blue {
-  background: var(--uz-blue);
+  background: var(--uz-gold);
   border: 2px solid var(--uz-silver);
 }
 
@@ -382,7 +403,7 @@ body {
 }
 
 .pl-row--highlight {
-  background: rgba(74, 222, 128, 0.1);
+  background: var(--uz-green-bg);
   margin: 0 -16px;
   padding: 12px 16px;
   border-radius: 0 0 var(--radius-lg) var(--radius-lg);
@@ -454,7 +475,7 @@ body {
 }
 
 .nav-item:active {
-  background: var(--uz-surface2);
+  background: var(--uz-amber-bg);
 }
 
 .nav-item__icon {
@@ -471,7 +492,7 @@ body {
 
 .nav-item--active .nav-item__icon,
 .nav-item--active .nav-item__label {
-  color: var(--uz-blue);
+  color: var(--uz-gold);
 }
 
 /* ── ユーティリティ ──────────────────────────────────────── */
@@ -493,7 +514,7 @@ body {
   width: 18px;
   height: 18px;
   border: 2px solid var(--uz-border);
-  border-top-color: var(--uz-blue);
+  border-top-color: var(--uz-gold);
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
 }
@@ -514,7 +535,7 @@ body {
   border-radius: var(--radius-md);
   font-size: 14px;
   font-weight: 600;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.6);
   opacity: 0;
   transition: opacity 0.25s, transform 0.25s;
   z-index: 300;
@@ -542,7 +563,7 @@ body {
   display: none;
   position: fixed;
   inset: 0;
-  background: rgba(26, 26, 46, 0.7);
+  background: rgba(18,16,14,0.8);
   z-index: 400;
   align-items: center;
   justify-content: center;
@@ -550,4 +571,33 @@ body {
 
 .loading-overlay--show {
   display: flex;
+}
+
+/* ── 確定申告タイマー ─────────────────────────────────────── */
+.tax-timer-blue {
+  background: var(--uz-info-bg);
+  border: 0.5px solid rgba(106,159,212,0.3);
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 12px;
+  color: var(--uz-info);
+  text-align: center;
+  margin-bottom: 12px;
+}
+
+.tax-timer-red {
+  background: var(--uz-red-bg);
+  border: 0.5px solid rgba(224,80,80,0.3);
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 12px;
+  color: var(--uz-red);
+  text-align: center;
+  margin-bottom: 12px;
+  animation: blink-timer 1s ease-in-out infinite;
+}
+
+@keyframes blink-timer {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.5; }
 }

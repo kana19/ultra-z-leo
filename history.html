@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <meta name="theme-color" content="#1a1a2e">
+  <meta name="theme-color" content="#12100E">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>履歴・修正 — ウルトラ財務くん</title>
@@ -36,7 +36,7 @@
       font-family: var(--font-main);
       transition: color .15s, border-color .15s;
     }
-    .hist-tab--active { color: var(--uz-text); border-bottom-color: var(--uz-blue); }
+    .hist-tab--active { color: var(--uz-gold); border-bottom-color: var(--uz-gold); }
     .hist-tab-content { display: none; }
     .hist-tab-content--active { display: block; }
 
@@ -70,7 +70,7 @@
     .attend-status {
       font-size: 11px; padding: 2px 8px; border-radius: 20px; font-weight: 600;
     }
-    .attend-status--active { background: rgba(74,222,128,.15); color: #4ade80; }
+    .attend-status--active { background: var(--uz-green-bg); color: var(--uz-green); }
     .attend-status--out    { background: rgba(136,136,170,.12); color: var(--uz-muted); }
 
     /* ── 修正ボタン・ロックバッジ ── */
@@ -78,16 +78,16 @@
       font-size: 11px;
       padding: 3px 10px;
       border-radius: 20px;
-      border: none;
+      border: 0.5px solid var(--uz-border2);
       cursor: pointer;
       font-family: var(--font-main);
       font-weight: 600;
-      background: var(--uz-blue);
-      color: #fff;
+      background: var(--uz-amber-bg);
+      color: var(--uz-gold);
       white-space: nowrap;
       flex-shrink: 0;
     }
-    .hist-edit-btn--grace { background: var(--uz-red); }
+    .hist-edit-btn--grace { background: var(--uz-red-bg); border-color: rgba(224,80,80,0.3); color: var(--uz-red); }
     .hist-grace-badge {
       font-size: 10px;
       color: var(--uz-red);
@@ -165,7 +165,7 @@
       font-size: 15px; font-family: var(--font-main);
       box-sizing: border-box; -webkit-appearance: none;
     }
-    .edit-input:focus { outline: none; border-color: var(--uz-blue); }
+    .edit-input:focus { outline: none; border-color: var(--uz-gold); }
     .edit-readonly {
       padding: 10px 12px; background: var(--uz-surface2);
       border-radius: 8px; color: var(--uz-muted); font-size: 14px;
@@ -186,7 +186,7 @@
       font-size: 13px; font-family: var(--font-main); cursor: pointer;
     }
     .tax-toggle--active {
-      background: var(--uz-blue); color: #fff; border-color: var(--uz-blue);
+      background: var(--uz-amber-bg); color: var(--uz-gold); border-color: var(--uz-border2);
     }
 
     .edit-panel__footer {
@@ -196,8 +196,8 @@
     }
     .edit-save-btn {
       width: 100%; padding: 14px;
-      background: var(--uz-blue); color: #fff;
-      border: none; border-radius: 10px;
+      background: var(--uz-amber-bg); color: var(--uz-gold);
+      border: 0.5px solid var(--uz-border2); border-radius: 10px;
       font-size: 15px; font-weight: 700; font-family: var(--font-main);
       cursor: pointer;
     }
@@ -212,6 +212,16 @@
   <header class="history-header">
     <span class="history-header__title">履歴・修正</span>
   </header>
+
+  <!-- 承認バナー（表示条件はGAS側フラグ実装後に有効化） -->
+  <div id="approval-banner" class="approval-banner" style="display:none">
+    <div class="approval-banner__title">承認が必要な修正申請があります</div>
+    <div id="approval-banner__detail" class="approval-banner__detail"></div>
+    <div class="approval-banner__btns">
+      <button id="approval-reject-btn"  class="btn-reject">却下</button>
+      <button id="approval-approve-btn" class="btn-approve">承認する</button>
+    </div>
+  </div>
 
   <!-- タブナビゲーション -->
   <div class="hist-tabs" role="tablist">
