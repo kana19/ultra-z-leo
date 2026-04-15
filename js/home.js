@@ -330,4 +330,269 @@ document.addEventListener('DOMContentLoaded', () => {
   loadAttendance();
   loadAlerts();
   loadPL();
+
+  if (document.body.classList.contains('is-ipad')) {
+    initIpadDashboard();
+  }
 });
+
+/* ── iPad ホームダッシュボード ────────────────────────────── */
+function initIpadDashboard() {
+  const dashboard = document.getElementById('ipad-home-dashboard');
+  if (!dashboard) return;
+  dashboard.hidden = false;
+
+  const now     = new Date();
+  const curYear = now.getFullYear();
+
+  // 年選択セレクト（過去3年）
+  const sel = document.getElementById('ipad-year-select');
+  if (sel) {
+    for (let y = curYear; y >= curYear - 2; y--) {
+      const opt = document.createElement('option');
+      opt.value       = y;
+      opt.textContent = `${y}年`;
+      sel.appendChild(opt);
+    }
+    sel.value = curYear;
+    sel.addEventListener('change', () => loadIpadYearData(parseInt(sel.value)));
+  }
+
+  renderIpadTaxTimerCompact();
+  loadIpadYearData(curYear);
+  loadSidebarRecent();
+}
+
+function renderIpadTaxTimerCompact() {
+  const el = document.getElementById('ipad-tax-timer-compact');
+  if (!el) return;
+  const now = new Date();
+  const m   = now.getMonth() + 1;
+  const d   = now.getDate();
+  const inPeriod = (m === 2 && d >= 16) || (m === 3 && d <= 15);
+  if (!inPeriod) return;
+  const deadline = new Date(now.getFullYear(), 2, 15);
+  const diffDays = Math.max(0, Math.ceil((deadline - now) / 86400000));
+  el.textContent  = `確定申告まで ${diffDays}日`;
+  el.style.color  = diffDays <= 3 ? 'var(--uz-red)' : 'var(--uz-gold)';
+}
+
+async function loadIpadYearData(year) {
+  const tbody = document.getElementById('ipad-pl-tbody');
+  const tfoot = document.getElementById('ipad-pl-tfoot');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="7" class="ipad-hist-empty">読み込み中...</td></tr>';
+  if (tfoot) tfoot.innerHTML = '';
+
+  const now      = new Date();
+  const curMonth = now.getFullYear() === year ? now.getMonth() + 1 : null;
+
+  try {
+    const results = await Promise.all(
+      Array.from({ length: 12 }, (_, i) => {
+        const m = String(i + 1).padStart(2, '0');
+        return callGAS('getSummary', { month: `${year}-${m}` }).catch(() => null);
+      })
+    );
+    renderIpadPLTable(results, curMonth);
+    renderIpadChart(results);
+  } catch {
+    tbody.innerHTML = '<tr><td colspan="7" class="ipad-hist-empty">データ取得エラー</td></tr>';
+  }
+}
+
+function _fmtShort(n) {
+  if (n === null || n === undefined || n === 0) return '—';
+  const abs = Math.abs(n);
+  if (abs >= 100000) return (n < 0 ? '-' : '') + (abs / 10000).toFixed(1) + '万';
+  if (abs >= 10000)  return (n < 0 ? '-' : '') + Math.round(abs / 1000) + '千';
+  return formatYen(n);
+}
+
+function renderIpadPLTable(results, curMonth) {
+  const tbody = document.getElementById('ipad-pl-tbody');
+  const tfoot = document.getElementById('ipad-pl-tfoot');
+  if (!tbody) return;
+
+  let totSales = 0, totCogs = 0, totSga = 0;
+
+  const rows = results.map((res, i) => {
+    const m  = i + 1;
+    const d  = (res && res.status === 'ok' && res.data) ? res.data : null;
+    const sales  = d ? (d.sales           ?? 0) : 0;
+    const cogs   = d ? (d.cogs            ?? 0) : 0;
+    const sga    = d ? (d.sga             ?? 0) : 0;
+    const gross  = d ? (d.grossProfit     ?? sales - cogs) : 0;
+    const profit = d ? (d.operatingProfit ?? gross - sga)  : 0;
+    const margin = sales > 0 ? Math.round(profit / sales * 100) : null;
+
+    totSales += sales; totCogs += cogs; totSga += sga;
+
+    const isCur   = m === curMonth;
+    const rowCls  = isCur ? ' class="pl-cur-month"' : '';
+    const label   = isCur ? `<strong>${m}月 ◀</strong>` : `${m}月`;
+    const mCol    = margin !== null ? `${margin}%` : '—';
+    const profCss = profit < 0
+      ? ' style="color:var(--uz-red)"'
+      : profit > 0 ? ' style="color:var(--uz-green)"' : '';
+
+    return `<tr${rowCls}>
+      <td>${label}</td>
+      <td class="ipad-td-r">${_fmtShort(sales)}</td>
+      <td class="ipad-td-r">${_fmtShort(cogs)}</td>
+      <td class="ipad-td-r">${_fmtShort(gross)}</td>
+      <td class="ipad-td-r">${_fmtShort(sga)}</td>
+      <td class="ipad-td-r"${profCss}>${_fmtShort(profit)}</td>
+      <td class="ipad-td-r">${mCol}</td>
+    </tr>`;
+  });
+
+  tbody.innerHTML = rows.join('');
+
+  if (tfoot) {
+    const totGross  = totSales - totCogs;
+    const totProfit = totGross - totSga;
+    const totMargin = totSales > 0 ? Math.round(totProfit / totSales * 100) : null;
+    const profCss   = totProfit < 0
+      ? ' style="color:var(--uz-red)"'
+      : totProfit > 0 ? ' style="color:var(--uz-green)"' : '';
+    tfoot.innerHTML = `<tr>
+      <td>合計</td>
+      <td class="ipad-td-r">${_fmtShort(totSales)}</td>
+      <td class="ipad-td-r">${_fmtShort(totCogs)}</td>
+      <td class="ipad-td-r">${_fmtShort(totGross)}</td>
+      <td class="ipad-td-r">${_fmtShort(totSga)}</td>
+      <td class="ipad-td-r"${profCss}>${_fmtShort(totProfit)}</td>
+      <td class="ipad-td-r">${totMargin !== null ? totMargin + '%' : '—'}</td>
+    </tr>`;
+  }
+}
+
+let _ipadChart = null;
+
+function renderIpadChart(results) {
+  const canvas = document.getElementById('ipad-pl-chart');
+  if (!canvas || typeof Chart === 'undefined') return;
+
+  const labels     = results.map((_, i) => `${i + 1}月`);
+  const salesData  = results.map(r =>
+    (r && r.status === 'ok' && r.data) ? (r.data.sales ?? 0) : 0
+  );
+  const profitData = results.map(r => {
+    if (!r || r.status !== 'ok' || !r.data) return 0;
+    const d = r.data;
+    return d.operatingProfit ?? ((d.sales ?? 0) - (d.cogs ?? 0) - (d.sga ?? 0));
+  });
+
+  if (_ipadChart) { _ipadChart.destroy(); _ipadChart = null; }
+
+  _ipadChart = new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: '売上',
+          data: salesData,
+          borderColor: '#D4AF37',
+          backgroundColor: 'rgba(212,175,55,0.1)',
+          borderWidth: 2,
+          pointRadius: 4,
+          tension: 0.3,
+          fill: true,
+        },
+        {
+          label: '経常利益',
+          data: profitData,
+          borderColor: '#4CAF80',
+          backgroundColor: 'rgba(76,175,128,0.08)',
+          borderWidth: 2,
+          pointRadius: 4,
+          tension: 0.3,
+          fill: false,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { color: '#A09070', font: { size: 12 } } },
+      },
+      scales: {
+        x: {
+          ticks: { color: '#A09070', font: { size: 11 } },
+          grid:  { color: 'rgba(212,175,55,0.08)' },
+        },
+        y: {
+          ticks: {
+            color: '#A09070',
+            font:  { size: 11 },
+            callback: v => {
+              const abs = Math.abs(v);
+              if (abs >= 100000) return (v < 0 ? '-' : '') + (abs / 10000).toFixed(0) + '万';
+              if (abs >= 10000)  return (v < 0 ? '-' : '') + Math.round(abs / 1000) + '千';
+              return v;
+            },
+          },
+          grid: { color: 'rgba(212,175,55,0.08)' },
+        },
+      },
+    },
+  });
+}
+
+async function loadSidebarRecent() {
+  const container = document.getElementById('sidebar-recent');
+  if (!container) return;
+
+  const now   = new Date();
+  const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+  try {
+    const [salesRes, costRes] = await Promise.all([
+      callGAS('getHistory', { type: 'sales', month }).catch(() => null),
+      callGAS('getHistory', { type: 'cost',  month }).catch(() => null),
+    ]);
+
+    const items = [];
+    if (salesRes && salesRes.status === 'ok' && Array.isArray(salesRes.data)) {
+      salesRes.data.slice(0, 5).forEach(r => items.push({
+        name:   r.service || r.serviceName || '売上',
+        amount: r.taxIncluded ?? r.amount ?? 0,
+        type:   'sales',
+        date:   String(r.date || ''),
+      }));
+    }
+    if (costRes && costRes.status === 'ok' && Array.isArray(costRes.data)) {
+      costRes.data.slice(0, 5).forEach(r => items.push({
+        name:   r.itemName || r.item || 'コスト',
+        amount: r.taxIncluded ?? r.amount ?? 0,
+        type:   'cost',
+        date:   String(r.date || ''),
+      }));
+    }
+
+    items.sort((a, b) => b.date.localeCompare(a.date));
+    const top = items.slice(0, 8);
+
+    if (top.length === 0) {
+      container.innerHTML = '<div class="sidebar-recent__title">今月の記録なし</div>';
+      return;
+    }
+
+    container.innerHTML = `<div class="sidebar-recent__title">最近の入力</div>`
+      + top.map(it => {
+          const md      = it.date.replace(/(\d{4})-(\d{2})-(\d{2})/, '$2/$3');
+          const nm      = escapeHtml(it.name).substring(0, 10);
+          const amtStr  = formatYen(it.amount);
+          const color   = it.type === 'sales' ? 'var(--uz-gold)' : 'var(--uz-red)';
+          return `<div class="sidebar-recent__item">
+            <span class="sidebar-recent__item-name">${md} ${nm}</span>
+            <span class="sidebar-recent__item-amt" style="color:${color}">${amtStr}</span>
+          </div>`;
+        }).join('');
+  } catch {
+    container.innerHTML = '';
+  }
+}

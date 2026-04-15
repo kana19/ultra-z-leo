@@ -896,3 +896,177 @@ body.is-ipad .ipad-uc-wrap {
 body.is-ipad .ipad-uc-left {
   border-right: 1px solid var(--uz-border);
 }
+
+/* ── iPad ホームダッシュボード ───────────────────────────── */
+
+/* ホームページでは既存の左右カラムを非表示 */
+body.is-ipad[data-page="home"] .ipad-col--left,
+body.is-ipad[data-page="home"] .ipad-col--right { display: none; }
+
+/* ダッシュボード自体はモバイルでは非表示 */
+.ipad-home-dashboard { display: none; }
+
+body.is-ipad .ipad-home-dashboard {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 20px 24px 32px;
+  box-sizing: border-box;
+}
+
+/* ダッシュボードヘッダー行 */
+.ipad-dash-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.ipad-year-select {
+  background: var(--uz-surface);
+  color: var(--uz-text);
+  border: 1px solid var(--uz-border2);
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 16px;
+  font-weight: 700;
+  font-family: inherit;
+  outline: none;
+  cursor: pointer;
+}
+
+.ipad-dash-header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+#ipad-tax-timer-compact {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.btn-tax-dl {
+  display: inline-block;
+  background: var(--uz-surface);
+  color: var(--uz-gold);
+  border: 1px solid var(--uz-border2);
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  text-decoration: none;
+}
+.btn-tax-dl:active { opacity: 0.7; }
+
+/* P&L テーブル */
+.ipad-pl-table-wrap {
+  overflow-x: auto;
+  border-radius: 10px;
+  border: 1px solid var(--uz-border);
+}
+
+.ipad-pl-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 560px;
+}
+
+.ipad-pl-table thead th {
+  padding: 11px 14px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--uz-gold);
+  letter-spacing: 0.06em;
+  background: var(--uz-surface);
+  border-bottom: 1px solid var(--uz-border);
+  white-space: nowrap;
+  text-align: left;
+}
+.ipad-pl-table thead th.ipad-td-r { text-align: right; }
+
+.ipad-pl-table tbody td {
+  padding: 10px 14px;
+  font-size: 13px;
+  color: var(--uz-text);
+  background: var(--uz-bg);
+  border-bottom: 1px solid var(--uz-border);
+  white-space: nowrap;
+}
+
+.ipad-pl-table tbody tr:last-child td { border-bottom: none; }
+
+.ipad-pl-table tfoot td {
+  padding: 11px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--uz-text);
+  background: var(--uz-surface);
+  border-top: 1px solid var(--uz-border2);
+  white-space: nowrap;
+}
+
+/* 当月行ハイライト */
+.ipad-pl-table .pl-cur-month td {
+  background: rgba(212,175,55,0.08);
+  color: var(--uz-gold);
+  font-weight: 600;
+}
+
+/* チャートラッパー */
+.ipad-chart-wrap {
+  background: var(--uz-surface);
+  border: 1px solid var(--uz-border);
+  border-radius: 10px;
+  padding: 20px;
+  height: 220px;
+  position: relative;
+}
+
+/* サイドバー最近履歴 */
+.sidebar-recent {
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid var(--uz-border);
+  overflow: hidden;
+}
+
+.sidebar-recent__title {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--uz-text2);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 0 12px 8px;
+}
+
+.sidebar-recent__item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 5px 12px;
+  font-size: 11px;
+  color: var(--uz-text2);
+  border-bottom: 1px solid var(--uz-border);
+}
+
+.sidebar-recent__item:last-child { border-bottom: none; }
+
+.sidebar-recent__item-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-right: 6px;
+}
+
+.sidebar-recent__item-amt {
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+  font-size: 11px;
+}

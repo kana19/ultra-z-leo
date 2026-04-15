@@ -13,7 +13,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/base.css">
 </head>
-<body>
+<body data-page="home">
 
 <!-- iPad サイドバーナビ（スマホでは非表示） -->
 <nav class="nav-sidebar" aria-label="メインナビゲーション">
@@ -38,6 +38,9 @@
     <span class="sidebar-item__icon" aria-hidden="true">⚙️</span>
     <span>設定</span>
   </a>
+
+  <!-- 最近の入力（iPad ホームのみ） -->
+  <div class="sidebar-recent" id="sidebar-recent"></div>
 </nav>
 
 <div class="page-wrapper">
@@ -53,6 +56,46 @@
 
   <!-- メインコンテンツ -->
   <main class="page-body">
+
+    <!-- ── iPad ホームダッシュボード（iPad のみ表示） ─── -->
+    <div class="ipad-home-dashboard" id="ipad-home-dashboard" hidden>
+
+      <!-- ヘッダー行：年選択 / 確定申告タイマー / 税理士用DL -->
+      <div class="ipad-dash-header">
+        <select id="ipad-year-select" class="ipad-year-select" aria-label="年選択"></select>
+        <div class="ipad-dash-header-right">
+          <div id="ipad-tax-timer-compact"></div>
+          <a href="pl.html" class="btn-tax-dl">📥 詳細損益</a>
+        </div>
+      </div>
+
+      <!-- P&L 年間テーブル -->
+      <div class="ipad-pl-table-wrap">
+        <table class="ipad-pl-table" id="ipad-pl-table">
+          <thead>
+            <tr>
+              <th>月</th>
+              <th class="ipad-td-r">売上</th>
+              <th class="ipad-td-r">仕入原価</th>
+              <th class="ipad-td-r">粗利</th>
+              <th class="ipad-td-r">販管費</th>
+              <th class="ipad-td-r">経常利益</th>
+              <th class="ipad-td-r">利益率</th>
+            </tr>
+          </thead>
+          <tbody id="ipad-pl-tbody">
+            <tr><td colspan="7" class="ipad-hist-empty">読み込み中...</td></tr>
+          </tbody>
+          <tfoot id="ipad-pl-tfoot"></tfoot>
+        </table>
+      </div>
+
+      <!-- 折れ線チャート -->
+      <div class="ipad-chart-wrap">
+        <canvas id="ipad-pl-chart"></canvas>
+      </div>
+
+    </div><!-- /ipad-home-dashboard -->
 
     <!-- ── 左カラム（iPad）/ 通常表示（スマホ） ─── -->
     <div class="ipad-col--left">
@@ -198,6 +241,7 @@
 <div id="csv-import-area"      style="display:none"></div>
 <div id="ai-suggestion-area"   style="display:none"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <script src="js/app.js"></script>
 <script src="js/home.js"></script>
 </body>
