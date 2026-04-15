@@ -47,6 +47,7 @@ document.addEventListener('DOMContentLoaded', () => {
   bindTaxButtons();
   bindSubmit();
   selectService(getServiceMaster()[0].code);
+  if (document.body.classList.contains('is-ipad')) _loadIpadSalesHistory();
 });
 
 /* ── 日付初期化 ──────────────────────────────────────────── */
@@ -410,4 +411,36 @@ function escHtml(str) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+/* ── iPad：当月売上履歴テーブル ──────────────────────────── */
+async function _loadIpadSalesHistory() {
+  const tbody = document.getElementById('ipad-sales-tbody');
+  if (!tbody) return;
+
+  const now   = new Date();
+  const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+  try {
+    const res = await callGAS('getHistory', { type: 'sales', month });
+    if (res && res.status === 'ok' && Array.isArray(res.data) && res.data.length > 0) {
+      tbody.innerHTML = res.data.slice(0, 20).map(r => {
+        const date    = String(r.date || '').replace(/(\d{4})-(\d{2})-(\d{2})/, '$2/$3');
+        const service = _ipadEsc(r.service || r.serviceName || r.item || '');
+        const amount  = formatYen(r.taxIncluded ?? r.amount ?? 0);
+        const flag    = r.uncollected ? `<span style="color:var(--uz-gold)">未収</span>` : '—';
+        return `<tr><td>${date}</td><td>${service}</td><td class="ipad-td-r">${amount}</td><td class="ipad-td-c">${flag}</td></tr>`;
+      }).join('');
+    } else {
+      tbody.innerHTML = '<tr><td colspan="4" class="ipad-hist-empty">データなし</td></tr>';
+    }
+  } catch {
+    tbody.innerHTML = '<tr><td colspan="4" class="ipad-hist-empty">—</td></tr>';
+  }
+}
+
+function _ipadEsc(s) {
+  return String(s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }

@@ -55,7 +55,27 @@
   <!-- iPad 2カラムラッパー -->
   <div class="ipad-form-wrap">
 
-  <!-- フォーム本体（左カラム） -->
+  <!-- 左カラム（iPad専用）：当月コスト一覧 -->
+  <div class="ipad-history-panel">
+    <div class="ipad-history-panel__header">当月のコスト入力済み（最大20件）</div>
+    <div class="ipad-hist-scroll">
+      <table class="ipad-hist-table">
+        <thead>
+          <tr>
+            <th>日付</th>
+            <th>科目名</th>
+            <th class="ipad-td-r">税込金額</th>
+            <th class="ipad-td-c">未払</th>
+          </tr>
+        </thead>
+        <tbody id="ipad-cost-tbody">
+          <tr><td colspan="4" class="ipad-hist-empty">読み込み中...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 入力フォーム（iPad右カラム / モバイルはメイン） -->
   <div class="form-body">
 
     <!-- ① 発生日 -->
@@ -168,22 +188,6 @@
     </div>
 
   </div><!-- /form-body -->
-
-  <!-- 右カラム（iPad専用：当月コスト入力済み一覧） -->
-  <div class="ipad-form-right">
-    <div class="ipad-right-panel">
-      <div class="ipad-right-panel__header">当月のコスト入力済み（直近10件）</div>
-      <div id="ipad-cost-recent" class="ipad-right-panel__body">
-        <p class="ipad-placeholder">登録すると<br>ここに一覧が表示されます</p>
-      </div>
-    </div>
-    <div class="ipad-right-panel" style="margin-top:16px;">
-      <div class="ipad-right-panel__header">買掛一覧</div>
-      <div id="ipad-cost-payable" class="ipad-right-panel__body">
-        <p class="ipad-placeholder">買掛データがあれば<br>ここに表示されます</p>
-      </div>
-    </div>
-  </div><!-- /ipad-form-right -->
 
   </div><!-- /ipad-form-wrap -->
 

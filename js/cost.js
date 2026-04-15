@@ -51,6 +51,7 @@ document.addEventListener('DOMContentLoaded', () => {
   bindUnpaidToggle();
   bindSubmit();
   selectDivision('1');
+  if (document.body.classList.contains('is-ipad')) _loadIpadCostHistory();
 });
 
 /* ── GASから最新マスタを取得（バックグラウンド） ─────────── */
@@ -272,4 +273,36 @@ function escHtml(str) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+/* ── iPad：当月コスト履歴テーブル ────────────────────────── */
+async function _loadIpadCostHistory() {
+  const tbody = document.getElementById('ipad-cost-tbody');
+  if (!tbody) return;
+
+  const now   = new Date();
+  const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+  try {
+    const res = await callGAS('getHistory', { type: 'cost', month });
+    if (res && res.status === 'ok' && Array.isArray(res.data) && res.data.length > 0) {
+      tbody.innerHTML = res.data.slice(0, 20).map(r => {
+        const date   = String(r.date || '').replace(/(\d{4})-(\d{2})-(\d{2})/, '$2/$3');
+        const item   = _costIpadEsc(r.item || r.itemName || r.service || '');
+        const amount = formatYen(r.taxIncluded ?? r.amount ?? 0);
+        const flag   = r.unpaid ? `<span style="color:var(--uz-red)">未払</span>` : '—';
+        return `<tr><td>${date}</td><td>${item}</td><td class="ipad-td-r">${amount}</td><td class="ipad-td-c">${flag}</td></tr>`;
+      }).join('');
+    } else {
+      tbody.innerHTML = '<tr><td colspan="4" class="ipad-hist-empty">データなし</td></tr>';
+    }
+  } catch {
+    tbody.innerHTML = '<tr><td colspan="4" class="ipad-hist-empty">—</td></tr>';
+  }
+}
+
+function _costIpadEsc(s) {
+  return String(s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }

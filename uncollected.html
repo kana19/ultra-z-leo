@@ -16,6 +16,31 @@
 </head>
 <body>
 
+<!-- iPad サイドバーナビ（スマホでは非表示） -->
+<nav class="nav-sidebar" aria-label="メインナビゲーション">
+  <div class="nav-sidebar__logo">ウルトラ財務くん</div>
+  <a href="index.html" class="sidebar-item">
+    <span class="sidebar-item__icon" aria-hidden="true">🏠</span>
+    <span>ホーム</span>
+  </a>
+  <a href="sales.html" class="sidebar-item">
+    <span class="sidebar-item__icon" aria-hidden="true">💰</span>
+    <span>売上コスト入力</span>
+  </a>
+  <a href="clockin.html" class="sidebar-item">
+    <span class="sidebar-item__icon" aria-hidden="true">🕐</span>
+    <span>入店記録</span>
+  </a>
+  <a href="history.html" class="sidebar-item">
+    <span class="sidebar-item__icon" aria-hidden="true">📝</span>
+    <span>履歴・修正</span>
+  </a>
+  <a href="settings.html" class="sidebar-item">
+    <span class="sidebar-item__icon" aria-hidden="true">⚙️</span>
+    <span>設定</span>
+  </a>
+</nav>
+
 <div class="page-wrapper">
 
   <!-- サブページヘッダー -->
@@ -25,7 +50,7 @@
     <div style="width:60px;"></div>
   </header>
 
-  <!-- 合計サマリーカード -->
+  <!-- 合計サマリーカード（全幅） -->
   <div class="uc-summary" role="region" aria-label="合計金額">
     <div class="uc-summary-card uc-summary-card--uncollected">
       <div class="uc-summary-card__label">未収合計</div>
@@ -37,35 +62,42 @@
     </div>
   </div>
 
-  <!-- ══════ 未収セクション ══════ -->
-  <div class="uc-section-header">
-    <span class="uc-section-header__title">未収（売上の未入金）</span>
-    <span id="uncollected-badge"
-          class="uc-section-header__badge uc-badge--uncollected"
-          style="display:none;"
-          aria-live="polite">0件</span>
-  </div>
+  <!-- iPad 2カラムラッパー / スマホは縦積み -->
+  <div class="ipad-uc-wrap">
 
-  <div id="uncollected-list"
-       role="region"
-       aria-label="未収一覧">
-    <!-- uncollected.js が描画 -->
-  </div>
+    <!-- 左カラム：未収 -->
+    <div class="ipad-uc-left">
+      <div class="uc-section-header">
+        <span class="uc-section-header__title">未収（売上の未入金）</span>
+        <span id="uncollected-badge"
+              class="uc-section-header__badge uc-badge--uncollected"
+              style="display:none;"
+              aria-live="polite">0件</span>
+      </div>
+      <div id="uncollected-list"
+           role="region"
+           aria-label="未収一覧">
+        <!-- uncollected.js が描画 -->
+      </div>
+    </div><!-- /ipad-uc-left -->
 
-  <!-- ══════ 買掛けセクション ══════ -->
-  <div class="uc-section-header" style="margin-top:8px;">
-    <span class="uc-section-header__title">買掛（コストの未払い）</span>
-    <span id="payable-badge"
-          class="uc-section-header__badge uc-badge--payable"
-          style="display:none;"
-          aria-live="polite">0件</span>
-  </div>
+    <!-- 右カラム：買掛け -->
+    <div class="ipad-uc-right">
+      <div class="uc-section-header" style="margin-top:8px;">
+        <span class="uc-section-header__title">買掛（コストの未払い）</span>
+        <span id="payable-badge"
+              class="uc-section-header__badge uc-badge--payable"
+              style="display:none;"
+              aria-live="polite">0件</span>
+      </div>
+      <div id="payable-list"
+           role="region"
+           aria-label="買掛一覧">
+        <!-- uncollected.js が描画 -->
+      </div>
+    </div><!-- /ipad-uc-right -->
 
-  <div id="payable-list"
-       role="region"
-       aria-label="買掛一覧">
-    <!-- uncollected.js が描画 -->
-  </div>
+  </div><!-- /ipad-uc-wrap -->
 
   <!-- 下部余白 -->
   <div style="height:24px;"></div>
