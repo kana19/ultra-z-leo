@@ -15,22 +15,6 @@
 </head>
 <body>
 
-<!-- ▼▼▼ デバッグ表示（確認後削除） ▼▼▼ -->
-<div id="debug-info" style="position:fixed;top:0;left:0;z-index:9999;background:red;color:white;font-size:11px;padding:4px;max-width:100%;"></div>
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-  const info = {
-    ua: navigator.userAgent.substring(0, 100),
-    w: window.innerWidth,
-    touch: navigator.maxTouchPoints,
-    isIpad: document.body.classList.contains('is-ipad'),
-    bodyClass: document.body.className
-  };
-  document.getElementById('debug-info').textContent = JSON.stringify(info);
-});
-</script>
-<!-- ▲▲▲ デバッグ表示（確認後削除） ▲▲▲ -->
-
 <!-- iPad サイドバーナビ（スマホでは非表示） -->
 <nav class="nav-sidebar" aria-label="メインナビゲーション">
   <div class="nav-sidebar__logo">ウルトラ財務くん</div>
