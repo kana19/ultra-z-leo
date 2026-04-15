@@ -1084,6 +1084,281 @@ body.is-ipad .ipad-btn-secondary {
 
 body.is-ipad .ipad-btn-secondary:active { opacity: 0.7; }
 
+/* ═══════════════════════════════════════════════════════════
+   iPad 売上・コスト入力パネル
+   ═══════════════════════════════════════════════════════════ */
+
+/* モバイルでは非表示 */
+.ipad-sc-wrap { display: none; }
+
+/* iPad時：既存ipad-form-wrapを非表示 */
+body.is-ipad[data-page="sales"] .ipad-form-wrap,
+body.is-ipad[data-page="cost"]  .ipad-form-wrap  { display: none !important; }
+
+/* iPad時：新パネルを2カラムグリッドで表示 */
+body.is-ipad[data-page="sales"] .ipad-sc-wrap,
+body.is-ipad[data-page="cost"]  .ipad-sc-wrap {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  height: calc(100dvh - 56px);
+}
+
+/* ── 左カラム ──────────────────────────────────────────── */
+body.is-ipad .ipad-sc-left {
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--uz-border);
+  overflow: hidden;
+  height: 100%;
+}
+
+/* サマリー3カード */
+body.is-ipad .ipad-summary-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 12px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--uz-border);
+}
+
+body.is-ipad .ipad-summary-card {
+  background: var(--uz-surface);
+  border: 1px solid var(--uz-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+body.is-ipad .ipad-summary-card--amber {
+  border-color: rgba(212,175,55,0.5);
+}
+
+body.is-ipad .ipad-summary-card__label {
+  font-size: 10px;
+  color: var(--uz-text2);
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+body.is-ipad .ipad-summary-card__value {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--uz-text);
+}
+
+body.is-ipad .ipad-summary-card--amber .ipad-summary-card__value {
+  color: var(--uz-gold);
+}
+
+/* フィルタバー */
+body.is-ipad .ipad-filter-bar {
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--uz-border);
+  flex-shrink: 0;
+}
+
+body.is-ipad .ipad-filter-select {
+  flex: 1;
+  background: var(--uz-surface);
+  color: var(--uz-text);
+  border: 1px solid var(--uz-border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  cursor: pointer;
+}
+
+/* 一覧ボディ */
+body.is-ipad .ipad-list-body {
+  overflow-y: auto;
+  flex: 1;
+}
+
+/* 一覧行 */
+body.is-ipad .ipad-list-row {
+  display: flex;
+  align-items: center;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--uz-border);
+  cursor: pointer;
+  gap: 8px;
+}
+
+body.is-ipad .ipad-list-row:hover,
+body.is-ipad .ipad-list-row--selected {
+  background: var(--uz-surface2);
+}
+
+body.is-ipad .ipad-list-row--unpaid {
+  background: var(--uz-amber-bg);
+  border-left: 3px solid var(--uz-gold);
+  padding-left: 11px;
+}
+
+body.is-ipad .ipad-list-row--locked {
+  opacity: 0.5;
+  background: var(--uz-surface);
+  cursor: default;
+}
+
+body.is-ipad .ipad-list-row__date {
+  font-size: 12px;
+  color: var(--uz-text2);
+  white-space: nowrap;
+  width: 42px;
+  flex-shrink: 0;
+}
+
+body.is-ipad .ipad-list-row__name {
+  flex: 1;
+  font-size: 13px;
+  color: var(--uz-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.is-ipad .ipad-list-row__amount {
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--uz-text);
+  white-space: nowrap;
+}
+
+body.is-ipad .ipad-list-badge {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+body.is-ipad .ipad-list-badge--unpaid {
+  background: var(--uz-amber-bg);
+  color: var(--uz-gold);
+  border: 1px solid rgba(212,175,55,0.3);
+}
+
+body.is-ipad .ipad-list-badge--locked {
+  background: rgba(160,144,112,0.12);
+  color: var(--uz-text2);
+}
+
+body.is-ipad .ipad-list-empty {
+  text-align: center;
+  padding: 40px 16px;
+  color: var(--uz-text2);
+  font-size: 13px;
+}
+
+/* ── 右カラム ──────────────────────────────────────────── */
+body.is-ipad .ipad-sc-right {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  height: 100%;
+}
+
+/* タブバー */
+body.is-ipad .ipad-input-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--uz-border);
+  flex-shrink: 0;
+}
+
+body.is-ipad .ipad-tab {
+  flex: 1;
+  padding: 12px;
+  font-size: 14px;
+  font-family: inherit;
+  background: transparent;
+  border: none;
+  color: var(--uz-text2);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+
+body.is-ipad .ipad-tab.ipad-tab--active {
+  color: var(--uz-gold);
+  border-bottom-color: var(--uz-gold);
+  font-weight: 600;
+}
+
+/* タブコンテンツ */
+body.is-ipad .ipad-tab-content {
+  flex: 1;
+  overflow-y: auto;
+  padding-bottom: 70px;
+}
+
+/* 登録ボタンを右カラムに合わせる */
+body.is-ipad[data-page="sales"] .submit-bar,
+body.is-ipad[data-page="cost"]  .submit-bar {
+  left: calc(200px + (100% - 200px) / 2);
+  width: calc((100% - 200px) / 2);
+}
+
+/* ── 未収・買掛け一覧（タブ内） ──────────────────────── */
+body.is-ipad .ipad-unpaid-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--uz-border);
+  background: var(--uz-amber-bg);
+}
+
+body.is-ipad .ipad-unpaid-row__info {
+  flex: 1;
+  min-width: 0;
+}
+
+body.is-ipad .ipad-unpaid-row__date {
+  font-size: 11px;
+  color: var(--uz-text2);
+}
+
+body.is-ipad .ipad-unpaid-row__name {
+  font-size: 13px;
+  color: var(--uz-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.is-ipad .ipad-unpaid-row__amount {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--uz-gold);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+body.is-ipad .ipad-clear-btn {
+  padding: 6px 12px;
+  background: transparent;
+  border: 1px solid var(--uz-gold);
+  border-radius: 6px;
+  color: var(--uz-gold);
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+body.is-ipad .ipad-clear-btn:active { opacity: 0.7; }
+body.is-ipad .ipad-clear-btn:disabled { opacity: 0.4; cursor: default; }
+
 /* サイドバー最近履歴 */
 .sidebar-recent {
   margin-top: auto;

@@ -14,7 +14,7 @@
   <link rel="stylesheet" href="css/base.css">
   <link rel="stylesheet" href="css/forms.css">
 </head>
-<body>
+<body data-page="cost">
 
 <!-- iPad サイドバーナビ（スマホでは非表示） -->
 <nav class="nav-sidebar" aria-label="メインナビゲーション">
@@ -53,7 +53,7 @@
   </header>
 
   <!-- iPad 2カラムラッパー -->
-  <div class="ipad-form-wrap">
+  <div class="ipad-form-wrap" id="ipad-form-main">
 
   <!-- 左カラム（iPad専用）：当月コスト一覧 -->
   <div class="ipad-history-panel">
@@ -190,6 +190,56 @@
   </div><!-- /form-body -->
 
   </div><!-- /ipad-form-wrap -->
+
+  <!-- iPad コスト入力パネル（iPad のみ表示） -->
+  <div class="ipad-sc-wrap" id="ipad-sc-wrap">
+
+    <!-- 左カラム：サマリー + フィルタ + 一覧 -->
+    <div class="ipad-sc-left">
+      <div class="ipad-summary-cards">
+        <div class="ipad-summary-card">
+          <div class="ipad-summary-card__label">当月コスト合計</div>
+          <div class="ipad-summary-card__value" id="ipad-month-total">---</div>
+        </div>
+        <div class="ipad-summary-card ipad-summary-card--amber">
+          <div class="ipad-summary-card__label">未払</div>
+          <div class="ipad-summary-card__value" id="ipad-unpaid-count">---件</div>
+        </div>
+        <div class="ipad-summary-card">
+          <div class="ipad-summary-card__label">今月の入力件数</div>
+          <div class="ipad-summary-card__value" id="ipad-entry-count">---件</div>
+        </div>
+      </div>
+      <div class="ipad-filter-bar">
+        <select id="ipad-filter-month" class="ipad-filter-select" aria-label="表示月"></select>
+        <select id="ipad-filter-state" class="ipad-filter-select" aria-label="状態">
+          <option value="all">すべて</option>
+          <option value="unpaid">未払のみ</option>
+          <option value="locked">ロックのみ</option>
+        </select>
+      </div>
+      <div class="ipad-list-body" id="ipad-cost-list">
+        <div class="ipad-list-empty">読み込み中...</div>
+      </div>
+    </div><!-- /ipad-sc-left -->
+
+    <!-- 右カラム：タブ + フォーム -->
+    <div class="ipad-sc-right">
+      <div class="ipad-input-tabs">
+        <button class="ipad-tab ipad-tab--active" data-tab="add" type="button">コストを追加</button>
+        <button class="ipad-tab" data-tab="payable" type="button">買掛け一覧</button>
+      </div>
+      <div id="ipad-tab-add" class="ipad-tab-content">
+        <!-- form-bodyをJSで移動 -->
+      </div>
+      <div id="ipad-tab-payable" class="ipad-tab-content" style="display:none">
+        <div class="ipad-unpaid-list" id="ipad-payable-list">
+          <div class="ipad-list-empty">読み込み中...</div>
+        </div>
+      </div>
+    </div><!-- /ipad-sc-right -->
+
+  </div><!-- /ipad-sc-wrap -->
 
 </div><!-- /page-wrapper -->
 

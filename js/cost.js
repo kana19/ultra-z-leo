@@ -51,7 +51,7 @@ document.addEventListener('DOMContentLoaded', () => {
   bindUnpaidToggle();
   bindSubmit();
   selectDivision('1');
-  if (document.body.classList.contains('is-ipad')) _loadIpadCostHistory();
+  if (document.body.classList.contains('is-ipad')) initIpadCostPanel();
 });
 
 /* ── GASから最新マスタを取得（バックグラウンド） ─────────── */
@@ -275,34 +275,182 @@ function escHtml(str) {
     .replace(/"/g, '&quot;');
 }
 
-/* ── iPad：当月コスト履歴テーブル ────────────────────────── */
-async function _loadIpadCostHistory() {
-  const tbody = document.getElementById('ipad-cost-tbody');
-  if (!tbody) return;
+/* ── iPad コスト入力パネル ─────────────────────────────────── */
+let _ipadCostHistory = [];
 
-  const now   = new Date();
-  const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+async function initIpadCostPanel() {
+  const wrap = document.getElementById('ipad-sc-wrap');
+  if (!wrap) return;
+
+  // form-body を「コストを追加」タブに移動
+  const tabAdd   = document.getElementById('ipad-tab-add');
+  const formBody = document.querySelector('.form-body');
+  if (tabAdd && formBody) tabAdd.appendChild(formBody);
+
+  // タブ切替バインド
+  document.querySelectorAll('.ipad-tab').forEach(btn => {
+    btn.addEventListener('click', () => _switchIpadCostTab(btn.dataset.tab));
+  });
+
+  const now          = new Date();
+  const currentMonth = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+
+  _initIpadCostFilterMonth(currentMonth);
+  await _loadIpadCostData(currentMonth);
+}
+
+function _initIpadCostFilterMonth(currentMonth) {
+  const sel = document.getElementById('ipad-filter-month');
+  if (!sel) return;
+  const now = new Date();
+  for (let i = 0; i < 12; i++) {
+    const d   = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const val = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    const opt = document.createElement('option');
+    opt.value = val;
+    opt.textContent = `${d.getFullYear()}年${d.getMonth()+1}月`;
+    sel.appendChild(opt);
+  }
+  sel.value = currentMonth;
+  sel.addEventListener('change', () => _loadIpadCostData(sel.value));
+  document.getElementById('ipad-filter-state')
+    ?.addEventListener('change', () => _renderIpadCostList());
+}
+
+async function _loadIpadCostData(month) {
+  const listEl = document.getElementById('ipad-cost-list');
+  if (listEl) listEl.innerHTML = '<div class="ipad-list-empty">読み込み中...</div>';
 
   try {
-    const res = await callGAS('getHistory', { type: 'cost', month });
-    if (res && res.status === 'ok' && Array.isArray(res.data) && res.data.length > 0) {
-      tbody.innerHTML = res.data.slice(0, 20).map(r => {
-        const date   = String(r.date || '').replace(/(\d{4})-(\d{2})-(\d{2})/, '$2/$3');
-        const item   = _costIpadEsc(r.item || r.itemName || r.service || '');
-        const amount = formatYen(r.taxIncluded ?? r.amount ?? 0);
-        const flag   = r.unpaid ? `<span style="color:var(--uz-red)">未払</span>` : '—';
-        return `<tr><td>${date}</td><td>${item}</td><td class="ipad-td-r">${amount}</td><td class="ipad-td-c">${flag}</td></tr>`;
-      }).join('');
-    } else {
-      tbody.innerHTML = '<tr><td colspan="4" class="ipad-hist-empty">データなし</td></tr>';
-    }
+    const histRes = await callGAS('getHistory', { type: 'cost', month }).catch(() => null);
+
+    _ipadCostHistory = (histRes?.status === 'ok' && Array.isArray(histRes.data))
+      ? histRes.data : [];
+
+    const total      = _ipadCostHistory.reduce((s, r) => s + (r.taxIncluded ?? r.amount ?? 0), 0);
+    const unpaidList = _ipadCostHistory.filter(r => r.unpaid || r.uncollected);
+
+    const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+    set('ipad-month-total',  formatYen(total));
+    set('ipad-unpaid-count', unpaidList.length + '件');
+    set('ipad-entry-count',  _ipadCostHistory.length + '件');
+
+    _renderIpadCostList();
+    _renderIpadPayableTab(unpaidList);
   } catch {
-    tbody.innerHTML = '<tr><td colspan="4" class="ipad-hist-empty">—</td></tr>';
+    if (listEl) listEl.innerHTML = '<div class="ipad-list-empty">読み込みエラー</div>';
   }
 }
 
-function _costIpadEsc(s) {
+function _renderIpadCostList() {
+  const listEl   = document.getElementById('ipad-cost-list');
+  const stateVal = document.getElementById('ipad-filter-state')?.value || 'all';
+  if (!listEl) return;
+
+  let rows = _ipadCostHistory;
+  if (stateVal === 'unpaid') rows = rows.filter(r => r.unpaid || r.uncollected);
+  if (stateVal === 'locked') rows = rows.filter(r => r.locked);
+
+  if (rows.length === 0) {
+    listEl.innerHTML = '<div class="ipad-list-empty">データなし</div>';
+    return;
+  }
+
+  listEl.innerHTML = rows.map((r, idx) => {
+    const date     = String(r.date || '').replace(/(\d{4})-(\d{2})-(\d{2})/, '$2/$3');
+    const name     = _costScEsc(r.itemName || r.item || r.service || '—');
+    const amount   = formatYen(r.taxIncluded ?? r.amount ?? 0);
+    const isUnpaid = !!(r.unpaid || r.uncollected);
+    const isLocked = !!r.locked;
+    let cls = 'ipad-list-row';
+    if (isUnpaid) cls += ' ipad-list-row--unpaid';
+    if (isLocked) cls += ' ipad-list-row--locked';
+    const badge = isUnpaid
+      ? `<span class="ipad-list-badge ipad-list-badge--unpaid">未払</span>`
+      : isLocked
+      ? `<span class="ipad-list-badge ipad-list-badge--locked">🔒</span>`
+      : '';
+    return `<div class="${cls}" data-idx="${idx}" onclick="_onIpadCostRowClick(${idx})">
+      <span class="ipad-list-row__date">${date}</span>
+      <span class="ipad-list-row__name">${name}</span>
+      <span class="ipad-list-row__amount">${amount}</span>
+      ${badge}
+    </div>`;
+  }).join('');
+}
+
+function _onIpadCostRowClick(idx) {
+  document.querySelectorAll('#ipad-cost-list .ipad-list-row').forEach(el => {
+    el.classList.toggle('ipad-list-row--selected', parseInt(el.dataset.idx) === idx);
+  });
+  const row = _ipadCostHistory[idx];
+  if (row?.locked) showToast('この行はロックされています', 'info');
+}
+
+function _renderIpadPayableTab(unpaidList) {
+  const listEl = document.getElementById('ipad-payable-list');
+  if (!listEl) return;
+
+  if (unpaidList.length === 0) {
+    listEl.innerHTML = '<div class="ipad-list-empty">買掛データなし</div>';
+    return;
+  }
+
+  listEl.innerHTML = unpaidList.map((r, idx) => {
+    const date   = String(r.date || '').replace(/(\d{4})-(\d{2})-(\d{2})/, '$2/$3');
+    const name   = _costScEsc(r.itemName || r.item || r.service || '—');
+    const amount = formatYen(r.taxIncluded ?? r.amount ?? 0);
+    return `<div class="ipad-unpaid-row" data-idx="${idx}">
+      <div class="ipad-unpaid-row__info">
+        <div class="ipad-unpaid-row__date">${date}</div>
+        <div class="ipad-unpaid-row__name">${name}</div>
+      </div>
+      <span class="ipad-unpaid-row__amount">${amount}</span>
+      <button class="ipad-clear-btn" type="button"
+              onclick="_ipadClearCost(${idx}, this)">消込</button>
+    </div>`;
+  }).join('');
+}
+
+async function _ipadClearCost(idx, btn) {
+  const unpaidList = _ipadCostHistory.filter(r => r.unpaid || r.uncollected);
+  const row = unpaidList[idx];
+  if (!row) return;
+
+  btn.disabled = true;
+  btn.textContent = '...';
+
+  try {
+    const result = await callGAS('reconcile', {
+      sheetName:  'cost',
+      rowIndex:   row.rowIndex ?? row.row ?? null,
+      paidAmount: row.taxIncluded ?? row.amount ?? 0,
+      paidDate:   todayStr(),
+    });
+    if (result.status !== 'ok') throw new Error(result.message || '消込エラー');
+    btn.closest('.ipad-unpaid-row').remove();
+    showToast('消込しました', 'success');
+    const month = document.getElementById('ipad-filter-month')?.value;
+    if (month) _loadIpadCostData(month);
+  } catch (e) {
+    btn.disabled = false;
+    btn.textContent = '消込';
+    showToast('消込に失敗しました：' + e.message, 'error');
+  }
+}
+
+function _switchIpadCostTab(tab) {
+  document.querySelectorAll('.ipad-tab').forEach(btn => {
+    btn.classList.toggle('ipad-tab--active', btn.dataset.tab === tab);
+  });
+  const addEl     = document.getElementById('ipad-tab-add');
+  const payableEl = document.getElementById('ipad-tab-payable');
+  if (addEl)     addEl.style.display     = tab === 'add' ? '' : 'none';
+  if (payableEl) payableEl.style.display = tab === 'add' ? 'none' : '';
+}
+
+function _costScEsc(s) {
   return String(s)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
