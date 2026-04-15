@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>履歴・修正 | ウルトラ財務くん PC版</title>
+<link rel="stylesheet" href="../css/base.css">
+<link rel="stylesheet" href="css/pc.css">
+</head>
+<body class="pc-body">
+<div id="pc-app" class="pc-layout">
+  <main class="pc-main" id="pc-main">
+    <div class="pc-body-inner">
+      <div class="pc-banner" id="pc-approval-banner">承認待ちの申請はありません</div>
+      <div class="pc-filter-row">
+        <label>月
+          <input type="month" id="f-month" class="pc-input">
+        </label>
+        <button id="btn-reload" class="pc-btn pc-btn--ghost">再読み込み</button>
+      </div>
+      <div class="pc-split">
+        <div class="pc-list-pane" id="list-pane">
+          <div class="pc-list-card text-muted" style="text-align:center;">読み込み中...</div>
+        </div>
+        <div class="pc-detail-pane" id="detail-pane">
+          <div class="pc-detail-empty">左の一覧から行を選択してください</div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+<script src="../js/app.js"></script>
+<script src="js/pc-common.js"></script>
+<script src="js/pc-history.js"></script>
+</body>
+</html>

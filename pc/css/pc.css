@@ -1,0 +1,267 @@
+/* ウルトラ財務くん LEO版 PWA — PC専用スタイル */
+
+* { box-sizing: border-box; }
+
+body.pc-body {
+  margin: 0;
+  background: var(--uz-bg);
+  color: var(--uz-text);
+  font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif;
+  font-size: 13px;
+  min-height: 100vh;
+}
+
+.pc-layout {
+  display: flex;
+  min-height: 100vh;
+}
+
+/* ── サイドバー ────────────────────────────── */
+.pc-sidebar {
+  width: 180px;
+  background: var(--uz-surface);
+  border-right: 1px solid var(--uz-border);
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  top: 0; left: 0; bottom: 0;
+  overflow: hidden;
+}
+
+.pc-sidebar__logo {
+  padding: 18px 16px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--uz-gold);
+  border-bottom: 1px solid var(--uz-border);
+  letter-spacing: 0.04em;
+}
+
+.pc-nav { padding: 8px 0; }
+.pc-nav a {
+  display: block;
+  padding: 10px 16px;
+  color: var(--uz-text);
+  text-decoration: none;
+  font-size: 13px;
+  border-left: 3px solid transparent;
+}
+.pc-nav a:hover { background: var(--uz-surface2); }
+.pc-nav a.active {
+  background: var(--uz-surface2);
+  border-left-color: var(--uz-gold);
+  color: var(--uz-gold);
+}
+
+.pc-recent {
+  flex: 1;
+  overflow-y: auto;
+  border-top: 1px solid var(--uz-border);
+  padding: 10px 12px;
+}
+.pc-recent__title {
+  font-size: 11px;
+  color: var(--uz-text2);
+  margin-bottom: 8px;
+  letter-spacing: 0.05em;
+}
+.pc-recent__item {
+  padding: 6px 4px;
+  border-bottom: 1px dashed var(--uz-border);
+  font-size: 11px;
+  line-height: 1.35;
+}
+.pc-recent__row1 { display: flex; justify-content: space-between; color: var(--uz-text2); }
+.pc-recent__row2 { color: var(--uz-text); margin-top: 2px; }
+.pc-recent__tag {
+  display: inline-block;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 10px;
+  margin-right: 4px;
+}
+.pc-recent__tag--sales { background: var(--uz-amber-bg); color: var(--uz-gold); }
+.pc-recent__tag--cost  { background: var(--uz-red-bg);   color: var(--uz-red); }
+
+/* ── メイン ────────────────────────────────── */
+.pc-main {
+  margin-left: 180px;
+  flex: 1;
+  padding: 0;
+}
+.pc-header {
+  padding: 14px 24px;
+  background: var(--uz-surface);
+  border-bottom: 1px solid var(--uz-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.pc-header__title { font-size: 15px; font-weight: 600; color: var(--uz-gold); }
+.pc-header__meta  { font-size: 12px; color: var(--uz-text2); }
+
+.pc-body-inner { padding: 20px 24px 40px; }
+
+/* ── 共通UI ────────────────────────────────── */
+.pc-card {
+  background: var(--uz-surface);
+  border: 1px solid var(--uz-border);
+  border-radius: 6px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.pc-btn {
+  display: inline-block;
+  padding: 6px 14px;
+  background: var(--uz-gold);
+  color: var(--uz-bg);
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.pc-btn:hover { background: var(--uz-gold-lt); }
+.pc-btn--ghost {
+  background: var(--uz-surface2);
+  color: var(--uz-text);
+  border: 1px solid var(--uz-border);
+}
+.pc-btn--danger { background: var(--uz-red); color: #fff; }
+.pc-btn--sm { padding: 3px 8px; font-size: 11px; }
+
+.pc-input, .pc-select {
+  background: var(--uz-surface2);
+  color: var(--uz-text);
+  border: 1px solid var(--uz-border);
+  border-radius: 4px;
+  padding: 5px 8px;
+  font-size: 12px;
+  font-family: inherit;
+}
+.pc-input:focus, .pc-select:focus { outline: 1px solid var(--uz-gold); }
+
+/* ── テーブル ──────────────────────────────── */
+.pc-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.pc-table th, .pc-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--uz-border);
+  text-align: left;
+  vertical-align: middle;
+}
+.pc-table th {
+  background: var(--uz-surface2);
+  color: var(--uz-text2);
+  font-weight: 600;
+  font-size: 11px;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+.pc-table td.num, .pc-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.pc-table tr:hover td { background: rgba(212,175,55,0.05); }
+.pc-table tr.row--unpaid td { background: var(--uz-amber-bg); }
+.pc-table tr.row--locked td { color: var(--uz-text3); }
+
+/* ── ホームP&L ────────────────────────────── */
+.pl-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+.pl-table th, .pl-table td {
+  border: 1px solid var(--uz-border);
+  padding: 4px 6px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.pl-table th:first-child, .pl-table td:first-child {
+  text-align: left;
+  font-weight: 600;
+  background: var(--uz-surface2);
+  position: sticky;
+  left: 0;
+  z-index: 1;
+}
+.pl-table th { background: var(--uz-surface2); color: var(--uz-text2); }
+.pl-table td.col-current { background: var(--uz-amber-bg); color: var(--uz-gold); font-weight: 600; }
+.pl-table td.col-total   { background: var(--uz-surface2); font-weight: 700; }
+.pl-table tr.pl-row--section td { color: var(--uz-gold); cursor: pointer; background: rgba(212,175,55,0.08); }
+.pl-table tr.pl-row--section td:first-child::before { content: '▶ '; display: inline-block; transition: transform 0.15s; }
+.pl-table tr.pl-row--section.open td:first-child::before { transform: rotate(90deg); }
+.pl-table tr.pl-row--sub td:first-child { padding-left: 24px; color: var(--uz-text); font-weight: 400; background: var(--uz-surface); }
+.pl-table tr.pl-row--sum td { color: var(--uz-green); font-weight: 700; background: rgba(76,175,128,0.06); }
+.pl-table tr.pl-row--sum.neg td { color: var(--uz-red); background: rgba(224,80,80,0.06); }
+
+.pl-chart-wrap { margin-top: 20px; background: var(--uz-surface); padding: 16px; border-radius: 6px; border: 1px solid var(--uz-border); height: 320px; }
+
+/* ── タブ ──────────────────────────────────── */
+.pc-tabs { display: flex; gap: 2px; margin-bottom: 12px; border-bottom: 1px solid var(--uz-border); }
+.pc-tab {
+  padding: 8px 20px;
+  background: transparent;
+  color: var(--uz-text2);
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  border-bottom: 2px solid transparent;
+}
+.pc-tab.active { color: var(--uz-gold); border-bottom-color: var(--uz-gold); }
+
+/* ── フィルタ行 ─────────────────────────────── */
+.pc-filter-row { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
+.pc-filter-row label { font-size: 12px; color: var(--uz-text2); display: flex; align-items: center; gap: 6px; }
+
+/* ── 履歴・修正 2ペイン ──────────────────────── */
+.pc-split { display: grid; grid-template-columns: 360px 1fr; gap: 16px; }
+.pc-list-pane { background: var(--uz-surface); border: 1px solid var(--uz-border); border-radius: 6px; max-height: calc(100vh - 180px); overflow-y: auto; }
+.pc-list-card { padding: 10px 14px; border-bottom: 1px solid var(--uz-border); cursor: pointer; }
+.pc-list-card:hover { background: var(--uz-surface2); }
+.pc-list-card.active { background: var(--uz-surface2); border-left: 3px solid var(--uz-gold); }
+.pc-list-card__r1 { display: flex; justify-content: space-between; font-size: 11px; color: var(--uz-text2); }
+.pc-list-card__r2 { margin-top: 3px; color: var(--uz-text); font-size: 13px; }
+.pc-list-card__tag { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 10px; margin-right: 6px; }
+.pc-list-card__tag--sales { background: var(--uz-amber-bg); color: var(--uz-gold); }
+.pc-list-card__tag--cost  { background: var(--uz-red-bg);   color: var(--uz-red); }
+.pc-list-card__tag--attend{ background: var(--uz-info-bg);  color: var(--uz-info); }
+
+.pc-detail-pane { background: var(--uz-surface); border: 1px solid var(--uz-border); border-radius: 6px; padding: 20px; min-height: 400px; }
+.pc-detail-empty { color: var(--uz-text2); text-align: center; padding: 80px 0; }
+
+.pc-banner {
+  padding: 10px 14px;
+  background: var(--uz-amber-bg);
+  border: 1px solid var(--uz-gold-dk);
+  border-radius: 4px;
+  margin-bottom: 14px;
+  color: var(--uz-gold);
+  font-size: 12px;
+}
+.pc-banner--muted { background: var(--uz-surface2); color: var(--uz-text2); border-color: var(--uz-border); }
+
+/* ── フォーム行 ─────────────────────────────── */
+.pc-form-row { display: flex; gap: 12px; align-items: center; margin-bottom: 10px; }
+.pc-form-row label { min-width: 110px; font-size: 12px; color: var(--uz-text2); }
+.pc-form-row .pc-input, .pc-form-row .pc-select { flex: 1; max-width: 320px; }
+
+/* ── 設定セクション ────────────────────────── */
+.pc-section-title {
+  font-size: 13px;
+  color: var(--uz-gold);
+  margin: 20px 0 10px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--uz-border);
+}
+
+/* ── 汎用 ─────────────────────────────────── */
+.text-muted { color: var(--uz-text2); }
+.text-right { text-align: right; }
+.mt-8  { margin-top: 8px; }
+.mt-16 { margin-top: 16px; }
+.hidden { display: none !important; }

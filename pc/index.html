@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>ホーム | ウルトラ財務くん PC版</title>
+<link rel="stylesheet" href="../css/base.css">
+<link rel="stylesheet" href="css/pc.css">
+</head>
+<body class="pc-body">
+<div id="pc-app" class="pc-layout">
+  <main class="pc-main" id="pc-main">
+    <div class="pc-body-inner">
+      <div class="pc-card">
+        <div class="pc-filter-row">
+          <label>年
+            <select id="pc-year" class="pc-select"></select>
+          </label>
+          <span class="text-muted" id="pc-status"></span>
+        </div>
+        <div style="overflow-x:auto;">
+          <table class="pl-table" id="pl-table">
+            <thead><tr id="pl-head"></tr></thead>
+            <tbody id="pl-body"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="pl-chart-wrap">
+        <canvas id="pl-chart"></canvas>
+      </div>
+    </div>
+  </main>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="../js/app.js"></script>
+<script src="js/pc-common.js"></script>
+<script src="js/pc-home.js"></script>
+</body>
+</html>

@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>設定 | ウルトラ財務くん PC版</title>
+<link rel="stylesheet" href="../css/base.css">
+<link rel="stylesheet" href="css/pc.css">
+</head>
+<body class="pc-body">
+<div id="pc-app" class="pc-layout">
+  <main class="pc-main" id="pc-main">
+    <div class="pc-body-inner">
+
+      <div class="pc-card">
+        <div class="pc-section-title">店舗情報</div>
+        <div class="pc-form-row"><label>店舗名</label><input type="text" id="s-store" class="pc-input"></div>
+        <div class="pc-form-row"><label>オーナー名</label><input type="text" id="s-owner" class="pc-input"></div>
+        <div style="margin-top:10px;"><button id="btn-save-store" class="pc-btn">店舗情報を保存</button></div>
+      </div>
+
+      <div class="pc-card">
+        <div class="pc-section-title">サービスマスタ</div>
+        <table class="pc-table" id="svc-table">
+          <thead><tr><th>コード</th><th>サービス名</th><th>税率</th></tr></thead>
+          <tbody id="svc-body"></tbody>
+        </table>
+      </div>
+
+      <div class="pc-card">
+        <div class="pc-section-title">科目マスタ</div>
+        <table class="pc-table" id="cm-table">
+          <thead><tr>
+            <th style="width:80px;">コード</th>
+            <th style="width:80px;">区分</th>
+            <th>科目名</th>
+            <th style="width:80px;">税率</th>
+            <th style="width:80px;">種別</th>
+          </tr></thead>
+          <tbody id="cm-body"></tbody>
+        </table>
+        <div style="margin-top:10px;"><button id="btn-save-cm" class="pc-btn">科目マスタを保存</button></div>
+      </div>
+
+      <div class="pc-card">
+        <div class="pc-section-title">スタッフマスタ</div>
+        <table class="pc-table" id="staff-table">
+          <thead><tr><th>ID</th><th>氏名</th><th>備考（オーナーのみ）</th></tr></thead>
+          <tbody id="staff-body"></tbody>
+        </table>
+      </div>
+
+    </div>
+  </main>
+</div>
+<script src="../js/app.js"></script>
+<script src="js/pc-common.js"></script>
+<script src="js/pc-settings.js"></script>
+</body>
+</html>
