@@ -5,6 +5,17 @@
 
 'use strict';
 
+// デバイス判定・bodyクラス付与
+(function() {
+  const ua = navigator.userAgent;
+  const isIPad = /iPad/.test(ua) ||
+    (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+  const isPC = !isIPad && window.innerWidth >= 1025;
+
+  if (isIPad) document.body.classList.add('is-ipad');
+  if (isPC)   document.body.classList.add('is-pc');
+})();
+
 /* ── GAS設定 ─────────────────────────────────────────────── */
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbwy8WQIb-WYK-FDq2CKcjvJ8BSkEk8Ew0K-b0s05qoyi9Q7-quaatgI9L_vkU7W3Xd93g/exec';
 
