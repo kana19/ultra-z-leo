@@ -60,40 +60,69 @@
     <!-- ── iPad ホームダッシュボード（iPad のみ表示） ─── -->
     <div class="ipad-home-dashboard" id="ipad-home-dashboard" hidden>
 
-      <!-- ヘッダー行：年選択 / 確定申告タイマー / 税理士用DL -->
-      <div class="ipad-dash-header">
-        <select id="ipad-year-select" class="ipad-year-select" aria-label="年選択"></select>
-        <div class="ipad-dash-header-right">
-          <div id="ipad-tax-timer-compact"></div>
-          <a href="pl.html" class="btn-tax-dl">📥 詳細損益</a>
+      <!-- 左カラム（2/3幅） -->
+      <div class="ipad-home-left">
+
+        <!-- KPI カード（横並び） -->
+        <div class="ipad-home-cards">
+          <div class="ipad-kpi-card">
+            <div class="ipad-kpi-card__label">今月の売上</div>
+            <div class="ipad-kpi-card__value" id="ipad-sales-val">---</div>
+          </div>
+          <div class="ipad-kpi-card ipad-kpi-card--profit">
+            <div class="ipad-kpi-card__label">経常利益</div>
+            <div class="ipad-kpi-card__value" id="ipad-profit-val">---</div>
+          </div>
         </div>
-      </div>
 
-      <!-- P&L 年間テーブル -->
-      <div class="ipad-pl-table-wrap">
-        <table class="ipad-pl-table" id="ipad-pl-table">
-          <thead>
-            <tr>
-              <th>月</th>
-              <th class="ipad-td-r">売上</th>
-              <th class="ipad-td-r">仕入原価</th>
-              <th class="ipad-td-r">粗利</th>
-              <th class="ipad-td-r">販管費</th>
-              <th class="ipad-td-r">経常利益</th>
-              <th class="ipad-td-r">利益率</th>
-            </tr>
-          </thead>
-          <tbody id="ipad-pl-tbody">
-            <tr><td colspan="7" class="ipad-hist-empty">読み込み中...</td></tr>
-          </tbody>
-          <tfoot id="ipad-pl-tfoot"></tfoot>
-        </table>
-      </div>
+        <!-- 月次棒グラフ -->
+        <div class="ipad-chart-wrap">
+          <div class="ipad-chart-loading" id="ipad-chart-loading">データを読み込み中...</div>
+          <canvas id="ipad-pl-chart"></canvas>
+        </div>
 
-      <!-- 折れ線チャート -->
-      <div class="ipad-chart-wrap">
-        <canvas id="ipad-pl-chart"></canvas>
-      </div>
+        <!-- 損益5行テーブル -->
+        <div class="ipad-pl-section">
+          <div class="ipad-pl-header">
+            <span class="ipad-pl-header__title">損益明細</span>
+            <select id="ipad-month-select" class="ipad-month-select" aria-label="表示月"></select>
+          </div>
+          <table class="ipad-pl-table" id="ipad-pl-table">
+            <tbody>
+              <tr><td>売上</td><td id="ipad-pl-sales">¥—</td></tr>
+              <tr><td>仕入原価</td><td id="ipad-pl-cogs">¥—</td></tr>
+              <tr class="row-gross"><td>粗利</td><td id="ipad-pl-gross">¥—</td></tr>
+              <tr><td>販管費</td><td id="ipad-pl-sga">¥—</td></tr>
+              <tr class="row-profit"><td>経常利益</td><td id="ipad-pl-profit">¥—</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+      </div><!-- /ipad-home-left -->
+
+      <!-- 右カラム（1/3幅） -->
+      <div class="ipad-home-right">
+
+        <!-- 年度累計カード -->
+        <div class="ipad-annual-card">
+          <div class="ipad-annual-card__label">年度累計売上</div>
+          <div class="ipad-annual-card__value" id="ipad-annual-sales">---</div>
+        </div>
+        <div class="ipad-annual-card ipad-annual-card--profit">
+          <div class="ipad-annual-card__label">年度累計経常利益</div>
+          <div class="ipad-annual-card__value" id="ipad-annual-profit">---</div>
+        </div>
+
+        <!-- 確定申告タイマー（期間中のみ） -->
+        <div id="ipad-tax-timer-right"></div>
+
+        <!-- DL・コピーボタン -->
+        <div class="ipad-home-actions">
+          <button class="ipad-btn-secondary" id="ipad-btn-copy" type="button">📋 コピー</button>
+          <button class="ipad-btn-secondary" id="ipad-btn-dl"   type="button">⬇️ DL</button>
+        </div>
+
+      </div><!-- /ipad-home-right -->
 
     </div><!-- /ipad-home-dashboard -->
 

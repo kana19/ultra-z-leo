@@ -908,125 +908,181 @@ body.is-ipad[data-page="home"] .ipad-col--right { display: none; }
 
 body.is-ipad .ipad-home-dashboard {
   grid-column: 1 / -1;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 2fr 1fr;
   gap: 20px;
   padding: 20px 24px 32px;
   box-sizing: border-box;
+  align-items: start;
 }
 
-/* ダッシュボードヘッダー行 */
-.ipad-dash-header {
+/* 左カラム */
+body.is-ipad .ipad-home-left {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* 右カラム */
+body.is-ipad .ipad-home-right {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* ── iPad版ホーム固有 ──────────────────────────── */
+body.is-ipad .ipad-home-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 0;
+}
+
+body.is-ipad .ipad-kpi-card {
+  background: var(--uz-surface);
+  border: 1px solid var(--uz-border);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+body.is-ipad .ipad-kpi-card__label {
+  font-size: 12px;
+  color: var(--uz-text2);
+  margin-bottom: 6px;
+}
+
+body.is-ipad .ipad-kpi-card__value {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--uz-gold);
+}
+
+body.is-ipad .ipad-chart-wrap {
+  background: var(--uz-surface);
+  border: 1px solid var(--uz-border);
+  border-radius: 8px;
+  padding: 16px;
+  height: 200px;
+  position: relative;
+}
+
+body.is-ipad .ipad-chart-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  color: var(--uz-text2);
+  pointer-events: none;
+}
+
+body.is-ipad .ipad-pl-section {
+  background: var(--uz-surface);
+  border: 1px solid var(--uz-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+body.is-ipad .ipad-pl-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--uz-border);
 }
 
-.ipad-year-select {
-  background: var(--uz-surface);
-  color: var(--uz-text);
-  border: 1px solid var(--uz-border2);
-  border-radius: 8px;
-  padding: 8px 14px;
-  font-size: 16px;
+body.is-ipad .ipad-pl-header__title {
+  font-size: 12px;
   font-weight: 700;
+  color: var(--uz-text2);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+body.is-ipad .ipad-month-select {
+  background: var(--uz-bg);
+  color: var(--uz-text);
+  border: 1px solid var(--uz-border);
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 13px;
   font-family: inherit;
   outline: none;
   cursor: pointer;
 }
 
-.ipad-dash-header-right {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-#ipad-tax-timer-compact {
-  font-size: 13px;
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.btn-tax-dl {
-  display: inline-block;
-  background: var(--uz-surface);
-  color: var(--uz-gold);
-  border: 1px solid var(--uz-border2);
-  border-radius: 8px;
-  padding: 8px 16px;
-  font-size: 14px;
-  font-family: inherit;
-  cursor: pointer;
-  white-space: nowrap;
-  text-decoration: none;
-}
-.btn-tax-dl:active { opacity: 0.7; }
-
-/* P&L テーブル */
-.ipad-pl-table-wrap {
-  overflow-x: auto;
-  border-radius: 10px;
-  border: 1px solid var(--uz-border);
-}
-
-.ipad-pl-table {
+body.is-ipad .ipad-pl-table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 560px;
 }
 
-.ipad-pl-table thead th {
-  padding: 11px 14px;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--uz-gold);
-  letter-spacing: 0.06em;
-  background: var(--uz-surface);
+body.is-ipad .ipad-pl-table td {
+  padding: 10px 12px;
   border-bottom: 1px solid var(--uz-border);
-  white-space: nowrap;
-  text-align: left;
-}
-.ipad-pl-table thead th.ipad-td-r { text-align: right; }
-
-.ipad-pl-table tbody td {
-  padding: 10px 14px;
-  font-size: 13px;
   color: var(--uz-text);
-  background: var(--uz-bg);
-  border-bottom: 1px solid var(--uz-border);
-  white-space: nowrap;
+  font-size: 14px;
 }
 
-.ipad-pl-table tbody tr:last-child td { border-bottom: none; }
-
-.ipad-pl-table tfoot td {
-  padding: 11px 14px;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--uz-text);
-  background: var(--uz-surface);
-  border-top: 1px solid var(--uz-border2);
-  white-space: nowrap;
-}
-
-/* 当月行ハイライト */
-.ipad-pl-table .pl-cur-month td {
-  background: rgba(212,175,55,0.08);
-  color: var(--uz-gold);
+body.is-ipad .ipad-pl-table td:last-child {
+  text-align: right;
   font-weight: 600;
 }
 
-/* チャートラッパー */
-.ipad-chart-wrap {
+body.is-ipad .ipad-pl-table tr:last-child td { border-bottom: none; }
+
+body.is-ipad .ipad-pl-table .row-gross,
+body.is-ipad .ipad-pl-table .row-profit {
+  background: var(--uz-green-bg);
+}
+
+body.is-ipad .ipad-pl-table .row-profit td:last-child {
+  color: var(--uz-green);
+}
+
+body.is-ipad .ipad-annual-card {
   background: var(--uz-surface);
   border: 1px solid var(--uz-border);
-  border-radius: 10px;
-  padding: 20px;
-  height: 220px;
-  position: relative;
+  border-radius: 8px;
+  padding: 14px;
+  margin-bottom: 12px;
 }
+
+body.is-ipad .ipad-annual-card__label {
+  font-size: 11px;
+  color: var(--uz-text2);
+  margin-bottom: 4px;
+}
+
+body.is-ipad .ipad-annual-card__value {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--uz-text);
+}
+
+body.is-ipad #ipad-tax-timer-right {
+  margin-bottom: 12px;
+}
+
+body.is-ipad .ipad-home-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+body.is-ipad .ipad-btn-secondary {
+  flex: 1;
+  padding: 10px;
+  background: transparent;
+  border: 1px solid var(--uz-border);
+  border-radius: 6px;
+  color: var(--uz-text2);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+body.is-ipad .ipad-btn-secondary:active { opacity: 0.7; }
 
 /* サイドバー最近履歴 */
 .sidebar-recent {
