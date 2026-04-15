@@ -5,7 +5,7 @@
 
 'use strict';
 
-// デバイス判定・bodyクラス付与
+// デバイス判定・bodyクラス付与（即時実行）
 (function() {
   const ua = navigator.userAgent;
   const isIPad = /iPad/.test(ua) ||
@@ -15,6 +15,18 @@
   if (isIPad) document.body.classList.add('is-ipad');
   if (isPC)   document.body.classList.add('is-pc');
 })();
+
+// DOMContentLoaded後にも付与（Safariサイドバーモード対策）
+document.addEventListener('DOMContentLoaded', function() {
+  const ua = navigator.userAgent;
+  const isIPad = /iPad/.test(ua) ||
+    (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+
+  if (isIPad) {
+    document.body.classList.add('is-ipad');
+    document.documentElement.classList.add('is-ipad');
+  }
+});
 
 /* ── GAS設定 ─────────────────────────────────────────────── */
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbwy8WQIb-WYK-FDq2CKcjvJ8BSkEk8Ew0K-b0s05qoyi9Q7-quaatgI9L_vkU7W3Xd93g/exec';
