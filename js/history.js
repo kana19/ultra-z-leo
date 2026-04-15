@@ -40,6 +40,7 @@ document.addEventListener('DOMContentLoaded', () => {
   bindEditPanel();
   bindListClicks(); // 委譲リスナーは1回だけ登録
   loadAll();
+  updateIpadApprovalBanner();
 });
 
 /* ── タブ切り替え ────────────────────────────────────────── */
@@ -194,14 +195,26 @@ function bindListClicks() {
     const btn = e.target.closest('.hist-edit-btn[data-scope="sc"]');
     if (!btn) return;
     const idx = parseInt(btn.dataset.idx, 10);
-    if (!isNaN(idx) && editableItems[idx]) openEditForm(editableItems[idx]);
+    if (!isNaN(idx) && editableItems[idx]) {
+      if (document.body.classList.contains('is-ipad')) {
+        renderIpadRightPanel(editableItems[idx]);
+      } else {
+        openEditForm(editableItems[idx]);
+      }
+    }
   });
 
   document.getElementById('attendance-list')?.addEventListener('click', e => {
     const btn = e.target.closest('.hist-edit-btn[data-scope="at"]');
     if (!btn) return;
     const idx = parseInt(btn.dataset.idx, 10);
-    if (!isNaN(idx) && attendItems[idx]) openEditForm(attendItems[idx]);
+    if (!isNaN(idx) && attendItems[idx]) {
+      if (document.body.classList.contains('is-ipad')) {
+        renderIpadRightPanel(attendItems[idx]);
+      } else {
+        openEditForm(attendItems[idx]);
+      }
+    }
   });
 }
 
@@ -685,4 +698,199 @@ function escHtml(str) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+/* ══════════════════════════════════════════════════════════
+   iPad 右パネル（4状態）
+   ══════════════════════════════════════════════════════════ */
+
+let _ipadSelectedRecord = null;
+
+/**
+ * ロック状態 + localStorage申請状態を合わせて返す
+ * @returns {'editable'|'grace'|'locked'|'pending'}
+ */
+function getLockState(record) {
+  const ls = getLockStatus(record.date);
+  if (!ls.locked) {
+    return ls.grace ? 'grace' : 'editable';
+  }
+  const key = `lock_pending_${record.type}_${record.rowIndex}`;
+  const pending = localStorage.getItem(key);
+  if (pending === 'pending' || pending === 'approved') return 'pending';
+  return 'locked';
+}
+
+function renderIpadRightPanel(record) {
+  const panel = document.querySelector('.ipad-right-panel');
+  if (!panel) return;
+
+  _ipadSelectedRecord = record;
+
+  const state = getLockState(record);
+  const ls    = getLockStatus(record.date);
+  const detail = _buildIpadRecordDetail(record);
+
+  let actionHTML = '';
+  if (state === 'editable') {
+    actionHTML = `
+      <button class="ipad-right-action-btn ipad-right-action-btn--edit"
+              type="button" id="ipad-right-edit-btn">修正する</button>`;
+  } else if (state === 'grace') {
+    actionHTML = `
+      <p class="form-hint" style="margin-bottom:12px;">猶予期間中（期限まであと${ls.daysLeft}日）</p>
+      <button class="ipad-right-action-btn ipad-right-action-btn--edit"
+              type="button" id="ipad-right-edit-btn">修正する</button>`;
+  } else if (state === 'locked') {
+    actionHTML = `
+      <div class="ipad-locked-note">🔒 このレコードはロック済みです</div>
+      <button class="ipad-right-action-btn ipad-right-action-btn--unlock"
+              type="button" id="ipad-right-unlock-btn">ロック解除を申請</button>`;
+  } else {
+    // pending
+    actionHTML = `
+      <span class="ipad-pending-badge">申請中</span>
+      <p class="form-hint" style="margin-bottom:12px;margin-top:8px;">
+        解除申請が送信されています。承認後に修正できます。
+      </p>
+      <div class="ipad-approve-btns">
+        <button class="ipad-right-action-btn ipad-right-action-btn--approve"
+                type="button" id="ipad-right-approve-btn">承認する</button>
+        <button class="ipad-right-action-btn ipad-right-action-btn--reject"
+                type="button" id="ipad-right-reject-btn">却下</button>
+      </div>`;
+  }
+
+  panel.innerHTML = `
+    <div class="ipad-right-panel__header">操作パネル</div>
+    ${detail}
+    ${actionHTML}
+  `;
+
+  // ボタンイベント
+  document.getElementById('ipad-right-edit-btn')?.addEventListener('click', () => {
+    openEditForm(_ipadSelectedRecord);
+  });
+  document.getElementById('ipad-right-unlock-btn')?.addEventListener('click', () => {
+    requestUnlock(_ipadSelectedRecord.type, _ipadSelectedRecord.rowIndex);
+    renderIpadRightPanel(_ipadSelectedRecord);
+  });
+  document.getElementById('ipad-right-approve-btn')?.addEventListener('click', () => {
+    approveUnlock(_ipadSelectedRecord.type, _ipadSelectedRecord.rowIndex);
+    renderIpadRightPanel(_ipadSelectedRecord);
+  });
+  document.getElementById('ipad-right-reject-btn')?.addEventListener('click', () => {
+    rejectUnlock(_ipadSelectedRecord.type, _ipadSelectedRecord.rowIndex);
+    renderIpadRightPanel(_ipadSelectedRecord);
+  });
+}
+
+function _buildIpadRecordDetail(record) {
+  let rows = '';
+  if (record.type === 'sales') {
+    rows = `
+      <div class="ipad-record-detail__row">
+        <span class="ipad-record-detail__key">種別</span>
+        <span class="ipad-record-detail__val">売上</span>
+      </div>
+      <div class="ipad-record-detail__row">
+        <span class="ipad-record-detail__key">日付</span>
+        <span class="ipad-record-detail__val">${escHtml(record.date || '—')}</span>
+      </div>
+      <div class="ipad-record-detail__row">
+        <span class="ipad-record-detail__key">サービス</span>
+        <span class="ipad-record-detail__val">${escHtml(record.itemName || '—')}</span>
+      </div>
+      <div class="ipad-record-detail__row">
+        <span class="ipad-record-detail__key">税込金額</span>
+        <span class="ipad-record-detail__val" style="color:var(--uz-gold);">${formatYen(record.amount)}</span>
+      </div>
+      ${record.memo ? `<div class="ipad-record-detail__row">
+        <span class="ipad-record-detail__key">メモ</span>
+        <span class="ipad-record-detail__val">${escHtml(record.memo)}</span>
+      </div>` : ''}`;
+  } else if (record.type === 'cost') {
+    rows = `
+      <div class="ipad-record-detail__row">
+        <span class="ipad-record-detail__key">種別</span>
+        <span class="ipad-record-detail__val">コスト</span>
+      </div>
+      <div class="ipad-record-detail__row">
+        <span class="ipad-record-detail__key">日付</span>
+        <span class="ipad-record-detail__val">${escHtml(record.date || '—')}</span>
+      </div>
+      <div class="ipad-record-detail__row">
+        <span class="ipad-record-detail__key">科目</span>
+        <span class="ipad-record-detail__val">${escHtml(record.itemName || '—')}</span>
+      </div>
+      <div class="ipad-record-detail__row">
+        <span class="ipad-record-detail__key">税込金額</span>
+        <span class="ipad-record-detail__val" style="color:var(--uz-red);">${formatYen(record.amount)}</span>
+      </div>
+      ${record.memo ? `<div class="ipad-record-detail__row">
+        <span class="ipad-record-detail__key">メモ</span>
+        <span class="ipad-record-detail__val">${escHtml(record.memo)}</span>
+      </div>` : ''}`;
+  } else {
+    // attendance
+    rows = `
+      <div class="ipad-record-detail__row">
+        <span class="ipad-record-detail__key">種別</span>
+        <span class="ipad-record-detail__val">入店記録</span>
+      </div>
+      <div class="ipad-record-detail__row">
+        <span class="ipad-record-detail__key">日付</span>
+        <span class="ipad-record-detail__val">${escHtml(record.date || '—')}</span>
+      </div>
+      <div class="ipad-record-detail__row">
+        <span class="ipad-record-detail__key">スタッフ</span>
+        <span class="ipad-record-detail__val">${escHtml(record.staffName || '—')}</span>
+      </div>
+      <div class="ipad-record-detail__row">
+        <span class="ipad-record-detail__key">入店</span>
+        <span class="ipad-record-detail__val">${escHtml(parseTimeStr(record.clockIn) || '—')}</span>
+      </div>
+      <div class="ipad-record-detail__row">
+        <span class="ipad-record-detail__key">退店</span>
+        <span class="ipad-record-detail__val">${escHtml(parseTimeStr(record.clockOut) || '未記録')}</span>
+      </div>`;
+  }
+  return `<div class="ipad-record-detail">${rows}</div>`;
+}
+
+function requestUnlock(type, rowIndex) {
+  localStorage.setItem(`lock_pending_${type}_${rowIndex}`, 'pending');
+  showToast('ロック解除を申請しました', 'success');
+  updateIpadApprovalBanner();
+}
+
+function approveUnlock(type, rowIndex) {
+  localStorage.setItem(`lock_pending_${type}_${rowIndex}`, 'approved');
+  showToast('申請を承認しました', 'success');
+  updateIpadApprovalBanner();
+}
+
+function rejectUnlock(type, rowIndex) {
+  localStorage.removeItem(`lock_pending_${type}_${rowIndex}`);
+  showToast('申請を却下しました', 'success');
+  updateIpadApprovalBanner();
+}
+
+function updateIpadApprovalBanner() {
+  const banner = document.getElementById('approval-banner');
+  if (!banner) return;
+  const pendingKeys = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key?.startsWith('lock_pending_') && localStorage.getItem(key) === 'pending') {
+      pendingKeys.push(key);
+    }
+  }
+  if (pendingKeys.length > 0) {
+    const detail = document.getElementById('approval-banner__detail');
+    if (detail) detail.textContent = `${pendingKeys.length}件の解除申請があります`;
+    banner.style.display = '';
+  } else {
+    banner.style.display = 'none';
+  }
 }

@@ -447,3 +447,39 @@ function escHtml(str) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
 }
+
+/* ══════════════════════════════════════════════════════════
+   iPad 設定アコーディオン
+   ══════════════════════════════════════════════════════════ */
+
+/**
+ * 設定セクションアコーディオン切り替え
+ * @param {HTMLButtonElement} btn - .settings-accordion-btn
+ */
+function toggleSettingsAccordion(btn) {
+  // iPad以外はアコーディオン不使用（非iPadでは常時展開）
+  if (!document.body.classList.contains('is-ipad')) return;
+
+  const bodyId = btn.getAttribute('aria-controls');
+  const bodyEl = document.getElementById(bodyId);
+  if (!bodyEl) return;
+
+  const isExpanded = btn.getAttribute('aria-expanded') === 'true';
+  btn.setAttribute('aria-expanded', String(!isExpanded));
+  if (isExpanded) {
+    bodyEl.setAttribute('hidden', '');
+  } else {
+    bodyEl.removeAttribute('hidden');
+  }
+}
+
+// iPad初期状態：補助金・GAS・アプリ情報は折りたたむ
+document.addEventListener('DOMContentLoaded', () => {
+  if (!document.body.classList.contains('is-ipad')) return;
+  ['sec-subsidy-body', 'sec-gas-body', 'sec-info-body'].forEach(id => {
+    const bodyEl = document.getElementById(id);
+    if (bodyEl) bodyEl.setAttribute('hidden', '');
+    const btn = document.querySelector(`[aria-controls="${id}"]`);
+    if (btn) btn.setAttribute('aria-expanded', 'false');
+  });
+});

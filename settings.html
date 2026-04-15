@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="css/forms.css">
   <link rel="stylesheet" href="css/pages.css">
 </head>
-<body>
+<body data-page="settings">
 
 <!-- iPad サイドバーナビ（スマホでは非表示） -->
 <nav class="nav-sidebar" aria-label="メインナビゲーション">
@@ -54,173 +54,199 @@
 
     <!-- ① 店舗情報 -->
     <section class="settings-section" aria-labelledby="sec-store">
-      <div class="settings-section__title" id="sec-store">店舗情報</div>
-      <div class="settings-row">
-        <div class="settings-row__label">
-          <div>店舗名</div>
-          <div class="settings-row__sub">ホーム画面に表示されます</div>
+      <button class="settings-accordion-btn" type="button" aria-expanded="true" aria-controls="sec-store-body" onclick="toggleSettingsAccordion(this)">
+        <span id="sec-store">店舗情報</span>
+        <span class="settings-accordion-chevron" aria-hidden="true">›</span>
+      </button>
+      <div class="settings-section__body" id="sec-store-body">
+        <div class="settings-row">
+          <div class="settings-row__label">
+            <div>店舗名</div>
+            <div class="settings-row__sub">ホーム画面に表示されます</div>
+          </div>
         </div>
-      </div>
-      <div style="padding:0 16px 14px; display:flex; gap:8px;">
-        <input type="text"
-               id="store-name-input"
-               class="settings-input"
-               placeholder="例：スナック LEO"
-               maxlength="30"
-               autocomplete="off"
-               aria-label="店舗名">
-        <button id="store-name-save"
-                class="settings-save-btn"
-                type="button">保存</button>
+        <div style="padding:0 16px 14px; display:flex; gap:8px;">
+          <input type="text"
+                 id="store-name-input"
+                 class="settings-input"
+                 placeholder="例：スナック LEO"
+                 maxlength="30"
+                 autocomplete="off"
+                 aria-label="店舗名">
+          <button id="store-name-save"
+                  class="settings-save-btn"
+                  type="button">保存</button>
+        </div>
       </div>
     </section>
 
     <!-- ② スタッフ管理 -->
     <section class="settings-section" aria-labelledby="sec-staff">
-      <div class="settings-section__title" id="sec-staff">スタッフ管理</div>
-
-      <!-- スタッフ一覧 -->
-      <div id="staff-list-container" role="list" aria-label="登録スタッフ一覧">
-        <!-- settings.js が描画 -->
-      </div>
-
-      <!-- スタッフ追加 -->
-      <div class="staff-add-row">
-        <input type="text"
-               id="staff-add-input"
-               class="staff-add-input"
-               placeholder="名前を入力して追加"
-               maxlength="20"
-               autocomplete="off"
-               aria-label="追加するスタッフ名">
-        <button id="staff-add-btn"
-                class="staff-add-btn"
-                type="button">追加</button>
+      <button class="settings-accordion-btn" type="button" aria-expanded="true" aria-controls="sec-staff-body" onclick="toggleSettingsAccordion(this)">
+        <span id="sec-staff">スタッフ管理</span>
+        <span class="settings-accordion-chevron" aria-hidden="true">›</span>
+      </button>
+      <div class="settings-section__body" id="sec-staff-body">
+        <!-- スタッフ一覧 -->
+        <div id="staff-list-container" role="list" aria-label="登録スタッフ一覧">
+          <!-- settings.js が描画 -->
+        </div>
+        <!-- スタッフ追加 -->
+        <div class="staff-add-row">
+          <input type="text"
+                 id="staff-add-input"
+                 class="staff-add-input"
+                 placeholder="名前を入力して追加"
+                 maxlength="20"
+                 autocomplete="off"
+                 aria-label="追加するスタッフ名">
+          <button id="staff-add-btn"
+                  class="staff-add-btn"
+                  type="button">追加</button>
+        </div>
       </div>
     </section>
 
     <!-- ③ サービスマスタ -->
     <section class="settings-section" aria-labelledby="sec-service">
-      <div class="settings-section__title" id="sec-service">サービスマスタ（売上区分）</div>
-
-      <!-- サービス一覧 -->
-      <div id="service-list-container" role="list" aria-label="登録サービス一覧">
-        <!-- settings.js が描画 -->
-      </div>
-
-      <!-- 上限到達メッセージ -->
-      <p id="service-limit-hint"
-         hidden
-         style="padding:10px 16px 4px;font-size:12px;color:var(--uz-muted);">
-        最大3種まで登録済みです。削除してから追加してください。
-      </p>
-
-      <!-- サービス追加フォーム -->
-      <div id="service-add-row" class="staff-add-row" style="align-items:center;flex-wrap:wrap;gap:8px;">
-        <input type="text"
-               id="service-add-name"
-               class="staff-add-input"
-               style="flex:2;min-width:120px;"
-               placeholder="サービス名（例：店内売上）"
-               maxlength="20"
-               autocomplete="off"
-               aria-label="追加するサービス名">
-        <select id="service-add-tax"
-                class="form-select"
-                style="flex:1;min-width:80px;height:40px;"
-                aria-label="税率">
-          <option value="10">10%</option>
-          <option value="8">8%（軽減）</option>
-          <option value="0">0%（非課税）</option>
-        </select>
-        <button id="service-add-btn"
-                class="staff-add-btn"
-                type="button">追加</button>
-      </div>
-      <div style="padding:6px 16px 14px;">
-        <p style="font-size:12px;color:var(--uz-muted);line-height:1.6;">
-          事業単位で登録してください（例：店内売上・テイクアウト・ケータリング）。<br>
-          最大3種まで。「諸口」は自動で表示されます。
+      <button class="settings-accordion-btn" type="button" aria-expanded="true" aria-controls="sec-service-body" onclick="toggleSettingsAccordion(this)">
+        <span id="sec-service">サービスマスタ（売上区分）</span>
+        <span class="settings-accordion-chevron" aria-hidden="true">›</span>
+      </button>
+      <div class="settings-section__body" id="sec-service-body">
+        <!-- サービス一覧 -->
+        <div id="service-list-container" role="list" aria-label="登録サービス一覧">
+          <!-- settings.js が描画 -->
+        </div>
+        <!-- 上限到達メッセージ -->
+        <p id="service-limit-hint"
+           hidden
+           style="padding:10px 16px 4px;font-size:12px;color:var(--uz-muted);">
+          最大3種まで登録済みです。削除してから追加してください。
         </p>
+        <!-- サービス追加フォーム -->
+        <div id="service-add-row" class="staff-add-row" style="align-items:center;flex-wrap:wrap;gap:8px;">
+          <input type="text"
+                 id="service-add-name"
+                 class="staff-add-input"
+                 style="flex:2;min-width:120px;"
+                 placeholder="サービス名（例：店内売上）"
+                 maxlength="20"
+                 autocomplete="off"
+                 aria-label="追加するサービス名">
+          <select id="service-add-tax"
+                  class="form-select"
+                  style="flex:1;min-width:80px;height:40px;"
+                  aria-label="税率">
+            <option value="10">10%</option>
+            <option value="8">8%（軽減）</option>
+            <option value="0">0%（非課税）</option>
+          </select>
+          <button id="service-add-btn"
+                  class="staff-add-btn"
+                  type="button">追加</button>
+        </div>
+        <div style="padding:6px 16px 14px;">
+          <p style="font-size:12px;color:var(--uz-muted);line-height:1.6;">
+            事業単位で登録してください（例：店内売上・テイクアウト・ケータリング）。<br>
+            最大3種まで。「諸口」は自動で表示されます。
+          </p>
+        </div>
       </div>
     </section>
 
     <!-- ③-B コスト科目マスタ -->
     <section class="settings-section" aria-labelledby="sec-cost-master">
-      <div class="settings-section__title" id="sec-cost-master">コスト科目マスタ（確定申告行番号対応）</div>
-
-      <div id="cost-master-container">
-        <!-- settings.js が描画 -->
-      </div>
-
-      <div style="padding:10px 16px 14px;">
-        <button id="cost-master-save-btn"
-                class="submit-btn submit-btn--blue"
-                type="button"
-                style="height:44px;font-size:14px;border-radius:var(--radius-md);">
-          科目マスタを保存する
-        </button>
+      <button class="settings-accordion-btn" type="button" aria-expanded="true" aria-controls="sec-cost-master-body" onclick="toggleSettingsAccordion(this)">
+        <span id="sec-cost-master">コスト科目マスタ（確定申告行番号対応）</span>
+        <span class="settings-accordion-chevron" aria-hidden="true">›</span>
+      </button>
+      <div class="settings-section__body" id="sec-cost-master-body">
+        <div id="cost-master-container">
+          <!-- settings.js が描画 -->
+        </div>
+        <div style="padding:10px 16px 14px;">
+          <button id="cost-master-save-btn"
+                  class="submit-btn submit-btn--blue"
+                  type="button"
+                  style="height:44px;font-size:14px;border-radius:var(--radius-md);">
+            科目マスタを保存する
+          </button>
+        </div>
       </div>
     </section>
 
     <!-- ④ 補助金対応チェック -->
     <section class="settings-section" aria-labelledby="sec-subsidy">
-      <div class="settings-section__title" id="sec-subsidy">補助金対応状況</div>
-
-      <div class="info-row">
-        <span class="info-row__key">会計機能（損益計算書）</span>
-        <span class="info-row__val" style="color:var(--uz-green);">✓ 対応済み</span>
-      </div>
-      <div class="info-row">
-        <span class="info-row__key">受発注機能（売上・コスト管理）</span>
-        <span class="info-row__val" style="color:var(--uz-green);">✓ 対応済み</span>
-      </div>
-      <div class="info-row">
-        <span class="info-row__key">インボイス対応（税率記録）</span>
-        <span class="info-row__val" style="color:var(--uz-green);">✓ 対応済み</span>
-      </div>
-      <div style="padding:10px 16px 14px;">
-        <p style="font-size:12px;color:var(--uz-muted);line-height:1.6;">
-          デジタル化・AI導入補助金2026 インボイス枠のITツール登録要件を満たしています。
-        </p>
+      <button class="settings-accordion-btn" type="button" aria-expanded="false" aria-controls="sec-subsidy-body" onclick="toggleSettingsAccordion(this)">
+        <span id="sec-subsidy">補助金対応状況</span>
+        <span class="settings-accordion-chevron" aria-hidden="true">›</span>
+      </button>
+      <div class="settings-section__body" id="sec-subsidy-body">
+        <div class="info-row">
+          <span class="info-row__key">会計機能（損益計算書）</span>
+          <span class="info-row__val" style="color:var(--uz-green);">✓ 対応済み</span>
+        </div>
+        <div class="info-row">
+          <span class="info-row__key">受発注機能（売上・コスト管理）</span>
+          <span class="info-row__val" style="color:var(--uz-green);">✓ 対応済み</span>
+        </div>
+        <div class="info-row">
+          <span class="info-row__key">インボイス対応（税率記録）</span>
+          <span class="info-row__val" style="color:var(--uz-green);">✓ 対応済み</span>
+        </div>
+        <div style="padding:10px 16px 14px;">
+          <p style="font-size:12px;color:var(--uz-muted);line-height:1.6;">
+            デジタル化・AI導入補助金2026 インボイス枠のITツール登録要件を満たしています。
+          </p>
+        </div>
       </div>
     </section>
 
     <!-- ④ GAS接続情報 -->
     <section class="settings-section" aria-labelledby="sec-gas">
-      <div class="settings-section__title" id="sec-gas">GAS接続情報</div>
-      <div class="info-row">
-        <span class="info-row__key">接続状態</span>
-        <span id="gas-status-val" class="info-row__val" style="color:var(--uz-muted);">確認中...</span>
-      </div>
-      <div class="info-row" style="flex-direction:column;align-items:flex-start;gap:4px;">
-        <span class="info-row__key">WebアプリURL</span>
-        <span class="info-row__url"
-              title="GAS WebアプリURL">
-          https://script.google.com/macros/s/AKfycbx...
-        </span>
-      </div>
-      <div style="padding:10px 16px 14px;">
-        <p style="font-size:12px;color:var(--uz-muted);line-height:1.6;">
-          GAS連携テスト完了後、接続を有効化してください。
-        </p>
+      <button class="settings-accordion-btn" type="button" aria-expanded="false" aria-controls="sec-gas-body" onclick="toggleSettingsAccordion(this)">
+        <span id="sec-gas">GAS接続情報</span>
+        <span class="settings-accordion-chevron" aria-hidden="true">›</span>
+      </button>
+      <div class="settings-section__body" id="sec-gas-body">
+        <div class="info-row">
+          <span class="info-row__key">接続状態</span>
+          <span id="gas-status-val" class="info-row__val" style="color:var(--uz-muted);">確認中...</span>
+        </div>
+        <div class="info-row" style="flex-direction:column;align-items:flex-start;gap:4px;">
+          <span class="info-row__key">WebアプリURL</span>
+          <span class="info-row__url" title="GAS WebアプリURL">
+            https://script.google.com/macros/s/AKfycbx...
+          </span>
+        </div>
+        <div style="padding:10px 16px 14px;">
+          <p style="font-size:12px;color:var(--uz-muted);line-height:1.6;">
+            GAS連携テスト完了後、接続を有効化してください。
+          </p>
+        </div>
       </div>
     </section>
 
     <!-- ⑤ アプリ情報 -->
     <section class="settings-section" aria-labelledby="sec-info">
-      <div class="settings-section__title" id="sec-info">アプリ情報</div>
-      <div class="info-row">
-        <span class="info-row__key">アプリ名</span>
-        <span class="info-row__val">ウルトラ財務くん LEO版</span>
-      </div>
-      <div class="info-row">
-        <span class="info-row__key">バージョン</span>
-        <span class="info-row__val">1.0.0</span>
-      </div>
-      <div class="info-row">
-        <span class="info-row__key">対応OS</span>
-        <span class="info-row__val">iOS / Android</span>
+      <button class="settings-accordion-btn" type="button" aria-expanded="false" aria-controls="sec-info-body" onclick="toggleSettingsAccordion(this)">
+        <span id="sec-info">アプリ情報</span>
+        <span class="settings-accordion-chevron" aria-hidden="true">›</span>
+      </button>
+      <div class="settings-section__body" id="sec-info-body">
+        <div class="info-row">
+          <span class="info-row__key">アプリ名</span>
+          <span class="info-row__val">ウルトラ財務くん LEO版</span>
+        </div>
+        <div class="info-row">
+          <span class="info-row__key">バージョン</span>
+          <span class="info-row__val">1.0.0</span>
+        </div>
+        <div class="info-row">
+          <span class="info-row__key">対応OS</span>
+          <span class="info-row__val">iOS / Android</span>
+        </div>
       </div>
     </section>
 

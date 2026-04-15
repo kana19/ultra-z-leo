@@ -1401,3 +1401,347 @@ body.is-ipad .ipad-clear-btn:disabled { opacity: 0.4; cursor: default; }
   flex-shrink: 0;
   font-size: 11px;
 }
+
+/* ══════════════════════════════════════════════════════════
+   iPad 入店記録パネル
+   ══════════════════════════════════════════════════════════ */
+.ipad-clockin-panel {
+  display: none;
+}
+
+body.is-ipad[data-page="clockin"] .ipad-form-wrap {
+  display: none !important;
+}
+
+body.is-ipad[data-page="clockin"] .clockin-submit-bar {
+  display: none !important;
+}
+
+body.is-ipad[data-page="clockin"] .ipad-clockin-panel {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  height: calc(100dvh - 56px);
+  overflow: hidden;
+}
+
+.ipad-ci-left {
+  overflow-y: auto;
+  border-right: 1px solid var(--uz-border);
+  padding: 16px;
+}
+
+.ipad-ci-section-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--uz-text2);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 12px;
+}
+
+.ipad-staff-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.ipad-staff-card {
+  background: var(--uz-surface);
+  border: 1.5px solid var(--uz-border);
+  border-radius: 10px;
+  padding: 14px 12px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  user-select: none;
+}
+
+.ipad-staff-card--active {
+  border-color: var(--uz-green);
+  background: var(--uz-green-bg);
+}
+
+.ipad-staff-card--inactive {
+  border-color: var(--uz-border);
+  opacity: 0.7;
+}
+
+.ipad-staff-card--selected {
+  border-color: var(--uz-gold) !important;
+  background: var(--uz-amber-bg) !important;
+  opacity: 1;
+}
+
+.ipad-staff-card__name {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--uz-text);
+  margin-bottom: 6px;
+}
+
+.ipad-staff-card__badge {
+  display: inline-block;
+  font-size: 10px;
+  padding: 1px 8px;
+  border-radius: 20px;
+  font-weight: 600;
+}
+
+.ipad-staff-card__badge--active {
+  background: var(--uz-green-bg);
+  color: var(--uz-green);
+  border: 0.5px solid rgba(76,175,128,0.3);
+}
+
+.ipad-staff-card__badge--inactive {
+  background: rgba(160,144,112,0.15);
+  color: var(--uz-text2);
+  border: 0.5px solid var(--uz-border);
+}
+
+.ipad-staff-card__time {
+  font-size: 10px;
+  color: var(--uz-text2);
+  margin-top: 5px;
+}
+
+.ipad-ci-right {
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+}
+
+.ipad-ci-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--uz-text2);
+  font-size: 14px;
+  min-height: 200px;
+}
+
+.ipad-ci-operation {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.ipad-ci-staff-header {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--uz-text);
+  padding-bottom: 14px;
+  margin-bottom: 0;
+  border-bottom: 1px solid var(--uz-border);
+}
+
+.ipad-ci-form-wrap {
+  padding-top: 16px;
+  padding-bottom: 8px;
+}
+
+.ipad-ci-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.ipad-ci-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ipad-ci-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--uz-text2);
+}
+
+/* ══════════════════════════════════════════════════════════
+   iPad 履歴・修正 右パネル
+   ══════════════════════════════════════════════════════════ */
+.ipad-right-panel {
+  padding: 16px;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.ipad-right-panel__header {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--uz-text2);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--uz-border);
+}
+
+.ipad-placeholder {
+  color: var(--uz-text2);
+  font-size: 14px;
+  text-align: center;
+  padding: 40px 0;
+}
+
+.ipad-record-detail {
+  background: var(--uz-surface);
+  border: 1px solid var(--uz-border);
+  border-radius: 10px;
+  padding: 2px 0;
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+
+.ipad-record-detail__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--uz-border);
+  font-size: 13px;
+}
+
+.ipad-record-detail__row:last-child { border-bottom: none; }
+
+.ipad-record-detail__key {
+  color: var(--uz-text2);
+  flex-shrink: 0;
+}
+
+.ipad-record-detail__val {
+  color: var(--uz-text);
+  font-weight: 600;
+  text-align: right;
+}
+
+.ipad-right-action-btn {
+  width: 100%;
+  padding: 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  font-family: var(--font-main);
+  cursor: pointer;
+  margin-bottom: 8px;
+  border: none;
+}
+
+.ipad-right-action-btn--edit {
+  background: var(--uz-amber-bg);
+  color: var(--uz-gold);
+  border: 0.5px solid var(--uz-border2);
+}
+
+.ipad-right-action-btn--unlock {
+  background: var(--uz-surface2);
+  color: var(--uz-text2);
+  border: 1px solid var(--uz-border);
+}
+
+.ipad-right-action-btn--approve {
+  background: var(--uz-green-bg);
+  color: var(--uz-green);
+  border: 0.5px solid rgba(76,175,128,0.3);
+}
+
+.ipad-right-action-btn--reject {
+  background: var(--uz-red-bg);
+  color: var(--uz-red);
+  border: 0.5px solid rgba(224,80,80,0.3);
+}
+
+.ipad-locked-note {
+  font-size: 13px;
+  color: var(--uz-text2);
+  padding: 10px 0 14px;
+}
+
+.ipad-pending-badge {
+  display: inline-block;
+  background: var(--uz-amber-bg);
+  color: var(--uz-gold);
+  border: 0.5px solid var(--uz-border2);
+  font-size: 11px;
+  padding: 2px 10px;
+  border-radius: 20px;
+  font-weight: 600;
+}
+
+.ipad-approve-btns {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* PC幅では承認・却下ボタンを隠す（オーナー専用機能） */
+@media (min-width: 1025px) {
+  .ipad-approve-btns { display: none !important; }
+}
+
+/* ══════════════════════════════════════════════════════════
+   iPad 設定アコーディオン
+   ══════════════════════════════════════════════════════════ */
+body.is-ipad[data-page="settings"] .ipad-settings-wrap {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+/* 非iPad：元の .settings-section__title と同じ見た目 */
+.settings-accordion-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px 10px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--uz-border);
+  color: var(--uz-muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  font-family: var(--font-main);
+  cursor: default;
+  pointer-events: none;
+  text-align: left;
+}
+
+/* iPad：インタラクティブなアコーディオンボタン */
+body.is-ipad[data-page="settings"] .settings-accordion-btn {
+  cursor: pointer;
+  pointer-events: auto;
+  font-size: 14px;
+  color: var(--uz-text);
+  padding: 14px 16px;
+  letter-spacing: 0;
+}
+
+body:not(.is-ipad) .settings-accordion-chevron {
+  display: none;
+}
+
+/* 非iPad：本体は常時表示 */
+body:not(.is-ipad) .settings-section__body[hidden] {
+  display: block !important;
+}
+
+.settings-accordion-chevron {
+  font-size: 18px;
+  color: var(--uz-text2);
+  transition: transform 0.2s;
+  flex-shrink: 0;
+}
+
+.settings-accordion-btn[aria-expanded="true"] .settings-accordion-chevron {
+  transform: rotate(90deg);
+}
+
+body.is-ipad[data-page="settings"] .settings-section__body[hidden] {
+  display: none !important;
+}

@@ -546,3 +546,263 @@ function escHtml(str) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
 }
+
+/* ══════════════════════════════════════════════════════════
+   iPad 入店記録パネル
+   ══════════════════════════════════════════════════════════ */
+
+let _ipadCiSelectedStaff = null; // { id, name, attendIdx } — 選択中スタッフ
+
+document.addEventListener('DOMContentLoaded', () => {
+  if (!document.body.classList.contains('is-ipad')) return;
+  initIpadClockInPanel();
+});
+
+function initIpadClockInPanel() {
+  // 時刻セレクト初期化
+  _ipadCiInitSelects();
+
+  // タブ切り替え
+  document.querySelectorAll('[data-ci-tab]').forEach(btn => {
+    btn.addEventListener('click', () => _ipadCiSwitchTab(btn.dataset.ciTab));
+  });
+
+  // 入店記録ボタン
+  document.getElementById('ipad-ci-submit-in')?.addEventListener('click', _ipadCiSubmitIn);
+
+  // 退店記録ボタン
+  document.getElementById('ipad-ci-submit-out')?.addEventListener('click', _ipadCiSubmitOut);
+
+  // スタッフカード描画（今日の勤怠は既にtodayAttendanceに入っている）
+  renderIpadStaffCards();
+}
+
+function _ipadCiInitSelects() {
+  const hourOpts = _TIME_HOURS.map(v => `<option value="${v}">${v}</option>`).join('');
+  const minOpts  = _TIME_MINS.map(v  => `<option value="${v}">${v}</option>`).join('');
+  const blankOpt = `<option value="">--</option>`;
+
+  ['ipad-ci-in-h', 'ipad-co-out-h'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = hourOpts;
+  });
+  ['ipad-ci-in-m', 'ipad-co-out-m'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = minOpts;
+  });
+  // 退店（入店タブ内）はオプション
+  const outH = document.getElementById('ipad-ci-out-h');
+  const outM = document.getElementById('ipad-ci-out-m');
+  if (outH) outH.innerHTML = blankOpt + hourOpts;
+  if (outM) outM.innerHTML = blankOpt + minOpts;
+}
+
+function _ipadCiGetTimeVal(hId, mId) {
+  const h = document.getElementById(hId)?.value;
+  const m = document.getElementById(mId)?.value;
+  if (!h || !m) return '';
+  return `${h}:${m}`;
+}
+
+function _ipadCiSetTimeVal(hId, mId, hhMM) {
+  if (!hhMM) {
+    const hEl = document.getElementById(hId);
+    const mEl = document.getElementById(mId);
+    if (hEl) hEl.value = '';
+    if (mEl) mEl.value = '';
+    return;
+  }
+  const [h, m] = hhMM.split(':');
+  const hEl = document.getElementById(hId);
+  const mEl = document.getElementById(mId);
+  if (hEl) hEl.value = h;
+  if (mEl) mEl.value = m;
+}
+
+function renderIpadStaffCards() {
+  const container = document.getElementById('ipad-staff-cards');
+  if (!container) return;
+
+  const master = getStaffMaster();
+  if (master.length === 0) {
+    container.innerHTML = `<p class="ipad-list-empty">設定からスタッフを登録してください</p>`;
+    return;
+  }
+
+  container.innerHTML = master.map(s => {
+    const attend = todayAttendance.find(a => String(a.id) === String(s.id));
+    const isActive  = attend && (!attend.clockOut);
+    const isOut     = attend && attend.clockOut;
+    const statusLabel = isActive ? '在店中' : (isOut ? '退店済' : '未入店');
+    const badgeClass  = isActive ? 'ipad-staff-card__badge--active' : 'ipad-staff-card__badge--inactive';
+    const cardClass   = isActive ? 'ipad-staff-card ipad-staff-card--active' : 'ipad-staff-card ipad-staff-card--inactive';
+    const timeInfo    = isActive ? `入店 ${parseTimeStr(attend.clockIn) || '—'}` :
+                        isOut    ? `入店 ${parseTimeStr(attend.clockIn) || '—'} / 退店 ${parseTimeStr(attend.clockOut)}` : '';
+
+    return `
+      <div class="${cardClass}"
+           data-staff-id="${escHtml(String(s.id))}"
+           data-staff-name="${escHtml(s.name)}"
+           role="button"
+           tabindex="0"
+           aria-label="${escHtml(s.name)}">
+        <div class="ipad-staff-card__name">${escHtml(s.name)}</div>
+        <span class="ipad-staff-card__badge ${badgeClass}">${statusLabel}</span>
+        ${timeInfo ? `<div class="ipad-staff-card__time">${escHtml(timeInfo)}</div>` : ''}
+      </div>`;
+  }).join('');
+
+  container.querySelectorAll('[data-staff-id]').forEach(card => {
+    card.addEventListener('click', () => {
+      _ipadCiSelectCard(card.dataset.staffId, card.dataset.staffName);
+    });
+    card.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') _ipadCiSelectCard(card.dataset.staffId, card.dataset.staffName);
+    });
+  });
+}
+
+function _ipadCiSelectCard(staffId, staffName) {
+  _ipadCiSelectedStaff = { id: staffId, name: staffName };
+
+  // カードハイライト
+  document.querySelectorAll('#ipad-staff-cards [data-staff-id]').forEach(c => {
+    const isSelected = c.dataset.staffId === staffId;
+    c.classList.toggle('ipad-staff-card--selected', isSelected);
+    if (isSelected) {
+      // active/inactive クラスは維持しつつ selected を追加
+    }
+  });
+
+  // 右パネル表示
+  document.getElementById('ipad-ci-empty').style.display     = 'none';
+  document.getElementById('ipad-ci-operation').style.display = '';
+
+  // スタッフ名表示
+  const header = document.getElementById('ipad-ci-staff-header');
+  if (header) header.textContent = staffName;
+
+  // 今日の勤怠状況を確認
+  const attend = todayAttendance.find(a => String(a.id) === String(staffId));
+  const isActive = attend && !attend.clockOut;
+
+  // 入店タブのデフォルト時刻セット
+  const ciDate = document.getElementById('ipad-ci-date');
+  if (ciDate) ciDate.value = todayStr();
+  _ipadCiSetTimeVal('ipad-ci-in-h', 'ipad-ci-in-m', nowHHMM());
+  _ipadCiSetTimeVal('ipad-ci-out-h', 'ipad-ci-out-m', '');
+
+  // 退店タブの表示制御
+  const outTab = document.querySelector('[data-ci-tab="out"]');
+  if (outTab) {
+    outTab.disabled = !isActive;
+    outTab.style.opacity = isActive ? '1' : '0.4';
+  }
+
+  // 退店タブ時刻セット（在店中なら現在時刻）
+  if (isActive) {
+    _ipadCiSetTimeVal('ipad-co-out-h', 'ipad-co-out-m', nowHHMM());
+  }
+
+  // 在店中なら退店タブをデフォルトに、それ以外は入店タブ
+  _ipadCiSwitchTab(isActive ? 'out' : 'in');
+}
+
+function _ipadCiSwitchTab(tab) {
+  document.querySelectorAll('[data-ci-tab]').forEach(btn => {
+    btn.classList.toggle('ipad-tab--active', btn.dataset.ciTab === tab);
+  });
+  document.getElementById('ipad-ci-tab-in').style.display  = tab === 'in'  ? '' : 'none';
+  document.getElementById('ipad-ci-tab-out').style.display = tab === 'out' ? '' : 'none';
+}
+
+async function _ipadCiSubmitIn() {
+  if (isSubmitting || !_ipadCiSelectedStaff) return;
+
+  const date     = document.getElementById('ipad-ci-date')?.value || todayStr();
+  const clockIn  = _ipadCiGetTimeVal('ipad-ci-in-h', 'ipad-ci-in-m');
+  const clockOut = _ipadCiGetTimeVal('ipad-ci-out-h', 'ipad-ci-out-m');
+
+  if (!clockIn) { showToast('入店時刻を選択してください', 'error'); return; }
+
+  const master  = getStaffMaster().find(s => String(s.id) === String(_ipadCiSelectedStaff.id));
+  const staffId = master?.id ?? (_ipadCiSelectedStaff.id || Date.now());
+
+  isSubmitting = true;
+  const btn = document.getElementById('ipad-ci-submit-in');
+  if (btn) { btn.disabled = true; btn.textContent = '登録中...'; }
+
+  try {
+    const result = await callGAS('clockIn', {
+      staffId,
+      staffName:    _ipadCiSelectedStaff.name,
+      clockInTime:  clockIn,
+      clockOutTime: clockOut || null,
+      date,
+      rowIndex:     null,
+    });
+    if (result.status !== 'ok') throw new Error(result.message || '登録エラー');
+
+    const newRecord = {
+      id: staffId, name: _ipadCiSelectedStaff.name,
+      date, clockIn, clockOut: clockOut || null,
+      isActive: !clockOut, rowIndex: result.rowIndex ?? null,
+    };
+    todayAttendance.unshift(newRecord);
+    saveAttendance(todayAttendance);
+
+    showToast(`${_ipadCiSelectedStaff.name}さんの入店を記録しました ✓`, 'success');
+    renderAttendanceList();
+    renderIpadStaffCards();
+    _ipadCiSelectedStaff = null;
+    document.getElementById('ipad-ci-empty').style.display     = '';
+    document.getElementById('ipad-ci-operation').style.display = 'none';
+
+  } catch (e) {
+    showToast('登録に失敗しました：' + e.message, 'error');
+  } finally {
+    isSubmitting = false;
+    if (btn) { btn.disabled = false; btn.textContent = '入店を記録する'; }
+  }
+}
+
+async function _ipadCiSubmitOut() {
+  if (isSubmitting || !_ipadCiSelectedStaff) return;
+
+  const clockOut = _ipadCiGetTimeVal('ipad-co-out-h', 'ipad-co-out-m');
+  if (!clockOut) { showToast('退店時刻を選択してください', 'error'); return; }
+
+  const attend = todayAttendance.find(a => String(a.id) === String(_ipadCiSelectedStaff.id));
+  if (!attend) { showToast('入店記録が見つかりません', 'error'); return; }
+
+  isSubmitting = true;
+  const btn = document.getElementById('ipad-ci-submit-out');
+  if (btn) { btn.disabled = true; btn.textContent = '記録中...'; }
+
+  try {
+    const result = await callGAS('clockOut', {
+      staffId:      attend.id,
+      clockOutTime: clockOut,
+      date:         attend.date || todayStr(),
+      rowIndex:     attend.rowIndex ?? null,
+    });
+    if (result.status !== 'ok') throw new Error(result.message || '登録エラー');
+
+    attend.clockOut = clockOut;
+    attend.isActive = false;
+    saveAttendance(todayAttendance);
+
+    showToast(`${_ipadCiSelectedStaff.name}さんの退店を記録しました ✓`, 'success');
+    renderAttendanceList();
+    renderIpadStaffCards();
+    _ipadCiSelectedStaff = null;
+    document.getElementById('ipad-ci-empty').style.display     = '';
+    document.getElementById('ipad-ci-operation').style.display = 'none';
+
+  } catch (e) {
+    showToast('退店記録に失敗しました：' + e.message, 'error');
+  } finally {
+    isSubmitting = false;
+    if (btn) { btn.disabled = false; btn.textContent = '退店を記録する'; }
+  }
+}

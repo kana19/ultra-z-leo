@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="css/forms.css">
   <link rel="stylesheet" href="css/pages.css">
 </head>
-<body>
+<body data-page="clockin">
 
 <!-- iPad サイドバーナビ（スマホでは非表示） -->
 <nav class="nav-sidebar" aria-label="メインナビゲーション">
@@ -129,6 +129,78 @@
     </div><!-- /ipad-clockin-right -->
 
   </div><!-- /ipad-form-wrap -->
+
+  <!-- iPad 入店記録パネル（iPad のみ表示） -->
+  <div class="ipad-clockin-panel" id="ipad-clockin-panel">
+
+    <!-- 左：スタッフカード一覧 -->
+    <div class="ipad-ci-left">
+      <div class="ipad-ci-section-label">スタッフを選択</div>
+      <div id="ipad-staff-cards" class="ipad-staff-cards">
+        <div class="ipad-list-empty">読み込み中...</div>
+      </div>
+    </div>
+
+    <!-- 右：操作パネル -->
+    <div class="ipad-ci-right">
+      <div class="ipad-ci-empty" id="ipad-ci-empty">
+        スタッフを選択してください
+      </div>
+      <div class="ipad-ci-operation" id="ipad-ci-operation" style="display:none">
+        <div class="ipad-ci-staff-header" id="ipad-ci-staff-header"></div>
+        <div class="ipad-input-tabs">
+          <button class="ipad-tab ipad-tab--active" data-ci-tab="in" type="button">入店を記録</button>
+          <button class="ipad-tab" data-ci-tab="out" type="button">退店を記録</button>
+        </div>
+        <!-- 入店タブ -->
+        <div id="ipad-ci-tab-in" class="ipad-tab-content ipad-ci-form-wrap">
+          <div class="ipad-ci-form">
+            <div class="ipad-ci-field">
+              <label class="ipad-ci-label">日付</label>
+              <input type="date" id="ipad-ci-date" class="date-input" style="width:100%;">
+            </div>
+            <div class="ipad-ci-field">
+              <label class="ipad-ci-label">入店時刻</label>
+              <div style="display:flex;align-items:center;gap:6px;">
+                <select id="ipad-ci-in-h" class="date-input" style="width:72px;" aria-label="入店時刻（時）"></select>
+                <span style="color:var(--uz-text);font-weight:600;font-size:16px;">:</span>
+                <select id="ipad-ci-in-m" class="date-input" style="width:72px;" aria-label="入店時刻（分）"></select>
+              </div>
+            </div>
+            <div class="ipad-ci-field">
+              <label class="ipad-ci-label">退店時刻 <span style="font-size:11px;font-weight:400;color:var(--uz-muted);margin-left:4px;">任意</span></label>
+              <div style="display:flex;align-items:center;gap:6px;">
+                <select id="ipad-ci-out-h" class="date-input" style="width:72px;" aria-label="退店時刻（時）"></select>
+                <span style="color:var(--uz-text);font-weight:600;font-size:16px;">:</span>
+                <select id="ipad-ci-out-m" class="date-input" style="width:72px;" aria-label="退店時刻（分）"></select>
+              </div>
+              <p class="form-hint">未選択のままにすると「退店未記録」で登録されます。</p>
+            </div>
+          </div>
+          <button id="ipad-ci-submit-in" class="clockin-btn" type="button" style="width:100%;margin-top:8px;">
+            入店を記録する
+          </button>
+        </div>
+        <!-- 退店タブ -->
+        <div id="ipad-ci-tab-out" class="ipad-tab-content ipad-ci-form-wrap" style="display:none">
+          <div class="ipad-ci-form">
+            <div class="ipad-ci-field">
+              <label class="ipad-ci-label">退店時刻</label>
+              <div style="display:flex;align-items:center;gap:6px;">
+                <select id="ipad-co-out-h" class="date-input" style="width:72px;" aria-label="退店時刻（時）"></select>
+                <span style="color:var(--uz-text);font-weight:600;font-size:16px;">:</span>
+                <select id="ipad-co-out-m" class="date-input" style="width:72px;" aria-label="退店時刻（分）"></select>
+              </div>
+            </div>
+          </div>
+          <button id="ipad-ci-submit-out" class="clockin-btn" type="button" style="width:100%;margin-top:8px;">
+            退店を記録する
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /ipad-clockin-panel -->
 
 </div><!-- /page-wrapper -->
 
