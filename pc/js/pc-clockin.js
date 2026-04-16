@@ -4,6 +4,27 @@
 let att = [];
 let editingKey = null;
 
+function formatTime(val) {
+  if (!val) return '—';
+  if (val instanceof Date) {
+    return val.toLocaleTimeString('ja-JP', {hour:'2-digit', minute:'2-digit'});
+  }
+  if (typeof val === 'string' && val.match(/^\d{1,2}:\d{2}/)) {
+    return val.substring(0, 5);
+  }
+  if (typeof val === 'number' && val >= 0 && val < 1) {
+    const totalMinutes = Math.round(val * 24 * 60);
+    const h = Math.floor(totalMinutes / 60);
+    const m = totalMinutes % 60;
+    return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+  }
+  const d = new Date(val);
+  if (!isNaN(d.getTime())) {
+    return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  }
+  return '—';
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
   pcBootstrap('clockin.html', '入店記録');
   document.getElementById('f-month').value = new Date().toISOString().slice(0,7);
@@ -20,8 +41,10 @@ async function load() {
   render();
 }
 
-function calcWork(ci, co) {
-  if (!ci || !co) return '';
+function calcWork(ciRaw, coRaw) {
+  const ci = formatTime(ciRaw);
+  const co = formatTime(coRaw);
+  if (ci === '—' || co === '—') return '';
   const [h1,m1] = ci.split(':').map(Number);
   const [h2,m2] = co.split(':').map(Number);
   let mins = (h2*60+m2) - (h1*60+m1);
@@ -39,11 +62,13 @@ function render() {
     const key = it.rowIndex;
     const editing = String(editingKey) === String(key);
     if (editing) {
+      const ciStr = formatTime(it.clockIn);
+      const coStr = formatTime(it.clockOut);
       return `<tr data-key="${key}">
         <td><input type="date" class="pc-input ef-date" value="${escHtml(it.date||'')}"></td>
         <td><input type="text" class="pc-input ef-name" value="${escHtml(it.staffName||'')}" style="width:100%;"></td>
-        <td><input type="time" class="pc-input ef-ci" value="${escHtml(it.clockIn||'')}" style="width:84px;"></td>
-        <td><input type="time" class="pc-input ef-co" value="${escHtml(it.clockOut||'')}" style="width:84px;"></td>
+        <td><input type="time" class="pc-input ef-ci" value="${ciStr==='—'?'':ciStr}" style="width:84px;"></td>
+        <td><input type="time" class="pc-input ef-co" value="${coStr==='—'?'':coStr}" style="width:84px;"></td>
         <td>—</td>
         <td>
           <button class="pc-btn pc-btn--sm btn-save">確定</button>
@@ -54,8 +79,8 @@ function render() {
     return `<tr data-key="${key}">
       <td>${escHtml(it.date||'')}</td>
       <td>${escHtml(it.staffName||'')}</td>
-      <td>${escHtml(it.clockIn||'')}</td>
-      <td>${escHtml(it.clockOut||'—')}</td>
+      <td>${formatTime(it.clockIn)}</td>
+      <td>${formatTime(it.clockOut)}</td>
       <td>${calcWork(it.clockIn, it.clockOut)}</td>
       <td><button class="pc-btn pc-btn--sm btn-edit">編集</button></td>
     </tr>`;

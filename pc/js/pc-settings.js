@@ -48,7 +48,9 @@ async function saveStore() {
 }
 
 function renderServices() {
-  const svcs = Array.isArray(settings?.services) ? settings.services : [];
+  let svcs = settings?.serviceList ?? settings?.services ?? [];
+  if (typeof svcs === 'string') { try { svcs = JSON.parse(svcs); } catch { svcs = []; } }
+  if (!Array.isArray(svcs)) svcs = [];
   const body = document.getElementById('svc-body');
   if (svcs.length === 0) {
     body.innerHTML = `<tr><td colspan="3" class="text-muted" style="text-align:center;padding:20px;">登録なし</td></tr>`;
@@ -99,7 +101,9 @@ async function saveCM() {
 }
 
 function renderStaff() {
-  const staff = Array.isArray(settings?.staff) ? settings.staff : [];
+  let staff = settings?.staffList ?? settings?.staff ?? [];
+  if (typeof staff === 'string') { try { staff = JSON.parse(staff); } catch { staff = []; } }
+  if (!Array.isArray(staff)) staff = [];
   const body = document.getElementById('staff-body');
   if (staff.length === 0) {
     body.innerHTML = `<tr><td colspan="3" class="text-muted" style="text-align:center;padding:20px;">登録なし</td></tr>`;

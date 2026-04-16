@@ -40,7 +40,9 @@ async function loadItems() {
   const type = currentTab;
   const res = await callGAS('getHistory', { type, month }).catch(() => null);
   if (res && res.status === 'ok' && Array.isArray(res.data)) {
-    items = res.data.filter(it => it.type === type);
+    // GASがtypeフィールドを返す場合のみフィルタ。返さない場合はサーバー側で既にフィルタ済みと想定
+    const hasTypeField = res.data.some(it => it && it.type);
+    items = hasTypeField ? res.data.filter(it => it.type === type) : res.data;
   } else {
     items = [];
   }
