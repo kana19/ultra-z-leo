@@ -746,12 +746,40 @@
 }
 
 /* ══════════════════════════════════════════════════════════
-   税理士用DLボタン（pl.html）
+   税理士用CSV DL（pl.html）
    ══════════════════════════════════════════════════════════ */
 
+/* 期間選択+DLボタン行 */
+.tax-dl-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  flex-wrap: wrap;
+}
+
+.tax-dl-select {
+  height: 36px;
+  border-radius: 7px;
+  font-size: 12px;
+  padding: 0 8px;
+  background: var(--uz-surface);
+  border: 0.5px solid var(--uz-border);
+  color: var(--uz-text);
+  font-family: var(--font-main);
+  flex: 1;
+  min-width: 0;
+}
+
+.tax-dl-sep {
+  font-size: 13px;
+  color: var(--uz-muted);
+  flex-shrink: 0;
+}
+
 .btn-tax-dl {
-  height: 40px;
-  border-radius: 9px;
+  height: 36px;
+  border-radius: 7px;
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
@@ -759,7 +787,9 @@
   border: 0.5px solid rgba(76,175,128,0.3);
   color: var(--uz-green);
   font-family: var(--font-main);
-  flex: 1;
+  padding: 0 12px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .btn-tax-dl:active { filter: brightness(0.85); }

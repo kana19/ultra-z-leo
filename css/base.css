@@ -1084,6 +1084,56 @@ body.is-ipad .ipad-btn-secondary {
 
 body.is-ipad .ipad-btn-secondary:active { opacity: 0.7; }
 
+/* ── iPad 税理士用CSV DLパネル ────────────────────────────── */
+body.is-ipad .ipad-tax-dl-panel {
+  margin-top: 8px;
+  padding: 10px 12px;
+  background: var(--uz-surface2);
+  border: 1px solid var(--uz-border);
+  border-radius: 8px;
+}
+
+body.is-ipad .ipad-tax-dl-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+body.is-ipad .ipad-tax-select {
+  flex: 1;
+  height: 34px;
+  border-radius: 6px;
+  background: var(--uz-surface);
+  border: 1px solid var(--uz-border);
+  color: var(--uz-text);
+  font-size: 12px;
+  font-family: inherit;
+  padding: 0 6px;
+  min-width: 0;
+}
+
+body.is-ipad .ipad-tax-sep {
+  font-size: 13px;
+  color: var(--uz-text2);
+  flex-shrink: 0;
+}
+
+body.is-ipad .ipad-tax-dl-btn {
+  width: 100%;
+  padding: 9px;
+  background: var(--uz-green-bg);
+  border: 1px solid rgba(76,175,128,0.3);
+  border-radius: 6px;
+  color: var(--uz-green);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+body.is-ipad .ipad-tax-dl-btn:active { opacity: 0.75; }
+
 /* ═══════════════════════════════════════════════════════════
    iPad 売上・コスト入力パネル
    ═══════════════════════════════════════════════════════════ */

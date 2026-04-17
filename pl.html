@@ -91,9 +91,16 @@
               class="pl-compare-btn"
               type="button"
               aria-pressed="false">前年同月比</button>
+    </div>
+
+    <!-- 税理士用CSV DL（期間選択） -->
+    <div class="tax-dl-row">
+      <select id="tax-from-month" class="tax-dl-select" aria-label="開始月"></select>
+      <span class="tax-dl-sep">〜</span>
+      <select id="tax-to-month" class="tax-dl-select" aria-label="終了月"></select>
       <button id="tax-download-btn"
               class="btn-tax-dl"
-              type="button">税理士用スプレッドシートをDL</button>
+              type="button">税理士用CSVをDL</button>
     </div>
 
     <!-- PLテーブル（月次） -->

@@ -11,8 +11,26 @@ const expandedSections = { sales: false, cogs: false, sga: false };
 document.addEventListener('DOMContentLoaded', async () => {
   pcBootstrap('index.html', 'ホーム（損益概観）');
   initYearSelect();
+  initTaxDL();
   await loadAndRender();
 });
+
+function initTaxDL() {
+  const fromSel = document.getElementById('pc-tax-from');
+  const toSel   = document.getElementById('pc-tax-to');
+  const btn     = document.getElementById('pc-tax-dl-btn');
+  if (!fromSel || !toSel || !btn) return;
+
+  const now       = new Date();
+  const curMonth  = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const fromDef   = `${Math.max(now.getFullYear(), 2025)}-01`;
+  buildMonthOptions(fromSel, fromDef);
+  buildMonthOptions(toSel,   curMonth);
+
+  btn.addEventListener('click', () => {
+    downloadTaxCSVByRange(fromSel.value, toSel.value, btn);
+  });
+}
 
 function initYearSelect() {
   const sel = document.getElementById('pc-year');

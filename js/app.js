@@ -279,3 +279,142 @@ function getCostMaster() {
 function saveCostMasterToStorage(list) {
   localStorage.setItem(COST_MASTER_KEY, JSON.stringify(list));
 }
+
+/* ── 税理士用CSV DL（共通ユーティリティ） ─────────────────── */
+
+/**
+ * 月プルダウンの選択肢を生成（直近24ヶ月分、新しい順）
+ * @param {HTMLSelectElement} selectEl
+ * @param {string} defaultValue 'YYYY-MM'
+ */
+function buildMonthOptions(selectEl, defaultValue) {
+  if (!selectEl) return;
+  selectEl.innerHTML = '';
+  const now = new Date();
+  const MIN = '2025-01';
+  for (let i = 0; i < 24; i++) {
+    const d   = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    if (val < MIN) break;
+    const opt = document.createElement('option');
+    opt.value       = val;
+    opt.textContent = `${d.getFullYear()}年${d.getMonth() + 1}月`;
+    selectEl.appendChild(opt);
+  }
+  if (defaultValue) selectEl.value = defaultValue;
+}
+
+/**
+ * YYYY-MM の範囲から月リストを生成
+ * @param {string} from 'YYYY-MM'
+ * @param {string} to   'YYYY-MM'
+ * @returns {string[]}
+ */
+function _buildMonthRange(from, to) {
+  const months = [];
+  let [y, m] = from.split('-').map(Number);
+  const [ty, tm] = to.split('-').map(Number);
+  while (y < ty || (y === ty && m <= tm)) {
+    months.push(`${y}-${String(m).padStart(2, '0')}`);
+    if (++m > 12) { m = 1; y++; }
+    if (months.length > 24) break; // 最大2年分
+  }
+  return months;
+}
+
+/**
+ * 税理士用CSV（期間指定）をダウンロード
+ * @param {string} fromMonth 'YYYY-MM'
+ * @param {string} toMonth   'YYYY-MM'
+ * @param {HTMLButtonElement|null} btnEl ボタン要素（ローディング表示用）
+ */
+async function downloadTaxCSVByRange(fromMonth, toMonth, btnEl) {
+  if (!fromMonth || !toMonth || fromMonth > toMonth) {
+    alert('期間を正しく選択してください（開始月 ≤ 終了月）');
+    return;
+  }
+
+  const origText = btnEl ? btnEl.textContent : '';
+  if (btnEl) { btnEl.disabled = true; btnEl.textContent = '取得中...'; }
+
+  try {
+    const months = _buildMonthRange(fromMonth, toMonth);
+
+    const results = await Promise.all(
+      months.map(mo =>
+        callGAS('getSummary', { month: mo })
+          .then(r => (r && r.status === 'ok' && r.data) ? r.data : null)
+          .catch(() => null)
+      )
+    );
+
+    // コスト科目マスタ（確定申告行番号対応）
+    const master = typeof getCostMaster === 'function' ? getCostMaster() : [];
+
+    // 仕入原価科目（divisionCode:"1"）
+    const cogsSubjects = master
+      .filter(item => item.divisionCode === '1' && item.name)
+      .map(item => ({ name: item.name, row: '-', key: null, div: 'cogs' }));
+
+    // 販管費科目（divisionCode:"2"）
+    const sgaSubjects = master
+      .filter(item => item.divisionCode === '2' && item.name)
+      .sort((a, b) => (a.taxRow ?? 99) - (b.taxRow ?? 99))
+      .map(item => ({ name: item.name, row: item.taxRow ? `行${item.taxRow}` : '-', key: null, div: 'sga' }));
+
+    const subjects = [
+      { name: '売上（収入）金額', row: '行1',  key: 'sales'  },
+      { name: '仕入金額合計',     row: '-',    key: 'cogs'   },
+      ...cogsSubjects,
+      { name: '粗利',             row: '-',    key: 'gross'  },
+      { name: '販管費合計',       row: '-',    key: 'sga'    },
+      ...sgaSubjects,
+      { name: '経常利益',         row: '行43', key: 'profit' },
+    ];
+
+    // ヘッダー行
+    const monthLabels = months.map(mo => {
+      const [y, mm] = mo.split('-').map(Number);
+      return `${y}年${mm}月`;
+    });
+    const header = ['科目', '行番号', ...monthLabels, '期間合計'];
+    const csvRows = [header];
+
+    subjects.forEach(s => {
+      const monthly = results.map(d => {
+        if (!d) return 0;
+        if (s.key === 'sales')  return d.sales  || 0;
+        if (s.key === 'cogs')   return d.cogs   || 0;
+        if (s.key === 'gross')  return (d.sales || 0) - (d.cogs || 0);
+        if (s.key === 'sga')    return d.sga    || 0;
+        if (s.key === 'profit') return (d.sales || 0) - (d.cogs || 0) - (d.sga || 0);
+        // 内訳科目：sgaBreakdown + cogsBreakdown から検索
+        const breakdown = [...(d.sgaBreakdown || []), ...(d.cogsBreakdown || [])];
+        const found = breakdown.find(it => it.name === s.name);
+        return found ? (found.amount || 0) : 0;
+      });
+      const total = monthly.reduce((a, b) => a + b, 0);
+      csvRows.push([s.name, s.row, ...monthly, total]);
+    });
+
+    // CSV文字列生成（BOM付きUTF-8）
+    const csv  = csvRows
+      .map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
+      .join('\r\n');
+    const bom  = '\uFEFF';
+    const blob = new Blob([bom + csv], { type: 'text/csv;charset=utf-8;' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `ultra_zaimu_${fromMonth.replace('-', '')}-${toMonth.replace('-', '')}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+  } catch (e) {
+    alert('ダウンロードに失敗しました: ' + e.message);
+  } finally {
+    if (btnEl) { btnEl.disabled = false; btnEl.textContent = origText; }
+  }
+}

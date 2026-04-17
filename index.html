@@ -119,7 +119,17 @@
         <!-- DL・コピーボタン -->
         <div class="ipad-home-actions">
           <button class="ipad-btn-secondary" id="ipad-btn-copy" type="button">📋 コピー</button>
-          <button class="ipad-btn-secondary" id="ipad-btn-dl"   type="button">⬇️ DL</button>
+          <button class="ipad-btn-secondary" id="ipad-btn-dl"   type="button">⬇️ 税理士用CSV</button>
+        </div>
+
+        <!-- 税理士用CSV DLパネル（DLボタン押下で表示） -->
+        <div class="ipad-tax-dl-panel" id="ipad-tax-dl-panel" hidden>
+          <div class="ipad-tax-dl-row">
+            <select id="ipad-tax-from" class="ipad-tax-select" aria-label="開始月"></select>
+            <span class="ipad-tax-sep">〜</span>
+            <select id="ipad-tax-to" class="ipad-tax-select" aria-label="終了月"></select>
+          </div>
+          <button id="ipad-tax-dl-exec" class="ipad-tax-dl-btn" type="button">ダウンロード実行</button>
         </div>
 
       </div><!-- /ipad-home-right -->

@@ -354,7 +354,14 @@ async function initIpadHome() {
 
   // DL・コピーボタン
   document.getElementById('ipad-btn-copy')?.addEventListener('click', _ipadCopyPL);
-  document.getElementById('ipad-btn-dl')?.addEventListener('click', () => navigate('pl.html'));
+  document.getElementById('ipad-btn-dl')?.addEventListener('click', _ipadToggleTaxDLPanel);
+
+  // 税理士用CSV DL実行ボタン
+  document.getElementById('ipad-tax-dl-exec')?.addEventListener('click', () => {
+    const from = document.getElementById('ipad-tax-from')?.value;
+    const to   = document.getElementById('ipad-tax-to')?.value;
+    downloadTaxCSVByRange(from, to, document.getElementById('ipad-tax-dl-exec'));
+  });
 
   // 当月損益をカードに表示
   const summary = await callGAS('getSummary', { month: currentMonth }).catch(() => null);
@@ -548,6 +555,27 @@ async function _renderIpadAnnualTotals() {
       profitEl.style.color = totProfit >= 0 ? 'var(--uz-green)' : 'var(--uz-red)';
     }
   } catch { /* サイレントフェイル */ }
+}
+
+function _ipadToggleTaxDLPanel() {
+  const panel   = document.getElementById('ipad-tax-dl-panel');
+  const fromSel = document.getElementById('ipad-tax-from');
+  const toSel   = document.getElementById('ipad-tax-to');
+  if (!panel) return;
+
+  if (panel.hidden) {
+    // 初回表示時にプルダウンを生成
+    if (!fromSel?.options.length) {
+      const now      = new Date();
+      const curMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      const fromDefault = `${Math.max(now.getFullYear(), 2025)}-01`;
+      buildMonthOptions(fromSel, fromDefault);
+      buildMonthOptions(toSel,   curMonth);
+    }
+    panel.hidden = false;
+  } else {
+    panel.hidden = true;
+  }
 }
 
 function _ipadCopyPL() {

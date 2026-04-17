@@ -16,6 +16,13 @@
             <select id="pc-year" class="pc-select"></select>
           </label>
           <span class="text-muted" id="pc-status"></span>
+          <div class="pc-tax-dl-row">
+            <span class="text-muted" style="font-size:11px;">税理士用CSV:</span>
+            <select id="pc-tax-from" class="pc-select" aria-label="開始月"></select>
+            <span class="text-muted">〜</span>
+            <select id="pc-tax-to" class="pc-select" aria-label="終了月"></select>
+            <button id="pc-tax-dl-btn" class="pc-btn pc-btn--ghost" type="button">⬇️ DL</button>
+          </div>
         </div>
         <div style="overflow-x:auto;">
           <table class="pl-table" id="pl-table">
