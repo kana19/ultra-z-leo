@@ -210,6 +210,42 @@ function setTimeSelect(idPrefix, value) {
   mEl.value = m;
 }
 
+/* ── 労働時間計算（日またぎ自動判定） ───────────────────── */
+/**
+ * 労働時間を計算し、日またぎ・異常判定を返す
+ * @param {string} clockIn  'HH:MM'
+ * @param {string} clockOut 'HH:MM'
+ * @returns {object|null} { minutes, hours, mins, isOvernight, isAbnormal, clockOutDisplay } | null
+ *
+ * 判定ルール:
+ *   - 退店時刻 >= 入店時刻 → 同日退店
+ *   - 退店時刻 <  入店時刻 → 翌日退店（+24時間）
+ *   - 労働時間が13時間超 → 異常フラグ
+ */
+const _WORK_ABNORMAL_MINUTES = 13 * 60; // 13時間を超えたら異常
+
+function calcWorkDuration(clockIn, clockOut) {
+  if (!clockIn || !clockOut) return null;
+  const mIn  = clockIn.match(/^(\d{1,2}):(\d{2})/);
+  const mOut = clockOut.match(/^(\d{1,2}):(\d{2})/);
+  if (!mIn || !mOut) return null;
+
+  const inMin  = parseInt(mIn[1], 10)  * 60 + parseInt(mIn[2], 10);
+  const outMin = parseInt(mOut[1], 10) * 60 + parseInt(mOut[2], 10);
+
+  const isOvernight = outMin < inMin;
+  const totalMin    = isOvernight ? (outMin + 24 * 60 - inMin) : (outMin - inMin);
+
+  return {
+    minutes: totalMin,
+    hours: Math.floor(totalMin / 60),
+    mins:  totalMin % 60,
+    isOvernight,
+    isAbnormal: totalMin > _WORK_ABNORMAL_MINUTES,
+    clockOutDisplay: isOvernight ? `翌${clockOut}` : clockOut,
+  };
+}
+
 /* ── ページナビゲーション ────────────────────────────────── */
 /**
  * 指定URLに遷移
