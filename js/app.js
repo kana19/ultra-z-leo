@@ -147,7 +147,7 @@ function hideLoading() {
 
 /* ── 時刻セレクト ────────────────────────────────────────── */
 const _TIME_HOURS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
-const _TIME_MINS  = ['00','05','10','15','20','25','30','35','40','45','50','55'];
+const _TIME_MINS  = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'));
 
 /**
  * 時・分セレクト2つのHTML断片を返す
@@ -158,8 +158,7 @@ const _TIME_MINS  = ['00','05','10','15','20','25','30','35','40','45','50','55'
 function timeSelectHTML(idPrefix, value, required = false) {
   const parts = (value || '').split(':');
   const selH  = (parts[0] || '').padStart(2, '0');
-  const mRaw  = parseInt(parts[1] || '', 10);
-  const selM  = isNaN(mRaw) ? '' : String(Math.floor(mRaw / 5) * 5).padStart(2, '0');
+  const selM  = (parts[1] || '').padStart(2, '0');
 
   const blankH = required ? '' : '<option value="">--</option>';
   const blankM = required ? '' : '<option value="">--</option>';
@@ -206,8 +205,7 @@ function setTimeSelect(idPrefix, value) {
   }
   const parts = value.split(':');
   const h     = (parts[0] || '').padStart(2, '0');
-  const mRaw  = parseInt(parts[1] || '', 10);
-  const m     = isNaN(mRaw) ? '00' : String(Math.floor(mRaw / 5) * 5).padStart(2, '0');
+  const m     = (parts[1] || '').padStart(2, '0');
   hEl.value = h;
   mEl.value = m;
 }
