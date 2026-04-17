@@ -5,7 +5,7 @@
    ============================================================ */
 
 /* ══════════════════════════════════════════════════════════
-   入店記録画面（clockin.html）
+   入店記録画面(clockin.html)
    ══════════════════════════════════════════════════════════ */
 
 /* クイック選択ボタングループ */
@@ -52,7 +52,7 @@
   color: var(--uz-gold);
 }
 
-/* 勤怠リスト（フル） */
+/* 勤怠リスト(フル) */
 .attendance-list {
   display: flex;
   flex-direction: column;
@@ -116,7 +116,18 @@
 
 .attendance-clockout-btn:active { background: rgba(224,80,80,0.2); }
 
-/* 入店ボタン（画面下固定） */
+/* 入店履歴 — 日またぎ・異常値の時刻表示 */
+.attend-time-overnight {
+  color: var(--uz-gold);
+  font-weight: 700;
+}
+
+.attend-time-abnormal {
+  color: var(--uz-red);
+  font-weight: 700;
+}
+
+/* 入店ボタン(画面下固定) */
 .clockin-submit-bar {
   position: fixed;
   bottom: 0;
@@ -153,10 +164,10 @@
 .clockin-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
 
 /* ══════════════════════════════════════════════════════════
-   未収・買掛け画面（uncollected.html）
+   未収・買掛け画面(uncollected.html)
    ══════════════════════════════════════════════════════════ */
 
-/* サマリーカード（上部） */
+/* サマリーカード(上部) */
 .uc-summary {
   display: flex;
   gap: 8px;
@@ -382,7 +393,7 @@
 }
 
 /* ══════════════════════════════════════════════════════════
-   設定画面（settings.html）
+   設定画面(settings.html)
    ══════════════════════════════════════════════════════════ */
 
 .settings-header {
@@ -594,7 +605,7 @@
   color: var(--uz-text);
 }
 
-/* GAS URL行（横スクロール） */
+/* GAS URL行(横スクロール) */
 .info-row__url {
   font-size: 10px;
   color: var(--uz-muted);
@@ -614,7 +625,7 @@
 }
 
 /* ══════════════════════════════════════════════════════════
-   入力履歴画面（history.html）
+   入力履歴画面(history.html)
    ══════════════════════════════════════════════════════════ */
 
 .history-header {
@@ -691,7 +702,7 @@
 .history-item__amount--attendance-out    { color: var(--uz-muted); font-size: 12px; }
 
 /* ══════════════════════════════════════════════════════════
-   承認バナー（history.html）
+   承認バナー(history.html)
    ══════════════════════════════════════════════════════════ */
 
 .approval-banner {
@@ -746,7 +757,7 @@
 }
 
 /* ══════════════════════════════════════════════════════════
-   税理士用CSV DL（pl.html）
+   税理士用CSV DL(pl.html)
    ══════════════════════════════════════════════════════════ */
 
 /* 期間選択+DLボタン行 */
