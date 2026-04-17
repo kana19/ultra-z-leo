@@ -338,9 +338,26 @@ function renderAttendance(items) {
       const dateLabel  = `${m}/${d}（${dow}）`;
       const clockIn    = parseTimeStr(r.clockIn);
       const clockOut   = parseTimeStr(r.clockOut);
-      const timeStr    = clockOut
-        ? `${escHtml(clockIn)} → ${escHtml(clockOut)}`
-        : `${escHtml(clockIn)} — 退店未記録`;
+
+      // 労働時間計算（日またぎ自動判定・異常判定）
+      const dur = clockOut ? calcWorkDuration(clockIn, clockOut) : null;
+
+      let timeStr;
+      if (clockOut) {
+        if (dur?.isAbnormal) {
+          // 異常値：全体を赤文字で警告表示
+          timeStr = `<span class="attend-time-abnormal">${escHtml(clockIn)} → ${escHtml(dur.clockOutDisplay)}</span>`;
+        } else if (dur?.isOvernight) {
+          // 正常な日またぎ：「翌」を金色で強調
+          timeStr = `${escHtml(clockIn)} → <span class="attend-time-overnight">翌</span>${escHtml(clockOut)}`;
+        } else {
+          // 同日退店：通常表示
+          timeStr = `${escHtml(clockIn)} → ${escHtml(clockOut)}`;
+        }
+      } else {
+        timeStr = `${escHtml(clockIn)} — 退店未記録`;
+      }
+
       const isActive   = !clockOut;
       const ls         = getLockStatus(r.date);
       const widget     = buildLockWidget(ls, atIdx, 'at');
@@ -646,6 +663,21 @@ async function saveEdit() {
         clockIn,
         clockOut,
       });
+
+      // 労働時間の異常チェック（保存はブロックしない・警告のみ）
+      if (result?.status === 'ok' && clockOut) {
+        const dur = calcWorkDuration(clockIn, clockOut);
+        if (dur?.isAbnormal) {
+          closeEditForm();
+          showToast(
+            `⚠️ 労働時間が${dur.hours}時間${dur.mins}分です。異常値の可能性があります。保存されましたが確認してください。`,
+            'error',
+            6000
+          );
+          await loadAll();
+          return;
+        }
+      }
     }
 
     if (result?.status !== 'ok') throw new Error(result?.message || '登録エラー');
