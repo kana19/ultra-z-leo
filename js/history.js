@@ -679,15 +679,29 @@ function parseTimeStr(val) {
   if (!val) return '';
   const s = String(val).trim();
   if (!s) return '';
+
+  // パターン1: "HH:MM" or "HH:MM:SS" 形式（そのまま返す）
   if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(s)) return s.slice(0, 5);
+
+  // パターン2: GASのシリアル日時（例: "Sat Dec 30 1899 20:21:00 GMT+0900"）
+  // ブラウザ依存のnew Date()を避け、正規表現でHH:MMを直接抽出
+  const serialMatch = s.match(/\b(\d{1,2}):(\d{2})(?::\d{2})?\b/);
+  if (serialMatch && /Dec 30 1899|1899\/12\/30|1899-12-30/.test(s)) {
+    return `${serialMatch[1].padStart(2, '0')}:${serialMatch[2]}`;
+  }
+
+  // パターン3: ISO形式（例: "2026-04-17T10:30:00.000Z"）
   if (/^\d{4}-\d{2}-\d{2}T/.test(s)) {
     const d = new Date(s);
     if (!isNaN(d.getTime()))
       return `${String(d.getUTCHours()).padStart(2,'0')}:${String(d.getUTCMinutes()).padStart(2,'0')}`;
   }
+
+  // パターン4: その他Date文字列（フォールバック）
   const d = new Date(s);
   if (!isNaN(d.getTime()))
     return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+
   return '';
 }
 
