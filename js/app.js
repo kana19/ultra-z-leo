@@ -29,7 +29,7 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 /* ── GAS設定 ─────────────────────────────────────────────── */
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbwy8WQIb-WYK-FDq2CKcjvJ8BSkEk8Ew0K-b0s05qoyi9Q7-quaatgI9L_vkU7W3Xd93g/exec';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycby4JMIAB3aX6_mLBoveCMDSXLpjKeMgr70YYkr7dwwhvnfBBcHgm45cSIQucC-L3P_gDA/exec';
 
 /**
  * GASにGETリクエストを送る（CORS回避のためクエリパラメータで送信）
@@ -227,9 +227,9 @@ const COST_MASTER_KEY = 'uz_cost_master';
 /** デフォルト科目マスタ（確定申告行番号対応） */
 const DEFAULT_COST_MASTER = [
   // ── 仕入原価（divisionCode:"1"） ──
-  { code: 'C1', taxRow: null, name: '仕入（酒類・食材）', taxRate: 8,  type: 'fixed',  divisionCode: '1' },
-  { code: 'C2', taxRow: null, name: '仕入（消耗品）',     taxRate: 10, type: 'fixed',  divisionCode: '1' },
-  { code: 'C3', taxRow: null, name: '仕入（その他）',     taxRate: 10, type: 'fixed',  divisionCode: '1' },
+  { code: 'C1', taxRow: null, name: '仕入(酒類・食材)', taxRate: 8,  type: 'fixed',  divisionCode: '1' },
+  { code: 'C2', taxRow: null, name: '仕入(消耗品)',     taxRate: 10, type: 'fixed',  divisionCode: '1' },
+  { code: 'C3', taxRow: null, name: '仕入(その他)',     taxRate: 10, type: 'fixed',  divisionCode: '1' },
   // ── 販管費（divisionCode:"2"）固定科目 ──
   { code: '8',  taxRow: 8,  name: '租税公課',       taxRate: 0,  type: 'fixed',  divisionCode: '2' },
   { code: '9',  taxRow: 9,  name: '荷造運賃',       taxRate: 10, type: 'fixed',  divisionCode: '2' },
