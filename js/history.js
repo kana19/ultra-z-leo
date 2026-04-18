@@ -669,11 +669,7 @@ async function saveEdit() {
         const dur = calcWorkDuration(clockIn, clockOut);
         if (dur?.isAbnormal) {
           closeEditForm();
-          showToast(
-            `⚠️ 労働時間が${dur.hours}時間${dur.mins}分です。異常値の可能性があります。保存されましたが確認してください。`,
-            'error',
-            6000
-          );
+          alert(`⚠️ 労働時間が${dur.hours}時間${dur.mins}分です。\n異常値の可能性があります。\n保存されましたが確認してください。`);
           await loadAll();
           return;
         }
