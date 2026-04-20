@@ -16,10 +16,10 @@ const SERVICE_MASTER_KEY = 'uz_service_master';
 /* ── デフォルト値 ────────────────────────────────────────── */
 const DEFAULT_STORE_NAME = 'スナック LEO';
 const DEFAULT_STAFF = [
-  { id: 1, name: 'さくら' },
-  { id: 2, name: 'あかね' },
-  { id: 3, name: 'みか'   },
-  { id: 4, name: 'ゆき'   },
+  { id: 1, name: 'さくら', employmentType: 'employed' },
+  { id: 2, name: 'あかね', employmentType: 'employed' },
+  { id: 3, name: 'みか',   employmentType: 'employed' },
+  { id: 4, name: 'ゆき',   employmentType: 'employed' },
 ];
 const DEFAULT_SERVICES = [
   { code: 'S001', name: '店内売上',     taxRate: 10 },
@@ -97,6 +97,17 @@ async function saveSettingsToGAS() {
       staffList:   getStaffList(),
       serviceList: getServiceList(),
     });
+  } catch {
+    // localStorageには保存済みのため、GAS失敗はサイレントフェイル
+  }
+}
+
+/**
+ * スタッフマスタのみをGASに保存（storeName / serviceListに影響しない）。
+ */
+async function saveStaffListToGAS() {
+  try {
+    await callGAS('saveStaffList', { staffList: getStaffList() });
   } catch {
     // localStorageには保存済みのため、GAS失敗はサイレントフェイル
   }
@@ -184,17 +195,93 @@ function renderStaffList() {
     return;
   }
 
-  container.innerHTML = list.map(s => `
-    <div class="staff-row" id="staff-row-${s.id}">
-      <span class="staff-row__name">${escHtml(s.name)}</span>
-      <button class="staff-delete-btn"
-              type="button"
-              onclick="deleteStaff(${s.id})"
-              aria-label="${escHtml(s.name)}を削除">
-        削除
-      </button>
-    </div>
-  `).join('');
+  container.innerHTML = list.map(s => {
+    const empType = s.employmentType || 'employed';
+    const badge = empType === 'contractor'
+      ? `<span class="staff-emp-badge staff-emp-badge--contractor">委託・外注</span>`
+      : `<span class="staff-emp-badge staff-emp-badge--employed">雇用</span>`;
+    return `
+      <div class="staff-row" id="staff-row-${s.id}">
+        <span class="staff-row__name">${escHtml(s.name)}</span>
+        ${badge}
+        <button class="staff-edit-btn"
+                type="button"
+                onclick="editStaff(${s.id})"
+                aria-label="${escHtml(s.name)}を編集">
+          編集
+        </button>
+        <button class="staff-delete-btn"
+                type="button"
+                onclick="deleteStaff(${s.id})"
+                aria-label="${escHtml(s.name)}を削除">
+          削除
+        </button>
+      </div>
+    `;
+  }).join('');
+}
+
+function editStaff(id) {
+  const list  = getStaffList();
+  const staff = list.find(s => s.id === id);
+  if (!staff) return;
+
+  const row = document.getElementById(`staff-row-${id}`);
+  if (!row) return;
+
+  const empType = staff.employmentType || 'employed';
+  row.innerHTML = `
+    <input type="text"
+           id="staff-edit-name-${id}"
+           class="settings-input"
+           style="flex:1;min-width:80px;height:40px;font-size:14px;"
+           value="${escHtml(staff.name)}"
+           maxlength="20"
+           autocomplete="off"
+           aria-label="スタッフ名">
+    <select id="staff-edit-emp-${id}"
+            class="form-select"
+            style="height:40px;font-size:13px;flex-shrink:0;"
+            aria-label="雇用形態">
+      <option value="employed"${empType === 'employed' ? ' selected' : ''}>雇用</option>
+      <option value="contractor"${empType === 'contractor' ? ' selected' : ''}>委託・外注</option>
+    </select>
+    <button class="staff-save-btn"
+            type="button"
+            onclick="saveEditStaff(${id})"
+            aria-label="保存">
+      保存
+    </button>
+    <button class="staff-cancel-btn"
+            type="button"
+            onclick="renderStaffList()"
+            aria-label="キャンセル">
+      キャンセル
+    </button>
+  `;
+  document.getElementById(`staff-edit-name-${id}`)?.focus();
+}
+
+async function saveEditStaff(id) {
+  const nameEl = document.getElementById(`staff-edit-name-${id}`);
+  const empEl  = document.getElementById(`staff-edit-emp-${id}`);
+  if (!nameEl || !empEl) return;
+
+  const name = nameEl.value.trim();
+  if (!name) return showToast('スタッフ名を入力してください', 'error');
+
+  const list = getStaffList();
+  if (list.some(s => s.id !== id && s.name === name)) {
+    return showToast('同じ名前のスタッフが既に登録されています', 'error');
+  }
+
+  const newList = list.map(s =>
+    s.id === id ? { ...s, name, employmentType: empEl.value } : s
+  );
+  _saveStaffList(newList);
+  renderStaffList();
+  showToast(`${name}を更新しました ✓`, 'success');
+  saveStaffListToGAS();
 }
 
 function deleteStaff(id) {
@@ -208,12 +295,13 @@ function deleteStaff(id) {
   _saveStaffList(newList);
   renderStaffList();
   showToast(`${target.name}を削除しました`, 'success');
-  saveSettingsToGAS();
+  saveStaffListToGAS();
 }
 
 function bindStaffAdd() {
-  const btn   = document.getElementById('staff-add-btn');
-  const input = document.getElementById('staff-add-input');
+  const btn       = document.getElementById('staff-add-btn');
+  const input     = document.getElementById('staff-add-input');
+  const empSelect = document.getElementById('staff-add-emp');
   if (!btn || !input) return;
 
   const doAdd = () => {
@@ -226,14 +314,16 @@ function bindStaffAdd() {
       return showToast('同じ名前のスタッフが既に登録されています', 'error');
     }
 
-    const maxId  = list.length > 0 ? Math.max(...list.map(s => s.id)) : 0;
-    const newList = [...list, { id: maxId + 1, name }];
+    const maxId         = list.length > 0 ? Math.max(...list.map(s => s.id)) : 0;
+    const employmentType = empSelect ? empSelect.value : 'employed';
+    const newList        = [...list, { id: maxId + 1, name, employmentType }];
     _saveStaffList(newList);
 
     input.value = '';
+    if (empSelect) empSelect.value = 'employed';
     renderStaffList();
     showToast(`${name}を追加しました ✓`, 'success');
-    saveSettingsToGAS();
+    saveStaffListToGAS();
   };
 
   btn.addEventListener('click', doAdd);

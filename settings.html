@@ -93,14 +93,21 @@
           <!-- settings.js が描画 -->
         </div>
         <!-- スタッフ追加 -->
-        <div class="staff-add-row">
+        <div class="staff-add-row" style="flex-wrap:wrap;">
           <input type="text"
                  id="staff-add-input"
                  class="staff-add-input"
-                 placeholder="名前を入力して追加"
+                 placeholder="スタッフ名"
                  maxlength="20"
                  autocomplete="off"
                  aria-label="追加するスタッフ名">
+          <select id="staff-add-emp"
+                  class="form-select"
+                  style="height:40px;font-size:13px;flex-shrink:0;"
+                  aria-label="雇用形態">
+            <option value="employed">雇用</option>
+            <option value="contractor">委託・外注</option>
+          </select>
           <button id="staff-add-btn"
                   class="staff-add-btn"
                   type="button">追加</button>

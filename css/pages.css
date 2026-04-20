@@ -527,6 +527,85 @@
   color: var(--uz-red);
 }
 
+/* スタッフ：雇用形態バッジ */
+.staff-emp-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 10px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.staff-emp-badge--employed {
+  background: var(--uz-amber-bg);
+  color: var(--uz-gold);
+  border: 1px solid var(--uz-border2);
+}
+
+.staff-emp-badge--contractor {
+  background: var(--uz-info-bg);
+  color: var(--uz-info);
+  border: 1px solid rgba(106,159,212,0.35);
+}
+
+/* スタッフ：編集ボタン */
+.staff-edit-btn {
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--uz-border2);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--uz-gold);
+  font-family: var(--font-main);
+  font-size: 12px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.staff-edit-btn:active {
+  border-color: var(--uz-gold);
+  background: var(--uz-amber-bg);
+}
+
+/* スタッフ：インライン編集 保存ボタン */
+.staff-save-btn {
+  height: 34px;
+  padding: 0 14px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--uz-gold);
+  color: var(--uz-bg);
+  font-family: var(--font-main);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: filter 0.15s;
+}
+
+.staff-save-btn:active { filter: brightness(0.85); }
+
+/* スタッフ：インライン編集 キャンセルボタン */
+.staff-cancel-btn {
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--uz-border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--uz-muted);
+  font-family: var(--font-main);
+  font-size: 12px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: border-color 0.15s;
+}
+
+.staff-cancel-btn:active { border-color: var(--uz-muted); }
+
 /* サービスマスタ：税率バッジ */
 .service-tax-badge {
   font-size: 11px;
