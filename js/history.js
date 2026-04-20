@@ -37,7 +37,7 @@ let isEditSaving    = false;
 let _ciStaffList = []; // localStorage から読み込み
 
 /* ── 新規入店登録：時刻セレクト（0〜29h / 5分刻み） ─────── */
-const _CI_HOURS = Array.from({ length: 30 }, (_, i) => String(i).padStart(2, '0'));
+const _CI_HOURS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
 const _CI_MINS  = Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, '0'));
 
 function buildCITimeSelectHTML(idPrefix) {
@@ -381,7 +381,9 @@ function renderAttendance(items) {
       const clockIn    = parseTimeStr(r.clockIn);
       const clockOut   = parseTimeStr(r.clockOut);
 
-      // 労働時間計算（日またぎ自動判定・異常判定）
+      // 労働時間計算（GAS の is_overnight / workMinutes を優先、なければローカル計算）
+      const isOvernightFlag = r.is_overnight === true ||
+        (clockOut ? calcWorkDuration(clockIn, clockOut)?.isOvernight : false);
       const dur = clockOut ? calcWorkDuration(clockIn, clockOut) : null;
 
       let timeStr;
@@ -389,12 +391,20 @@ function renderAttendance(items) {
         if (dur?.isAbnormal) {
           // 異常値：全体を赤文字で警告表示
           timeStr = `<span class="attend-time-abnormal">${escHtml(clockIn)} → ${escHtml(dur.clockOutDisplay)}</span>`;
-        } else if (dur?.isOvernight) {
-          // 正常な日またぎ：「翌」を金色で強調
+        } else if (isOvernightFlag) {
+          // 正常な日またぎ：「翌」を強調
           timeStr = `${escHtml(clockIn)} → <span class="attend-time-overnight">翌</span>${escHtml(clockOut)}`;
         } else {
           // 同日退店：通常表示
           timeStr = `${escHtml(clockIn)} → ${escHtml(clockOut)}`;
+        }
+        // 勤務時間を追記（GAS提供値を優先）
+        const wMin = r.workMinutes || dur?.minutes;
+        if (wMin && !dur?.isAbnormal) {
+          const wh = Math.floor(wMin / 60);
+          const wm = wMin % 60;
+          const durLabel = wm > 0 ? `${wh}時間${wm}分` : `${wh}時間`;
+          timeStr += ` <span style="font-size:11px;color:var(--uz-muted);">(${durLabel})</span>`;
         }
       } else {
         timeStr = `${escHtml(clockIn)} — 退店未記録`;
@@ -860,6 +870,29 @@ function _applyStaffEmpType() {
   empSel.value = _ciStaffList[idx].employmentType || 'employed';
 }
 
+/**
+ * 入店・退店時刻から日跨ぎかどうかを返す
+ * @returns {boolean|null} true=日跨ぎ / false=同日 / null=退店未選択
+ */
+function isOvernightCI(ciH, ciM, coH, coM) {
+  if (coH === '' || coM === '') return null;
+  const inMin  = Number(ciH) * 60 + Number(ciM);
+  const outMin = Number(coH) * 60 + Number(coM);
+  return outMin < inMin;
+}
+
+/** 翌日バッジの表示/非表示を更新 */
+function _updateOvernightBadge() {
+  const badge = document.getElementById('ci-next-day-badge');
+  if (!badge) return;
+  const ciH = document.getElementById('ci-clockin-h')?.value  || '';
+  const ciM = document.getElementById('ci-clockin-m')?.value  || '';
+  const coH = document.getElementById('ci-clockout-h')?.value || '';
+  const coM = document.getElementById('ci-clockout-m')?.value || '';
+  const overnight = isOvernightCI(ciH, ciM, coH, coM);
+  badge.style.display = overnight === true ? 'inline-block' : 'none';
+}
+
 function updateCIBtnLabel() {
   const btn = document.getElementById('ci-submit-btn');
   if (!btn) return;
@@ -869,10 +902,23 @@ function updateCIBtnLabel() {
   const clockOut = getTimeSelectValue('ci-clockout');
 
   const datePart = dateVal ? dateVal.replace(/-/g, '/') : '日付未選択';
-  const ciPart   = clockIn  || '時刻未選択';
-  const coPart   = clockOut ? `${clockOut} 退店` : '退店未記録';
+  const ciPart   = clockIn || '時刻未選択';
+
+  let coPart;
+  if (!clockOut) {
+    coPart = '退店未記録';
+  } else {
+    const ciH = document.getElementById('ci-clockin-h')?.value  || '';
+    const ciM = document.getElementById('ci-clockin-m')?.value  || '';
+    const coH = document.getElementById('ci-clockout-h')?.value || '';
+    const coM = document.getElementById('ci-clockout-m')?.value || '';
+    const overnight = isOvernightCI(ciH, ciM, coH, coM);
+    coPart = overnight === true ? `翌 ${clockOut} 退店` : `${clockOut} 退店`;
+  }
 
   btn.textContent = `${datePart} ${ciPart} 入店 / ${coPart} 登録する`;
+
+  _updateOvernightBadge();
 }
 
 async function submitClockIn() {
@@ -916,14 +962,27 @@ async function submitClockIn() {
   const btn = document.getElementById('ci-submit-btn');
   if (btn) { btn.disabled = true; btn.textContent = '登録中...'; }
 
+  // 日跨ぎ判定・退店日計算
+  let clockOutDate = date;
+  if (clockOut) {
+    const [ciH, ciM] = clockIn.split(':').map(Number);
+    const [coH, coM] = clockOut.split(':').map(Number);
+    if (coH * 60 + coM < ciH * 60 + ciM) {
+      const d = new Date(date);
+      d.setDate(d.getDate() + 1);
+      clockOutDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    }
+  }
+
   try {
     const result = await callGAS('clockIn', {
       staffId,
       staffName,
       employmentType,
       date,
-      clockIn,
-      clockOut,
+      clockInTime:  clockIn,
+      clockOutTime: clockOut || '',
+      clockOutDate: clockOut ? clockOutDate : '',
     });
 
     if (result?.status !== 'ok') throw new Error(result?.message || '登録エラー');
@@ -1087,12 +1146,28 @@ async function quickClockOut(rowIndex, staffId, staffName) {
   }
   if (!confirm(`${staffName} の退店を現在時刻で記録しますか？`)) return;
 
-  const now = new Date();
-  const clockOut = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  const now          = new Date();
+  const clockOutTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+  // 日跨ぎ判定：attendItems から入店レコードを取得
+  const record     = attendItems.find(it => it.rowIndex === rowIndex);
+  const clockIn    = parseTimeStr(record?.clockIn) || '';
+  const clockInDate = record?.date || todayStr();
+  let   clockOutDate = clockInDate;
+
+  if (clockIn) {
+    const [ciH, ciM] = clockIn.split(':').map(Number);
+    const [coH, coM] = clockOutTime.split(':').map(Number);
+    if (coH * 60 + coM < ciH * 60 + ciM) {
+      const d = new Date(clockInDate);
+      d.setDate(d.getDate() + 1);
+      clockOutDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    }
+  }
 
   showLoading();
   try {
-    const result = await callGAS('clockOut', { rowIndex, staffId, clockOut });
+    const result = await callGAS('clockOut', { rowIndex, staffId, clockOutTime, clockOutDate });
     if (result?.status !== 'ok') throw new Error(result?.message || '記録エラー');
     showToast(`${staffName} の退店を記録しました ✓`, 'success');
     await loadAttendanceOnly();

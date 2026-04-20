@@ -284,6 +284,18 @@
       white-space: nowrap; flex-shrink: 0;
     }
 
+    /* ── 日跨ぎバッジ ── */
+    .ci-badge-nextday {
+      font-size: 11px;
+      padding: 3px 8px;
+      background: rgba(59, 130, 246, 0.12);
+      color: #3b82f6;
+      border-radius: 10px;
+      font-weight: 600;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
     /* ── 新規入店登録 開くボタン ── */
     .ci-open-btn {
       display: block;
@@ -581,7 +593,10 @@
         <label class="ci-field-label">
           退店時刻<span class="ci-optional">任意</span>
         </label>
-        <div id="ci-clockout-wrap"><!-- history.js が描画 --></div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <div id="ci-clockout-wrap"><!-- history.js が描画 --></div>
+          <span id="ci-next-day-badge" class="ci-badge-nextday" style="display:none;">翌日</span>
+        </div>
       </div>
 
       <!-- 登録ボタン -->
