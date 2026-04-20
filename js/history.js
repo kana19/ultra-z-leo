@@ -33,12 +33,39 @@ let attendItems   = []; // 入店履歴行
 let currentEditItem = null;
 let isEditSaving    = false;
 
+// 新規入店登録フォーム
+let _ciStaffList = []; // localStorage から読み込み
+
+/* ── 新規入店登録：時刻セレクト（0〜29h / 5分刻み） ─────── */
+const _CI_HOURS = Array.from({ length: 30 }, (_, i) => String(i).padStart(2, '0'));
+const _CI_MINS  = Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, '0'));
+
+function buildCITimeSelectHTML(idPrefix) {
+  const blank = '<option value="">--</option>';
+  const optsH = blank + _CI_HOURS.map(v => `<option value="${v}">${v}</option>`).join('');
+  const optsM = blank + _CI_MINS.map(v  => `<option value="${v}">${v}</option>`).join('');
+  return `<div style="display:flex;align-items:center;gap:6px;">` +
+    `<select id="${idPrefix}-h" class="date-input" style="width:72px;">${optsH}</select>` +
+    `<span style="color:var(--uz-text);font-weight:600;font-size:16px;">:</span>` +
+    `<select id="${idPrefix}-m" class="date-input" style="width:72px;">${optsM}</select>` +
+    `</div>`;
+}
+
+function _getStaffFromStorage() {
+  try {
+    const saved = localStorage.getItem('uz_staff_master');
+    return saved ? JSON.parse(saved) : [];
+  } catch { return []; }
+}
+
 /* ── 初期化 ──────────────────────────────────────────────── */
 document.addEventListener('DOMContentLoaded', () => {
   bindTabs();
   bindNav();
   bindEditPanel();
   bindListClicks(); // 委譲リスナーは1回だけ登録
+  initClockInForm();
+  bindClockInForm();
   loadAll();
   updateIpadApprovalBanner();
 });
@@ -205,15 +232,26 @@ function bindListClicks() {
   });
 
   document.getElementById('attendance-list')?.addEventListener('click', e => {
-    const btn = e.target.closest('.hist-edit-btn[data-scope="at"]');
-    if (!btn) return;
-    const idx = parseInt(btn.dataset.idx, 10);
-    if (!isNaN(idx) && attendItems[idx]) {
-      if (document.body.classList.contains('is-ipad')) {
-        renderIpadRightPanel(attendItems[idx]);
-      } else {
-        openEditForm(attendItems[idx]);
+    const editBtn = e.target.closest('.hist-edit-btn[data-scope="at"]');
+    if (editBtn) {
+      const idx = parseInt(editBtn.dataset.idx, 10);
+      if (!isNaN(idx) && attendItems[idx]) {
+        if (document.body.classList.contains('is-ipad')) {
+          renderIpadRightPanel(attendItems[idx]);
+        } else {
+          openEditForm(attendItems[idx]);
+        }
       }
+      return;
+    }
+
+    const coBtn = e.target.closest('.ci-clockout-btn');
+    if (coBtn) {
+      quickClockOut(
+        parseInt(coBtn.dataset.rowIndex, 10),
+        coBtn.dataset.staffId   || '',
+        coBtn.dataset.staffName || ''
+      );
     }
   });
 }
@@ -362,6 +400,17 @@ function renderAttendance(items) {
       const ls         = getLockStatus(r.date);
       const widget     = buildLockWidget(ls, atIdx, 'at');
 
+      const clockoutBtn = (isActive && !ls.locked)
+        ? `<button class="ci-clockout-btn"
+                   type="button"
+                   data-row-index="${enriched.rowIndex || ''}"
+                   data-staff-id="${escHtml(String(enriched.staffId || ''))}"
+                   data-staff-name="${escHtml(enriched.staffName || '')}"
+                   aria-label="${escHtml(enriched.staffName || '')}の退店を記録">
+             退店を記録
+           </button>`
+        : '';
+
       html += `
         <div class="attend-record-row">
           <div class="attend-record-date">${dateLabel}</div>
@@ -369,6 +418,7 @@ function renderAttendance(items) {
           <span class="attend-status ${isActive ? 'attend-status--active' : 'attend-status--out'}">
             ${isActive ? '在店中' : '退店済'}
           </span>
+          ${clockoutBtn}
           ${widget}
         </div>`;
     });
@@ -731,6 +781,224 @@ function parseTimeStr(val) {
     return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
 
   return '';
+}
+
+/* ══════════════════════════════════════════════════════════
+   新規入店登録フォーム
+   ══════════════════════════════════════════════════════════ */
+
+function initClockInForm() {
+  _ciStaffList = _getStaffFromStorage();
+
+  // スタッフプルダウンを描画
+  const sel = document.getElementById('ci-staff-select');
+  if (sel) {
+    sel.innerHTML = '<option value="">スタッフを選択...</option>';
+    _ciStaffList.forEach((s, i) => {
+      const opt = document.createElement('option');
+      opt.value       = String(i);
+      opt.textContent = s.name;
+      sel.appendChild(opt);
+    });
+  }
+
+  // 今日の日付をセット
+  const dateInput = document.getElementById('ci-date');
+  if (dateInput) dateInput.value = todayStr();
+
+  // 時刻セレクト描画（0〜29h / 5分刻み）
+  const ciWrap = document.getElementById('ci-clockin-wrap');
+  if (ciWrap) ciWrap.innerHTML = buildCITimeSelectHTML('ci-clockin');
+
+  const coWrap = document.getElementById('ci-clockout-wrap');
+  if (coWrap) coWrap.innerHTML = buildCITimeSelectHTML('ci-clockout');
+
+  updateCIBtnLabel();
+}
+
+function bindClockInForm() {
+  // ラジオ切り替え
+  document.querySelectorAll('input[name="ci-mode"]').forEach(radio => {
+    radio.addEventListener('change', () => {
+      const isRegistered = radio.value === 'registered';
+      document.getElementById('ci-registered-wrap').style.display = isRegistered ? '' : 'none';
+      document.getElementById('ci-manual-wrap').style.display     = isRegistered ? 'none' : '';
+
+      if (isRegistered) {
+        // 現在選択中のスタッフで雇用形態を自動反映
+        _applyStaffEmpType();
+      } else {
+        // 手入力モードは雇用形態をリセット（必須入力化）
+        const empSel = document.getElementById('ci-emp-type');
+        if (empSel) empSel.value = '';
+      }
+    });
+  });
+
+  // 登録済みスタッフ変更 → 雇用形態自動反映
+  document.getElementById('ci-staff-select')?.addEventListener('change', _applyStaffEmpType);
+
+  // ボタンラベル動的更新
+  ['ci-date', 'ci-clockin-h', 'ci-clockin-m', 'ci-clockout-h', 'ci-clockout-m'].forEach(id => {
+    document.getElementById(id)?.addEventListener('change', updateCIBtnLabel);
+  });
+
+  // 登録ボタン
+  document.getElementById('ci-submit-btn')?.addEventListener('click', submitClockIn);
+}
+
+function _applyStaffEmpType() {
+  const sel   = document.getElementById('ci-staff-select');
+  const empSel = document.getElementById('ci-emp-type');
+  if (!sel || !empSel) return;
+  const idx   = parseInt(sel.value, 10);
+  if (isNaN(idx) || !_ciStaffList[idx]) { empSel.value = ''; return; }
+  empSel.value = _ciStaffList[idx].employmentType || 'employed';
+}
+
+function updateCIBtnLabel() {
+  const btn = document.getElementById('ci-submit-btn');
+  if (!btn) return;
+
+  const dateVal  = document.getElementById('ci-date')?.value || '';
+  const clockIn  = getTimeSelectValue('ci-clockin');
+  const clockOut = getTimeSelectValue('ci-clockout');
+
+  const datePart = dateVal ? dateVal.replace(/-/g, '/') : '日付未選択';
+  const ciPart   = clockIn  || '時刻未選択';
+  const coPart   = clockOut ? `${clockOut} 退店` : '退店未記録';
+
+  btn.textContent = `${datePart} ${ciPart} 入店 / ${coPart} 登録する`;
+}
+
+async function submitClockIn() {
+  const mode = document.querySelector('input[name="ci-mode"]:checked')?.value || 'registered';
+
+  let staffName, staffId;
+
+  if (mode === 'registered') {
+    const sel = document.getElementById('ci-staff-select');
+    const idx = parseInt(sel?.value, 10);
+    if (isNaN(idx) || !_ciStaffList[idx]) {
+      return showToast('スタッフを選択してください', 'error');
+    }
+    staffName = _ciStaffList[idx].name;
+    staffId   = String(_ciStaffList[idx].id);
+  } else {
+    staffName = document.getElementById('ci-staff-name')?.value.trim() || '';
+    staffId   = '';
+    if (!staffName) return showToast('スタッフ名を入力してください', 'error');
+  }
+
+  const employmentType = document.getElementById('ci-emp-type')?.value || '';
+  if (!employmentType) return showToast('雇用形態を選択してください', 'error');
+
+  const date = document.getElementById('ci-date')?.value || '';
+  if (!date) return showToast('日付を選択してください', 'error');
+
+  const clockIn = getTimeSelectValue('ci-clockin');
+  if (!clockIn) return showToast('入店時刻を選択してください', 'error');
+
+  const clockOut = getTimeSelectValue('ci-clockout'); // 任意
+
+  // 退店時刻の異常チェック
+  if (clockOut) {
+    const dur = calcWorkDuration(clockIn, clockOut);
+    if (dur?.isAbnormal) {
+      if (!confirm(`⚠️ 労働時間が${dur.hours}時間${dur.mins}分です。\n異常値の可能性があります。続けますか？`)) return;
+    }
+  }
+
+  const btn = document.getElementById('ci-submit-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '登録中...'; }
+
+  try {
+    const result = await callGAS('clockIn', {
+      staffId,
+      staffName,
+      employmentType,
+      date,
+      clockIn,
+      clockOut,
+    });
+
+    if (result?.status !== 'ok') throw new Error(result?.message || '登録エラー');
+
+    showToast(`${staffName} の入店を記録しました ✓`, 'success');
+    _resetCIForm();
+    await loadAttendanceOnly();
+
+  } catch (e) {
+    showToast('登録に失敗しました：' + e.message, 'error');
+    if (btn) { btn.disabled = false; }
+    updateCIBtnLabel();
+  }
+}
+
+function _resetCIForm() {
+  // 登録済みモードに戻す
+  const regRadio = document.getElementById('ci-mode-registered');
+  if (regRadio) regRadio.checked = true;
+  document.getElementById('ci-registered-wrap').style.display = '';
+  document.getElementById('ci-manual-wrap').style.display     = 'none';
+
+  // スタッフ・名前リセット
+  const staffSel = document.getElementById('ci-staff-select');
+  if (staffSel) staffSel.value = '';
+  const nameInput = document.getElementById('ci-staff-name');
+  if (nameInput) nameInput.value = '';
+
+  // 雇用形態リセット
+  const empSel = document.getElementById('ci-emp-type');
+  if (empSel) empSel.value = '';
+
+  // 日付を今日にリセット
+  const dateInput = document.getElementById('ci-date');
+  if (dateInput) dateInput.value = todayStr();
+
+  // 時刻セレクトをクリア
+  setTimeSelect('ci-clockin',  '');
+  setTimeSelect('ci-clockout', '');
+
+  updateCIBtnLabel();
+}
+
+async function loadAttendanceOnly() {
+  attendItems = [];
+  const monthParam = `${currentYear}-${String(currentMonth).padStart(2, '0')}`;
+  try {
+    const result = await callGAS('getAttendanceByMonth', { month: monthParam });
+    if (result?.status === 'ok' && Array.isArray(result.data)) {
+      renderAttendance(result.data);
+    } else {
+      renderAttendanceError();
+    }
+  } catch {
+    renderAttendanceError();
+  }
+}
+
+async function quickClockOut(rowIndex, staffId, staffName) {
+  if (!rowIndex) {
+    showToast('rowIndex が取得できません。GAS の getAttendanceByMonth に rowIndex を追加してください。', 'error', 4000);
+    return;
+  }
+  if (!confirm(`${staffName} の退店を現在時刻で記録しますか？`)) return;
+
+  const now = new Date();
+  const clockOut = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+  showLoading();
+  try {
+    const result = await callGAS('clockOut', { rowIndex, staffId, clockOut });
+    if (result?.status !== 'ok') throw new Error(result?.message || '記録エラー');
+    showToast(`${staffName} の退店を記録しました ✓`, 'success');
+    await loadAttendanceOnly();
+  } catch (e) {
+    showToast('退店記録に失敗しました：' + e.message, 'error');
+  } finally {
+    hideLoading();
+  }
 }
 
 /* ── XSSエスケープ ───────────────────────────────────────── */
