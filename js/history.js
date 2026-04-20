@@ -51,6 +51,39 @@ function buildCITimeSelectHTML(idPrefix) {
     `</div>`;
 }
 
+/** 退店時刻の「時」option HTMLを入店時刻基準で生成 */
+function buildClockOutHourOptionsHTML(ciH) {
+  const ciHInt = parseInt(ciH, 10);
+  let html = '<option value="">--</option>';
+  if (isNaN(ciHInt) || ciHInt === 0) {
+    for (let h = 0; h <= 23; h++) {
+      html += `<option value="${String(h).padStart(2, '0')}">${String(h).padStart(2, '0')}</option>`;
+    }
+    return html;
+  }
+  for (let h = ciHInt; h <= 23; h++) {
+    html += `<option value="${String(h).padStart(2, '0')}">${String(h).padStart(2, '0')}</option>`;
+  }
+  html += '<option value="" disabled>── 翌日 ──</option>';
+  for (let h = 0; h < ciHInt; h++) {
+    html += `<option value="${String(h).padStart(2, '0')}">${String(h).padStart(2, '0')}</option>`;
+  }
+  return html;
+}
+
+/** 退店時刻の「時」セレクトを入店時刻基準で再生成（既存値保持） */
+function _refreshClockOutHourSelect(ciHId, coHId) {
+  const coHSel = document.getElementById(coHId);
+  if (!coHSel) return;
+  const prevValue = coHSel.value;
+  const ciH = document.getElementById(ciHId)?.value || '';
+  coHSel.innerHTML = buildClockOutHourOptionsHTML(ciH);
+  if (prevValue && !isNaN(parseInt(prevValue, 10))) {
+    const match = Array.from(coHSel.options).find(o => o.value === prevValue && !o.disabled);
+    if (match) coHSel.value = prevValue;
+  }
+}
+
 function _getStaffFromStorage() {
   try {
     const saved = localStorage.getItem('uz_staff_master');
@@ -489,6 +522,11 @@ function openEditForm(item) {
     // attendance
     titleEl.textContent = '入店記録を修正';
     bodyEl.innerHTML    = buildAttendanceFormHTML(item);
+    // 退店時刻の時プルダウンを入店時刻基準で再生成
+    _refreshClockOutHourSelect('ef-clockin-h', 'ef-clockout-h');
+    document.getElementById('ef-clockin-h')?.addEventListener('change', () => {
+      _refreshClockOutHourSelect('ef-clockin-h', 'ef-clockout-h');
+    });
   }
 
   bindTaxCalc();
@@ -1114,8 +1152,13 @@ function openCIModal() {
   initClockInForm();
 
   // initClockInForm() がHTML再描画するので時刻セレクトのchangeリスナーを再登録
-  ['ci-clockin-h', 'ci-clockin-m', 'ci-clockout-h', 'ci-clockout-m'].forEach(id => {
+  ['ci-clockin-m', 'ci-clockout-h', 'ci-clockout-m'].forEach(id => {
     document.getElementById(id)?.addEventListener('change', updateCIBtnLabel);
+  });
+  // 入店時刻「時」変更 → 退店時刻プルダウンを再生成
+  document.getElementById('ci-clockin-h')?.addEventListener('change', () => {
+    _refreshClockOutHourSelect('ci-clockin-h', 'ci-clockout-h');
+    updateCIBtnLabel();
   });
 
   // 入店時刻を現在時刻の5分刻みでセット
@@ -1124,6 +1167,8 @@ function openCIModal() {
   const ciM = document.getElementById('ci-clockin-m');
   if (ciH) ciH.value = String(hour).padStart(2, '0');
   if (ciM) ciM.value = String(min).padStart(2, '0');
+  // 入店時刻基準で退店時刻プルダウンを初期化
+  _refreshClockOutHourSelect('ci-clockin-h', 'ci-clockout-h');
   updateCIBtnLabel();
 
   // オーバーレイ表示 + シートをスライドイン
