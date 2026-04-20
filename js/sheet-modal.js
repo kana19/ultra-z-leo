@@ -93,15 +93,19 @@ window.SheetModal = (() => {
     const body = _el('div', 'sm-body');
     body.innerHTML = options.bodyHtml || '';
 
-    const footer = _el('div', 'sm-footer');
-    const submitBtn = _el('button', 'sm-submit-btn', { type: 'button' });
-    submitBtn.textContent = options.submitLabel || '登録する';
-    footer.appendChild(submitBtn);
-
     sheet.appendChild(handle);
     sheet.appendChild(header);
     sheet.appendChild(body);
-    sheet.appendChild(footer);
+
+    // onSubmit が提供された場合のみ SheetModal 管理のフッターボタンを表示
+    let submitBtn = null;
+    if (typeof options.onSubmit === 'function') {
+      const footer = _el('div', 'sm-footer');
+      submitBtn = _el('button', 'sm-submit-btn', { type: 'button' });
+      submitBtn.textContent = options.submitLabel || '登録する';
+      footer.appendChild(submitBtn);
+      sheet.appendChild(footer);
+    }
 
     document.body.appendChild(overlay);
     document.body.appendChild(sheet);
@@ -124,22 +128,23 @@ window.SheetModal = (() => {
     // ── ドラッグ
     _bindDrag(sheet);
 
-    // ── 送信ボタン
-    submitBtn.addEventListener('click', async () => {
-      if (!options.onSubmit) return;
-      const origLabel = submitBtn.textContent;
-      submitBtn.disabled = true;
-      submitBtn.textContent = '送信中...';
-      try {
-        const result = await options.onSubmit();
-        if (result === true) close();
-      } finally {
-        if (submitBtn.isConnected) {
-          submitBtn.disabled  = false;
-          submitBtn.textContent = origLabel;
+    // ── 送信ボタン（onSubmit 提供時のみ）
+    if (submitBtn) {
+      submitBtn.addEventListener('click', async () => {
+        const origLabel = submitBtn.textContent;
+        submitBtn.disabled = true;
+        submitBtn.textContent = '送信中...';
+        try {
+          const result = await options.onSubmit();
+          if (result === true) close();
+        } finally {
+          if (submitBtn.isConnected) {
+            submitBtn.disabled    = false;
+            submitBtn.textContent = origLabel;
+          }
         }
-      }
-    });
+      });
+    }
 
     // ── onRender（DOM差し込み直後）
     if (typeof options.onRender === 'function') {

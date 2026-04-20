@@ -97,12 +97,7 @@ document.addEventListener('DOMContentLoaded', () => {
   bindNav();
   bindEditPanel();
   bindListClicks(); // 委譲リスナーは1回だけ登録
-  initClockInForm();
-  bindClockInForm();
-  bindCIModalDragClose();
   document.getElementById('ci-open-btn')?.addEventListener('click', openCIModal);
-  document.getElementById('ci-modal-close')?.addEventListener('click', closeCIModal);
-  document.getElementById('ci-modal-overlay')?.addEventListener('click', closeCIModal);
   loadAll();
   updateIpadApprovalBanner();
 });
@@ -839,10 +834,66 @@ function parseTimeStr(val) {
    新規入店登録フォーム
    ══════════════════════════════════════════════════════════ */
 
-function initClockInForm() {
-  _ciStaffList = _getStaffFromStorage();
+/** シートモーダルに差し込むフォーム HTML を生成 */
+function _buildCIFormBodyHTML() {
+  return `
+    <div class="ci-section" aria-label="新規入店登録">
+      <div class="ci-row ci-row--radio">
+        <label class="ci-radio-label">
+          <input type="radio" name="ci-mode" id="ci-mode-registered" value="registered" checked>
+          <span>登録済みから選ぶ</span>
+        </label>
+        <label class="ci-radio-label">
+          <input type="radio" name="ci-mode" id="ci-mode-manual" value="manual">
+          <span>未登録を手入力</span>
+        </label>
+      </div>
+      <div id="ci-registered-wrap" class="ci-row">
+        <label class="ci-field-label" for="ci-staff-select">スタッフ</label>
+        <select id="ci-staff-select" class="ci-select" aria-label="スタッフを選択">
+          <option value="">スタッフを選択...</option>
+        </select>
+      </div>
+      <div id="ci-manual-wrap" class="ci-row" style="display:none;">
+        <label class="ci-field-label" for="ci-staff-name">スタッフ名</label>
+        <input type="text" id="ci-staff-name" class="ci-input"
+               placeholder="スタッフ名を入力" maxlength="20" autocomplete="off"
+               aria-label="スタッフ名">
+      </div>
+      <div class="ci-row">
+        <label class="ci-field-label" for="ci-emp-type">雇用形態</label>
+        <select id="ci-emp-type" class="ci-select" aria-label="雇用形態">
+          <option value="">選択してください</option>
+          <option value="employed">雇用</option>
+          <option value="contractor">委託・外注</option>
+        </select>
+      </div>
+      <div class="ci-row">
+        <label class="ci-field-label" for="ci-date">日付</label>
+        <input type="date" id="ci-date" class="ci-date-input" aria-label="日付">
+      </div>
+      <div class="ci-row">
+        <label class="ci-field-label">入店時刻</label>
+        <div id="ci-clockin-wrap"></div>
+      </div>
+      <div class="ci-row">
+        <label class="ci-field-label">退店時刻<span class="ci-optional">任意</span></label>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <div id="ci-clockout-wrap"></div>
+          <span id="ci-next-day-badge" class="ci-badge-nextday" style="display:none;">翌日</span>
+        </div>
+      </div>
+      <div id="ci-error-toast"></div>
+      <div class="ci-row ci-row--submit">
+        <button id="ci-submit-btn" type="button" class="ci-submit-btn">登録する</button>
+      </div>
+    </div>`;
+}
 
-  // スタッフプルダウンを描画
+/** SheetModal の onRender で呼ぶ：フォーム初期化＋イベントバインド */
+function _initCIFormInModal() {
+  // スタッフリスト更新してプルダウンに反映
+  _ciStaffList = _getStaffFromStorage();
   const sel = document.getElementById('ci-staff-select');
   if (sel) {
     sel.innerHTML = '<option value="">スタッフを選択...</option>';
@@ -854,57 +905,65 @@ function initClockInForm() {
     });
   }
 
-  // 今日の日付をセット
+  // 今日の日付
   const dateInput = document.getElementById('ci-date');
   if (dateInput) dateInput.value = todayStr();
 
-  // 時刻セレクト描画（0〜29h / 5分刻み）
+  // 時刻セレクト描画
   const ciWrap = document.getElementById('ci-clockin-wrap');
   if (ciWrap) ciWrap.innerHTML = buildCITimeSelectHTML('ci-clockin');
-
   const coWrap = document.getElementById('ci-clockout-wrap');
   if (coWrap) coWrap.innerHTML = buildCITimeSelectHTML('ci-clockout');
 
-  updateCIBtnLabel();
-}
-
-function bindClockInForm() {
   // ラジオ切り替え
   document.querySelectorAll('input[name="ci-mode"]').forEach(radio => {
     radio.addEventListener('change', () => {
       const isRegistered = radio.value === 'registered';
       document.getElementById('ci-registered-wrap').style.display = isRegistered ? '' : 'none';
       document.getElementById('ci-manual-wrap').style.display     = isRegistered ? 'none' : '';
-
       if (isRegistered) {
-        // 現在選択中のスタッフで雇用形態を自動反映
         _applyStaffEmpType();
       } else {
-        // 手入力モードは雇用形態をリセット（必須入力化）
         const empSel = document.getElementById('ci-emp-type');
         if (empSel) empSel.value = '';
       }
     });
   });
 
-  // 登録済みスタッフ変更 → 雇用形態自動反映
+  // スタッフ変更 → 雇用形態自動反映
   document.getElementById('ci-staff-select')?.addEventListener('change', _applyStaffEmpType);
 
-  // ボタンラベル動的更新
-  ['ci-date', 'ci-clockin-h', 'ci-clockin-m', 'ci-clockout-h', 'ci-clockout-m'].forEach(id => {
+  // ボタンラベル動的更新（分・退店時刻・日付）
+  ['ci-date', 'ci-clockin-m', 'ci-clockout-h', 'ci-clockout-m'].forEach(id => {
     document.getElementById(id)?.addEventListener('change', updateCIBtnLabel);
+  });
+  // 入店時刻「時」変更 → 退店プルダウン再生成
+  document.getElementById('ci-clockin-h')?.addEventListener('change', () => {
+    _refreshClockOutHourSelect('ci-clockin-h', 'ci-clockout-h');
+    updateCIBtnLabel();
   });
 
   // 登録ボタン
   document.getElementById('ci-submit-btn')?.addEventListener('click', submitClockIn);
 
-  // フィールド操作時の赤枠解除
+  // バリデーションエラー赤枠の解除
   document.getElementById('ci-emp-type')?.addEventListener('change', e => {
     e.target.classList.remove('ci-field-error');
   });
   document.getElementById('ci-clockin-wrap')?.addEventListener('change', () => {
     document.getElementById('ci-clockin-wrap')?.classList.remove('ci-field-error');
   });
+
+  // 入店時刻を現在時刻（5分刻み）でセット
+  const { hour, min } = getCurrentTimeRounded();
+  const ciH = document.getElementById('ci-clockin-h');
+  const ciM = document.getElementById('ci-clockin-m');
+  if (ciH) ciH.value = String(hour).padStart(2, '0');
+  if (ciM) ciM.value = String(min).padStart(2, '0');
+
+  // 入店時刻基準で退店プルダウン初期化
+  _refreshClockOutHourSelect('ci-clockin-h', 'ci-clockout-h');
+  updateCIBtnLabel();
 }
 
 function _applyStaffEmpType() {
@@ -1107,36 +1166,8 @@ async function submitClockIn() {
   }
 }
 
-function _resetCIForm() {
-  // 登録済みモードに戻す
-  const regRadio = document.getElementById('ci-mode-registered');
-  if (regRadio) regRadio.checked = true;
-  document.getElementById('ci-registered-wrap').style.display = '';
-  document.getElementById('ci-manual-wrap').style.display     = 'none';
-
-  // スタッフ・名前リセット
-  const staffSel = document.getElementById('ci-staff-select');
-  if (staffSel) staffSel.value = '';
-  const nameInput = document.getElementById('ci-staff-name');
-  if (nameInput) nameInput.value = '';
-
-  // 雇用形態リセット
-  const empSel = document.getElementById('ci-emp-type');
-  if (empSel) empSel.value = '';
-
-  // 日付を今日にリセット
-  const dateInput = document.getElementById('ci-date');
-  if (dateInput) dateInput.value = todayStr();
-
-  // 時刻セレクトをクリア
-  setTimeSelect('ci-clockin',  '');
-  setTimeSelect('ci-clockout', '');
-
-  updateCIBtnLabel();
-}
-
 /* ══════════════════════════════════════════════════════════
-   シートモーダル（§12.5-1準拠）
+   シートモーダル（SheetModal 利用）
    ══════════════════════════════════════════════════════════ */
 
 function getCurrentTimeRounded() {
@@ -1148,98 +1179,15 @@ function getCurrentTimeRounded() {
 }
 
 function openCIModal() {
-  // スタッフリスト最新化 + フォームHTML再描画 + 今日の日付セット
-  initClockInForm();
-
-  // initClockInForm() がHTML再描画するので時刻セレクトのchangeリスナーを再登録
-  ['ci-clockin-m', 'ci-clockout-h', 'ci-clockout-m'].forEach(id => {
-    document.getElementById(id)?.addEventListener('change', updateCIBtnLabel);
+  SheetModal.open({
+    title:    '新規入店登録',
+    bodyHtml: _buildCIFormBodyHTML(),
+    onRender: _initCIFormInModal,
   });
-  // 入店時刻「時」変更 → 退店時刻プルダウンを再生成
-  document.getElementById('ci-clockin-h')?.addEventListener('change', () => {
-    _refreshClockOutHourSelect('ci-clockin-h', 'ci-clockout-h');
-    updateCIBtnLabel();
-  });
-
-  // 入店時刻を現在時刻の5分刻みでセット
-  const { hour, min } = getCurrentTimeRounded();
-  const ciH = document.getElementById('ci-clockin-h');
-  const ciM = document.getElementById('ci-clockin-m');
-  if (ciH) ciH.value = String(hour).padStart(2, '0');
-  if (ciM) ciM.value = String(min).padStart(2, '0');
-  // 入店時刻基準で退店時刻プルダウンを初期化
-  _refreshClockOutHourSelect('ci-clockin-h', 'ci-clockout-h');
-  updateCIBtnLabel();
-
-  // オーバーレイ表示 + シートをスライドイン
-  document.getElementById('ci-modal-overlay')?.classList.add('ci-modal-overlay--show');
-  const sheet = document.getElementById('ci-modal-sheet');
-  if (sheet) {
-    sheet.style.transition = 'transform 0.25s ease-out';
-    sheet.style.transform  = '';
-    sheet.classList.add('ci-modal-sheet--open');
-  }
-  document.body.style.overflow = 'hidden';
 }
 
 function closeCIModal() {
-  const overlay = document.getElementById('ci-modal-overlay');
-  const sheet   = document.getElementById('ci-modal-sheet');
-
-  overlay?.classList.remove('ci-modal-overlay--show');
-  document.body.style.overflow = '';
-
-  if (sheet) {
-    sheet.style.transition = 'transform 0.25s ease-in';
-    sheet.style.transform  = 'translateY(100%)';
-    setTimeout(() => {
-      sheet.classList.remove('ci-modal-sheet--open');
-      sheet.style.transition = '';
-      sheet.style.transform  = '';
-      _clearCIFieldErrors();
-      _resetCIForm();
-    }, 250);
-  } else {
-    _clearCIFieldErrors();
-    _resetCIForm();
-  }
-}
-
-function bindCIModalDragClose() {
-  const sheet = document.getElementById('ci-modal-sheet');
-  if (!sheet) return;
-
-  let startY = 0;
-  let dragY  = 0;
-  let active = false;
-
-  sheet.addEventListener('touchstart', e => {
-    startY = e.touches[0].clientY;
-    dragY  = 0;
-    active = true;
-    sheet.style.transition = 'none';
-  }, { passive: true });
-
-  sheet.addEventListener('touchmove', e => {
-    if (!active) return;
-    dragY = e.touches[0].clientY - startY;
-    if (dragY < 0) dragY = 0;
-    sheet.style.transform = `translateY(${dragY}px)`;
-  }, { passive: true });
-
-  sheet.addEventListener('touchend', () => {
-    if (!active) return;
-    active = false;
-    if (dragY >= 80) {
-      closeCIModal();
-    } else {
-      sheet.style.transition = 'transform 0.15s ease-out';
-      sheet.style.transform  = 'translateY(0)';
-      setTimeout(() => { sheet.style.transition = ''; }, 150);
-    }
-    startY = 0;
-    dragY  = 0;
-  });
+  SheetModal.close();
 }
 
 async function loadAttendanceOnly() {
