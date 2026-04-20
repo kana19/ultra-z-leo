@@ -1027,9 +1027,6 @@ async function submitClockIn() {
     }
   }
 
-  const btn = document.getElementById('ci-submit-btn');
-  if (btn) { btn.disabled = true; btn.textContent = '登録中...'; }
-
   // 日跨ぎ判定・退店日計算
   let clockOutDate = date;
   if (clockOut) {
@@ -1041,6 +1038,9 @@ async function submitClockIn() {
       clockOutDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     }
   }
+
+  const btn = document.getElementById('ci-submit-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '登録中...'; }
 
   try {
     const result = await callGAS('clockIn', {
@@ -1061,8 +1061,11 @@ async function submitClockIn() {
 
   } catch (e) {
     showToast('登録に失敗しました：' + e.message, 'error');
-    if (btn) { btn.disabled = false; }
-    updateCIBtnLabel();
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      updateCIBtnLabel();
+    }
   }
 }
 
