@@ -283,6 +283,106 @@
       background: var(--uz-green-bg); color: var(--uz-green);
       white-space: nowrap; flex-shrink: 0;
     }
+
+    /* ── 新規入店登録 開くボタン ── */
+    .ci-open-btn {
+      display: block;
+      width: 100%;
+      padding: 12px 16px;
+      background: var(--uz-amber-bg);
+      color: var(--uz-gold);
+      border: 1px solid var(--uz-border2);
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 700;
+      font-family: var(--font-main);
+      cursor: pointer;
+      text-align: center;
+      transition: background 0.15s;
+    }
+    .ci-open-btn:active { background: rgba(212,175,55,0.22); }
+
+    /* ── シートモーダル：背景オーバーレイ ── */
+    .ci-modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 400;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s;
+    }
+    .ci-modal-overlay--show {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    /* ── シートモーダル：シート本体 ── */
+    .ci-modal-sheet {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: var(--uz-surface);
+      border-top-left-radius: 16px;
+      border-top-right-radius: 16px;
+      box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.1);
+      z-index: 401;
+      max-height: 80vh;
+      transform: translateY(100%);
+      transition: transform 0.25s ease-out;
+      padding-bottom: env(safe-area-inset-bottom);
+      display: flex;
+      flex-direction: column;
+    }
+    .ci-modal-sheet--open { transform: translateY(0); }
+
+    /* ── シートモーダル：ドラッグハンドル ── */
+    .ci-modal-handle {
+      width: 36px;
+      height: 4px;
+      background: var(--uz-border);
+      border-radius: 9999px;
+      margin: 10px auto 6px;
+      flex-shrink: 0;
+    }
+
+    /* ── シートモーダル：ヘッダー ── */
+    .ci-modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 4px 20px 10px;
+      border-bottom: 1px solid var(--uz-border);
+      flex-shrink: 0;
+    }
+    .ci-modal-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--uz-text);
+    }
+    .ci-modal-close {
+      background: none;
+      border: none;
+      color: var(--uz-muted);
+      font-size: 20px;
+      cursor: pointer;
+      padding: 4px 8px;
+      font-family: var(--font-main);
+      line-height: 1;
+    }
+
+    /* ── シートモーダル：フォーム領域 ── */
+    .ci-modal-body {
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .ci-modal-body .ci-section {
+      margin: 0;
+      border: none;
+      border-radius: 0;
+    }
+    .ci-modal-body .ci-section__title { display: none; }
   </style>
 </head>
 <body data-page="history">
@@ -371,74 +471,11 @@
       <div id="panel-attendance" class="hist-tab-content"
            role="tabpanel" aria-labelledby="tab-attendance">
 
-        <!-- ▸ 新規入店登録セクション -->
-        <div id="ci-section" class="ci-section" aria-label="新規入店登録">
-          <div class="ci-section__title">新規入店登録</div>
-
-          <!-- スタッフ選択モード -->
-          <div class="ci-row ci-row--radio">
-            <label class="ci-radio-label">
-              <input type="radio" name="ci-mode" id="ci-mode-registered" value="registered" checked>
-              <span>登録済みから選ぶ</span>
-            </label>
-            <label class="ci-radio-label">
-              <input type="radio" name="ci-mode" id="ci-mode-manual" value="manual">
-              <span>未登録を手入力</span>
-            </label>
-          </div>
-
-          <!-- 登録済みスタッフ選択 -->
-          <div id="ci-registered-wrap" class="ci-row">
-            <label class="ci-field-label" for="ci-staff-select">スタッフ</label>
-            <select id="ci-staff-select" class="ci-select" aria-label="スタッフを選択">
-              <option value="">スタッフを選択...</option>
-            </select>
-          </div>
-
-          <!-- 未登録手入力 -->
-          <div id="ci-manual-wrap" class="ci-row" style="display:none;">
-            <label class="ci-field-label" for="ci-staff-name">スタッフ名</label>
-            <input type="text" id="ci-staff-name" class="ci-input"
-                   placeholder="スタッフ名を入力" maxlength="20" autocomplete="off"
-                   aria-label="スタッフ名">
-          </div>
-
-          <!-- 雇用形態 -->
-          <div class="ci-row">
-            <label class="ci-field-label" for="ci-emp-type">雇用形態</label>
-            <select id="ci-emp-type" class="ci-select" aria-label="雇用形態">
-              <option value="">選択してください</option>
-              <option value="employed">雇用</option>
-              <option value="contractor">委託・外注</option>
-            </select>
-          </div>
-
-          <!-- 日付 -->
-          <div class="ci-row">
-            <label class="ci-field-label" for="ci-date">日付</label>
-            <input type="date" id="ci-date" class="ci-date-input" aria-label="日付">
-          </div>
-
-          <!-- 入店時刻 -->
-          <div class="ci-row">
-            <label class="ci-field-label">入店時刻</label>
-            <div id="ci-clockin-wrap"><!-- history.js が描画 --></div>
-          </div>
-
-          <!-- 退店時刻 -->
-          <div class="ci-row">
-            <label class="ci-field-label">
-              退店時刻<span class="ci-optional">任意</span>
-            </label>
-            <div id="ci-clockout-wrap"><!-- history.js が描画 --></div>
-          </div>
-
-          <!-- 登録ボタン -->
-          <div class="ci-row ci-row--submit">
-            <button id="ci-submit-btn" type="button" class="ci-submit-btn">
-              登録する
-            </button>
-          </div>
+        <!-- ▸ 新規入店登録ボタン -->
+        <div style="padding: 12px 16px 4px;">
+          <button id="ci-open-btn" type="button" class="ci-open-btn">
+            ＋ 新規入店登録
+          </button>
         </div>
 
         <!-- ▸ 入店履歴一覧 -->
@@ -474,6 +511,86 @@
   </div>
   <div class="edit-panel__footer">
     <button id="edit-save-btn" type="button" class="edit-save-btn">保存する</button>
+  </div>
+</div>
+
+<!-- ── 新規入店登録 シートモーダル ── -->
+<div id="ci-modal-overlay" class="ci-modal-overlay" aria-hidden="true"></div>
+<div id="ci-modal-sheet" class="ci-modal-sheet" role="dialog" aria-modal="true" aria-labelledby="ci-modal-title">
+  <div class="ci-modal-handle" aria-hidden="true"></div>
+  <div class="ci-modal-header">
+    <span id="ci-modal-title" class="ci-modal-title">新規入店登録</span>
+    <button id="ci-modal-close" type="button" class="ci-modal-close" aria-label="閉じる">✕</button>
+  </div>
+  <div class="ci-modal-body">
+    <div id="ci-section" class="ci-section" aria-label="新規入店登録">
+      <div class="ci-section__title">新規入店登録</div>
+
+      <!-- スタッフ選択モード -->
+      <div class="ci-row ci-row--radio">
+        <label class="ci-radio-label">
+          <input type="radio" name="ci-mode" id="ci-mode-registered" value="registered" checked>
+          <span>登録済みから選ぶ</span>
+        </label>
+        <label class="ci-radio-label">
+          <input type="radio" name="ci-mode" id="ci-mode-manual" value="manual">
+          <span>未登録を手入力</span>
+        </label>
+      </div>
+
+      <!-- 登録済みスタッフ選択 -->
+      <div id="ci-registered-wrap" class="ci-row">
+        <label class="ci-field-label" for="ci-staff-select">スタッフ</label>
+        <select id="ci-staff-select" class="ci-select" aria-label="スタッフを選択">
+          <option value="">スタッフを選択...</option>
+        </select>
+      </div>
+
+      <!-- 未登録手入力 -->
+      <div id="ci-manual-wrap" class="ci-row" style="display:none;">
+        <label class="ci-field-label" for="ci-staff-name">スタッフ名</label>
+        <input type="text" id="ci-staff-name" class="ci-input"
+               placeholder="スタッフ名を入力" maxlength="20" autocomplete="off"
+               aria-label="スタッフ名">
+      </div>
+
+      <!-- 雇用形態 -->
+      <div class="ci-row">
+        <label class="ci-field-label" for="ci-emp-type">雇用形態</label>
+        <select id="ci-emp-type" class="ci-select" aria-label="雇用形態">
+          <option value="">選択してください</option>
+          <option value="employed">雇用</option>
+          <option value="contractor">委託・外注</option>
+        </select>
+      </div>
+
+      <!-- 日付 -->
+      <div class="ci-row">
+        <label class="ci-field-label" for="ci-date">日付</label>
+        <input type="date" id="ci-date" class="ci-date-input" aria-label="日付">
+      </div>
+
+      <!-- 入店時刻 -->
+      <div class="ci-row">
+        <label class="ci-field-label">入店時刻</label>
+        <div id="ci-clockin-wrap"><!-- history.js が描画 --></div>
+      </div>
+
+      <!-- 退店時刻 -->
+      <div class="ci-row">
+        <label class="ci-field-label">
+          退店時刻<span class="ci-optional">任意</span>
+        </label>
+        <div id="ci-clockout-wrap"><!-- history.js が描画 --></div>
+      </div>
+
+      <!-- 登録ボタン -->
+      <div class="ci-row ci-row--submit">
+        <button id="ci-submit-btn" type="button" class="ci-submit-btn">
+          登録する
+        </button>
+      </div>
+    </div>
   </div>
 </div>
 

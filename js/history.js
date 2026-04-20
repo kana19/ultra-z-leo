@@ -66,6 +66,10 @@ document.addEventListener('DOMContentLoaded', () => {
   bindListClicks(); // 委譲リスナーは1回だけ登録
   initClockInForm();
   bindClockInForm();
+  bindCIModalDragClose();
+  document.getElementById('ci-open-btn')?.addEventListener('click', openCIModal);
+  document.getElementById('ci-modal-close')?.addEventListener('click', closeCIModal);
+  document.getElementById('ci-modal-overlay')?.addEventListener('click', closeCIModal);
   loadAll();
   updateIpadApprovalBanner();
 });
@@ -925,7 +929,7 @@ async function submitClockIn() {
     if (result?.status !== 'ok') throw new Error(result?.message || '登録エラー');
 
     showToast(`${staffName} の入店を記録しました ✓`, 'success');
-    _resetCIForm();
+    closeCIModal();
     await loadAttendanceOnly();
 
   } catch (e) {
@@ -961,6 +965,104 @@ function _resetCIForm() {
   setTimeSelect('ci-clockout', '');
 
   updateCIBtnLabel();
+}
+
+/* ══════════════════════════════════════════════════════════
+   シートモーダル（§12.5-1準拠）
+   ══════════════════════════════════════════════════════════ */
+
+function getCurrentTimeRounded() {
+  const now = new Date();
+  return {
+    hour: now.getHours(),
+    min:  Math.floor(now.getMinutes() / 5) * 5,
+  };
+}
+
+function openCIModal() {
+  // スタッフリスト最新化 + フォームHTML再描画 + 今日の日付セット
+  initClockInForm();
+
+  // initClockInForm() がHTML再描画するので時刻セレクトのchangeリスナーを再登録
+  ['ci-clockin-h', 'ci-clockin-m', 'ci-clockout-h', 'ci-clockout-m'].forEach(id => {
+    document.getElementById(id)?.addEventListener('change', updateCIBtnLabel);
+  });
+
+  // 入店時刻を現在時刻の5分刻みでセット
+  const { hour, min } = getCurrentTimeRounded();
+  const ciH = document.getElementById('ci-clockin-h');
+  const ciM = document.getElementById('ci-clockin-m');
+  if (ciH) ciH.value = String(hour).padStart(2, '0');
+  if (ciM) ciM.value = String(min).padStart(2, '0');
+  updateCIBtnLabel();
+
+  // オーバーレイ表示 + シートをスライドイン
+  document.getElementById('ci-modal-overlay')?.classList.add('ci-modal-overlay--show');
+  const sheet = document.getElementById('ci-modal-sheet');
+  if (sheet) {
+    sheet.style.transition = 'transform 0.25s ease-out';
+    sheet.style.transform  = '';
+    sheet.classList.add('ci-modal-sheet--open');
+  }
+  document.body.style.overflow = 'hidden';
+}
+
+function closeCIModal() {
+  const overlay = document.getElementById('ci-modal-overlay');
+  const sheet   = document.getElementById('ci-modal-sheet');
+
+  overlay?.classList.remove('ci-modal-overlay--show');
+  document.body.style.overflow = '';
+
+  if (sheet) {
+    sheet.style.transition = 'transform 0.25s ease-in';
+    sheet.style.transform  = 'translateY(100%)';
+    setTimeout(() => {
+      sheet.classList.remove('ci-modal-sheet--open');
+      sheet.style.transition = '';
+      sheet.style.transform  = '';
+      _resetCIForm();
+    }, 250);
+  } else {
+    _resetCIForm();
+  }
+}
+
+function bindCIModalDragClose() {
+  const sheet = document.getElementById('ci-modal-sheet');
+  if (!sheet) return;
+
+  let startY = 0;
+  let dragY  = 0;
+  let active = false;
+
+  sheet.addEventListener('touchstart', e => {
+    startY = e.touches[0].clientY;
+    dragY  = 0;
+    active = true;
+    sheet.style.transition = 'none';
+  }, { passive: true });
+
+  sheet.addEventListener('touchmove', e => {
+    if (!active) return;
+    dragY = e.touches[0].clientY - startY;
+    if (dragY < 0) dragY = 0;
+    sheet.style.transform = `translateY(${dragY}px)`;
+  }, { passive: true });
+
+  sheet.addEventListener('touchend', () => {
+    if (!active) return;
+    active = false;
+    if (dragY >= 80) {
+      closeCIModal();
+    } else {
+      sheet.style.transition = 'transform 0.15s ease-out';
+      sheet.style.transform  = 'translateY(0)';
+      setTimeout(() => { sheet.style.transition = ''; }, 150);
+    }
+    startY = 0;
+    dragY  = 0;
+  });
 }
 
 async function loadAttendanceOnly() {
