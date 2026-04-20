@@ -284,6 +284,21 @@
       white-space: nowrap; flex-shrink: 0;
     }
 
+    /* ── バリデーションエラー ── */
+    .ci-field-error {
+      border-color: #e24b4a !important;
+    }
+    #ci-error-toast {
+      display: none;
+      margin: 8px 16px 0;
+      padding: 10px 14px;
+      background: #e24b4a;
+      color: #fff;
+      border-radius: 8px;
+      font-size: 14px;
+      text-align: center;
+    }
+
     /* ── 日跨ぎバッジ ── */
     .ci-badge-nextday {
       font-size: 11px;
@@ -598,6 +613,9 @@
           <span id="ci-next-day-badge" class="ci-badge-nextday" style="display:none;">翌日</span>
         </div>
       </div>
+
+      <!-- バリデーションエラートースト -->
+      <div id="ci-error-toast"></div>
 
       <!-- 登録ボタン -->
       <div class="ci-row ci-row--submit">

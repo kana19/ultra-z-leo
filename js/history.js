@@ -859,6 +859,14 @@ function bindClockInForm() {
 
   // 登録ボタン
   document.getElementById('ci-submit-btn')?.addEventListener('click', submitClockIn);
+
+  // フィールド操作時の赤枠解除
+  document.getElementById('ci-emp-type')?.addEventListener('change', e => {
+    e.target.classList.remove('ci-field-error');
+  });
+  document.getElementById('ci-clockin-wrap')?.addEventListener('change', () => {
+    document.getElementById('ci-clockin-wrap')?.classList.remove('ci-field-error');
+  });
 }
 
 function _applyStaffEmpType() {
@@ -921,7 +929,69 @@ function updateCIBtnLabel() {
   _updateOvernightBadge();
 }
 
+/** エラートースト表示（3秒後自動非表示） */
+function _showCIError(message) {
+  const toast = document.getElementById('ci-error-toast');
+  if (!toast) return;
+  toast.textContent = message;
+  toast.style.display = 'block';
+  clearTimeout(toast._timeoutId);
+  toast._timeoutId = setTimeout(() => { toast.style.display = 'none'; }, 3000);
+}
+
+/** 全フィールドの赤枠解除 */
+function _clearCIFieldErrors() {
+  document.querySelectorAll('.ci-field-error').forEach(el => el.classList.remove('ci-field-error'));
+  const toast = document.getElementById('ci-error-toast');
+  if (toast) toast.style.display = 'none';
+}
+
+/**
+ * バリデーション実行
+ * @returns {{ type:'error', field:Element, message:string } | { type:'confirm' } | null}
+ */
+function _validateCIForm() {
+  _clearCIFieldErrors();
+
+  // 雇用形態チェック
+  const empEl = document.getElementById('ci-emp-type');
+  if (!empEl?.value) {
+    return { type: 'error', field: empEl, message: '雇用形態を選択してください' };
+  }
+
+  // 入店時刻チェック
+  const ciH = document.getElementById('ci-clockin-h');
+  const ciM = document.getElementById('ci-clockin-m');
+  if (!ciH?.value || !ciM?.value) {
+    return { type: 'error', field: document.getElementById('ci-clockin-wrap'), message: '入店時刻を選択してください' };
+  }
+
+  // スタッフ未指定チェック（任意・confirmのみ）
+  const mode        = document.querySelector('input[name="ci-mode"]:checked')?.value || 'registered';
+  const staffSelect = document.getElementById('ci-staff-select');
+  const staffInput  = document.getElementById('ci-staff-name');
+  const noStaff     = mode === 'registered'
+    ? !staffSelect?.value
+    : !(staffInput?.value?.trim());
+  if (noStaff) {
+    return { type: 'confirm' };
+  }
+
+  return null;
+}
+
 async function submitClockIn() {
+  // バリデーション
+  const validation = _validateCIForm();
+  if (validation?.type === 'error') {
+    validation.field?.classList.add('ci-field-error');
+    _showCIError(validation.message);
+    return;
+  }
+  if (validation?.type === 'confirm') {
+    if (!window.confirm('スタッフ名無しで登録しますか？')) return;
+  }
+
   const mode = document.querySelector('input[name="ci-mode"]:checked')?.value || 'registered';
 
   let staffName, staffId;
@@ -929,25 +999,23 @@ async function submitClockIn() {
   if (mode === 'registered') {
     const sel = document.getElementById('ci-staff-select');
     const idx = parseInt(sel?.value, 10);
-    if (isNaN(idx) || !_ciStaffList[idx]) {
-      return showToast('スタッフを選択してください', 'error');
+    if (!isNaN(idx) && _ciStaffList[idx]) {
+      staffName = _ciStaffList[idx].name;
+      staffId   = String(_ciStaffList[idx].id);
+    } else {
+      staffName = '';
+      staffId   = '';
     }
-    staffName = _ciStaffList[idx].name;
-    staffId   = String(_ciStaffList[idx].id);
   } else {
     staffName = document.getElementById('ci-staff-name')?.value.trim() || '';
     staffId   = '';
-    if (!staffName) return showToast('スタッフ名を入力してください', 'error');
   }
 
   const employmentType = document.getElementById('ci-emp-type')?.value || '';
-  if (!employmentType) return showToast('雇用形態を選択してください', 'error');
-
-  const date = document.getElementById('ci-date')?.value || '';
+  const date           = document.getElementById('ci-date')?.value     || '';
   if (!date) return showToast('日付を選択してください', 'error');
 
   const clockIn = getTimeSelectValue('ci-clockin');
-  if (!clockIn) return showToast('入店時刻を選択してください', 'error');
 
   const clockOut = getTimeSelectValue('ci-clockout'); // 任意
 
@@ -1080,9 +1148,11 @@ function closeCIModal() {
       sheet.classList.remove('ci-modal-sheet--open');
       sheet.style.transition = '';
       sheet.style.transform  = '';
+      _clearCIFieldErrors();
       _resetCIForm();
     }, 250);
   } else {
+    _clearCIFieldErrors();
     _resetCIForm();
   }
 }
