@@ -98,7 +98,6 @@ document.addEventListener('DOMContentLoaded', () => {
   bindEditPanel();
   bindListClicks(); // 委譲リスナーは1回だけ登録
   document.getElementById('ci-open-btn')?.addEventListener('click', openCIModal);
-  document.getElementById('sales-open-btn')?.addEventListener('click', openSalesModal);
   loadAll();
   updateIpadApprovalBanner();
 });

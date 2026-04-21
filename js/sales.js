@@ -416,481 +416,241 @@ function escHtml(str) {
 }
 
 /* ════════════════════════════════════════════════════════════
-   SheetModal 版 売上入力（S3g-3）
+   SheetModal 版 売上入力（S3g-3 D案）
    ════════════════════════════════════════════════════════════ */
 
-/** シートモーダルに差し込むフォーム HTML を生成 */
 function _buildSalesFormBodyHTML() {
   return `
-    <div class="sales-sm" aria-label="売上入力">
-      <!-- ① 発生日 -->
-      <div class="form-section">
-        <label class="form-section__label" for="sm-date-input">発生日</label>
-        <input type="date" id="sm-date-input" class="date-input" aria-label="発生日">
+    <div class="sales-sm-body">
+
+      <div class="sales-sm-section">
+        <label class="sales-sm-label" for="sm-sales-date">日付</label>
+        <input type="date" id="sm-sales-date" class="sales-sm-date-input">
       </div>
 
-      <!-- ② サービス選択 -->
-      <div class="form-section">
-        <span class="form-section__label">サービス</span>
-        <div id="sm-service-cards"
-             class="radio-card-group radio-card-group--last-full"
-             role="radiogroup" aria-label="サービス選択">
+      <div class="sales-sm-section">
+        <label class="sales-sm-label">サービスを選択</label>
+        <div id="sm-sales-cards" class="sales-sm-cards"></div>
+      </div>
+
+      <div class="sales-sm-section">
+        <label class="sales-sm-label">金額</label>
+        <div class="sales-sm-amount-wrap">
+          <input type="text" id="sm-sales-amount" class="sales-sm-amount-input"
+                 inputmode="numeric" placeholder="0" maxlength="12" autocomplete="off">
+          <span class="sales-sm-yen">円</span>
         </div>
       </div>
 
-      <!-- ③ 諸口品目名 -->
-      <div class="form-section" id="sm-misc-section" hidden>
-        <label class="form-section__label" for="sm-misc-name-input">品目名</label>
-        <input type="text" id="sm-misc-name-input" class="text-input"
-               placeholder="品目名を入力（例：手土産代）" maxlength="50" autocomplete="off">
-        <p class="form-hint">マスタ未登録の品目を記録する場合に入力してください。</p>
+      <div class="sales-sm-section">
+        <label class="sales-sm-label">メモ<span class="sales-sm-optional">任意</span></label>
+        <textarea id="sm-sales-memo" class="sales-sm-memo" rows="2"></textarea>
       </div>
 
-      <!-- ④ 税率 -->
-      <div class="form-section">
-        <span class="form-section__label">税率</span>
-        <div class="tax-toggle" role="group" aria-label="税率選択">
-          <button class="tax-btn" data-rate="0"  type="button" aria-pressed="false"> 0%</button>
-          <button class="tax-btn" data-rate="8"  type="button" aria-pressed="false"> 8%</button>
-          <button class="tax-btn" data-rate="10" type="button" aria-pressed="false">10%</button>
-        </div>
-        <p class="form-hint">サービスのデフォルト税率が自動セットされます。変更は例外時のみ。</p>
-      </div>
+      <div id="sm-sales-toast" class="sales-sm-toast"></div>
 
-      <!-- ⑤ 金額入力 -->
-      <div class="form-section">
-        <span class="form-section__label">売上入力（税込み）</span>
-        <div class="amount-wrap amount-wrap--blue">
-          <span class="amount-prefix" aria-hidden="true">¥</span>
-          <input type="text" id="sm-amount-input" class="amount-input"
-                 inputmode="numeric" pattern="[0-9]*" placeholder="0"
-                 maxlength="10" autocomplete="off" aria-label="税込金額">
-        </div>
-        <div class="tax-display" aria-live="polite">
-          <div class="tax-display-item">
-            <div class="tax-display-item__label">税抜金額</div>
-            <div id="sm-tax-excluded" class="tax-display-item__value tax-display-item__value--blue">¥—</div>
-          </div>
-          <div class="tax-display-item">
-            <div class="tax-display-item__label">消費税</div>
-            <div id="sm-tax-amount" class="tax-display-item__value tax-display-item__value--blue">¥—</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ⑥ 売掛トグル -->
-      <div class="form-section">
-        <div class="toggle-row">
-          <div class="toggle-row__left">
-            <div class="toggle-row__title">売掛</div>
-            <div class="toggle-row__desc">まだ入金されていない場合にON</div>
-          </div>
-          <label class="switch" aria-label="売掛としてマーク">
-            <input type="checkbox" id="sm-uncollected-toggle">
-            <span class="switch-slider"></span>
-          </label>
-        </div>
-      </div>
-
-      <!-- ⑦ メモ -->
-      <div class="form-section">
-        <label class="form-section__label" for="sm-memo-input">メモ（任意）</label>
-        <input type="text" id="sm-memo-input" class="text-input"
-               placeholder="例：3名来店、ボトル持参" maxlength="100" autocomplete="off">
-      </div>
-
-      <!-- ⑧ 個別管理アコーディオン -->
-      <div class="accordion-section">
-        <button class="accordion-header" type="button"
-                id="sm-indiv-accordion-btn"
-                aria-expanded="false"
-                aria-controls="sm-indiv-accordion-body">
-          <span>⚙ 個別管理（上級者向け）</span>
-          <span class="accordion-chevron" aria-hidden="true">›</span>
-        </button>
-        <div class="accordion-body" id="sm-indiv-accordion-body" hidden>
-          <p id="sm-indiv-accordion-hint" class="form-hint" style="margin-bottom:14px;">
-            ⚠ 個別管理分は売上入力とは別に追加登録されます。売上入力時に個別分を差し引いて入力してください。
-          </p>
-          <div id="sm-indiv-rows"></div>
-          <button type="button" class="indiv-add-btn" id="sm-indiv-add-btn">
-            ＋ 行を追加
-          </button>
-        </div>
-      </div>
-
-      <!-- 登録ボタン -->
-      <div style="padding:16px 0 8px;">
-        <button id="sm-submit-btn" type="button" class="submit-btn submit-btn--blue"
-                style="width:100%;position:static;">
+      <div class="sales-sm-footer">
+        <button type="button" id="sm-sales-submit" class="sales-sm-submit-btn">
           登録する
         </button>
       </div>
+
     </div>`;
 }
 
-/** SheetModal の onRender で呼ぶ：フォーム初期化＋イベントバインド */
-function _initSalesFormInModal() {
-  // 日付を今日にセット
-  const dateEl = document.getElementById('sm-date-input');
-  if (dateEl) {
-    dateEl.value = todayStr();
-    dateEl.addEventListener('change', _smUpdateSubmitBtnDate);
-  }
+async function _initSalesFormInModal() {
+  document.getElementById('sm-sales-date').value = todayStr();
 
-  // サービスカード描画
-  const container = document.getElementById('sm-service-cards');
-  if (container) {
-    container.innerHTML = getServiceMaster().map(svc => `
-      <div class="radio-card"
-           data-code="${svc.code}"
-           role="radio"
-           aria-checked="false"
-           tabindex="0">
-        <div class="radio-card__label">${escHtml(svc.name)}</div>
-        <div class="radio-card__sub">税率 ${svc.taxRate}%</div>
-      </div>
-    `).join('');
+  await _renderSalesCards();
 
-    container.querySelectorAll('.radio-card').forEach(card => {
-      card.addEventListener('click', () => _smSelectService(card.dataset.code));
-      card.addEventListener('keydown', e => {
-        if (e.key === 'Enter' || e.key === ' ') _smSelectService(card.dataset.code);
-      });
-    });
-  }
+  _bindSalesAmountFormatting();
 
-  // 税率ボタン
-  document.querySelectorAll('.sales-sm .tax-btn').forEach(btn => {
-    btn.addEventListener('click', () => _smSetTaxRate(parseInt(btn.dataset.rate)));
-  });
+  document.getElementById('sm-sales-submit')
+    ?.addEventListener('click', _smHandleSalesSubmit);
 
-  // 金額入力
-  const amtEl = document.getElementById('sm-amount-input');
-  if (amtEl) {
-    amtEl.addEventListener('input', () => {
-      amtEl.value = amtEl.value.replace(/[^0-9]/g, '');
-      _smRecalcTax();
-      _smUpdateAccordionHint();
-    });
-  }
-
-  // アコーディオンバインド
-  document.getElementById('sm-indiv-accordion-btn')
-    ?.addEventListener('click', _smToggleAccordion);
-  document.getElementById('sm-indiv-add-btn')
-    ?.addEventListener('click', _smAddIndividualRow);
-
-  // 登録ボタン
-  document.getElementById('sm-submit-btn')
-    ?.addEventListener('click', _smHandleSubmit);
-
-  // 初期サービス選択
-  _smSelectService(getServiceMaster()[0].code);
+  document.getElementById('sm-sales-cards')
+    ?.addEventListener('click', _smHandleCardTap);
 }
 
-/* ── モーダル内サービス選択 ──────────────────────────────── */
-function _smSelectService(code) {
-  const svc = getServiceMaster().find(s => s.code === code);
-  if (!svc) return;
-  selectedServiceCode = code;
-
-  document.querySelectorAll('#sm-service-cards .radio-card').forEach(card => {
-    const checked = card.dataset.code === code;
-    card.classList.toggle('radio-card--checked-blue', checked);
-    card.setAttribute('aria-checked', String(checked));
-  });
-
-  _smSetTaxRate(svc.taxRate);
-
-  const miscSection = document.getElementById('sm-misc-section');
-  if (miscSection) {
-    miscSection.hidden = code !== 'S099';
-    if (code !== 'S099') {
-      const miscInput = document.getElementById('sm-misc-name-input');
-      if (miscInput) miscInput.value = '';
-    }
-  }
-}
-
-/* ── モーダル内税率セット ────────────────────────────────── */
-function _smSetTaxRate(rate) {
-  currentTaxRate = rate;
-  document.querySelectorAll('.sales-sm .tax-btn').forEach(btn => {
-    btn.classList.toggle('tax-btn--active-blue', parseInt(btn.dataset.rate) === rate);
-  });
-  _smRecalcTax();
-}
-
-/* ── モーダル内税計算 ────────────────────────────────────── */
-function _smRecalcTax() {
-  const raw = (document.getElementById('sm-amount-input')?.value || '0').replace(/,/g, '');
-  const taxIncluded = parseInt(raw) || 0;
-  const { taxExcluded, tax } = calcTax(taxIncluded, currentTaxRate);
-  const exEl  = document.getElementById('sm-tax-excluded');
-  const taxEl = document.getElementById('sm-tax-amount');
-  if (exEl)  exEl.textContent  = taxIncluded > 0 ? formatYen(taxExcluded) : '¥—';
-  if (taxEl) taxEl.textContent = taxIncluded > 0 ? formatYen(tax)         : '¥—';
-}
-
-/* ── モーダル内ボタンラベル更新 ──────────────────────────── */
-function _smBuildSubmitBtnText() {
-  const dateVal = document.getElementById('sm-date-input')?.value || todayStr();
-  return `発生日 ${dateVal.replace(/-/g, '/')}　登録する`;
-}
-
-function _smUpdateSubmitBtnDate() {
-  const btn = document.getElementById('sm-submit-btn');
-  if (!btn || btn.disabled) return;
-  btn.innerHTML = _smBuildSubmitBtnText();
-}
-
-/* ── モーダル内アコーディオン ────────────────────────────── */
-let _smAccordionOpen = false;
-let _smNextRowId     = 1;
-
-function _smToggleAccordion() {
-  _smAccordionOpen = !_smAccordionOpen;
-  const body = document.getElementById('sm-indiv-accordion-body');
-  const btn  = document.getElementById('sm-indiv-accordion-btn');
-  if (body) body.hidden = !_smAccordionOpen;
-  if (btn)  btn.setAttribute('aria-expanded', String(_smAccordionOpen));
-
-  if (_smAccordionOpen && !document.querySelector('#sm-indiv-rows .indiv-row')) {
-    _smAddIndividualRow();
-  }
-  if (_smAccordionOpen) _smUpdateAccordionHint();
-}
-
-function _smUpdateAccordionHint() {
-  const el = document.getElementById('sm-indiv-accordion-hint');
-  if (!el) return;
-  const amount = parseInt(
-    (document.getElementById('sm-amount-input')?.value || '0').replace(/,/g, '')
-  ) || 0;
-  if (amount === 0) {
-    el.textContent = '💡 売上金額が0円です。個別管理のみで登録できます。損益集計には個別管理分のみが反映されます。';
-  } else {
-    el.textContent = '⚠ 個別管理分は売上入力とは別に追加登録されます。売上入力時に個別分を差し引いて入力してください。';
-  }
-}
-
-function _smAddIndividualRow() {
-  const container = document.getElementById('sm-indiv-rows');
+async function _renderSalesCards() {
+  const container = document.getElementById('sm-sales-cards');
   if (!container) return;
-  const id  = _smNextRowId++;
-  const div = document.createElement('div');
-  div.className  = 'indiv-row';
-  div.dataset.id = id;
-  div.innerHTML  = `
-    <div class="indiv-row-header">
-      <select class="form-select indiv-customer-select"
-              aria-label="顧客選択">
-        ${buildCustomerOptions()}
-      </select>
-      <button class="indiv-remove-btn" type="button"
-              aria-label="行を削除">✕</button>
-    </div>
-    <input type="text"
-           id="sm-indiv-manual-${id}"
-           class="text-input indiv-manual-input"
-           placeholder="顧客名を入力"
-           maxlength="30"
-           autocomplete="off"
-           hidden>
-    <div class="indiv-row-body">
-      <div class="amount-wrap amount-wrap--blue indiv-amount-wrap">
-        <span class="amount-prefix" aria-hidden="true">¥</span>
-        <input type="text"
-               id="sm-indiv-amount-${id}"
-               class="amount-input indiv-amount-input"
-               inputmode="numeric"
-               pattern="[0-9]*"
-               placeholder="0"
-               maxlength="10"
-               aria-label="金額">
-      </div>
-      <div class="indiv-uncollected-label">
-        <span class="indiv-uncollected-text">売掛</span>
-        <label class="switch switch--small">
-          <input type="checkbox" id="sm-indiv-uc-${id}" class="indiv-uncollected-chk">
-          <span class="switch-slider"></span>
-        </label>
-      </div>
-    </div>
-    <input type="text"
-           id="sm-indiv-memo-${id}"
-           class="text-input indiv-memo-input"
-           placeholder="メモ（任意）"
-           maxlength="100"
-           autocomplete="off"
-           aria-label="メモ">
-  `;
 
-  // イベントバインド（inline onclick ではなく addEventListener）
-  const sel = div.querySelector('.indiv-customer-select');
-  sel?.addEventListener('change', () => {
-    const manual = document.getElementById(`sm-indiv-manual-${id}`);
-    if (manual) {
-      manual.hidden = sel.value !== '__manual__';
-      if (manual.hidden) manual.value = '';
-    }
-  });
-  const amtInput = div.querySelector('.indiv-amount-input');
-  amtInput?.addEventListener('input', function() {
-    this.value = this.value.replace(/[^0-9]/g, '');
-  });
-  div.querySelector('.indiv-remove-btn')?.addEventListener('click', () => div.remove());
-
-  container.appendChild(div);
-}
-
-/** モーダル内の個別行データ収集 */
-function _smCollectIndividualRows() {
-  const rows = [];
-  document.querySelectorAll('#sm-indiv-rows .indiv-row').forEach(row => {
-    const id      = row.dataset.id;
-    const sel     = row.querySelector('.indiv-customer-select');
-    const manual  = document.getElementById(`sm-indiv-manual-${id}`);
-    const amtEl   = document.getElementById(`sm-indiv-amount-${id}`);
-    const ucEl    = document.getElementById(`sm-indiv-uc-${id}`);
-    const memoEl  = document.getElementById(`sm-indiv-memo-${id}`);
-
-    let customerName = sel?.value || '';
-    if (customerName === '__misc__')   customerName = '諸口';
-    if (customerName === '__manual__') customerName = manual?.value.trim() || '';
-
-    rows.push({
-      customerName,
-      amount:      parseInt((amtEl?.value || '0').replace(/[^0-9]/g, '')) || 0,
-      uncollected: ucEl?.checked ?? false,
-      memo:        memoEl?.value.trim() || '',
-    });
-  });
-  return rows;
-}
-
-/* ── モーダル送信処理 ────────────────────────────────────── */
-async function _smHandleSubmit() {
-  if (isSubmitting) return;
-
-  const date     = document.getElementById('sm-date-input')?.value || '';
-  const rawAmt   = (document.getElementById('sm-amount-input')?.value || '0').replace(/,/g, '');
-  const amount   = parseInt(rawAmt) || 0;
-  const memo     = document.getElementById('sm-memo-input')?.value.trim() || '';
-  const miscName = document.getElementById('sm-misc-name-input')?.value.trim() || '';
-  const svc      = getServiceMaster().find(s => s.code === selectedServiceCode);
-  const mainUC   = document.getElementById('sm-uncollected-toggle')?.checked ?? false;
-
-  // バリデーション
-  if (!date) {
-    SheetModal.showValidationError('#sm-date-input', '日付を入力してください');
-    return;
-  }
-  if (!svc) {
-    showToast('サービスを選択してください', 'error');
-    return;
-  }
-
-  const indivOnlyMode = (amount === 0 && _smAccordionOpen);
-
-  if (!indivOnlyMode) {
-    if (amount <= 0) {
-      SheetModal.showValidationError('#sm-amount-input', '金額を入力してください');
-      return;
-    }
-    if (svc.code === 'S099' && !miscName) {
-      SheetModal.showValidationError('#sm-misc-name-input', '品目名を入力してください');
-      return;
-    }
-  }
-
-  let indivRows = [];
-  if (_smAccordionOpen) {
-    indivRows = _smCollectIndividualRows();
-    for (const r of indivRows) {
-      if (!r.customerName) {
-        showToast('顧客名を選択または入力してください', 'error');
-        return;
-      }
-      if (r.amount <= 0) {
-        showToast('個別行の金額を入力してください', 'error');
-        return;
-      }
-    }
-    if (indivOnlyMode && indivRows.length === 0) {
-      showToast('個別行を1件以上入力してください', 'error');
-      return;
-    }
-  }
-
-  const { taxExcluded, tax } = calcTax(amount, currentTaxRate);
-
-  isSubmitting = true;
-  const btn = document.getElementById('sm-submit-btn');
-  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner" style="width:20px;height:20px;border-top-color:#fff;"></span>'; }
-
+  let ranking = [];
   try {
-    if (!indivOnlyMode) {
-      const mainRes = await callGAS('addSales', {
-        date,
-        serviceCode:  svc.code,
-        serviceName:  svc.name,
-        miscItemName: miscName,
-        amountExTax:  taxExcluded,
-        taxRate:      currentTaxRate,
-        tax,
-        amountInTax:  amount,
-        memo,
-        uncollected:  mainUC ? 1 : 0,
-      });
-      if (mainRes.status !== 'ok') throw new Error(mainRes.message || '売上登録エラー');
-    }
+    ranking = await _getSalesRanking();
+  } catch (e) {
+    // ランキング取得失敗時はデフォルト順で表示
+  }
 
-    if (_smAccordionOpen && indivRows.length > 0) {
-      const results = await Promise.all(
-        indivRows.map(r => {
-          const { taxExcluded: rEx, tax: rTax } = calcTax(r.amount, currentTaxRate);
-          return callGAS('addSales', {
-            date,
-            serviceCode:  svc.code,
-            serviceName:  svc.name,
-            miscItemName: '',
-            amountExTax:  rEx,
-            taxRate:      currentTaxRate,
-            tax:          rTax,
-            amountInTax:  r.amount,
-            memo:         [r.customerName, r.memo].filter(Boolean).join('　'),
-            uncollected:  r.uncollected ? 1 : 0,
-          });
-        })
-      );
-      if (results.some(r => r.status !== 'ok')) throw new Error('個別行の登録中にエラーが発生しました');
-    }
+  const services = _getServiceMasterSorted(ranking);
+
+  container.innerHTML = services.map(svc => `
+    <div class="sales-sm-card" data-code="${escHtml(svc.code)}">
+      <div class="sales-sm-card__icon">${svc.icon || '📝'}</div>
+      <div class="sales-sm-card__label">${escHtml(svc.name)}</div>
+    </div>
+  `).join('');
+}
+
+async function _getSalesRanking() {
+  const CACHE_KEY = 'salesRankingCache';
+  const CACHE_TTL = 24 * 60 * 60 * 1000;
+
+  const cached = localStorage.getItem(CACHE_KEY);
+  if (cached) {
+    try {
+      const { timestamp, data } = JSON.parse(cached);
+      if (Date.now() - timestamp < CACHE_TTL) {
+        _refreshSalesRankingInBackground();
+        return data;
+      }
+    } catch (e) {}
+  }
+
+  const result = await callGAS('getSalesCategoryRanking', { months: 1 });
+  const data = Array.isArray(result) ? result : (result?.data || []);
+  localStorage.setItem(CACHE_KEY, JSON.stringify({ timestamp: Date.now(), data }));
+  return data;
+}
+
+async function _refreshSalesRankingInBackground() {
+  try {
+    const result = await callGAS('getSalesCategoryRanking', { months: 1 });
+    const data = Array.isArray(result) ? result : (result?.data || []);
+    localStorage.setItem('salesRankingCache', JSON.stringify({ timestamp: Date.now(), data }));
+  } catch (e) {}
+}
+
+function _getServiceMasterSorted(ranking) {
+  const rankingMap = new Map((ranking || []).map(r => [r.code, r.count]));
+  return getServiceMaster().slice().sort((a, b) => {
+    const countA = rankingMap.get(a.code) || 0;
+    const countB = rankingMap.get(b.code) || 0;
+    return countB - countA;
+  });
+}
+
+function _bindSalesAmountFormatting() {
+  const el = document.getElementById('sm-sales-amount');
+  if (!el) return;
+  el.addEventListener('input', () => {
+    const raw = el.value.replace(/[^0-9]/g, '');
+    const pos = el.selectionStart;
+    const prevLen = el.value.length;
+    el.value = raw ? Number(raw).toLocaleString() : '';
+    // カーソル位置補正
+    const diff = el.value.length - prevLen;
+    try { el.setSelectionRange(pos + diff, pos + diff); } catch (e) {}
+  });
+}
+
+function _smHandleCardTap(e) {
+  const card = e.target.closest('.sales-sm-card');
+  if (!card) return;
+
+  document.querySelectorAll('.sales-sm-card').forEach(c => c.classList.remove('selected'));
+  card.classList.add('selected');
+
+  document.getElementById('sm-sales-amount')?.focus();
+
+  document.getElementById('sm-sales-cards')?.classList.remove('sales-sm-field-error');
+}
+
+async function _smHandleSalesSubmit() {
+  const btn = document.getElementById('sm-sales-submit');
+  if (!btn || btn.disabled) return;
+
+  const date         = document.getElementById('sm-sales-date')?.value || '';
+  const selectedCard = document.querySelector('.sales-sm-card.selected');
+  const rawAmt       = (document.getElementById('sm-sales-amount')?.value || '').replace(/,/g, '');
+  const amount       = parseInt(rawAmt, 10);
+  const memo         = document.getElementById('sm-sales-memo')?.value.trim() || '';
+
+  if (!date) {
+    _smShowSalesError('sm-sales-date', '日付を入力してください');
+    return;
+  }
+  if (!selectedCard) {
+    _smShowSalesError('sm-sales-cards', 'サービスを選択してください');
+    return;
+  }
+  if (!amount || amount <= 0) {
+    _smShowSalesError('sm-sales-amount', '金額を入力してください');
+    return;
+  }
+
+  const svc = getServiceMaster().find(s => s.code === selectedCard.dataset.code);
+  const taxRate = svc ? svc.taxRate : 10;
+  const { taxExcluded, tax } = calcTax(amount, taxRate);
+
+  btn.disabled = true;
+  btn.textContent = '送信中...';
+  try {
+    const result = await callGAS('addSales', {
+      date,
+      serviceCode:  selectedCard.dataset.code,
+      serviceName:  svc ? svc.name : '',
+      miscItemName: '',
+      amountExTax:  taxExcluded,
+      taxRate,
+      tax,
+      amountInTax:  amount,
+      memo,
+      uncollected:  0,
+    });
+
+    if (result?.status !== 'ok') throw new Error(result?.message || '登録エラー');
 
     showToast('売上を登録しました ✓', 'success');
     SheetModal.close();
-    // 履歴画面のデータを更新（history.js がロードされている場合のみ）
+
     if (typeof loadAll === 'function') loadAll();
 
+    _refreshSalesRankingInBackground();
+
   } catch (e) {
-    showToast('登録に失敗しました：' + e.message, 'error');
+    _smShowSalesError(null, '登録に失敗しました：' + e.message);
   } finally {
-    isSubmitting = false;
-    if (btn) { btn.disabled = false; btn.innerHTML = _smBuildSubmitBtnText(); }
+    if (btn.isConnected) {
+      btn.disabled = false;
+      btn.textContent = '登録する';
+    }
   }
 }
 
-/* ── SheetModal 起動／終了 ──────────────────────────────── */
-function openSalesModal() {
-  // モーダル用状態リセット
-  selectedServiceCode = null;
-  currentTaxRate      = 10;
-  _smAccordionOpen    = false;
-  _smNextRowId        = 1;
+function _smShowSalesError(fieldId, message) {
+  if (fieldId) {
+    const el   = document.getElementById(fieldId);
+    const wrap = fieldId === 'sm-sales-cards'
+      ? el
+      : el?.closest('.sales-sm-section');
 
+    wrap?.classList.add('sales-sm-field-error');
+
+    const removeErr = () => {
+      wrap?.classList.remove('sales-sm-field-error');
+      el?.removeEventListener('change', removeErr);
+      el?.removeEventListener('input',  removeErr);
+      el?.removeEventListener('focus',  removeErr);
+    };
+    el?.addEventListener('change', removeErr);
+    el?.addEventListener('input',  removeErr);
+    el?.addEventListener('focus',  removeErr);
+  }
+
+  const toast = document.getElementById('sm-sales-toast');
+  if (toast) {
+    toast.textContent = message;
+    toast.classList.add('show');
+    clearTimeout(toast._tid);
+    toast._tid = setTimeout(() => toast.classList.remove('show'), 3000);
+  }
+}
+
+function openSalesModal() {
   SheetModal.open({
-    title:    '売上入力',
+    title:    '売上登録',
     bodyHtml: _buildSalesFormBodyHTML(),
     onRender: _initSalesFormInModal,
   });

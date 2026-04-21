@@ -1,0 +1,180 @@
+/* css/sales-modal.css — 売上登録シートモーダル（D案） */
+
+.sales-sm-body {
+  padding: 8px 16px 16px;
+}
+.sales-sm-section {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--uz-border);
+}
+.sales-sm-section:last-of-type {
+  border-bottom: none;
+}
+.sales-sm-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--uz-muted);
+  margin-bottom: 8px;
+}
+.sales-sm-optional {
+  font-size: 11px;
+  font-weight: normal;
+  color: var(--uz-muted);
+  margin-left: 8px;
+}
+
+/* 日付入力 */
+.sales-sm-date-input {
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 12px;
+  font-size: 16px;
+  font-family: var(--font-main);
+  border: 1px solid var(--uz-border);
+  border-radius: 8px;
+  background: var(--uz-bg-surface);
+  box-sizing: border-box;
+  -webkit-appearance: none;
+}
+
+/* カード一覧 */
+.sales-sm-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.sales-sm-card {
+  min-height: 72px;
+  padding: 12px 8px;
+  background: var(--uz-bg-surface);
+  border: 2px solid var(--uz-border);
+  border-radius: 10px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  transition: all 0.15s;
+}
+.sales-sm-card__icon {
+  font-size: 20px;
+  margin-bottom: 4px;
+}
+.sales-sm-card__label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--uz-text);
+  line-height: 1.2;
+}
+.sales-sm-card.selected {
+  border-color: var(--uz-gold);
+  background: var(--uz-amber-bg);
+}
+.sales-sm-card:active {
+  transform: scale(0.96);
+}
+
+/* 金額入力 */
+.sales-sm-amount-wrap {
+  display: flex;
+  align-items: center;
+}
+.sales-sm-amount-input {
+  flex: 1;
+  min-height: 44px;
+  padding: 8px 12px;
+  font-size: 20px;
+  font-weight: 700;
+  text-align: right;
+  font-family: var(--font-main);
+  border: 1px solid var(--uz-border);
+  border-radius: 8px;
+  background: var(--uz-bg-surface);
+  box-sizing: border-box;
+}
+.sales-sm-yen {
+  display: inline-block;
+  margin-left: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--uz-muted);
+  line-height: 44px;
+  flex-shrink: 0;
+}
+
+/* メモ */
+.sales-sm-memo {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 14px;
+  font-family: var(--font-main);
+  border: 1px solid var(--uz-border);
+  border-radius: 8px;
+  background: var(--uz-bg-surface);
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+/* バリデーションエラー */
+.sales-sm-field-error .sales-sm-date-input,
+.sales-sm-field-error .sales-sm-amount-input,
+.sales-sm-field-error .sales-sm-memo {
+  border-color: var(--uz-red) !important;
+}
+.sales-sm-field-error.sales-sm-cards,
+.sales-sm-cards.sales-sm-field-error {
+  outline: 2px solid var(--uz-red);
+  border-radius: 10px;
+}
+
+/* トースト */
+.sales-sm-toast {
+  display: none;
+  padding: 10px 14px;
+  margin: 12px 0 0;
+  background: var(--uz-red);
+  color: white;
+  border-radius: 8px;
+  font-size: 13px;
+  text-align: center;
+}
+.sales-sm-toast.show {
+  display: block;
+  animation: salesSmToastIn 0.2s ease-out;
+}
+@keyframes salesSmToastIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* フッター登録ボタン */
+.sales-sm-footer {
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+  position: sticky;
+  bottom: 0;
+  background: var(--uz-bg-surface);
+  border-top: 1px solid var(--uz-border);
+  margin: 0 -16px;
+}
+.sales-sm-submit-btn {
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 16px;
+  background: var(--uz-gold);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 16px;
+  font-weight: 700;
+  font-family: var(--font-main);
+  cursor: pointer;
+}
+.sales-sm-submit-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.sales-sm-submit-btn:active:not(:disabled) {
+  filter: brightness(1.05);
+}

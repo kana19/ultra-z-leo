@@ -13,6 +13,9 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/forms.css">
+  <link rel="stylesheet" href="css/sheet-modal.css">
+  <link rel="stylesheet" href="css/sales-modal.css">
 </head>
 <body data-page="home">
 
@@ -146,10 +149,10 @@
 
           <!-- 売上入力ボタン -->
           <div style="position:relative;">
-            <a href="sales.html" class="action-btn action-btn--sales" role="button">
+            <button type="button" class="action-btn action-btn--sales" onclick="openSalesModal()">
               <span class="action-btn__icon" aria-hidden="true">💰</span>
               <span class="action-btn__label">売上を入れる</span>
-            </a>
+            </button>
             <span id="dot-uncollected"
                   class="action-btn__dot"
                   style="display:flex; align-items:center; gap:4px;"
@@ -283,6 +286,8 @@
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <script src="js/app.js"></script>
+<script src="js/sheet-modal.js"></script>
+<script src="js/sales.js"></script>
 <script src="js/home.js"></script>
 </body>
 </html>
