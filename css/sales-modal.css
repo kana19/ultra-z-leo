@@ -128,6 +128,55 @@
   outline: 2px solid var(--uz-red);
   border-radius: 10px;
 }
+.sales-sm-field-error.sm-taxrate-chips,
+.sm-taxrate-chips.sales-sm-field-error {
+  outline: 2px solid var(--uz-red);
+  border-radius: 16px;
+  padding: 4px;
+  margin: 8px -4px 4px;
+}
+
+/* 日付入力欄の視認性強化（S3g-3f） */
+.sm-date-input {
+  border: 2px solid var(--border-strong, #333);
+  background: var(--bg-surface, #fff);
+  padding: 10px 12px;
+  font-size: 16px;
+  border-radius: 8px;
+}
+
+/* 内消費税メモ表示 */
+.sm-tax-memo {
+  font-size: 12px;
+  color: var(--text-secondary, #666);
+  margin-top: 4px;
+}
+
+/* 税率チップ群 */
+.sm-taxrate-chips {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0 8px;
+}
+.sm-taxrate-chip {
+  padding: 6px 14px;
+  border: 1px solid var(--border-default, #ccc);
+  border-radius: 16px;
+  background: var(--bg-surface, #fff);
+  font-size: 13px;
+  color: var(--text-secondary, #666);
+  cursor: pointer;
+  font-family: var(--font-main);
+}
+.sm-taxrate-chip.is-active {
+  border-color: var(--color-primary, #2a7ae2);
+  background: var(--color-primary-bg, #e8f1fb);
+  color: var(--color-primary, #2a7ae2);
+  font-weight: 600;
+}
+.sm-taxrate-chip:active {
+  transform: scale(0.96);
+}
 
 /* トースト */
 .sales-sm-toast {

@@ -40,6 +40,10 @@ let accordionOpen       = false;
 let nextRowId           = 1;
 let _salesInModal       = false;   // SheetModal 経由で開いているか
 
+/* ── SheetModal 版 売上入力 state（S3g-3f） ────────────── */
+let _smSelectedServiceCode = null;
+let _smSelectedTaxRate     = null;
+
 /* ── 初期化（sales.html ページ専用） ─────────────────────── */
 document.addEventListener('DOMContentLoaded', () => {
   if (document.body.dataset.page !== 'sales') return;
@@ -425,21 +429,27 @@ function _buildSalesFormBodyHTML() {
 
       <div class="sales-sm-section">
         <label class="sales-sm-label" for="sm-sales-date">日付</label>
-        <input type="date" id="sm-sales-date" class="sales-sm-date-input">
+        <input type="date" id="sm-sales-date" class="sales-sm-date-input sm-date-input">
       </div>
 
       <div class="sales-sm-section">
         <label class="sales-sm-label">サービスを選択</label>
         <div id="sm-sales-cards" class="sales-sm-cards"></div>
+        <div class="sm-taxrate-chips" id="sm-sales-taxrate-chips" role="group" aria-label="税率選択">
+          <button type="button" class="sm-taxrate-chip" data-rate="10">10%</button>
+          <button type="button" class="sm-taxrate-chip" data-rate="8">8%</button>
+          <button type="button" class="sm-taxrate-chip" data-rate="0">非課税</button>
+        </div>
       </div>
 
       <div class="sales-sm-section">
-        <label class="sales-sm-label">金額</label>
+        <label class="sales-sm-label">金額（税込）</label>
         <div class="sales-sm-amount-wrap">
           <input type="text" id="sm-sales-amount" class="sales-sm-amount-input"
                  inputmode="numeric" placeholder="0" maxlength="12" autocomplete="off">
           <span class="sales-sm-yen">円</span>
         </div>
+        <div id="sm-sales-tax-display" class="sm-tax-memo">内消費税 0 円</div>
       </div>
 
       <div class="sales-sm-section">
@@ -459,17 +469,65 @@ function _buildSalesFormBodyHTML() {
 }
 
 async function _initSalesFormInModal() {
+  // state を完全初期化（次回オープン時の保証）
+  _smSelectedServiceCode = null;
+  _smSelectedTaxRate     = null;
+
   document.getElementById('sm-sales-date').value = todayStr();
 
   await _renderSalesCards();
 
   _bindSalesAmountFormatting();
+  _bindTaxRateChips();
+  _bindSalesAmountTaxRecalc();
 
   document.getElementById('sm-sales-submit')
     ?.addEventListener('click', _smHandleSalesSubmit);
 
   document.getElementById('sm-sales-cards')
     ?.addEventListener('click', _smHandleCardTap);
+
+  _smUpdateTaxChipUI();
+  _smRefreshTaxDisplay();
+}
+
+function _bindTaxRateChips() {
+  document.querySelectorAll('#sm-sales-taxrate-chips .sm-taxrate-chip').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const rate = parseInt(btn.dataset.rate, 10);
+      if (!Number.isFinite(rate)) return;
+      _smSelectedTaxRate = rate;
+      _smUpdateTaxChipUI();
+      _smRefreshTaxDisplay();
+      document.getElementById('sm-sales-taxrate-chips')
+        ?.classList.remove('sales-sm-field-error');
+    });
+  });
+}
+
+function _bindSalesAmountTaxRecalc() {
+  const el = document.getElementById('sm-sales-amount');
+  if (!el) return;
+  el.addEventListener('input', _smRefreshTaxDisplay);
+}
+
+function _smUpdateTaxChipUI() {
+  document.querySelectorAll('#sm-sales-taxrate-chips .sm-taxrate-chip').forEach(btn => {
+    const rate = parseInt(btn.dataset.rate, 10);
+    btn.classList.toggle('is-active', _smSelectedTaxRate != null && rate === _smSelectedTaxRate);
+  });
+}
+
+function _smRefreshTaxDisplay() {
+  const el = document.getElementById('sm-sales-tax-display');
+  if (!el) return;
+  const raw = (document.getElementById('sm-sales-amount')?.value || '').replace(/[^0-9]/g, '');
+  const amt = parseInt(raw, 10) || 0;
+  let tax = 0;
+  if (_smSelectedTaxRate != null && _smSelectedTaxRate > 0 && amt > 0) {
+    tax = calcTax(amt, _smSelectedTaxRate).tax;
+  }
+  el.textContent = `内消費税 ${Number(tax).toLocaleString()} 円`;
 }
 
 async function _renderSalesCards() {
@@ -552,6 +610,20 @@ function _smHandleCardTap(e) {
   document.querySelectorAll('.sales-sm-card').forEach(c => c.classList.remove('selected'));
   card.classList.add('selected');
 
+  const code = card.dataset.code;
+  _smSelectedServiceCode = code;
+
+  // 諸口（S099）はマスタ taxRate に関わらず未選択スタート
+  // 通常サービスはマスタ値（10/8/0）をデフォルト選択
+  const svc = getServiceMaster().find(s => s.code === code);
+  if (code !== 'S099' && svc && (svc.taxRate === 10 || svc.taxRate === 8 || svc.taxRate === 0)) {
+    _smSelectedTaxRate = svc.taxRate;
+  } else {
+    _smSelectedTaxRate = null;
+  }
+  _smUpdateTaxChipUI();
+  _smRefreshTaxDisplay();
+
   document.getElementById('sm-sales-amount')?.focus();
 
   document.getElementById('sm-sales-cards')?.classList.remove('sales-sm-field-error');
@@ -575,13 +647,17 @@ async function _smHandleSalesSubmit() {
     _smShowSalesError('sm-sales-cards', 'サービスを選択してください');
     return;
   }
+  if (_smSelectedTaxRate == null) {
+    _smShowSalesError('sm-sales-taxrate-chips', '税率を選択してください');
+    return;
+  }
   if (!amount || amount <= 0) {
     _smShowSalesError('sm-sales-amount', '金額を入力してください');
     return;
   }
 
   const svc = getServiceMaster().find(s => s.code === selectedCard.dataset.code);
-  const taxRate = svc ? svc.taxRate : 10;
+  const taxRate = _smSelectedTaxRate;
   const { taxExcluded, tax } = calcTax(amount, taxRate);
 
   btn.disabled = true;
@@ -622,7 +698,7 @@ async function _smHandleSalesSubmit() {
 function _smShowSalesError(fieldId, message) {
   if (fieldId) {
     const el   = document.getElementById(fieldId);
-    const wrap = fieldId === 'sm-sales-cards'
+    const wrap = (fieldId === 'sm-sales-cards' || fieldId === 'sm-sales-taxrate-chips')
       ? el
       : el?.closest('.sales-sm-section');
 
@@ -633,10 +709,12 @@ function _smShowSalesError(fieldId, message) {
       el?.removeEventListener('change', removeErr);
       el?.removeEventListener('input',  removeErr);
       el?.removeEventListener('focus',  removeErr);
+      el?.removeEventListener('click',  removeErr);
     };
     el?.addEventListener('change', removeErr);
     el?.addEventListener('input',  removeErr);
     el?.addEventListener('focus',  removeErr);
+    el?.addEventListener('click',  removeErr);
   }
 
   const toast = document.getElementById('sm-sales-toast');
@@ -653,7 +731,13 @@ function openSalesModal() {
     title:    '売上登録',
     bodyHtml: _buildSalesFormBodyHTML(),
     onRender: _initSalesFormInModal,
+    onClose:  _resetSalesModalState,
   });
+}
+
+function _resetSalesModalState() {
+  _smSelectedServiceCode = null;
+  _smSelectedTaxRate     = null;
 }
 
 /* ── iPad 売上入力パネル ─────────────────────────────────── */
