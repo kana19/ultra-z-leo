@@ -16,6 +16,7 @@
   <link rel="stylesheet" href="css/forms.css">
   <link rel="stylesheet" href="css/sheet-modal.css">
   <link rel="stylesheet" href="css/sales-modal.css">
+  <link rel="stylesheet" href="css/cost-modal.css">
 </head>
 <body data-page="home">
 
@@ -162,10 +163,10 @@
 
           <!-- コスト入力ボタン -->
           <div style="position:relative;">
-            <a href="cost.html" class="action-btn action-btn--cost" role="button">
+            <button type="button" class="action-btn action-btn--cost" onclick="openCostModal()">
               <span class="action-btn__icon" aria-hidden="true">💸</span>
               <span class="action-btn__label">コストを入れる</span>
-            </a>
+            </button>
             <span id="dot-payable"
                   class="action-btn__dot"
                   style="display:flex; align-items:center; gap:4px;"
@@ -288,6 +289,7 @@
 <script src="js/app.js"></script>
 <script src="js/sheet-modal.js"></script>
 <script src="js/sales.js"></script>
+<script src="js/cost.js"></script>
 <script src="js/home.js"></script>
 </body>
 </html>
