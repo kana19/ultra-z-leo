@@ -29,7 +29,7 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 /* ── GAS設定 ─────────────────────────────────────────────── */
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbwBDHj9-p6ZT6ExXrxF1Q-XwiEkNMPwDc0aAuk7zptivRhWhepvaCDsjaIJd7WHh_h9-A/exec';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycby4JMIAB3aX6_mLBoveCMDSXLpjKeMgr70YYkr7dwwhvnfBBcHgm45cSIQucC-L3P_gDA/exec';
 
 /**
  * GASにGETリクエストを送る（CORS回避のためクエリパラメータで送信）
@@ -43,6 +43,32 @@ async function callGAS(action, data = {}) {
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return await res.json();
 }
+
+/**
+ * アプリ起動時にGASからstoreTypeを取得してlocalStorageに同期する
+ * （源泉徴収UIの出し分けに使う・cost.jsから localStorage を同期で読まれる）
+ * 通信失敗時は既存キャッシュを維持・初回失敗時は'off'扱い（安全側）
+ *
+ * 実行タイミング：DOMContentLoaded時にバックグラウンドで非同期実行
+ * モーダル起動時には既にlocalStorageが最新化されている設計
+ */
+async function syncStoreTypeAtStartup() {
+  try {
+    const res = await callGAS('getSettings', {});
+    if (res && res.status === 'ok' && res.data && typeof res.data.storeType === 'string') {
+      const st = res.data.storeType.toLowerCase();
+      const normalized = (st === 'hostess' || st === 'standard') ? st : 'off';
+      localStorage.setItem('uz_store_type', normalized);
+    }
+  } catch (e) {
+    console.warn('[app.js] storeType起動時同期失敗（キャッシュ値を使用）:', e);
+  }
+}
+
+// 起動時にバックグラウンドで storeType を同期（UIブロックなし）
+document.addEventListener('DOMContentLoaded', function() {
+  syncStoreTypeAtStartup();
+});
 
 /* ── 金額フォーマット ────────────────────────────────────── */
 /**
