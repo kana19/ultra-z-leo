@@ -611,3 +611,76 @@
   background: var(--uz-red-bg);
   color: var(--uz-red);
 }
+
+/* ============================================================
+   源泉徴収セクション 補助UI（コスト入力モーダル）
+   - 金額欄ヘルプテキスト
+   - 内訳サマリー（報酬総額・源泉徴収額・差引支払額）
+   ============================================================ */
+
+/* 金額欄ヘルプテキスト（外注工賃・給料賃金 選択時のみ表示） */
+.cost-sm-amount-help {
+  margin-top: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--uz-gold);
+  letter-spacing: 0.02em;
+}
+
+.cost-sm-amount-help[hidden] { display: none; }
+
+/* 内訳サマリー枠 */
+.cost-sm-wh-summary {
+  margin-top: 12px;
+  padding: 12px 14px;
+  background: var(--uz-surface2);
+  border: 1px solid var(--uz-border);
+  border-radius: var(--radius-md);
+}
+
+.cost-sm-wh-summary[hidden] { display: none; }
+
+.cost-sm-wh-summary-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 4px 0;
+  font-family: var(--font-main);
+}
+
+.cost-sm-wh-summary-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--uz-text2);
+  letter-spacing: 0.03em;
+}
+
+.cost-sm-wh-summary-value {
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--uz-text);
+}
+
+.cost-sm-wh-summary-value--minus {
+  color: var(--uz-muted);
+}
+
+.cost-sm-wh-summary-divider {
+  height: 1px;
+  background: var(--uz-border);
+  margin: 6px 0;
+}
+
+/* 差引支払額（合計行） */
+.cost-sm-wh-summary-row--total .cost-sm-wh-summary-label {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--uz-text);
+}
+
+.cost-sm-wh-summary-row--total .cost-sm-wh-summary-value {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--uz-gold);
+}

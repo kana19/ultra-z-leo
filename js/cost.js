@@ -571,6 +571,9 @@ function _smCostBuildFormBodyHTML() {
           <span class="cost-sm-yen">円</span>
         </div>
         <div id="sm-cost-tax-memo" class="sm-tax-memo">内消費税 0 円</div>
+        <div id="sm-cost-amount-help" class="cost-sm-amount-help" hidden>
+          ※報酬総額（税込）を入力してください
+        </div>
       </section>
 
       <!-- 源泉徴収セクション（外注工賃／給料賃金 選択時のみ・storeType!=off の場合のみ表示） -->
@@ -605,6 +608,23 @@ function _smCostBuildFormBodyHTML() {
             <span class="cost-sm-yen">円</span>
           </div>
           <div class="sm-tax-memo">給与所得の源泉徴収額を手入力（税額表の自動計算は搭載しません）</div>
+        </div>
+
+        <!-- 内訳サマリー（報酬総額・源泉徴収額・差引支払額） -->
+        <div class="cost-sm-wh-summary" id="sm-cost-wh-summary" hidden>
+          <div class="cost-sm-wh-summary-row">
+            <span class="cost-sm-wh-summary-label">報酬総額</span>
+            <span class="cost-sm-wh-summary-value" id="sm-cost-wh-summary-gross">0 円</span>
+          </div>
+          <div class="cost-sm-wh-summary-row">
+            <span class="cost-sm-wh-summary-label">源泉徴収額</span>
+            <span class="cost-sm-wh-summary-value cost-sm-wh-summary-value--minus" id="sm-cost-wh-summary-tax">△ 0 円</span>
+          </div>
+          <div class="cost-sm-wh-summary-divider"></div>
+          <div class="cost-sm-wh-summary-row cost-sm-wh-summary-row--total">
+            <span class="cost-sm-wh-summary-label">差引支払額</span>
+            <span class="cost-sm-wh-summary-value" id="sm-cost-wh-summary-net">0 円</span>
+          </div>
         </div>
       </section>
 
@@ -1129,6 +1149,8 @@ function _smCostUpdateWithholdingUI() {
   const manualBox  = document.getElementById('sm-cost-withholding-manual');
   const daysRow    = document.getElementById('sm-cost-wh-days-row');
   const formulaEl  = document.getElementById('sm-cost-wh-formula');
+  const helpEl     = document.getElementById('sm-cost-amount-help');
+  const summaryEl  = document.getElementById('sm-cost-wh-summary');
   if (!section || !calcBox || !manualBox) return;
 
   const mode = _smCostGetWithholdingMode(_smCostSelectedItemCode);
@@ -1137,11 +1159,15 @@ function _smCostUpdateWithholdingUI() {
     section.hidden   = true;
     calcBox.hidden   = true;
     manualBox.hidden = true;
+    if (helpEl)    helpEl.hidden    = true;
+    if (summaryEl) summaryEl.hidden = true;
     _smCostWithholdingAmount = 0;
     return;
   }
 
   section.hidden = false;
+  if (helpEl)    helpEl.hidden    = false;
+  if (summaryEl) summaryEl.hidden = false;
 
   if (mode === 'manual') {
     // 給料賃金：手入力のみ
@@ -1201,6 +1227,7 @@ function _smCostRecalcWithholding() {
     const manualInput = document.getElementById('sm-cost-wh-manual');
     const raw = manualInput ? String(manualInput.value).replace(/[^\d]/g, '') : '';
     _smCostWithholdingAmount = raw ? Number(raw) : 0;
+    _smCostUpdateWhSummary();
     return;
   }
 
@@ -1230,6 +1257,26 @@ function _smCostRecalcWithholding() {
   if (resultEl) {
     resultEl.textContent = `源泉徴収額 ${withholding.toLocaleString('ja-JP')} 円`;
   }
+
+  _smCostUpdateWhSummary();
+}
+
+/**
+ * 内訳サマリー更新（報酬総額・源泉徴収額・差引支払額）
+ * hostess/standard/manual の全モードから呼ばれる
+ */
+function _smCostUpdateWhSummary() {
+  const grossInput  = document.getElementById('sm-cost-amount');
+  const grossRaw    = grossInput ? String(grossInput.value).replace(/[^\d]/g, '') : '';
+  const grossAmount = grossRaw ? Number(grossRaw) : 0;
+  const netAmount   = Math.max(0, grossAmount - _smCostWithholdingAmount);
+
+  const grossEl = document.getElementById('sm-cost-wh-summary-gross');
+  const taxEl   = document.getElementById('sm-cost-wh-summary-tax');
+  const netEl   = document.getElementById('sm-cost-wh-summary-net');
+  if (grossEl) grossEl.textContent = `${grossAmount.toLocaleString('ja-JP')} 円`;
+  if (taxEl)   taxEl.textContent   = `△ ${_smCostWithholdingAmount.toLocaleString('ja-JP')} 円`;
+  if (netEl)   netEl.textContent   = `${netAmount.toLocaleString('ja-JP')} 円`;
 }
 
 /**
