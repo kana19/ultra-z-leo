@@ -66,8 +66,10 @@ async function syncStoreTypeAtStartup() {
 }
 
 // 起動時にバックグラウンドで storeType を同期（UIブロックなし）
+// 他ページの初期化処理(home.js loadAll等)とGAS呼び出し競合しないよう
+// 5秒遅延させてから実行する。コスト入力モーダルが開かれる頃には完了している前提
 document.addEventListener('DOMContentLoaded', function() {
-  syncStoreTypeAtStartup();
+  setTimeout(syncStoreTypeAtStartup, 5000);
 });
 
 /* ── 金額フォーマット ────────────────────────────────────── */
