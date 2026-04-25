@@ -12,6 +12,10 @@
 const STORE_NAME_KEY     = 'uz_store_name';
 const STAFF_MASTER_KEY   = 'uz_staff_master';
 const SERVICE_MASTER_KEY = 'uz_service_master';
+// storeType：源泉徴収機能の計算方式（hostess / standard / off）
+// 顧客UIには出さず、納品時にターゲット社・パートナーがGASスプレッドシート直接編集で設定する
+// localStorageにはGAS取得結果をキャッシュするが、ここから編集するUIは提供しない
+const STORE_TYPE_KEY     = 'uz_store_type';
 
 /* ── デフォルト値 ────────────────────────────────────────── */
 const DEFAULT_STORE_NAME = 'スナック LEO';
@@ -58,6 +62,28 @@ function _saveServiceList(list) {
   localStorage.setItem(SERVICE_MASTER_KEY, JSON.stringify(list));
 }
 
+/**
+ * storeType取得（源泉徴収の計算方式）
+ * 'hostess' : ホステス報酬特例計算
+ * 'standard': 一般報酬計算
+ * 'off'     : 源泉徴収機能OFF（UI表示なし）
+ * デフォルトは 'off'（未設定時は機能を出さない安全側挙動）
+ */
+function getStoreType() {
+  const raw = (localStorage.getItem(STORE_TYPE_KEY) || '').toLowerCase();
+  if (raw === 'hostess' || raw === 'standard') return raw;
+  return 'off';
+}
+
+function _saveStoreType(val) {
+  const v = String(val || '').toLowerCase();
+  const normalized = (v === 'hostess' || v === 'standard') ? v : 'off';
+  localStorage.setItem(STORE_TYPE_KEY, normalized);
+}
+
+// cost.js から参照されるためグローバル公開
+window.getStoreType = getStoreType;
+
 /* ── GAS 同期 ────────────────────────────────────────────── */
 
 /**
@@ -68,10 +94,12 @@ async function loadSettingsFromGAS() {
   try {
     const res = await callGAS('getSettings', {});
     if (res && res.status === 'ok' && res.data) {
-      const { storeName, staffList, serviceList } = res.data;
+      const { storeName, staffList, serviceList, storeType } = res.data;
       if (storeName   != null) _saveStoreName(storeName);
       if (Array.isArray(staffList))   _saveStaffList(staffList);
       if (Array.isArray(serviceList)) _saveServiceList(serviceList);
+      // storeType は納品時設定（顧客UIに出さない）。GASから取得して localStorage にキャッシュ
+      if (storeType != null) _saveStoreType(storeType);
       // UIを最新データで再描画
       initStoreName();
       renderStaffList();

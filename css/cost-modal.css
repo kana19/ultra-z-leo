@@ -213,3 +213,83 @@ textarea.cost-sm-field-error,
   .cost-sm-card__label  { font-size: 11px; }
   .cost-sm-amount-input { font-size: 18px; }
 }
+
+/* ══════════════════════════════════════════════════════════════
+   cost-modal.css への追記差分
+   ──────────────────────────────────────────────────────────────
+   既存の css/cost-modal.css の末尾に以下を追加してください。
+   （既存のクラス定義は一切変更しません）
+   ══════════════════════════════════════════════════════════════ */
+
+/* ── 買掛トグル ───────────────────────────────────────── */
+.cost-sm-unpaid-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  font-size: 15px;
+  color: var(--uz-text, #E8E0CC);
+  cursor: pointer;
+  user-select: none;
+}
+
+.cost-sm-unpaid-toggle input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--uz-gold, #D4AF37);
+  cursor: pointer;
+}
+
+/* ── 源泉徴収セクション ──────────────────────────────── */
+.cost-sm-wh-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+}
+
+.cost-sm-wh-label {
+  font-size: 14px;
+  color: var(--uz-text2, #A09070);
+  flex: 1;
+}
+
+.cost-sm-wh-days-input {
+  width: 60px;
+  height: 36px;
+  padding: 0 8px;
+  text-align: center;
+  font-size: 15px;
+  background: var(--uz-surface2, #252118);
+  border: 1px solid var(--uz-border, rgba(212,175,55,0.18));
+  border-radius: 6px;
+  color: var(--uz-text, #E8E0CC);
+}
+
+.cost-sm-wh-days-input:focus {
+  outline: none;
+  border-color: var(--uz-gold, #D4AF37);
+}
+
+.cost-sm-wh-unit {
+  font-size: 14px;
+  color: var(--uz-text2, #A09070);
+}
+
+.cost-sm-wh-calc-result {
+  padding: 10px 12px;
+  margin-top: 6px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--uz-gold, #D4AF37);
+  background: var(--uz-amber-bg, rgba(212,175,55,0.12));
+  border-radius: 6px;
+  text-align: right;
+}
+
+.cost-sm-wh-formula {
+  padding: 4px 2px 0;
+  font-size: 12px;
+  color: var(--uz-text2, #A09070);
+  text-align: right;
+}
