@@ -16,12 +16,26 @@ let _costIsSubmitting         = false;
 /**
  * 指定区分の科目リストを返す（空のcustom除外・末尾に諸口追加）
  * @param {string} divCode
+ * @param {Object} [options]
+ * @param {boolean} [options.filterBySmartphoneVisible=false]
+ *   true の場合、smartphoneVisible: false の科目を除外する
+ *   （スマホ版モーダルから業態テンプレート連動で外注工賃・給料賃金等を非表示にするため）
+ *   iPad版・PC版では false（既存科目すべて表示）
+ *   詳細：3デバイス統合仕様.md §6-3・§12 / システム仕様書.md §8-5
  * @returns {Array}
  */
-function getDivisionItems(divCode) {
+function getDivisionItems(divCode, options) {
+  const opts = options || {};
+  const filterSm = opts.filterBySmartphoneVisible === true;
+
   const items = costMaster
     .filter(i => i.divisionCode === divCode)
-    .filter(i => i.name && i.name.trim() !== '');
+    .filter(i => i.name && i.name.trim() !== '')
+    .filter(i => {
+      if (!filterSm) return true;
+      // smartphoneVisible キーが存在しない既存データは true（表示）として扱う（後方互換性）
+      return i.smartphoneVisible !== false;
+    });
 
   items.push({
     code:         `MISC_${divCode}`,
@@ -459,7 +473,10 @@ function _costScEsc(s) {
    SheetModal 版 コスト入力（D案ハイブリッド）
    3デバイス統合仕様.md §6-3 準拠
    既存フルページ版（L1〜L457）とは完全独立・DOM / state / 関数名すべて別系統
-   諸口・買掛・源泉徴収UI 実装済み
+   諸口・買掛 実装済み
+   入力時統一ルール：全科目で総額（税込）入力（戦略思想§3-7・システム仕様書§8-5）
+   業態テンプレート連動：smartphoneVisible: false の科目は科目選択リストから非表示
+   源泉徴収はPC版「月末経理機能」で月末に処理する（スマホには源泉徴収UIなし）
    ══════════════════════════════════════════════════════════════ */
 
 // ── state ─────────────────────────────────────────────
@@ -469,10 +486,6 @@ let _smCostSelectedTaxRate      = null;
 // 諸口・買掛
 let _smCostMiscName             = '';
 let _smCostUnpaid               = false;
-// 源泉徴収（外注工賃・給料賃金 選択時のみ使用）
-// settings.storeType が 'off' の場合は一切表示しない（納品時設定・戦略思想§3-2）
-let _smCostWithholdingAmount    = 0;      // 計算結果または手入力値（実際にGASへ送る値）
-let _smCostWithholdingDays      = null;   // hostess計算時の日数（当月日数を既定・手動上書き可）
 
 // ── モーダル起動 ───────────────────────
 /**
@@ -511,8 +524,6 @@ function _smCostResetState() {
   _smCostSelectedTaxRate      = null;
   _smCostMiscName             = '';
   _smCostUnpaid               = false;
-  _smCostWithholdingAmount    = 0;
-  _smCostWithholdingDays      = null;
 }
 
 // ── モーダル HTML 生成 ───────────────────────────────
@@ -571,61 +582,6 @@ function _smCostBuildFormBodyHTML() {
           <span class="cost-sm-yen">円</span>
         </div>
         <div id="sm-cost-tax-memo" class="sm-tax-memo">内消費税 0 円</div>
-        <div id="sm-cost-amount-help" class="cost-sm-amount-help" hidden>
-          ※報酬総額（税込）を入力してください
-        </div>
-      </section>
-
-      <!-- 源泉徴収セクション（外注工賃／給料賃金 選択時のみ・storeType!=off の場合のみ表示） -->
-      <section class="cost-sm-section" id="sm-cost-withholding-section" hidden>
-        <label class="cost-sm-label">源泉徴収額</label>
-
-        <!-- hostess/standard計算結果の表示（外注工賃選択時） -->
-        <div id="sm-cost-withholding-calc" hidden>
-          <div class="cost-sm-wh-row" id="sm-cost-wh-days-row" hidden>
-            <span class="cost-sm-wh-label">計算期間の日数</span>
-            <input type="number"
-                   id="sm-cost-wh-days"
-                   class="cost-sm-wh-days-input"
-                   min="1" max="31"
-                   inputmode="numeric">
-            <span class="cost-sm-wh-unit">日</span>
-          </div>
-          <div class="cost-sm-wh-calc-result" id="sm-cost-wh-calc-result">源泉徴収額 0 円</div>
-          <div class="cost-sm-wh-formula" id="sm-cost-wh-formula"></div>
-        </div>
-
-        <!-- employed（給料賃金）の手入力欄 -->
-        <div id="sm-cost-withholding-manual" hidden>
-          <div class="cost-sm-amount-wrap">
-            <input type="text"
-                   id="sm-cost-wh-manual"
-                   class="cost-sm-amount-input"
-                   inputmode="numeric"
-                   placeholder="0"
-                   maxlength="10"
-                   autocomplete="off">
-            <span class="cost-sm-yen">円</span>
-          </div>
-          <div class="sm-tax-memo">給与所得の源泉徴収額を手入力（税額表の自動計算は搭載しません）</div>
-        </div>
-
-        <!-- 内訳サマリー（報酬総額・源泉徴収額・差引支払額） -->
-        <div class="cost-sm-wh-summary" id="sm-cost-wh-summary" hidden>
-          <div class="cost-sm-wh-summary-row">
-            <span class="cost-sm-wh-summary-label">報酬総額</span>
-            <span class="cost-sm-wh-summary-value" id="sm-cost-wh-summary-gross">0 円</span>
-          </div>
-          <div class="cost-sm-wh-summary-row">
-            <span class="cost-sm-wh-summary-label">源泉徴収額</span>
-            <span class="cost-sm-wh-summary-value cost-sm-wh-summary-value--minus" id="sm-cost-wh-summary-tax">△ 0 円</span>
-          </div>
-          <div class="cost-sm-wh-summary-divider"></div>
-          <div class="cost-sm-wh-summary-row cost-sm-wh-summary-row--total">
-            <span class="cost-sm-wh-summary-label">差引支払額</span>
-            <span class="cost-sm-wh-summary-value" id="sm-cost-wh-summary-net">0 円</span>
-          </div>
-        </div>
       </section>
 
       <!-- 買掛トグル -->
@@ -665,8 +621,6 @@ function _smCostInitFormInModal() {
   _smCostSelectedTaxRate      = null;
   _smCostMiscName             = '';
   _smCostUnpaid               = false;
-  _smCostWithholdingAmount    = 0;
-  _smCostWithholdingDays      = null;
 
   // 2. 科目カードの初期レンダリング（販管費＝divisionCode:'2'）
   _smCostRenderItemCards('2');
@@ -680,7 +634,6 @@ function _smCostInitFormInModal() {
   _smCostBindDateInput();
   _smCostBindMiscNameInput();
   _smCostBindUnpaidToggle();
-  _smCostBindWithholdingInputs();
 
   // 4. 内消費税メモを初期表示（税率未選択なので 0円 表示）
   _smCostRecalcTaxMemo();
@@ -713,8 +666,6 @@ function _smCostSelectDivision(divisionCode) {
   // 3. 科目選択と税率選択をリセット（区分切替で選択を持ち越さない）
   _smCostSelectedItemCode = null;
   _smCostSelectedTaxRate  = null;
-  _smCostWithholdingAmount = 0;
-  _smCostWithholdingDays   = null;
 
   // 4. 科目カードを再描画
   _smCostRenderItemCards(divisionCode);
@@ -731,13 +682,10 @@ function _smCostSelectDivision(divisionCode) {
   const miscInput = document.getElementById('sm-cost-misc-name');
   if (miscInput) miscInput.value = '';
 
-  // 7. 源泉徴収UIを隠す（科目未選択状態に戻る）
-  _smCostUpdateWithholdingUI();
-
-  // 8. 内消費税メモを再計算（税率 null → 0円表示）
+  // 7. 内消費税メモを再計算（税率 null → 0円表示）
   _smCostRecalcTaxMemo();
 
-  // 9. エラー枠解除
+  // 8. エラー枠解除
   document.querySelectorAll('.cost-sm-field-error').forEach(el => {
     el.classList.remove('cost-sm-field-error');
   });
@@ -747,9 +695,10 @@ function _smCostRenderItemCards(divisionCode) {
   const container = document.getElementById('sm-cost-item-cards');
   if (!container) return;
 
-  // getDivisionItems は既存のフルページ版ヘルパー（L21〜L36）
+  // getDivisionItems は既存のフルページ版ヘルパー（L21〜L48）
   // 返り値：指定区分の科目配列（末尾に諸口 MISC_1 / MISC_2 が動的追加済み・空 name はフィルタ済み）
-  const items = getDivisionItems(divisionCode);
+  // スマホ版は smartphoneVisible: false の科目（業態テンプレート連動で非表示化）を除外する
+  const items = getDivisionItems(divisionCode, { filterBySmartphoneVisible: true });
 
   container.innerHTML = items.map(item => {
     const isActive = item.code === _smCostSelectedItemCode;
@@ -784,8 +733,8 @@ function _smCostSelectItem(itemCode) {
     );
   });
 
-  // 3. 選択された科目オブジェクトを取得
-  const items = getDivisionItems(_smCostSelectedDivisionCode);
+  // 3. 選択された科目オブジェクトを取得（スマホ版なのでsmartphoneVisibleフィルタ適用）
+  const items = getDivisionItems(_smCostSelectedDivisionCode, { filterBySmartphoneVisible: true });
   const selectedItem = items.find(it => it.code === itemCode);
   if (!selectedItem) return;
 
@@ -815,13 +764,10 @@ function _smCostSelectItem(itemCode) {
     _smCostSetTaxRate(selectedItem.taxRate);
   }
 
-  // 5. 源泉徴収UIの表示切替（科目に応じて）
-  _smCostUpdateWithholdingUI();
-
-  // 6. 内消費税メモを再計算
+  // 5. 内消費税メモを再計算
   _smCostRecalcTaxMemo();
 
-  // 7. エラー枠解除
+  // 6. エラー枠解除
   const cardsContainer = document.getElementById('sm-cost-item-cards');
   if (cardsContainer) cardsContainer.classList.remove('cost-sm-field-error');
 }
@@ -867,9 +813,7 @@ function _smCostBindAmountInput() {
     }
     // 3. 内消費税メモ再計算
     _smCostRecalcTaxMemo();
-    // 4. 源泉徴収の計算も連動（外注工賃選択時のみ）
-    _smCostRecalcWithholding();
-    // 5. エラー枠解除
+    // 4. エラー枠解除
     input.classList.remove('cost-sm-field-error');
   });
 }
@@ -915,8 +859,8 @@ function _smCostValidate() {
     return { ok: false, errorTarget: cards, errorMsg: '科目を選択してください' };
   }
 
-  // 諸口選択時は科目名必須
-  const items = getDivisionItems(_smCostSelectedDivisionCode);
+  // 諸口選択時は科目名必須（スマホ版なのでsmartphoneVisibleフィルタ適用）
+  const items = getDivisionItems(_smCostSelectedDivisionCode, { filterBySmartphoneVisible: true });
   const selectedItem = items.find(it => it.code === _smCostSelectedItemCode);
   if (selectedItem && selectedItem.type === 'misc') {
     const miscInput = document.getElementById('sm-cost-misc-name');
@@ -968,7 +912,7 @@ async function _smCostHandleSubmit() {
   const unpaidEl    = document.getElementById('sm-cost-unpaid');
   const unpaidVal   = unpaidEl ? (unpaidEl.checked ? 1 : 0) : 0;
 
-  const items        = getDivisionItems(_smCostSelectedDivisionCode);
+  const items        = getDivisionItems(_smCostSelectedDivisionCode, { filterBySmartphoneVisible: true });
   const selectedItem = items.find(it => it.code === _smCostSelectedItemCode);
   if (!selectedItem) {
     _smCostShowToast('科目が不正です');
@@ -978,12 +922,9 @@ async function _smCostHandleSubmit() {
   // 3. 税額計算（3デバイス統合仕様§6-4）
   const { taxExcluded, tax } = calcTax(amountInTax, _smCostSelectedTaxRate);
 
-  // 4. 源泉徴収額の確定（UIが出ていない場合は0）
-  const whSection = document.getElementById('sm-cost-withholding-section');
-  const whVisible = whSection && !whSection.hidden;
-  const withholdingAmount = whVisible ? (Number(_smCostWithholdingAmount) || 0) : 0;
-
-  // 5. payload 組立（clientId は箱だけ用意・現フェーズでは空文字固定）
+  // 4. payload 組立（clientId は箱だけ用意・現フェーズでは空文字固定）
+  // 源泉徴収額はスマホ入力では扱わない（戦略思想§3-7・システム仕様書§8-5）
+  // 全科目で総額（税込）入力に統一・源泉徴収はPC版「月末経理機能」で月末に処理する
   const payload = {
     date:              dateVal,
     divisionCode:      _smCostSelectedDivisionCode,
@@ -997,11 +938,10 @@ async function _smCostHandleSubmit() {
     taxIncluded:       amountInTax,
     memo:              memoVal,
     unpaid:            unpaidVal,
-    withholdingAmount: withholdingAmount,
     clientId:          '',   // Phase A 管理ポータル実装時に実値を入れる・現時点は空
   };
 
-  // 6. GAS 送信
+  // 5. GAS 送信
   _smCostSetSubmitLoading(true);
   try {
     const result = await callGAS('addCost', payload);
@@ -1087,226 +1027,6 @@ function _smCostBindUnpaidToggle() {
   });
 }
 
-// ══════════════════════════════════════════════════════
-// 源泉徴収機能（戦略思想§3-2・システム仕様書§8-5 準拠）
-// ══════════════════════════════════════════════════════
-
-/**
- * 源泉徴収UIを出す対象科目コード
- * - '21': 外注工賃 → hostess または standard 計算式（storeTypeで決定）
- * - '20': 給料賃金 → 手入力のみ（計算式なし・税額表は搭載しない）
- * 仕様書§8-5・グレード詳細一覧§2-5 に基づく
- */
-/**
- * settings.storeType を localStorage から直接読む（cost.js 単独で完結）
- * settings.js のグローバル関数 getStoreType() への依存を持たない設計
- * - 'hostess' / 'standard' のいずれかなら正規化して返す
- * - 未設定・不正値は 'off' に寄せる（源泉徴収機能OFF・安全側）
- *
- * localStorage への書き込みは settings.js 起動時の loadSettingsFromGAS が担当する
- * 各ページで cost モーダルが開かれた時点で、既に GAS 同期済みのキャッシュが入っている前提
- */
-function _smCostReadStoreType() {
-  try {
-    const raw = (localStorage.getItem('uz_store_type') || '').toLowerCase();
-    if (raw === 'hostess' || raw === 'standard') return raw;
-  } catch (_) {}
-  return 'off';
-}
-
-function _smCostGetWithholdingMode(itemCode) {
-  const storeType = _smCostReadStoreType();
-  if (storeType === 'off') return 'none';           // 機能OFF
-  if (itemCode === '21') return storeType;          // 'hostess' or 'standard'
-  if (itemCode === '20') return 'manual';           // 給料賃金：手入力
-  return 'none';
-}
-
-/**
- * 当月日数を返す（hostess計算の既定値）
- * モーダル内の日付入力が指す月の日数
- */
-function _smCostGetDaysInMonthOfInput() {
-  const dateEl = document.getElementById('sm-cost-date');
-  const val = dateEl ? dateEl.value : '';
-  const parts = val.split('-');
-  const y = Number(parts[0]);
-  const m = Number(parts[1]);
-  if (!y || !m) {
-    // フォールバック：現在月の日数
-    const now = new Date();
-    return new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-  }
-  return new Date(y, m, 0).getDate();
-}
-
-/**
- * 源泉徴収UIの表示切替（科目変更時・区分切替時に呼ばれる）
- */
-function _smCostUpdateWithholdingUI() {
-  const section    = document.getElementById('sm-cost-withholding-section');
-  const calcBox    = document.getElementById('sm-cost-withholding-calc');
-  const manualBox  = document.getElementById('sm-cost-withholding-manual');
-  const daysRow    = document.getElementById('sm-cost-wh-days-row');
-  const formulaEl  = document.getElementById('sm-cost-wh-formula');
-  const helpEl     = document.getElementById('sm-cost-amount-help');
-  const summaryEl  = document.getElementById('sm-cost-wh-summary');
-  if (!section || !calcBox || !manualBox) return;
-
-  const mode = _smCostGetWithholdingMode(_smCostSelectedItemCode);
-
-  if (mode === 'none') {
-    section.hidden   = true;
-    calcBox.hidden   = true;
-    manualBox.hidden = true;
-    if (helpEl)    helpEl.hidden    = true;
-    if (summaryEl) summaryEl.hidden = true;
-    _smCostWithholdingAmount = 0;
-    return;
-  }
-
-  section.hidden = false;
-  if (helpEl)    helpEl.hidden    = false;
-  if (summaryEl) summaryEl.hidden = false;
-
-  if (mode === 'manual') {
-    // 給料賃金：手入力のみ
-    calcBox.hidden   = true;
-    manualBox.hidden = false;
-    // 手入力欄の現在値を反映
-    const manualInput = document.getElementById('sm-cost-wh-manual');
-    _smCostWithholdingAmount = manualInput
-      ? (Number(String(manualInput.value).replace(/[^\d]/g, '')) || 0)
-      : 0;
-    return;
-  }
-
-  // hostess / standard：計算式ベース
-  calcBox.hidden   = false;
-  manualBox.hidden = true;
-
-  // 日数行は hostess のみ表示
-  if (daysRow) daysRow.hidden = (mode !== 'hostess');
-
-  // 日数既定値の設定（まだ入っていなければ当月日数をセット）
-  if (mode === 'hostess') {
-    const daysInput = document.getElementById('sm-cost-wh-days');
-    if (daysInput && (!daysInput.value || _smCostWithholdingDays === null)) {
-      const defaultDays = _smCostGetDaysInMonthOfInput();
-      daysInput.value = String(defaultDays);
-      _smCostWithholdingDays = defaultDays;
-    }
-  }
-
-  // 計算式の説明表示
-  if (formulaEl) {
-    if (mode === 'hostess') {
-      formulaEl.textContent = '(支払額 − 5,000円 × 日数) × 10.21%';
-    } else {
-      formulaEl.textContent = '支払額 × 10.21%（100万円超部分は20.42%）';
-    }
-  }
-
-  _smCostRecalcWithholding();
-}
-
-/**
- * 源泉徴収額を再計算して表示（金額・日数変更時にも呼ばれる）
- */
-function _smCostRecalcWithholding() {
-  const mode = _smCostGetWithholdingMode(_smCostSelectedItemCode);
-  const resultEl = document.getElementById('sm-cost-wh-calc-result');
-
-  if (mode === 'none') {
-    _smCostWithholdingAmount = 0;
-    return;
-  }
-
-  if (mode === 'manual') {
-    // 手入力モード：入力値をそのまま state に反映
-    const manualInput = document.getElementById('sm-cost-wh-manual');
-    const raw = manualInput ? String(manualInput.value).replace(/[^\d]/g, '') : '';
-    _smCostWithholdingAmount = raw ? Number(raw) : 0;
-    _smCostUpdateWhSummary();
-    return;
-  }
-
-  // 支払額（税込）を取得
-  const amountInput = document.getElementById('sm-cost-amount');
-  const amountRaw = amountInput ? String(amountInput.value).replace(/[^\d]/g, '') : '';
-  const amount = amountRaw ? Number(amountRaw) : 0;
-
-  let withholding = 0;
-  if (amount > 0) {
-    if (mode === 'hostess') {
-      const days = _smCostWithholdingDays != null ? _smCostWithholdingDays : _smCostGetDaysInMonthOfInput();
-      const base = amount - (5000 * days);
-      withholding = base > 0 ? Math.floor(base * 0.1021) : 0;
-    } else if (mode === 'standard') {
-      // 100万円超部分は20.42%
-      if (amount <= 1000000) {
-        withholding = Math.floor(amount * 0.1021);
-      } else {
-        const over = amount - 1000000;
-        withholding = Math.floor(1000000 * 0.1021 + over * 0.2042);
-      }
-    }
-  }
-
-  _smCostWithholdingAmount = withholding;
-  if (resultEl) {
-    resultEl.textContent = `源泉徴収額 ${withholding.toLocaleString('ja-JP')} 円`;
-  }
-
-  _smCostUpdateWhSummary();
-}
-
-/**
- * 内訳サマリー更新（報酬総額・源泉徴収額・差引支払額）
- * hostess/standard/manual の全モードから呼ばれる
- */
-function _smCostUpdateWhSummary() {
-  const grossInput  = document.getElementById('sm-cost-amount');
-  const grossRaw    = grossInput ? String(grossInput.value).replace(/[^\d]/g, '') : '';
-  const grossAmount = grossRaw ? Number(grossRaw) : 0;
-  const netAmount   = Math.max(0, grossAmount - _smCostWithholdingAmount);
-
-  const grossEl = document.getElementById('sm-cost-wh-summary-gross');
-  const taxEl   = document.getElementById('sm-cost-wh-summary-tax');
-  const netEl   = document.getElementById('sm-cost-wh-summary-net');
-  if (grossEl) grossEl.textContent = `${grossAmount.toLocaleString('ja-JP')} 円`;
-  if (taxEl)   taxEl.textContent   = `△ ${_smCostWithholdingAmount.toLocaleString('ja-JP')} 円`;
-  if (netEl)   netEl.textContent   = `${netAmount.toLocaleString('ja-JP')} 円`;
-}
-
-/**
- * 源泉徴収UIの各入力要素をバインド
- * - 日数入力（hostess計算時の手動上書き）
- * - 手入力欄（給料賃金選択時）
- */
-function _smCostBindWithholdingInputs() {
-  const daysInput = document.getElementById('sm-cost-wh-days');
-  if (daysInput) {
-    daysInput.addEventListener('input', () => {
-      const v = Number(String(daysInput.value).replace(/[^\d]/g, ''));
-      if (v >= 1 && v <= 31) {
-        _smCostWithholdingDays = v;
-      } else {
-        _smCostWithholdingDays = null;
-      }
-      _smCostRecalcWithholding();
-    });
-  }
-
-  const manualInput = document.getElementById('sm-cost-wh-manual');
-  if (manualInput) {
-    manualInput.addEventListener('input', () => {
-      const raw = String(manualInput.value).replace(/[^\d]/g, '');
-      manualInput.value = raw ? Number(raw).toLocaleString('ja-JP') : '';
-      _smCostWithholdingAmount = raw ? Number(raw) : 0;
-    });
-  }
-}
 
 // ── グローバル露出 ───────────────
 // index.html からの onclick="openCostModal()" 呼び出しに対応するため window に露出
