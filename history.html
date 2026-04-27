@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0B1842">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>履歴・修正 - ウルトラZAIMUくん</title>
+  <title>履歴・修正 — ウルトラZAIMUくん</title>
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <link rel="manifest" href="manifest.json">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -345,7 +345,7 @@
 
 <!-- iPad サイドバーナビ（スマホでは非表示） -->
 <nav class="nav-sidebar" aria-label="メインナビゲーション">
-  <div class="nav-sidebar__logo">ウルトラ財務くん</div>
+  <div class="nav-sidebar__logo">ウルトラZAIMUくん</div>
   <a href="index.html" class="sidebar-item">
     <span class="sidebar-item__icon" aria-hidden="true">🏠</span>
     <span>ホーム</span>
@@ -403,7 +403,7 @@
                 class="hist-tab"
                 type="button" role="tab"
                 aria-selected="false" aria-controls="panel-attendance">
-          入店履歴
+          <span data-uilabel-key="clockin_history">入店履歴</span>
         </button>
       </div>
 
@@ -431,14 +431,16 @@
         <!-- ▸ 新規入店登録ボタン -->
         <div style="padding: 12px 16px 4px;">
           <button id="ci-open-btn" type="button" class="ci-open-btn">
-            ＋ 新規入店登録
+            ＋ <span data-uilabel-key="clockin_register">新規入店登録</span>
           </button>
         </div>
 
         <!-- ▸ 入店履歴一覧 -->
         <div id="attendance-list"
              style="padding:0 0 calc(var(--nav-height) + env(safe-area-inset-bottom) + 16px);"
-             role="region" aria-label="入店履歴">
+             role="region"
+             aria-label="入店履歴"
+             data-uilabel-aria-key="clockin_history">
         </div>
       </div>
 
