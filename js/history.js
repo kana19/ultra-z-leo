@@ -10,6 +10,10 @@
  * タブ2：入店履歴（getAttendanceByMonth）
  *   ※ GAS側で rowIndex を含めてください：
  *   { rowIndex, date, staffId, staffName, clockIn, clockOut }
+ *
+ * 業態テンプレート連動：
+ *   動的生成するテキスト（ボタン・履歴行・トースト・モーダル等）は
+ *   app.js の deriveUILabels() からラベルを取得して書き換える。
  */
 
 'use strict';
@@ -364,10 +368,12 @@ function renderAttendance(items) {
   if (!container) return;
   attendItems = [];
 
+  const labels = deriveUILabels();
+
   if (items.length === 0) {
     container.innerHTML = `
       <p style="text-align:center;padding:40px 20px;font-size:13px;color:var(--uz-muted);">
-        この月の入店履歴はありません
+        この月の${escHtml(labels.clockin_history)}はありません
       </p>`;
     return;
   }
@@ -435,7 +441,7 @@ function renderAttendance(items) {
           timeStr += ` <span style="font-size:11px;color:var(--uz-muted);">(${durLabel})</span>`;
         }
       } else {
-        timeStr = `${escHtml(clockIn)} — 退店未記録`;
+        timeStr = `${escHtml(clockIn)} — ${escHtml(labels.clockout_unrecorded)}`;
       }
 
       const isActive   = !clockOut;
@@ -448,8 +454,8 @@ function renderAttendance(items) {
                    data-row-index="${enriched.rowIndex || ''}"
                    data-staff-id="${escHtml(String(enriched.staffId || ''))}"
                    data-staff-name="${escHtml(enriched.staffName || '')}"
-                   aria-label="${escHtml(enriched.staffName || '')}の退店を記録">
-             退店を記録
+                   aria-label="${escHtml(enriched.staffName || '')}の${escHtml(labels.clockout_action)}">
+             ${escHtml(labels.clockout_action)}
            </button>`
         : '';
 
@@ -458,7 +464,7 @@ function renderAttendance(items) {
           <div class="attend-record-date">${dateLabel}</div>
           <div class="attend-record-times">${timeStr}</div>
           <span class="attend-status ${isActive ? 'attend-status--active' : 'attend-status--out'}">
-            ${isActive ? '在店中' : '退店済'}
+            ${isActive ? escHtml(labels.clockin_active) : escHtml(labels.clockout_done)}
           </span>
           ${clockoutBtn}
           ${widget}
@@ -473,9 +479,10 @@ function renderAttendance(items) {
 
 function renderAttendanceError() {
   const container = document.getElementById('attendance-list');
+  const labels = deriveUILabels();
   if (container) container.innerHTML = `
     <p style="text-align:center;padding:40px 20px;font-size:13px;color:var(--uz-muted);">
-      入店履歴の取得に失敗しました。<br>通信状態を確認してください。
+      ${escHtml(labels.clockin_history)}の取得に失敗しました。<br>通信状態を確認してください。
     </p>`;
 }
 
@@ -515,7 +522,8 @@ function openEditForm(item) {
     bodyEl.innerHTML    = buildCostFormHTML(item);
   } else {
     // attendance
-    titleEl.textContent = '入店記録を修正';
+    const labels = deriveUILabels();
+    titleEl.textContent = `${labels.clockin_record}を修正`;
     bodyEl.innerHTML    = buildAttendanceFormHTML(item);
     // 退店時刻の時プルダウンを入店時刻基準で再生成
     _refreshClockOutHourSelect('ef-clockin-h', 'ef-clockout-h');
@@ -625,6 +633,7 @@ function buildCostFormHTML(item) {
 }
 
 function buildAttendanceFormHTML(item) {
+  const labels   = deriveUILabels();
   const clockIn  = parseTimeStr(item.clockIn)  || '';
   const clockOut = parseTimeStr(item.clockOut) || '';
   return `
@@ -638,11 +647,11 @@ function buildAttendanceFormHTML(item) {
              value="${escHtml(item.date || '')}">
     </div>
     <div class="edit-field">
-      <label class="edit-label">入店時刻</label>
+      <label class="edit-label">${escHtml(labels.clockin_time)}</label>
       ${timeSelectHTML('ef-clockin', clockIn, true)}
     </div>
     <div class="edit-field">
-      <label class="edit-label">退店時刻
+      <label class="edit-label">${escHtml(labels.clockout_time)}
         <span style="font-size:11px;font-weight:400;color:var(--uz-muted);margin-left:4px;">任意</span>
       </label>
       ${timeSelectHTML('ef-clockout', clockOut, false)}
@@ -741,12 +750,13 @@ async function saveEdit() {
 
     } else {
       // attendance
+      const labels   = deriveUILabels();
       const date     = document.getElementById('ef-date')?.value || item.date;
       const clockIn  = getTimeSelectValue('ef-clockin');
       const clockOut = getTimeSelectValue('ef-clockout');
 
       if (!clockIn) {
-        showToast('入店時刻を選択してください', 'error');
+        showToast(`${labels.clockin_time}を選択してください`, 'error');
         isEditSaving = false;
         if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = '保存する'; }
         return;
@@ -836,8 +846,9 @@ function parseTimeStr(val) {
 
 /** シートモーダルに差し込むフォーム HTML を生成 */
 function _buildCIFormBodyHTML() {
+  const labels = deriveUILabels();
   return `
-    <div class="ci-section" aria-label="新規入店登録">
+    <div class="ci-section" aria-label="${escHtml(labels.clockin_register)}">
       <div class="ci-row ci-row--radio">
         <label class="ci-radio-label">
           <input type="radio" name="ci-mode" id="ci-mode-registered" value="registered" checked>
@@ -873,11 +884,11 @@ function _buildCIFormBodyHTML() {
         <input type="date" id="ci-date" class="ci-date-input" aria-label="日付">
       </div>
       <div class="ci-row">
-        <label class="ci-field-label">入店時刻</label>
+        <label class="ci-field-label">${escHtml(labels.clockin_time)}</label>
         <div id="ci-clockin-wrap"></div>
       </div>
       <div class="ci-row">
-        <label class="ci-field-label">退店時刻<span class="ci-optional">任意</span></label>
+        <label class="ci-field-label">${escHtml(labels.clockout_time)}<span class="ci-optional">任意</span></label>
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
           <div id="ci-clockout-wrap"></div>
           <span id="ci-next-day-badge" class="ci-badge-nextday" style="display:none;">翌日</span>
@@ -1002,6 +1013,7 @@ function updateCIBtnLabel() {
   const btn = document.getElementById('ci-submit-btn');
   if (!btn) return;
 
+  const labels   = deriveUILabels();
   const dateVal  = document.getElementById('ci-date')?.value || '';
   const clockIn  = getTimeSelectValue('ci-clockin');
   const clockOut = getTimeSelectValue('ci-clockout');
@@ -1011,17 +1023,17 @@ function updateCIBtnLabel() {
 
   let coPart;
   if (!clockOut) {
-    coPart = '退店未記録';
+    coPart = labels.clockout_unrecorded;
   } else {
     const ciH = document.getElementById('ci-clockin-h')?.value  || '';
     const ciM = document.getElementById('ci-clockin-m')?.value  || '';
     const coH = document.getElementById('ci-clockout-h')?.value || '';
     const coM = document.getElementById('ci-clockout-m')?.value || '';
     const overnight = isOvernightCI(ciH, ciM, coH, coM);
-    coPart = overnight === true ? `翌 ${clockOut} 退店` : `${clockOut} 退店`;
+    coPart = overnight === true ? `翌 ${clockOut} ${labels.clockout_label}` : `${clockOut} ${labels.clockout_label}`;
   }
 
-  btn.textContent = `${datePart} ${ciPart} 入店 / ${coPart} 登録する`;
+  btn.textContent = `${datePart} ${ciPart} ${labels.clockin_label} / ${coPart} 登録する`;
 
   _updateOvernightBadge();
 }
@@ -1050,6 +1062,8 @@ function _clearCIFieldErrors() {
 function _validateCIForm() {
   _clearCIFieldErrors();
 
+  const labels = deriveUILabels();
+
   // 雇用形態チェック
   const empEl = document.getElementById('ci-emp-type');
   if (!empEl?.value) {
@@ -1060,7 +1074,7 @@ function _validateCIForm() {
   const ciH = document.getElementById('ci-clockin-h');
   const ciM = document.getElementById('ci-clockin-m');
   if (!ciH?.value || !ciM?.value) {
-    return { type: 'error', field: document.getElementById('ci-clockin-wrap'), message: '入店時刻を選択してください' };
+    return { type: 'error', field: document.getElementById('ci-clockin-wrap'), message: `${labels.clockin_time}を選択してください` };
   }
 
   // スタッフ未指定チェック（任意・confirmのみ）
@@ -1089,6 +1103,7 @@ async function submitClockIn() {
     if (!window.confirm('スタッフ名無しで登録しますか？')) return;
   }
 
+  const labels = deriveUILabels();
   const mode = document.querySelector('input[name="ci-mode"]:checked')?.value || 'registered';
 
   let staffName, staffId;
@@ -1152,7 +1167,7 @@ async function submitClockIn() {
 
     if (result?.status !== 'ok') throw new Error(result?.message || '登録エラー');
 
-    showToast(`${staffName} の入店を記録しました ✓`, 'success');
+    showToast(`${staffName} の${labels.clockin_label}を記録しました ✓`, 'success');
     closeCIModal();
     await loadAttendanceOnly();
 
@@ -1179,8 +1194,9 @@ function getCurrentTimeRounded() {
 }
 
 function openCIModal() {
+  const labels = deriveUILabels();
   SheetModal.open({
-    title:    '新規入店登録',
+    title:    labels.clockin_register,
     bodyHtml: _buildCIFormBodyHTML(),
     onRender: _initCIFormInModal,
   });
@@ -1210,7 +1226,8 @@ async function quickClockOut(rowIndex, staffId, staffName) {
     showToast('rowIndex が取得できません。GAS の getAttendanceByMonth に rowIndex を追加してください。', 'error', 4000);
     return;
   }
-  if (!confirm(`${staffName} の退店を現在時刻で記録しますか？`)) return;
+  const labels = deriveUILabels();
+  if (!confirm(`${staffName} の${labels.clockout_label}を現在時刻で記録しますか？`)) return;
 
   const now          = new Date();
   const clockOutTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
@@ -1235,10 +1252,10 @@ async function quickClockOut(rowIndex, staffId, staffName) {
   try {
     const result = await callGAS('clockOut', { rowIndex, staffId, clockOutTime, clockOutDate });
     if (result?.status !== 'ok') throw new Error(result?.message || '記録エラー');
-    showToast(`${staffName} の退店を記録しました ✓`, 'success');
+    showToast(`${staffName} の${labels.clockout_label}を記録しました ✓`, 'success');
     await loadAttendanceOnly();
   } catch (e) {
-    showToast('退店記録に失敗しました：' + e.message, 'error');
+    showToast(`${labels.clockout_label}記録に失敗しました：` + e.message, 'error');
   } finally {
     hideLoading();
   }
@@ -1339,6 +1356,7 @@ function renderIpadRightPanel(record) {
 }
 
 function _buildIpadRecordDetail(record) {
+  const labels = deriveUILabels();
   let rows = '';
   if (record.type === 'sales') {
     rows = `
@@ -1389,7 +1407,7 @@ function _buildIpadRecordDetail(record) {
     rows = `
       <div class="ipad-record-detail__row">
         <span class="ipad-record-detail__key">種別</span>
-        <span class="ipad-record-detail__val">入店記録</span>
+        <span class="ipad-record-detail__val">${escHtml(labels.clockin_record)}</span>
       </div>
       <div class="ipad-record-detail__row">
         <span class="ipad-record-detail__key">日付</span>
@@ -1400,11 +1418,11 @@ function _buildIpadRecordDetail(record) {
         <span class="ipad-record-detail__val">${escHtml(record.staffName || '—')}</span>
       </div>
       <div class="ipad-record-detail__row">
-        <span class="ipad-record-detail__key">入店</span>
+        <span class="ipad-record-detail__key">${escHtml(labels.clockin_label)}</span>
         <span class="ipad-record-detail__val">${escHtml(parseTimeStr(record.clockIn) || '—')}</span>
       </div>
       <div class="ipad-record-detail__row">
-        <span class="ipad-record-detail__key">退店</span>
+        <span class="ipad-record-detail__key">${escHtml(labels.clockout_label)}</span>
         <span class="ipad-record-detail__val">${escHtml(parseTimeStr(record.clockOut) || '未記録')}</span>
       </div>`;
   }
