@@ -31,6 +31,40 @@ const DEFAULT_SERVICES = [
 ];
 const MAX_SERVICES = 3;
 
+/* ── パスワード関連ヘルパー（スタッフ枠パスワード）──────────────
+ * 戦略思想§3-7「商売の都合優先」+ システム仕様書§10-3 準拠：
+ *   - 日常打刻はワンタップ（パスワード入力なし）
+ *   - パスワードはやめたスタッフのログイン防止・退職時の枠流用に使用
+ *   - オーナーが settings 画面でスタッフ追加・パスワード変更を行う
+ * 形式：5桁英数字（半角英大小文字＋数字）
+ * ハッシュ：SHA-256・ソルトは staffId（管理ポータルのPINと同等の方式・技術仕様書§3-6）
+ * 平文はクライアント・サーバいずれにも保持しない（送信もハッシュ済み）
+ */
+const STAFF_PW_PATTERN = /^[A-Za-z0-9]{5}$/;
+
+/**
+ * スタッフ枠パスワードのバリデーション
+ * @param {string} pw
+ * @returns {boolean} 5桁英数字に合致すれば true
+ */
+function validateStaffPassword(pw) {
+  return typeof pw === 'string' && STAFF_PW_PATTERN.test(pw);
+}
+
+/**
+ * スタッフ枠パスワードをハッシュ化（SHA-256・ソルトは staffId）
+ * @param {number|string} staffId
+ * @param {string} password
+ * @returns {Promise<string>} 16進文字列のハッシュ値
+ */
+async function hashStaffPassword(staffId, password) {
+  const salted  = `staff:${staffId}:${password}`;
+  const encoded = new TextEncoder().encode(salted);
+  const buf     = await crypto.subtle.digest('SHA-256', encoded);
+  const bytes   = Array.from(new Uint8Array(buf));
+  return bytes.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 /* ── localStorage アクセサ ───────────────────────────────── */
 function getStoreName() {
   return localStorage.getItem(STORE_NAME_KEY) || DEFAULT_STORE_NAME;
@@ -274,6 +308,14 @@ function editStaff(id) {
       <option value="employed"${empType === 'employed' ? ' selected' : ''}>雇用</option>
       <option value="contractor"${empType === 'contractor' ? ' selected' : ''}>委託・外注</option>
     </select>
+    <input type="text"
+           id="staff-edit-password-${id}"
+           class="settings-input"
+           style="flex:1;min-width:120px;height:40px;font-size:14px;"
+           placeholder="パスワード変更（任意・5桁英数字）"
+           maxlength="5"
+           autocomplete="off"
+           aria-label="パスワード変更">
     <button class="staff-save-btn"
             type="button"
             onclick="saveEditStaff(${id})"
@@ -293,6 +335,7 @@ function editStaff(id) {
 async function saveEditStaff(id) {
   const nameEl = document.getElementById(`staff-edit-name-${id}`);
   const empEl  = document.getElementById(`staff-edit-emp-${id}`);
+  const pwEl   = document.getElementById(`staff-edit-password-${id}`);
   if (!nameEl || !empEl) return;
 
   const name = nameEl.value.trim();
@@ -303,12 +346,31 @@ async function saveEditStaff(id) {
     return showToast('同じ名前のスタッフが既に登録されています', 'error');
   }
 
+  // パスワード変更（任意・空欄なら既存の passwordHash を維持）
+  const pwInput = pwEl ? pwEl.value.trim() : '';
+  let passwordUpdate = null;
+  if (pwInput) {
+    if (!validateStaffPassword(pwInput)) {
+      return showToast('パスワードは5桁の半角英数字で入力してください', 'error');
+    }
+    const passwordHash = await hashStaffPassword(id, pwInput);
+    passwordUpdate = {
+      passwordHash,
+      passwordUpdatedAt: new Date().toISOString(),
+    };
+  }
+
   const newList = list.map(s =>
-    s.id === id ? { ...s, name, employmentType: empEl.value } : s
+    s.id === id
+      ? { ...s, name, employmentType: empEl.value, ...(passwordUpdate || {}) }
+      : s
   );
   _saveStaffList(newList);
   renderStaffList();
-  showToast(`${name}を更新しました ✓`, 'success');
+  const msg = passwordUpdate
+    ? `${name}を更新しました（パスワード変更含む）✓`
+    : `${name}を更新しました ✓`;
+  showToast(msg, 'success');
   saveStaffListToGAS();
 }
 
@@ -330,11 +392,18 @@ function bindStaffAdd() {
   const btn       = document.getElementById('staff-add-btn');
   const input     = document.getElementById('staff-add-input');
   const empSelect = document.getElementById('staff-add-emp');
+  const pwInput   = document.getElementById('staff-add-password');
   if (!btn || !input) return;
 
-  const doAdd = () => {
+  const doAdd = async () => {
     const name = input.value.trim();
     if (!name) return showToast('スタッフ名を入力してください', 'error');
+
+    // パスワードバリデーション（5桁英数字必須）
+    const password = pwInput ? pwInput.value.trim() : '';
+    if (!validateStaffPassword(password)) {
+      return showToast('パスワードは5桁の半角英数字で入力してください', 'error');
+    }
 
     const list = getStaffList();
 
@@ -343,12 +412,22 @@ function bindStaffAdd() {
     }
 
     const maxId         = list.length > 0 ? Math.max(...list.map(s => s.id)) : 0;
+    const newId         = maxId + 1;
     const employmentType = empSelect ? empSelect.value : 'employed';
-    const newList        = [...list, { id: maxId + 1, name, employmentType }];
+    const passwordHash  = await hashStaffPassword(newId, password);
+    const passwordUpdatedAt = new Date().toISOString();
+    const newList       = [...list, {
+      id: newId,
+      name,
+      employmentType,
+      passwordHash,
+      passwordUpdatedAt,
+    }];
     _saveStaffList(newList);
 
     input.value = '';
     if (empSelect) empSelect.value = 'employed';
+    if (pwInput) pwInput.value = '';
     renderStaffList();
     showToast(`${name}を追加しました ✓`, 'success');
     saveStaffListToGAS();
@@ -356,6 +435,9 @@ function bindStaffAdd() {
 
   btn.addEventListener('click', doAdd);
   input.addEventListener('keydown', e => { if (e.key === 'Enter') doAdd(); });
+  if (pwInput) {
+    pwInput.addEventListener('keydown', e => { if (e.key === 'Enter') doAdd(); });
+  }
 }
 
 /* ── サービスマスタ ──────────────────────────────────────── */
