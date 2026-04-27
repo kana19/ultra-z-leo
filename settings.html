@@ -108,10 +108,22 @@
             <option value="employed">雇用</option>
             <option value="contractor">委託・外注</option>
           </select>
+          <input type="text"
+                 id="staff-add-password"
+                 class="staff-add-input"
+                 style="flex:1;min-width:140px;"
+                 placeholder="パスワード（5桁英数字）"
+                 maxlength="5"
+                 autocomplete="off"
+                 aria-label="スタッフ枠パスワード">
           <button id="staff-add-btn"
                   class="staff-add-btn"
                   type="button">追加</button>
         </div>
+        <p style="padding:6px 16px 14px;font-size:12px;color:var(--uz-muted);line-height:1.6;">
+          パスワードはやめたスタッフのログイン防止に使用します。退職時はこの画面から「編集」でパスワードを変更し、必要に応じて名前も変更すれば、同じ枠を新しいスタッフに引き継げます。<br>
+          打刻はワンタップで行うため、スタッフ自身がパスワードを入力する場面はありません。
+        </p>
       </div>
     </section>
 
