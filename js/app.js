@@ -109,39 +109,57 @@ document.addEventListener('DOMContentLoaded', function() {
  *   - 顧客が直接設定するUIは出さない（管理ポータルから設定される）
  *   - 通常は templateId から動的導出・custom時のみ uz_ui_labels の個別保存値を優先
  * 対象キー：
- *   - clockin_record    : 入店記録 / 出勤記録
- *   - clockin_history   : 入店履歴 / 出勤履歴
- *   - clockin_active    : 入店中 / 出勤中
- *   - clockin_time      : 入店時刻 / 出勤時刻
- *   - clockout_time     : 退店時刻 / 退勤時刻
- *   - clockin_action    : 入店を記録 / 出勤を記録
- *   - clockout_action   : 退店を記録 / 退勤を記録
- *   - clockin_register  : 新規入店登録 / 新規出勤登録
+ *   - clockin_record       : 入店記録 / 出勤記録
+ *   - clockin_history      : 入店履歴 / 出勤履歴
+ *   - clockin_active       : 入店中 / 出勤中
+ *   - clockin_time         : 入店時刻 / 出勤時刻
+ *   - clockout_time        : 退店時刻 / 退勤時刻
+ *   - clockin_action       : 入店を記録 / 出勤を記録
+ *   - clockout_action      : 退店を記録 / 退勤を記録
+ *   - clockin_register     : 新規入店登録 / 新規出勤登録
+ *   - clockout_done        : 退店済 / 退勤済
+ *   - not_clocked_in       : 未入店 / 未出勤
+ *   - clockin_label        : 入店 / 出勤
+ *   - clockout_label       : 退店 / 退勤
+ *   - clockout_unrecorded  : 退店未記録 / 退勤未記録
+ *   - attendance_empty     : 本日の入店記録がありません / 本日の出勤記録がありません
  */
 
 const UI_LABELS_KEY  = 'uz_ui_labels';
 const TEMPLATE_ID_KEY = 'uz_template_id';
 
 const UI_LABELS_HOSTESS = {
-  clockin_record:   '入店記録',
-  clockin_history:  '入店履歴',
-  clockin_active:   '入店中',
-  clockin_time:     '入店時刻',
-  clockout_time:    '退店時刻',
-  clockin_action:   '入店を記録',
-  clockout_action:  '退店を記録',
-  clockin_register: '新規入店登録',
+  clockin_record:      '入店記録',
+  clockin_history:     '入店履歴',
+  clockin_active:      '入店中',
+  clockin_time:        '入店時刻',
+  clockout_time:       '退店時刻',
+  clockin_action:      '入店を記録',
+  clockout_action:     '退店を記録',
+  clockin_register:    '新規入店登録',
+  clockout_done:       '退店済',
+  not_clocked_in:      '未入店',
+  clockin_label:       '入店',
+  clockout_label:      '退店',
+  clockout_unrecorded: '退店未記録',
+  attendance_empty:    '本日の入店記録がありません',
 };
 
 const UI_LABELS_GENERAL = {
-  clockin_record:   '出勤記録',
-  clockin_history:  '出勤履歴',
-  clockin_active:   '出勤中',
-  clockin_time:     '出勤時刻',
-  clockout_time:    '退勤時刻',
-  clockin_action:   '出勤を記録',
-  clockout_action:  '退勤を記録',
-  clockin_register: '新規出勤登録',
+  clockin_record:      '出勤記録',
+  clockin_history:     '出勤履歴',
+  clockin_active:      '出勤中',
+  clockin_time:        '出勤時刻',
+  clockout_time:       '退勤時刻',
+  clockin_action:      '出勤を記録',
+  clockout_action:     '退勤を記録',
+  clockin_register:    '新規出勤登録',
+  clockout_done:       '退勤済',
+  not_clocked_in:      '未出勤',
+  clockin_label:       '出勤',
+  clockout_label:      '退勤',
+  clockout_unrecorded: '退勤未記録',
+  attendance_empty:    '本日の出勤記録がありません',
 };
 
 /**
