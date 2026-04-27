@@ -4,6 +4,10 @@
  *
  * 目的：スタッフの記録忘れ修正・未登録スタッフの手動記録
  * 入店・退店を1画面で同時設定・修正できる仕様
+ *
+ * 業態テンプレート連動：
+ *   動的生成するテキスト（submit ボタン・一覧・トースト等）は
+ *   app.js の deriveUILabels() からラベルを取得して書き換える。
  */
 
 'use strict';
@@ -250,13 +254,14 @@ function bindFormInputs() {
 
 /* ── 登録ボタンテキスト生成 ──────────────────────────────── */
 function buildSubmitBtnText() {
+  const labels   = deriveUILabels();
   const date     = document.getElementById('form-date')?.value || todayStr();
   const clockIn  = getTimeSelectValue('form-clockin');
   const clockOut = getTimeSelectValue('form-clockout');
   const dispDate = date.replace(/-/g, '/');
   const inStr    = clockIn  || '--:--';
-  const outStr   = clockOut ? `${clockOut} 退店` : '退店未記録';
-  return `${dispDate} ${inStr} 入店 / ${outStr}　登録する`;
+  const outStr   = clockOut ? `${clockOut} ${labels.clockout_label}` : labels.clockout_unrecorded;
+  return `${dispDate} ${inStr} ${labels.clockin_label} / ${outStr}　登録する`;
 }
 
 function updateSubmitBtn() {
@@ -277,12 +282,13 @@ function bindSubmitBtn() {
 async function handleSubmit() {
   if (isSubmitting || !selectedName) return;
 
+  const labels   = deriveUILabels();
   const date     = document.getElementById('form-date')?.value || todayStr();
   const clockIn  = getTimeSelectValue('form-clockin');
   const clockOut = getTimeSelectValue('form-clockout');
 
   if (!clockIn) {
-    showToast('入店時刻を選択してください', 'error');
+    showToast(`${labels.clockin_time}を選択してください`, 'error');
     return;
   }
 
@@ -375,8 +381,10 @@ function renderAttendanceList() {
   const container = document.getElementById('attendance-list');
   if (!container) return;
 
+  const labels = deriveUILabels();
+
   if (todayAttendance.length === 0) {
-    container.innerHTML = `<p class="uc-empty">本日の入店記録がありません</p>`;
+    container.innerHTML = `<p class="uc-empty">${escHtml(labels.attendance_empty)}</p>`;
     return;
   }
 
@@ -401,7 +409,7 @@ function renderAttendanceList() {
         <div class="attendance-info" style="flex:1;min-width:0;">
           <div class="attendance-name">${escHtml(a.name)}</div>
           <div class="attendance-time">
-            入店 ${escHtml(clockInDisp)}&nbsp;&nbsp;/&nbsp;&nbsp;退店 ${escHtml(clockOutDisp)}
+            ${escHtml(labels.clockin_label)} ${escHtml(clockInDisp)}&nbsp;&nbsp;/&nbsp;&nbsp;${escHtml(labels.clockout_label)} ${escHtml(clockOutDisp)}
           </div>
         </div>
         <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;flex-shrink:0;">
@@ -422,7 +430,7 @@ function renderAttendanceList() {
                          background:#16a34a;color:#fff;
                          border:none;cursor:pointer;
                          font-family:var(--font-main);white-space:nowrap;">
-            退店を記録
+            ${escHtml(labels.clockout_action)}
           </button>` : ''}
         </div>
         ${isExpanded ? `
@@ -482,7 +490,8 @@ function renderAttendanceList() {
       const idx     = parseInt(btn.dataset.idx, 10);
       const timeVal = getTimeSelectValue(`inline-clockout-${idx}`);
       if (!timeVal) {
-        showToast('退店時刻を選択してください', 'error');
+        const labels = deriveUILabels();
+        showToast(`${labels.clockout_time}を選択してください`, 'error');
         return;
       }
       handleInlineClockOut(idx, timeVal);
@@ -504,6 +513,7 @@ async function handleInlineClockOut(idx, clockOutTime) {
   const record = todayAttendance[idx];
   if (!record) return;
 
+  const labels  = deriveUILabels();
   const date    = record.date || todayStr();
   const staffId = record.id;
 
@@ -528,10 +538,10 @@ async function handleInlineClockOut(idx, clockOutTime) {
 
     clockoutExpandedIdx = null;
     renderAttendanceList();
-    showToast(`${record.name}さんの退店を記録しました ✓`, 'success');
+    showToast(`${record.name}さんの${labels.clockout_label}を記録しました ✓`, 'success');
 
   } catch (e) {
-    showToast('退店記録に失敗しました：' + e.message, 'error');
+    showToast(`${labels.clockout_label}記録に失敗しました：` + e.message, 'error');
     if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = '記録する'; }
   } finally {
     isSubmitting = false;
@@ -623,6 +633,7 @@ function renderIpadStaffCards() {
   const container = document.getElementById('ipad-staff-cards');
   if (!container) return;
 
+  const labels = deriveUILabels();
   const master = getStaffMaster();
   if (master.length === 0) {
     container.innerHTML = `<p class="ipad-list-empty">設定からスタッフを登録してください</p>`;
@@ -633,11 +644,11 @@ function renderIpadStaffCards() {
     const attend = todayAttendance.find(a => String(a.id) === String(s.id));
     const isActive  = attend && (!attend.clockOut);
     const isOut     = attend && attend.clockOut;
-    const statusLabel = isActive ? '在店中' : (isOut ? '退店済' : '未入店');
+    const statusLabel = isActive ? labels.clockin_active : (isOut ? labels.clockout_done : labels.not_clocked_in);
     const badgeClass  = isActive ? 'ipad-staff-card__badge--active' : 'ipad-staff-card__badge--inactive';
     const cardClass   = isActive ? 'ipad-staff-card ipad-staff-card--active' : 'ipad-staff-card ipad-staff-card--inactive';
-    const timeInfo    = isActive ? `入店 ${parseTimeStr(attend.clockIn) || '—'}` :
-                        isOut    ? `入店 ${parseTimeStr(attend.clockIn) || '—'} / 退店 ${parseTimeStr(attend.clockOut)}` : '';
+    const timeInfo    = isActive ? `${labels.clockin_label} ${parseTimeStr(attend.clockIn) || '—'}` :
+                        isOut    ? `${labels.clockin_label} ${parseTimeStr(attend.clockIn) || '—'} / ${labels.clockout_label} ${parseTimeStr(attend.clockOut)}` : '';
 
     return `
       <div class="${cardClass}"
@@ -647,7 +658,7 @@ function renderIpadStaffCards() {
            tabindex="0"
            aria-label="${escHtml(s.name)}">
         <div class="ipad-staff-card__name">${escHtml(s.name)}</div>
-        <span class="ipad-staff-card__badge ${badgeClass}">${statusLabel}</span>
+        <span class="ipad-staff-card__badge ${badgeClass}">${escHtml(statusLabel)}</span>
         ${timeInfo ? `<div class="ipad-staff-card__time">${escHtml(timeInfo)}</div>` : ''}
       </div>`;
   }).join('');
@@ -719,11 +730,12 @@ function _ipadCiSwitchTab(tab) {
 async function _ipadCiSubmitIn() {
   if (isSubmitting || !_ipadCiSelectedStaff) return;
 
+  const labels   = deriveUILabels();
   const date     = document.getElementById('ipad-ci-date')?.value || todayStr();
   const clockIn  = _ipadCiGetTimeVal('ipad-ci-in-h', 'ipad-ci-in-m');
   const clockOut = _ipadCiGetTimeVal('ipad-ci-out-h', 'ipad-ci-out-m');
 
-  if (!clockIn) { showToast('入店時刻を選択してください', 'error'); return; }
+  if (!clockIn) { showToast(`${labels.clockin_time}を選択してください`, 'error'); return; }
 
   const master  = getStaffMaster().find(s => String(s.id) === String(_ipadCiSelectedStaff.id));
   const staffId = master?.id ?? (_ipadCiSelectedStaff.id || Date.now());
@@ -751,7 +763,7 @@ async function _ipadCiSubmitIn() {
     todayAttendance.unshift(newRecord);
     saveAttendance(todayAttendance);
 
-    showToast(`${_ipadCiSelectedStaff.name}さんの入店を記録しました ✓`, 'success');
+    showToast(`${_ipadCiSelectedStaff.name}さんの${labels.clockin_label}を記録しました ✓`, 'success');
     renderAttendanceList();
     renderIpadStaffCards();
     _ipadCiSelectedStaff = null;
@@ -762,18 +774,19 @@ async function _ipadCiSubmitIn() {
     showToast('登録に失敗しました：' + e.message, 'error');
   } finally {
     isSubmitting = false;
-    if (btn) { btn.disabled = false; btn.textContent = '入店を記録する'; }
+    if (btn) { btn.disabled = false; btn.textContent = labels.clockin_action; }
   }
 }
 
 async function _ipadCiSubmitOut() {
   if (isSubmitting || !_ipadCiSelectedStaff) return;
 
+  const labels   = deriveUILabels();
   const clockOut = _ipadCiGetTimeVal('ipad-co-out-h', 'ipad-co-out-m');
-  if (!clockOut) { showToast('退店時刻を選択してください', 'error'); return; }
+  if (!clockOut) { showToast(`${labels.clockout_time}を選択してください`, 'error'); return; }
 
   const attend = todayAttendance.find(a => String(a.id) === String(_ipadCiSelectedStaff.id));
-  if (!attend) { showToast('入店記録が見つかりません', 'error'); return; }
+  if (!attend) { showToast(`${labels.clockin_label}記録が見つかりません`, 'error'); return; }
 
   isSubmitting = true;
   const btn = document.getElementById('ipad-ci-submit-out');
@@ -792,7 +805,7 @@ async function _ipadCiSubmitOut() {
     attend.isActive = false;
     saveAttendance(todayAttendance);
 
-    showToast(`${_ipadCiSelectedStaff.name}さんの退店を記録しました ✓`, 'success');
+    showToast(`${_ipadCiSelectedStaff.name}さんの${labels.clockout_label}を記録しました ✓`, 'success');
     renderAttendanceList();
     renderIpadStaffCards();
     _ipadCiSelectedStaff = null;
@@ -800,9 +813,9 @@ async function _ipadCiSubmitOut() {
     document.getElementById('ipad-ci-operation').style.display = 'none';
 
   } catch (e) {
-    showToast('退店記録に失敗しました：' + e.message, 'error');
+    showToast(`${labels.clockout_label}記録に失敗しました：` + e.message, 'error');
   } finally {
     isSubmitting = false;
-    if (btn) { btn.disabled = false; btn.textContent = '退店を記録する'; }
+    if (btn) { btn.disabled = false; btn.textContent = labels.clockout_action; }
   }
 }
