@@ -332,7 +332,10 @@ function getOrCreateSheet(name) {
 /**
  * settings読み込み
  * B1:storeName / B2:staffList / B3:serviceList / B12:storeType
+ * B13:templateId / B14:uiLabels(JSON)
  * storeType 未設定時は 'off' をデフォルトで返す（源泉徴収機能OFF状態・納品時に書き換え）
+ * templateId 未設定時は 'general-shop' をデフォルトで返す（業態テンプレート・納品時に書き換え）
+ * uiLabels 未設定時は {} をデフォルトで返す（custom時のみ意味がある・通常は空）
  */
 function getSettings() {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('settings');
@@ -341,6 +344,8 @@ function getSettings() {
   var staffJson   = sheet.getRange('B2').getValue();
   var serviceJson = sheet.getRange('B3').getValue();
   var storeTypeRaw = sheet.getRange('B12').getValue();
+  var templateIdRaw = sheet.getRange('B13').getValue();
+  var uiLabelsJson  = sheet.getRange('B14').getValue();
   var staffList = [], serviceList = [];
   try { if (staffJson)   staffList   = JSON.parse(staffJson);   } catch(e) {}
   try { if (serviceJson) serviceList = JSON.parse(serviceJson); } catch(e) {}
@@ -356,17 +361,30 @@ function getSettings() {
   if (storeType !== 'hostess' && storeType !== 'standard') {
     storeType = 'off';
   }
+  // templateId は hostess-shop / general-shop / non-shop / custom のみ許容。未設定や不正値は 'general-shop' に寄せる
+  var templateId = String(templateIdRaw || '');
+  if (templateId !== 'hostess-shop' && templateId !== 'general-shop' && templateId !== 'non-shop' && templateId !== 'custom') {
+    templateId = 'general-shop';
+  }
+  // uiLabels は JSON 文字列。パース失敗・未設定時は {} を返す
+  var uiLabels = {};
+  try { if (uiLabelsJson) uiLabels = JSON.parse(uiLabelsJson); } catch(e) {}
+  if (!uiLabels || typeof uiLabels !== 'object') uiLabels = {};
   return { status: 'ok', data: {
     storeName: storeName || '',
     staffList: staffList,
     serviceList: serviceList,
-    storeType: storeType
+    storeType: storeType,
+    templateId: templateId,
+    uiLabels: uiLabels
   }};
 }
 
 /**
  * settings保存
  * storeType は B12 に直書き（payload に含まれていれば更新・通常は顧客UIからは送信されない）
+ * templateId は B13 に直書き（payload に含まれていれば更新・通常は顧客UIからは送信されない）
+ * uiLabels は B14 に JSON.stringify して直書き（payload に含まれていれば更新）
  * 顧客UIには出さず納品時にスプレッドシート直接編集で設定する運用（戦略思想§3-2）
  */
 function saveSettings(data) {
@@ -391,9 +409,25 @@ function saveSettings(data) {
     sheet.getRange('A12').setValue('storeType');
     sheet.getRange('B12').setValue(st);
   }
+  // templateId は通常の顧客UIからは送信されないが、送信された場合のみ更新
+  if (data.templateId !== undefined) {
+    var tid = String(data.templateId || '');
+    if (tid !== 'hostess-shop' && tid !== 'general-shop' && tid !== 'non-shop' && tid !== 'custom') tid = 'general-shop';
+    sheet.getRange('A13').setValue('templateId');
+    sheet.getRange('B13').setValue(tid);
+  }
+  // uiLabels は通常の顧客UIからは送信されないが、送信された場合のみ更新
+  if (data.uiLabels !== undefined) {
+    sheet.getRange('A14').setValue('uiLabels');
+    sheet.getRange('B14').setValue(JSON.stringify(data.uiLabels || {}));
+  }
   return { status: 'ok' };
 }
 
+/**
+ * スタッフリスト保存
+ * passwordHash / passwordUpdatedAt はスタッフごとパスワード機能（システム仕様書§10-3）用
+ */
 function saveStaffList(staffList) {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('settings');
   if (!sheet) return { status: 'error', message: 'settingsシートが見つかりません' };
@@ -401,7 +435,9 @@ function saveStaffList(staffList) {
     return {
       id: String(s.id || ''),
       name: String(s.name || ''),
-      employmentType: s.employmentType === 'contractor' ? 'contractor' : 'employed'
+      employmentType: s.employmentType === 'contractor' ? 'contractor' : 'employed',
+      passwordHash: String(s.passwordHash || ''),
+      passwordUpdatedAt: s.passwordUpdatedAt ? String(s.passwordUpdatedAt) : ''
     };
   });
   sheet.getRange('A2').setValue('staffList');
@@ -766,4 +802,72 @@ function setupWithholdingAndClientId() {
   }
 
   Logger.log('setupWithholdingAndClientId 完了');
+}
+
+// =============================================================
+// 業態テンプレート・スタッフパスワード マイグレーション
+// settings B13 templateId 初期化 + B14 uiLabels 初期化 + 既存スタッフリストに passwordHash/passwordUpdatedAt 補完
+// =============================================================
+
+/**
+ * templateId/uiLabels/passwordHash 機能の初期セットアップ（1回だけ実行）
+ * - settings B13 に templateId='general-shop' を初期化（納品時に hostess-shop/general-shop/non-shop/custom へ書き換え）
+ * - settings B14 に uiLabels='{}' を初期化（custom時のみ意味がある・通常は空）
+ * - 既存スタッフリストに passwordHash=''・passwordUpdatedAt='' を補完
+ */
+function setupTemplateAndPassword() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  // --- settings B13 templateId 初期化 ---
+  var settings = ss.getSheetByName('settings');
+  if (!settings) {
+    settings = ss.insertSheet('settings');
+  }
+  var currentTemplateId = settings.getRange('B13').getValue();
+  if (!currentTemplateId || currentTemplateId === '') {
+    settings.getRange('A13').setValue('templateId');
+    settings.getRange('B13').setValue('general-shop');
+    Logger.log('settings B13 に templateId="general-shop" を初期化しました');
+  } else {
+    Logger.log('settings B13 は既に "' + currentTemplateId + '" が設定済みのためスキップ');
+  }
+
+  // --- settings B14 uiLabels 初期化 ---
+  var currentUiLabels = settings.getRange('B14').getValue();
+  if (!currentUiLabels || currentUiLabels === '') {
+    settings.getRange('A14').setValue('uiLabels');
+    settings.getRange('B14').setValue('{}');
+    Logger.log('settings B14 に uiLabels="{}" を初期化しました');
+  } else {
+    Logger.log('settings B14 は既に "' + currentUiLabels + '" が設定済みのためスキップ');
+  }
+
+  // --- 既存スタッフリストに passwordHash/passwordUpdatedAt 補完 ---
+  var staffJson = settings.getRange('B2').getValue();
+  var staffList = [];
+  try { if (staffJson) staffList = JSON.parse(staffJson); } catch(e) {}
+  if (!Array.isArray(staffList)) staffList = [];
+  var filledCount = 0;
+  staffList = staffList.map(function(s) {
+    var changed = false;
+    if (s.passwordHash === undefined) {
+      s.passwordHash = '';
+      changed = true;
+    }
+    if (s.passwordUpdatedAt === undefined) {
+      s.passwordUpdatedAt = '';
+      changed = true;
+    }
+    if (changed) filledCount++;
+    return s;
+  });
+  if (filledCount > 0) {
+    settings.getRange('A2').setValue('staffList');
+    settings.getRange('B2').setValue(JSON.stringify(staffList));
+    Logger.log('既存スタッフ ' + filledCount + ' 件に passwordHash=""・passwordUpdatedAt="" を補完しました');
+  } else {
+    Logger.log('既存スタッフリストは既に passwordHash/passwordUpdatedAt が補完済みのためスキップ');
+  }
+
+  Logger.log('setupTemplateAndPassword 完了');
 }
