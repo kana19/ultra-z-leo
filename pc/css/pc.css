@@ -269,8 +269,3 @@ body.pc-body {
 .mt-8  { margin-top: 8px; }
 .mt-16 { margin-top: 16px; }
 .hidden { display: none !important; }
-
-/* ── 月末経理 ──────────────────────────────── */
-.pc-section-empty { padding: 20px; color: var(--uz-text2); text-align: center; font-size: 12px; }
-#confirm-row { margin-top: 20px; padding: 16px; background: var(--uz-amber-bg); border: 1px solid var(--uz-gold-dk, var(--uz-gold)); border-radius: 6px; }
-#confirm-row .text-muted { display: block; margin-bottom: 10px; font-size: 11px; }

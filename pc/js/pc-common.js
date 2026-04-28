@@ -6,7 +6,6 @@ const PC_NAV = [
   { href: 'sales.html',    label: '売上・コスト入力' },
   { href: 'clockin.html',  label: '入店記録' },
   { href: 'history.html',  label: '履歴・修正' },
-  { href: 'monthend.html', label: '月末経理' },
   { href: 'settings.html', label: '設定' },
 ];
 
