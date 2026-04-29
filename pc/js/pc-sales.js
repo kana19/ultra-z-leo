@@ -7,20 +7,44 @@ let costMaster = [];
 let editingKey = null;
 let newDraft = null;
 
+/**
+ * 案件粗利タブの表示判定（堅牢化版）
+ *  1. js/app.js の getFeatureVisibility() があれば優先
+ *  2. フォールバック：localStorage の templateId から動的判定（non-shop / custom 時 true）
+ *  3. 何も読めない場合は false（安全側・general-shop 既定）
+ */
+function _shouldShowProjectGrossprofit() {
+  if (typeof getFeatureVisibility === 'function') {
+    try {
+      const fv = getFeatureVisibility();
+      return !!(fv && fv.project_grossprofit === true);
+    } catch (e) { /* fallthrough */ }
+  }
+  try {
+    const tid = localStorage.getItem('uz_template_id');
+    return tid === 'non-shop' || tid === 'custom';
+  } catch (e) {
+    return false;
+  }
+}
+
+function _applyProjectGrossprofitTabVisibility() {
+  const tab = document.querySelector('.pc-tab--project-grossprofit');
+  if (!tab) return;
+  tab.style.display = _shouldShowProjectGrossprofit() ? '' : 'none';
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
   pcBootstrap('sales.html', '売上・コスト入力');
   // 月フィルタ初期値
   document.getElementById('f-month').value = new Date().toISOString().slice(0,7);
   costMaster = getCostMaster();
 
-  // 案件粗利タブの表示制御（featureVisibility.project_grossprofit に従う・§3-9-3）
-  const fv = (typeof getFeatureVisibility === 'function')
-    ? getFeatureVisibility()
-    : { project_grossprofit: false };
-  if (fv.project_grossprofit) {
-    const tab = document.querySelector('.pc-tab--project-grossprofit');
-    if (tab) tab.style.display = '';
-  }
+  // 案件粗利タブの表示制御（初回・キャッシュ値ベース）
+  _applyProjectGrossprofitTabVisibility();
+
+  // settings 同期完了後に再評価（5秒遅延の syncSettingsAtStartup 完了で反映）
+  document.addEventListener('uz:settings-synced', _applyProjectGrossprofitTabVisibility);
 
   bindTabs();
   document.getElementById('f-month').addEventListener('change', loadItems);
@@ -76,6 +100,10 @@ async function loadItems() {
     // GASがtypeフィールドを返す場合のみフィルタ。返さない場合はサーバー側で既にフィルタ済みと想定
     const hasTypeField = res.data.some(it => it && it.type);
     items = hasTypeField ? res.data.filter(it => it.type === type) : res.data;
+    // 「仕入原価」タブは divisionCode='1' のみに絞る（販管費は専用画面 cost-sga.html へ分離・§3-9-3）
+    if (type === 'cost') {
+      items = items.filter(it => String(it.divisionCode) === '1');
+    }
   } else {
     items = [];
   }
@@ -250,7 +278,8 @@ function startNew() {
     taxRate: 10,
     uncollected: 0,
     unpaid: 0,
-    divisionCode: '2',
+    // 仕入原価タブからの新規追加は divisionCode='1' を既定値に（販管費は cost-sga.html 専用）
+    divisionCode: currentTab === 'cost' ? '1' : '2',
     itemCode: '',
   };
   editingKey = '__new__';

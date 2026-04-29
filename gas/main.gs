@@ -1163,6 +1163,11 @@ function getProjectGrossProfit(data) {
   }
 
   // コスト集計（V列(22)＝index 21・税込金額 L列(12)=index 11）
+  // 集計対象は4区分のみ（経営判断としての貢献利益概念・固定費は対象外）：
+  //   ① 仕入原価系すべて（divisionCode='1' / D列(4)=index 3）
+  //   ② 給料賃金（itemCode='20'・臨時雇用分の紐付け運用）
+  //   ③ 外注工賃（itemCode='21'）
+  //   ④ 税理士等の報酬（itemCode='25'・特定案件支払分の紐付け運用）
   var costByProject = {};
   var costSheet = ss.getSheetByName('コスト');
   if (costSheet && costSheet.getLastRow() >= 2 && costSheet.getLastColumn() >= 22) {
@@ -1171,6 +1176,13 @@ function getProjectGrossProfit(data) {
       var pid = String(r[21] || '');
       if (!pid) return;
       if (targetId && pid !== targetId) return;
+      var divCode = String(r[3] || '');   // D列(4) divisionCode = index 3
+      var itemCode = String(r[5] || '');  // F列(6) itemCode      = index 5
+      var isTargetCost = (divCode === '1') ||
+                         (itemCode === '20') ||
+                         (itemCode === '21') ||
+                         (itemCode === '25');
+      if (!isTargetCost) return;
       costByProject[pid] = (costByProject[pid] || 0) + (Number(r[11]) || 0);
     });
   }

@@ -92,6 +92,12 @@ async function syncSettingsAtStartup() {
 
     // 取得後にUI用語を反映
     applyUILabels();
+
+    // settings 同期完了イベント発火
+    // 各ページが templateId 確定後の表示制御（案件粗利タブ等）を再評価できるよう通知する
+    try {
+      document.dispatchEvent(new CustomEvent('uz:settings-synced', { detail: { data: d } }));
+    } catch (e) { /* CustomEvent 非対応環境は無視 */ }
   } catch (e) {
     console.warn('[app.js] settings起動時同期失敗（キャッシュ値を使用）:', e);
   }

@@ -72,7 +72,10 @@ function renderProjectGrossProfitTable(container, projects) {
     container.innerHTML = `
       <div class="pc-empty">
         <p>紐付けられた案件がまだありません。</p>
-        <p class="pc-empty__hint">「案件マスタ管理」サブビューで案件を登録し、「紐付け作業」サブビューで既存の売上・コスト行に紐付けると、ここに案件別の粗利が表示されます。</p>
+        <p class="pc-empty__hint">
+          「案件マスタ管理」サブビューで案件を登録し、「紐付け作業」サブビューで売上・コスト行に紐付けると、ここに案件別の粗利が表示されます。
+          集計対象は「仕入原価／外注工賃／給料賃金（臨時雇用分）／税理士等の報酬（特定案件分）」に限定されており、固定費（光熱費・地代等）は対象外です。
+        </p>
       </div>
     `;
     return;
@@ -354,6 +357,20 @@ async function deleteProjectFlow(projectId) {
  * 紐付け作業
  * ===================== */
 
+/**
+ * コスト行が案件紐付けの対象か判定する（§3-9-3 経営判断としての貢献利益）
+ *  - divisionCode='1'（仕入原価系すべて）
+ *  - itemCode='20'（給料賃金・臨時雇用分のみ紐付け運用）
+ *  - itemCode='21'（外注工賃）
+ *  - itemCode='25'（税理士等の報酬・特定案件支払分のみ紐付け運用）
+ */
+function _isLinkTargetCostRow(row) {
+  if (!row || row.type !== 'cost') return false;
+  if (String(row.divisionCode) === '1') return true;
+  const targetCodes = ['20', '21', '25'];
+  return targetCodes.indexOf(String(row.itemCode)) !== -1;
+}
+
 let linkRowsCache = [];
 let linkProjectsCache = [];   // active のみ
 let linkFilterStatus = 'unlinked';   // 'unlinked' / 'linked' / 'all'
@@ -384,7 +401,11 @@ async function loadProjectLink() {
   }
 
   linkProjectsCache = (projectsRes.data || []).filter(p => (p.status || 'active') === 'active');
-  linkRowsCache = (historyRes.data || []).filter(r => r.type === 'sales' || r.type === 'cost');
+  // 紐付け対象を§3-9-3 経営判断としての貢献利益概念に従い絞り込む：
+  //   ・売上行：全件
+  //   ・コスト行：仕入原価系（divisionCode='1'）/ 給料賃金(20) / 外注工賃(21) / 税理士等の報酬(25) のみ
+  //     固定費（光熱費・地代・通信費等）は案件粗利の対象外（経営判断で紐付け不可）
+  linkRowsCache = (historyRes.data || []).filter(r => r.type === 'sales' || _isLinkTargetCostRow(r));
   linkSelectedRows.clear();
 
   renderProjectLink(panel);
@@ -452,7 +473,11 @@ function renderProjectLink(panel) {
       <div class="pc-master-header">
         <div>
           <h2>紐付け作業</h2>
-          <p class="pc-note">過去の売上・コスト行に案件を紐付けると、案件粗利レポートで集計対象になります。会計上の損益計算には影響しません。</p>
+          <p class="pc-note">
+            案件粗利の集計対象になる行のみを表示しています：売上行すべて／仕入原価／外注工賃／給料賃金（臨時雇用分のみ）／税理士等の報酬（特定案件支払分のみ）。
+            事業全体の固定費（光熱費・地代・通信費等）は案件粗利の対象外のため表示されません。
+            紐付けは経営者の判断で行います（社員固定給や顧問税理士費用は紐付けしない運用）。
+          </p>
         </div>
       </div>
       <div class="pc-filter-row">

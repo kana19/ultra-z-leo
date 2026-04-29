@@ -2,7 +2,7 @@
 'use strict';
 
 /**
- * PC版サイドバー4区分構造（§3-9-3）
+ * PC版サイドバー5項目構造（戦略思想§3-9-3 確定）
  *   - type: 'item'    単独メニュー（区分外・例：ホーム）
  *   - type: 'section' 区分見出し＋配下メニュー
  *
@@ -12,11 +12,12 @@
  *   - visibilityFlag  featureVisibility のキー名（無ければ常時表示）
  *   - placeholder     true なら遷移せずトースト表示（実装予定機能）
  *
- * 4区分定義（§3-9-3 §1-3）：
- *   ① 売上・仕入原価     sales.html（案件粗利タブはタブ内で実装）
- *   ② 雇用・委託・外注   clockin.html / 月末経理プレースホルダ
- *   ③ 履歴・修正         history.html
- *   ④ 設定               settings.html
+ * 5項目定義（§3-9-3 §1-3）：
+ *   ① 売上・仕入原価     sales.html（案件粗利タブはタブ内で実装・divisionCode='1' のみ）
+ *   ② 販管費             cost-sga.html（divisionCode='2' のみ）
+ *   ③ 雇用・委託・外注   clockin.html / 月末経理プレースホルダ
+ *   ④ 履歴・修正         history.html
+ *   ⑤ 設定               settings.html
  */
 const PC_NAV = [
   { type: 'item', href: 'index.html', label: 'ホーム' },
@@ -25,6 +26,13 @@ const PC_NAV = [
     label: '売上・仕入原価',
     children: [
       { href: 'sales.html', label: '売上・コスト入力' }
+    ]
+  },
+  {
+    type: 'section',
+    label: '販管費',
+    children: [
+      { href: 'cost-sga.html', label: '販管費入力' }
     ]
   },
   {
