@@ -1,5 +1,5 @@
 /**
- * ウルトラ財務くん LEO版 PWA — uncollected.js
+ * ウルトラZAIMUくん LEO版 PWA — uncollected.js
  * 未収・買掛け一覧画面ロジック（GAS getUncollected / reconcile 連携版）
  */
 

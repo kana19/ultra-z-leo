@@ -1,5 +1,5 @@
 /**
- * ウルトラ財務くん LEO版 GAS — attendance_v3.gs
+ * ウルトラZAIMUくん LEO版 GAS — attendance_v3.gs
  * attendance列構成 v3（8列）対応・マイグレーション・全アクション
  *
  * 列構成:

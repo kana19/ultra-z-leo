@@ -1,5 +1,5 @@
 /**
- * ウルトラ財務くん LEO版 PWA — home.js
+ * ウルトラZAIMUくん LEO版 PWA — home.js
  * ホーム画面ロジック
  */
 

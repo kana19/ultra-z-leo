@@ -1,5 +1,5 @@
 /**
- * ウルトラ財務くん LEO版 PWA — pl.js
+ * ウルトラZAIMUくん LEO版 PWA — pl.js
  * 損益サマリー画面ロジック（GAS getSummary 連携版）
  */
 

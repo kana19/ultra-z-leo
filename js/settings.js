@@ -1,5 +1,5 @@
 /**
- * ウルトラ財務くん LEO版 PWA — settings.js
+ * ウルトラZAIMUくん LEO版 PWA — settings.js
  * 設定画面ロジック（localStorage + GAS双方向同期版）
  *
  * 起動時: GAS getSettings → localStorage上書き → UI描画

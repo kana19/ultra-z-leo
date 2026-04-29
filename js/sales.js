@@ -1,5 +1,5 @@
 /**
- * ウルトラ財務くん LEO版 PWA — sales.js
+ * ウルトラZAIMUくん LEO版 PWA — sales.js
  * 売上入力画面ロジック
  */
 

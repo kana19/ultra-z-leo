@@ -1,5 +1,5 @@
 /**
- * ウルトラ財務くん LEO版 PWA — app.js
+ * ウルトラZAIMUくん LEO版 PWA — app.js
  * 共通ロジック・GAS通信
  */
 
@@ -80,6 +80,14 @@ async function syncSettingsAtStartup() {
     // uiLabels 同期（custom時のみ意味がある・通常は空）
     if (d.uiLabels && typeof d.uiLabels === 'object') {
       localStorage.setItem('uz_ui_labels', JSON.stringify(d.uiLabels));
+    }
+
+    // featureVisibility 同期（custom時のみ実値を保存・他テンプレート時は localStorage を空にする）
+    // §3-9-3 §3-8 deriveFeatureVisibility が custom 時のみ localStorage を読み出す設計
+    if (d.templateId === 'custom' && d.featureVisibility && typeof d.featureVisibility === 'object') {
+      localStorage.setItem('uz_feature_visibility', JSON.stringify(d.featureVisibility));
+    } else {
+      localStorage.removeItem('uz_feature_visibility');
     }
 
     // 取得後にUI用語を反映
@@ -246,6 +254,65 @@ function applyUILabels() {
       document.title = labels[key] + baseSuffix;
     }
   }
+}
+
+/* ── 機能表示フラグ（featureVisibility）─────────────────────
+ * 戦略思想§3-9-3 §3-8 準拠：
+ *   - templateId に応じて機能の表示／非表示を導出する
+ *   - custom テンプレート時のみ localStorage の uz_feature_visibility を優先
+ *   - 通常は templateId から動的導出（管理ポータル設定不要）
+ *
+ * 3キー：
+ *   - project_grossprofit : 案件粗利機能（PC版売上タブ内タブ）
+ *   - clockin_menu        : 入店記録メニュー
+ *   - payroll_menu        : 月末経理メニュー（プレースホルダ・本体未実装）
+ */
+const FEATURE_VISIBILITY_KEY = 'uz_feature_visibility';
+
+/**
+ * templateIdから featureVisibility を動的導出する。
+ * custom テンプレートの場合のみ、localStorage の uz_feature_visibility を読み出して優先する。
+ * @param {string} templateId
+ * @returns {{project_grossprofit:boolean, clockin_menu:boolean, payroll_menu:boolean}}
+ */
+function deriveFeatureVisibility(templateId) {
+  const tid = templateId || getTemplateId();
+
+  if (tid === 'hostess-shop') {
+    return { project_grossprofit: false, clockin_menu: true,  payroll_menu: true  };
+  }
+  if (tid === 'general-shop') {
+    return { project_grossprofit: false, clockin_menu: true,  payroll_menu: false };
+  }
+  if (tid === 'non-shop') {
+    return { project_grossprofit: true,  clockin_menu: false, payroll_menu: false };
+  }
+  if (tid === 'custom') {
+    try {
+      const stored = localStorage.getItem(FEATURE_VISIBILITY_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        return Object.assign(
+          { project_grossprofit: true, clockin_menu: true, payroll_menu: false },
+          parsed
+        );
+      }
+    } catch (e) {
+      console.warn('[app.js] uz_feature_visibility の読み込みに失敗:', e);
+    }
+    return { project_grossprofit: true, clockin_menu: true, payroll_menu: false };
+  }
+
+  // 不明値は安全側のデフォルト
+  return { project_grossprofit: false, clockin_menu: true, payroll_menu: false };
+}
+
+/**
+ * 現在の templateId に対応する featureVisibility を取得する。
+ * @returns {{project_grossprofit:boolean, clockin_menu:boolean, payroll_menu:boolean}}
+ */
+function getFeatureVisibility() {
+  return deriveFeatureVisibility(getTemplateId());
 }
 
 

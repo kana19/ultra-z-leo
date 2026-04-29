@@ -1,5 +1,5 @@
 /**
- * ウルトラ財務くん LEO版 PWA — history.js
+ * ウルトラZAIMUくん LEO版 PWA — history.js
  * 履歴・修正画面ロジック
  *
  * タブ1：売上・コスト（getHistory）

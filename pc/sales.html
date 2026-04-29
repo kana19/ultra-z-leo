@@ -13,10 +13,11 @@
     <div class="pc-body-inner">
       <div class="pc-tabs">
         <button class="pc-tab active" data-tab="sales">売上</button>
-        <button class="pc-tab" data-tab="cost">コスト</button>
+        <button class="pc-tab" data-tab="cost">仕入原価</button>
+        <button class="pc-tab pc-tab--project-grossprofit" data-tab="project-grossprofit" style="display:none">案件粗利</button>
       </div>
 
-      <div class="pc-card">
+      <div class="pc-card" data-tab-panel="sales-cost">
         <div class="pc-filter-row">
           <label>月
             <input type="month" id="f-month" class="pc-input">
@@ -45,11 +46,18 @@
           </table>
         </div>
       </div>
+
+      <div class="pc-card" data-tab-panel="project-grossprofit" style="display:none">
+        <div id="project-grossprofit-body">
+          <div class="pc-loading">読み込み中...</div>
+        </div>
+      </div>
     </div>
   </main>
 </div>
 <script src="../js/app.js"></script>
 <script src="js/pc-common.js"></script>
+<script src="js/pc-projects.js"></script>
 <script src="js/pc-sales.js"></script>
 </body>
 </html>

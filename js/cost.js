@@ -1,5 +1,5 @@
 /**
- * ウルトラ財務くん LEO版 PWA — cost.js
+ * ウルトラZAIMUくん LEO版 PWA — cost.js
  * コスト入力画面ロジック（科目マスタ連携版）
  */
 

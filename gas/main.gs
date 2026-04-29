@@ -29,6 +29,13 @@ function doGet(e) {
                                         result = { status: 'ok' };                       break;
       case 'runAttendanceMigrationV3':  result = setupAttendanceMigrationV3();            break;
       case 'getSalesCategoryRanking':   result = getSalesCategoryRanking_(data.months);   break;
+      // §3-9-3 案件粗利機能
+      case 'getProjects':               result = getProjects();                           break;
+      case 'addProject':                result = addProject(data);                        break;
+      case 'updateProject':             result = updateProject(data);                     break;
+      case 'deleteProject':             result = deleteProject(data);                     break;
+      case 'linkProject':               result = linkProject(data);                       break;
+      case 'getProjectGrossProfit':     result = getProjectGrossProfit(data);             break;
       default: result = { status: 'error', message: '不明なアクション: ' + action };
     }
   } catch (err) {
@@ -39,6 +46,10 @@ function doGet(e) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
+/**
+ * 売上追記（20列・T列:projectId 含む）
+ * projectId は Phase A 案件粗利機能用。スマホ・iPad側からは送信されない（PC版のみ）
+ */
 function addSales(data) {
   var date = data.date || '';
   var parts = date.split('-');
@@ -51,15 +62,17 @@ function addSales(data) {
     Number(data.amountExTax) || 0, Number(data.taxRate) || 0,
     Number(data.tax) || 0, Number(data.amountInTax) || 0,
     data.memo || '', '', '',
-    Number(data.uncollected) || 0, '', new Date(), 0
+    Number(data.uncollected) || 0, '', new Date(), 0,
+    String(data.projectId || '')   // T列(20) projectId（案件粗利機能・§3-9-3）
   ]);
   return { status: 'ok' };
 }
 
 /**
- * コスト追記（21列・T列:withholdingAmount・U列:clientId）
+ * コスト追記（22列・T列:withholdingAmount・U列:clientId・V列:projectId）
  * withholdingAmount は payload で渡された場合のみ格納（通常は0）
  * clientId は Phase A 管理ポータル実装時まで空文字で受領（箱のみ）
+ * projectId は §3-9-3 案件粗利機能用。スマホ・iPad側からは送信されない（PC版のみ）
  */
 function addCost(data) {
   var date = data.date || '';
@@ -75,7 +88,8 @@ function addCost(data) {
     data.memo || '', '', '',
     Number(data.unpaid) || 0, '', new Date(), 0,
     Number(data.withholdingAmount) || 0,   // T列(20)
-    String(data.clientId || '')             // U列(21)
+    String(data.clientId || ''),            // U列(21)
+    String(data.projectId || '')            // V列(22) projectId（案件粗利機能・§3-9-3）
   ]);
   return { status: 'ok' };
 }
@@ -100,11 +114,15 @@ function updateSales(data) {
   sheet.getRange(row, 12).setValue(Number(data.amountInTax)  || 0);
   sheet.getRange(row, 13).setValue(data.memo         || '');
   sheet.getRange(row, 16).setValue(Number(data.uncollected)  || 0);
+  // payload に含まれていれば T列(projectId) も更新（未送信時は既存値保持）
+  if (data.projectId !== undefined) {
+    sheet.getRange(row, 20).setValue(String(data.projectId || ''));
+  }
   return { status: 'ok' };
 }
 
 /**
- * コスト修正（T列:withholdingAmount・U列:clientId を含む）
+ * コスト修正（T列:withholdingAmount・U列:clientId・V列:projectId を含む）
  */
 function updateCost(data) {
   if (!data.rowIndex) return { status: 'error', message: 'rowIndexが必要です' };
@@ -128,12 +146,15 @@ function updateCost(data) {
   sheet.getRange(row, 12).setValue(Number(data.taxIncluded)  || 0);
   sheet.getRange(row, 13).setValue(data.memo         || '');
   sheet.getRange(row, 16).setValue(Number(data.unpaid)       || 0);
-  // payload に含まれていれば T列・U列も更新（未送信時は既存値保持）
+  // payload に含まれていれば T列・U列・V列も更新（未送信時は既存値保持）
   if (data.withholdingAmount !== undefined) {
     sheet.getRange(row, 20).setValue(Number(data.withholdingAmount) || 0);
   }
   if (data.clientId !== undefined) {
     sheet.getRange(row, 21).setValue(String(data.clientId || ''));
+  }
+  if (data.projectId !== undefined) {
+    sheet.getRange(row, 22).setValue(String(data.projectId || ''));
   }
   return { status: 'ok' };
 }
@@ -312,7 +333,8 @@ function getHistory(month) {
 }
 
 /**
- * コストシートは 21列構成（T列:withholdingAmount・U列:clientId 含む）
+ * 売上シートは 20列構成（T列:案件ID 含む）
+ * コストシートは 22列構成（T列:withholdingAmount・U列:clientId・V列:案件ID 含む）
  */
 function getOrCreateSheet(name) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -320,9 +342,9 @@ function getOrCreateSheet(name) {
   if (!sheet) {
     sheet = ss.insertSheet(name);
     if (name === '売上') {
-      sheet.appendRow(['日付','年','月','顧客コード','売上対象','サービスコード','サービス','諸口品目名','金額(税抜)','税率','消費税','税込金額','メモ','入金日','入金額','未収フラグ','消込状況','登録日時','ロックフラグ']);
+      sheet.appendRow(['日付','年','月','顧客コード','売上対象','サービスコード','サービス','諸口品目名','金額(税抜)','税率','消費税','税込金額','メモ','入金日','入金額','未収フラグ','消込状況','登録日時','ロックフラグ','案件ID']);
     } else if (name === 'コスト') {
-      sheet.appendRow(['日付','年','月','区分コード','経費区分','科目コード','科目','諸口科目名','金額(税抜)','税率','消費税','税込金額','メモ','支払日','支払額','未払フラグ','消込状況','登録日時','ロックフラグ','源泉徴収額','クライアントID']);
+      sheet.appendRow(['日付','年','月','区分コード','経費区分','科目コード','科目','諸口科目名','金額(税抜)','税率','消費税','税込金額','メモ','支払日','支払額','未払フラグ','消込状況','登録日時','ロックフラグ','源泉徴収額','クライアントID','案件ID']);
     }
     sheet.setFrozenRows(1);
   }
@@ -332,10 +354,11 @@ function getOrCreateSheet(name) {
 /**
  * settings読み込み
  * B1:storeName / B2:staffList / B3:serviceList / B12:storeType
- * B13:templateId / B14:uiLabels(JSON)
+ * B13:templateId / B14:uiLabels(JSON) / B16:featureVisibility(JSON)
  * storeType 未設定時は 'off' をデフォルトで返す（源泉徴収機能OFF状態・納品時に書き換え）
  * templateId 未設定時は 'general-shop' をデフォルトで返す（業態テンプレート・納品時に書き換え）
  * uiLabels 未設定時は {} をデフォルトで返す（custom時のみ意味がある・通常は空）
+ * featureVisibility 未設定時は {} をデフォルトで返す（custom時のみ意味がある・§3-9-3 §3-8）
  */
 function getSettings() {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('settings');
@@ -346,6 +369,7 @@ function getSettings() {
   var storeTypeRaw = sheet.getRange('B12').getValue();
   var templateIdRaw = sheet.getRange('B13').getValue();
   var uiLabelsJson  = sheet.getRange('B14').getValue();
+  var featureVisibilityJson = sheet.getRange('B16').getValue();
   var staffList = [], serviceList = [];
   try { if (staffJson)   staffList   = JSON.parse(staffJson);   } catch(e) {}
   try { if (serviceJson) serviceList = JSON.parse(serviceJson); } catch(e) {}
@@ -370,13 +394,18 @@ function getSettings() {
   var uiLabels = {};
   try { if (uiLabelsJson) uiLabels = JSON.parse(uiLabelsJson); } catch(e) {}
   if (!uiLabels || typeof uiLabels !== 'object') uiLabels = {};
+  // featureVisibility は JSON 文字列。パース失敗・未設定時は {} を返す
+  var featureVisibility = {};
+  try { if (featureVisibilityJson) featureVisibility = JSON.parse(featureVisibilityJson); } catch(e) {}
+  if (!featureVisibility || typeof featureVisibility !== 'object') featureVisibility = {};
   return { status: 'ok', data: {
     storeName: storeName || '',
     staffList: staffList,
     serviceList: serviceList,
     storeType: storeType,
     templateId: templateId,
-    uiLabels: uiLabels
+    uiLabels: uiLabels,
+    featureVisibility: featureVisibility
   }};
 }
 
@@ -420,6 +449,11 @@ function saveSettings(data) {
   if (data.uiLabels !== undefined) {
     sheet.getRange('A14').setValue('uiLabels');
     sheet.getRange('B14').setValue(JSON.stringify(data.uiLabels || {}));
+  }
+  // featureVisibility は custom テンプレート時のみ意味がある（§3-9-3 §3-8）
+  if (data.featureVisibility !== undefined) {
+    sheet.getRange('A16').setValue('featureVisibility');
+    sheet.getRange('B16').setValue(JSON.stringify(data.featureVisibility || {}));
   }
   return { status: 'ok' };
 }
@@ -870,4 +904,258 @@ function setupTemplateAndPassword() {
   }
 
   Logger.log('setupTemplateAndPassword 完了');
+}
+
+// =============================================================
+// 案件粗利機能（§3-9-3 §9）
+// projectsシート（7列・案件マスタ）と関連アクション6個
+// 大前提：会計データ構造を1ミリも変えず・projectIdオプショナル後付け・PC版のみ
+// =============================================================
+
+/**
+ * projects シート取得（無ければ作成）
+ * 列：projectId / projectName / customerName / startDate / endDate / status / memo
+ */
+function _getOrCreateProjectsSheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName('projects');
+  if (!sheet) {
+    sheet = ss.insertSheet('projects');
+    sheet.getRange(1, 1, 1, 7).setValues([
+      ['projectId', 'projectName', 'customerName', 'startDate', 'endDate', 'status', 'memo']
+    ]);
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
+/**
+ * projectId 生成：'p-' + 8桁ランダム英数字（重複時最大100回リトライ）
+ */
+function _generateProjectId(existingIds) {
+  var chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  for (var attempt = 0; attempt < 100; attempt++) {
+    var id = 'p-';
+    for (var i = 0; i < 8; i++) {
+      id += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    if (existingIds.indexOf(id) === -1) return id;
+  }
+  throw new Error('projectId 重複生成上限');
+}
+
+/**
+ * 日付値を 'yyyy-MM-dd' 文字列に正規化
+ */
+function _toProjectDateStr(val) {
+  if (val instanceof Date) {
+    return Utilities.formatDate(val, 'Asia/Tokyo', 'yyyy-MM-dd');
+  }
+  return String(val || '').substring(0, 10);
+}
+
+/**
+ * 案件マスタ取得
+ */
+function getProjects() {
+  var sheet = _getOrCreateProjectsSheet();
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return { status: 'ok', data: [] };
+
+  var values = sheet.getRange(2, 1, lastRow - 1, 7).getValues();
+  var projects = values.map(function(row) {
+    return {
+      projectId: String(row[0] || ''),
+      projectName: String(row[1] || ''),
+      customerName: String(row[2] || ''),
+      startDate: _toProjectDateStr(row[3]),
+      endDate: _toProjectDateStr(row[4]),
+      status: String(row[5] || 'active'),
+      memo: String(row[6] || '')
+    };
+  });
+  return { status: 'ok', data: projects };
+}
+
+/**
+ * 案件追加（projectId 自動生成）
+ */
+function addProject(data) {
+  var sheet = _getOrCreateProjectsSheet();
+  var lastRow = sheet.getLastRow();
+  var existingIds = lastRow >= 2
+    ? sheet.getRange(2, 1, lastRow - 1, 1).getValues().map(function(r) { return r[0]; })
+    : [];
+
+  var projectId = _generateProjectId(existingIds);
+  sheet.appendRow([
+    projectId,
+    data.projectName || '',
+    data.customerName || '',
+    data.startDate || '',
+    data.endDate || '',
+    data.status || 'active',
+    data.memo || ''
+  ]);
+  return { status: 'ok', data: { projectId: projectId } };
+}
+
+/**
+ * 案件更新
+ */
+function updateProject(data) {
+  if (!data.projectId) return { status: 'error', message: 'projectIdが必要です' };
+  var sheet = _getOrCreateProjectsSheet();
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return { status: 'error', message: '案件が存在しません' };
+
+  var ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+  for (var i = 0; i < ids.length; i++) {
+    if (ids[i][0] === data.projectId) {
+      var rowIdx = i + 2;
+      sheet.getRange(rowIdx, 2).setValue(data.projectName || '');
+      sheet.getRange(rowIdx, 3).setValue(data.customerName || '');
+      sheet.getRange(rowIdx, 4).setValue(data.startDate || '');
+      sheet.getRange(rowIdx, 5).setValue(data.endDate || '');
+      sheet.getRange(rowIdx, 6).setValue(data.status || 'active');
+      sheet.getRange(rowIdx, 7).setValue(data.memo || '');
+      return { status: 'ok' };
+    }
+  }
+  return { status: 'error', message: 'projectId が見つかりません' };
+}
+
+/**
+ * 案件削除（紐付け行が存在する場合は force=true でなければ警告）
+ */
+function deleteProject(data) {
+  if (!data.projectId) return { status: 'error', message: 'projectIdが必要です' };
+  var sheet = _getOrCreateProjectsSheet();
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return { status: 'error', message: '案件が存在しません' };
+
+  if (!data.force) {
+    var linked = _countLinkedRows(data.projectId);
+    if (linked > 0) {
+      return { status: 'warning', message: linked + '件の紐付け行が存在します', linkedCount: linked };
+    }
+  }
+
+  var ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+  for (var i = 0; i < ids.length; i++) {
+    if (ids[i][0] === data.projectId) {
+      sheet.deleteRow(i + 2);
+      return { status: 'ok' };
+    }
+  }
+  return { status: 'error', message: 'projectId が見つかりません' };
+}
+
+/**
+ * 売上T列・コストV列を走査して projectId 紐付け行数をカウント
+ */
+function _countLinkedRows(projectId) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var count = 0;
+
+  var salesSheet = ss.getSheetByName('売上');
+  if (salesSheet && salesSheet.getLastRow() >= 2 && salesSheet.getLastColumn() >= 20) {
+    var salesIds = salesSheet.getRange(2, 20, salesSheet.getLastRow() - 1, 1).getValues();
+    count += salesIds.filter(function(r) { return r[0] === projectId; }).length;
+  }
+
+  var costSheet = ss.getSheetByName('コスト');
+  if (costSheet && costSheet.getLastRow() >= 2 && costSheet.getLastColumn() >= 22) {
+    var costIds = costSheet.getRange(2, 22, costSheet.getLastRow() - 1, 1).getValues();
+    count += costIds.filter(function(r) { return r[0] === projectId; }).length;
+  }
+
+  return count;
+}
+
+/**
+ * 既存売上行・コスト行に projectId を紐付ける
+ * data.sheetName='売上'→T列(20) / 'コスト'→V列(22)
+ */
+function linkProject(data) {
+  if (!data.sheetName) return { status: 'error', message: 'sheetNameが必要です' };
+  if (!data.rowIndex) return { status: 'error', message: 'rowIndexが必要です' };
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(data.sheetName);
+  if (!sheet) return { status: 'error', message: 'シートが見つかりません' };
+
+  var col = data.sheetName === '売上' ? 20 : (data.sheetName === 'コスト' ? 22 : 0);
+  if (!col) return { status: 'error', message: 'シート名が不正です（売上/コストのみ）' };
+  sheet.getRange(Number(data.rowIndex), col).setValue(String(data.projectId || ''));
+  return { status: 'ok' };
+}
+
+/**
+ * 案件別 売上・原価・粗利集計
+ * data.projectId が指定されていればその案件のみ・無指定なら全案件
+ * 売上シート T列(20=index 19)・コストシート V列(22=index 21) で紐付け済み行を集計
+ */
+function getProjectGrossProfit(data) {
+  data = data || {};
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var targetId = data.projectId || null;
+
+  // 案件マスタ取得
+  var projectsResult = getProjects();
+  var projects = projectsResult.data || [];
+
+  // 売上集計（T列(20)＝index 19・税込金額 L列(12)=index 11）
+  var salesByProject = {};
+  var salesSheet = ss.getSheetByName('売上');
+  if (salesSheet && salesSheet.getLastRow() >= 2 && salesSheet.getLastColumn() >= 20) {
+    var sRows = salesSheet.getRange(2, 1, salesSheet.getLastRow() - 1, 20).getValues();
+    sRows.forEach(function(r) {
+      var pid = String(r[19] || '');
+      if (!pid) return;
+      if (targetId && pid !== targetId) return;
+      salesByProject[pid] = (salesByProject[pid] || 0) + (Number(r[11]) || 0);
+    });
+  }
+
+  // コスト集計（V列(22)＝index 21・税込金額 L列(12)=index 11）
+  var costByProject = {};
+  var costSheet = ss.getSheetByName('コスト');
+  if (costSheet && costSheet.getLastRow() >= 2 && costSheet.getLastColumn() >= 22) {
+    var cRows = costSheet.getRange(2, 1, costSheet.getLastRow() - 1, 22).getValues();
+    cRows.forEach(function(r) {
+      var pid = String(r[21] || '');
+      if (!pid) return;
+      if (targetId && pid !== targetId) return;
+      costByProject[pid] = (costByProject[pid] || 0) + (Number(r[11]) || 0);
+    });
+  }
+
+  // 統合
+  var allIds = {};
+  Object.keys(salesByProject).forEach(function(k) { allIds[k] = true; });
+  Object.keys(costByProject).forEach(function(k) { allIds[k] = true; });
+
+  var result = [];
+  Object.keys(allIds).forEach(function(pid) {
+    var project = null;
+    for (var i = 0; i < projects.length; i++) {
+      if (projects[i].projectId === pid) { project = projects[i]; break; }
+    }
+    var sales = salesByProject[pid] || 0;
+    var cost = costByProject[pid] || 0;
+    var gross = sales - cost;
+    var rate = sales > 0 ? (gross / sales * 100) : null;
+    result.push({
+      projectId: pid,
+      projectName: project ? project.projectName : '(削除済)',
+      customerName: project ? project.customerName : '',
+      status: project ? project.status : 'unknown',
+      sales: sales,
+      cost: cost,
+      grossProfit: gross,
+      grossProfitRate: rate
+    });
+  });
+
+  return { status: 'ok', data: result };
 }

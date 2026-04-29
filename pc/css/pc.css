@@ -1,4 +1,4 @@
-/* ウルトラ財務くん LEO版 PWA — PC専用スタイル */
+/* ウルトラZAIMUくん LEO版 PWA — PC専用スタイル */
 
 * { box-sizing: border-box; }
 
@@ -52,6 +52,23 @@ body.pc-body {
   border-left-color: var(--uz-gold);
   color: var(--uz-gold);
 }
+
+/* ── 4区分構造（§3-9-3）──────────────────── */
+.pc-sidebar__section-label {
+  font-size: 11px;
+  color: var(--uz-text2);
+  letter-spacing: 0.05em;
+  padding: 12px 16px 4px;
+  text-transform: none;
+  font-weight: 600;
+}
+.pc-sidebar__section-children { padding-left: 8px; }
+.pc-sidebar__section-children a { padding-left: 16px; font-size: 12px; }
+.pc-sidebar__nav-item--placeholder {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.pc-sidebar__nav-item--placeholder:hover { background: transparent; }
 
 .pc-recent {
   flex: 1;
@@ -269,3 +286,30 @@ body.pc-body {
 .mt-8  { margin-top: 8px; }
 .mt-16 { margin-top: 16px; }
 .hidden { display: none !important; }
+
+/* ── 案件粗利タブ（§3-9-3）───────────────── */
+.pc-project-grossprofit { padding: 16px; }
+.pc-project-grossprofit h2 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  color: var(--uz-gold);
+}
+.pc-note {
+  color: var(--uz-text2);
+  font-size: 11px;
+  line-height: 1.6;
+  margin-bottom: 16px;
+}
+.pc-table td.negative { color: var(--uz-red); }
+.pc-status-active    { color: var(--uz-green); }
+.pc-status-completed { color: var(--uz-text2); }
+.pc-status-canceled  { color: var(--uz-red); }
+.pc-status-unknown   { color: var(--uz-text3); }
+.pc-empty {
+  padding: 32px;
+  text-align: center;
+  color: var(--uz-text2);
+}
+.pc-empty__hint { font-size: 11px; margin-top: 8px; line-height: 1.6; }
+.pc-loading { padding: 32px; text-align: center; color: var(--uz-text2); }
+.pc-error   { padding: 32px; text-align: center; color: var(--uz-red); }

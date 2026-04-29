@@ -1,5 +1,5 @@
 /**
- * ウルトラ財務くん LEO版 GAS — costmaster_additions.gs
+ * ウルトラZAIMUくん LEO版 GAS — costmaster_additions.gs
  * コスト科目マスタ GAS対応追加コード
  *
  * 既存の doGet / doPost に下記を追加してください。

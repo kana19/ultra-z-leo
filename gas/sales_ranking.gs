@@ -1,5 +1,5 @@
 /**
- * ウルトラ財務くん LEO版 GAS — sales_ranking.gs
+ * ウルトラZAIMUくん LEO版 GAS — sales_ranking.gs
  * 売上サービスカテゴリのランキング集計
  *
  * 既存の doGet の switch 文に以下を追記してください:

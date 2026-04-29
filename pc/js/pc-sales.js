@@ -13,6 +13,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('f-month').value = new Date().toISOString().slice(0,7);
   costMaster = getCostMaster();
 
+  // 案件粗利タブの表示制御（featureVisibility.project_grossprofit に従う・§3-9-3）
+  const fv = (typeof getFeatureVisibility === 'function')
+    ? getFeatureVisibility()
+    : { project_grossprofit: false };
+  if (fv.project_grossprofit) {
+    const tab = document.querySelector('.pc-tab--project-grossprofit');
+    if (tab) tab.style.display = '';
+  }
+
   bindTabs();
   document.getElementById('f-month').addEventListener('change', loadItems);
   document.getElementById('f-division').addEventListener('change', render);
@@ -29,9 +38,28 @@ function bindTabs() {
       document.querySelectorAll('.pc-tab').forEach(b => b.classList.toggle('active', b === t));
       currentTab = t.dataset.tab;
       editingKey = null; newDraft = null;
-      await loadItems();
+      togglePanels(currentTab);
+      if (currentTab === 'project-grossprofit') {
+        if (typeof loadProjectGrossProfit === 'function') {
+          await loadProjectGrossProfit();
+        }
+      } else {
+        await loadItems();
+      }
     });
   });
+}
+
+function togglePanels(tab) {
+  const salesCostPanel = document.querySelector('[data-tab-panel="sales-cost"]');
+  const projectPanel = document.querySelector('[data-tab-panel="project-grossprofit"]');
+  if (tab === 'project-grossprofit') {
+    if (salesCostPanel) salesCostPanel.style.display = 'none';
+    if (projectPanel) projectPanel.style.display = '';
+  } else {
+    if (salesCostPanel) salesCostPanel.style.display = '';
+    if (projectPanel) projectPanel.style.display = 'none';
+  }
 }
 
 async function loadItems() {

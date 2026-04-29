@@ -1,5 +1,5 @@
 /**
- * ウルトラ財務くん LEO版 PWA — clockin.js
+ * ウルトラZAIMUくん LEO版 PWA — clockin.js
  * 入店記録画面ロジック
  *
  * 目的：スタッフの記録忘れ修正・未登録スタッフの手動記録
