@@ -313,3 +313,195 @@ body.pc-body {
 .pc-empty__hint { font-size: 11px; margin-top: 8px; line-height: 1.6; }
 .pc-loading { padding: 32px; text-align: center; color: var(--uz-text2); }
 .pc-error   { padding: 32px; text-align: center; color: var(--uz-red); }
+
+/* ── 案件粗利タブ サブビュー切替（粗利レポート/案件マスタ管理/紐付け作業）── */
+.pc-project-subview-nav {
+  display: flex;
+  gap: 4px;
+  padding: 12px 16px 0;
+  border-bottom: 1px solid var(--uz-border);
+}
+.pc-subview-btn {
+  background: transparent;
+  border: none;
+  padding: 10px 20px;
+  color: var(--uz-text2);
+  font-size: 12px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+}
+.pc-subview-btn:hover { color: var(--uz-text); }
+.pc-subview-btn--active {
+  color: var(--uz-gold);
+  border-bottom-color: var(--uz-gold);
+}
+.pc-project-subview { padding: 16px; }
+
+/* ── 案件マスタ管理／紐付け作業 共通 ── */
+.pc-master-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.pc-master-header h2 { margin: 0; font-size: 14px; color: var(--uz-gold); }
+.pc-master-header .pc-note { margin: 4px 0 0; font-size: 11px; }
+
+/* フィルタ行内の select（既存 .pc-filter-row と非干渉な scope に限定） */
+.pc-project-master .pc-filter-row select,
+.pc-project-link   .pc-filter-row select {
+  background: var(--uz-surface2);
+  border: 1px solid var(--uz-border);
+  color: var(--uz-text);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: inherit;
+}
+
+/* 状態フィルタボタン（active/completed/canceled/all） */
+.pc-filter-btn {
+  background: transparent;
+  border: 1px solid var(--uz-border);
+  color: var(--uz-text2);
+  padding: 4px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.pc-filter-btn:hover { color: var(--uz-text); }
+.pc-filter-btn--active {
+  background: var(--uz-amber-bg);
+  color: var(--uz-gold);
+  border-color: var(--uz-gold);
+}
+
+/* 一括適用バー */
+.pc-bulk-action-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 8px 12px;
+  background: var(--uz-amber-bg);
+  border: 1px solid var(--uz-border);
+  border-radius: 4px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.pc-bulk-count { font-size: 12px; color: var(--uz-text2); }
+.pc-project-link .pc-bulk-action-row select {
+  background: var(--uz-surface2);
+  border: 1px solid var(--uz-border);
+  color: var(--uz-text);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: inherit;
+}
+
+/* プライマリ／セカンダリ／アクションボタン */
+.pc-primary-btn {
+  background: var(--uz-gold);
+  color: var(--uz-bg);
+  border: none;
+  padding: 6px 14px;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 12px;
+  cursor: pointer;
+}
+.pc-primary-btn:hover { background: var(--uz-gold-lt); }
+.pc-primary-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.pc-secondary-btn {
+  background: var(--uz-surface2);
+  color: var(--uz-text);
+  border: 1px solid var(--uz-border);
+  padding: 6px 14px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.pc-action-btn {
+  background: transparent;
+  color: var(--uz-gold);
+  border: 1px solid var(--uz-border);
+  padding: 3px 10px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 11px;
+  margin-right: 4px;
+}
+.pc-action-btn:hover { background: var(--uz-amber-bg); }
+.pc-action-btn--danger { color: var(--uz-red); }
+.pc-action-btn--danger:hover { background: var(--uz-red-bg); }
+
+/* モーダル（案件追加・編集ダイアログ） */
+.pc-modal-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+.pc-modal {
+  background: var(--uz-surface);
+  border: 1px solid var(--uz-gold-dk, var(--uz-gold));
+  border-radius: 6px;
+  padding: 24px;
+  width: 480px;
+  max-width: 90vw;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+.pc-modal h3 {
+  margin: 0 0 16px;
+  font-size: 14px;
+  color: var(--uz-gold);
+}
+/* モーダル内のフォーム行はラベル上配置（既存 .pc-form-row とは別レイアウト） */
+.pc-modal .pc-form-row {
+  display: block;
+  margin-bottom: 12px;
+}
+.pc-modal .pc-form-row label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 12px;
+  color: var(--uz-text2);
+  min-width: auto;
+}
+.pc-modal .pc-form-row input,
+.pc-modal .pc-form-row select,
+.pc-modal .pc-form-row textarea {
+  width: 100%;
+  background: var(--uz-surface2);
+  border: 1px solid var(--uz-border);
+  color: var(--uz-text);
+  padding: 6px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: inherit;
+  box-sizing: border-box;
+  max-width: none;
+}
+.pc-modal .pc-form-row input:focus,
+.pc-modal .pc-form-row select:focus,
+.pc-modal .pc-form-row textarea:focus {
+  outline: 1px solid var(--uz-gold);
+}
+.pc-required { color: var(--uz-red); }
+.pc-modal-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+/* 紐付け作業：種別タグ */
+.pc-type-sales { color: var(--uz-green); font-size: 11px; }
+.pc-type-cost  { color: var(--uz-red);   font-size: 11px; }

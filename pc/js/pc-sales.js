@@ -40,7 +40,12 @@ function bindTabs() {
       editingKey = null; newDraft = null;
       togglePanels(currentTab);
       if (currentTab === 'project-grossprofit') {
-        if (typeof loadProjectGrossProfit === 'function') {
+        // サブビュー切替UI（粗利レポート/案件マスタ管理/紐付け作業）の初期化
+        // initProjectSubviews 内で初期サブビュー（粗利レポート）も自動ロードされる
+        if (typeof initProjectSubviews === 'function') {
+          initProjectSubviews();
+        } else if (typeof loadProjectGrossProfit === 'function') {
+          // 後方互換用フォールバック
           await loadProjectGrossProfit();
         }
       } else {

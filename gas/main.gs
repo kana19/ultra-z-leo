@@ -294,6 +294,7 @@ function getHistory(month) {
       if (month && dateStr.indexOf(month) !== 0) return;
       results.push({
         type: 'sales',
+        sheetName: '売上',
         rowIndex: i + 2,
         date: dateStr,
         serviceCode: String(row[5] || ''),
@@ -301,7 +302,8 @@ function getHistory(month) {
         taxRate: Number(row[9]) || 0,
         amount: Number(row[11]) || 0,
         memo: String(row[12] || ''),
-        uncollected: Number(row[15]) || 0
+        uncollected: Number(row[15]) || 0,
+        projectId: String(row[19] || '')   // T列(20=index 19)・案件粗利機能
       });
     });
   }
@@ -313,6 +315,7 @@ function getHistory(month) {
       if (month && dateStr.indexOf(month) !== 0) return;
       results.push({
         type: 'cost',
+        sheetName: 'コスト',
         rowIndex: i + 2,
         date: dateStr,
         divisionCode: String(row[3] || ''),
@@ -324,7 +327,8 @@ function getHistory(month) {
         amount: Number(row[11]) || 0,
         memo: String(row[12] || ''),
         unpaid: Number(row[15]) || 0,
-        withholdingAmount: Number(row[19]) || 0
+        withholdingAmount: Number(row[19]) || 0,
+        projectId: String(row[21] || '')   // V列(22=index 21)・案件粗利機能
       });
     });
   }
@@ -1026,7 +1030,9 @@ function updateProject(data) {
 }
 
 /**
- * 案件削除（紐付け行が存在する場合は force=true でなければ警告）
+ * 案件削除
+ *  - data.force=false（既定）：紐付け行存在時は warning を返して中止
+ *  - data.force=true        ：紐付けされた売上T列・コストV列を空欄化してから案件行を削除
  */
 function deleteProject(data) {
   if (!data.projectId) return { status: 'error', message: 'projectIdが必要です' };
@@ -1039,6 +1045,9 @@ function deleteProject(data) {
     if (linked > 0) {
       return { status: 'warning', message: linked + '件の紐付け行が存在します', linkedCount: linked };
     }
+  } else {
+    // force 削除時：紐付けされた売上・コスト行の projectId を空欄化
+    _clearProjectIdLinks(data.projectId);
   }
 
   var ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
@@ -1049,6 +1058,42 @@ function deleteProject(data) {
     }
   }
   return { status: 'error', message: 'projectId が見つかりません' };
+}
+
+/**
+ * 案件削除（force）時に紐付けされた売上・コスト行の projectId を空欄化する
+ * 売上 T列(20)・コスト V列(22) を一括で読んで該当 projectId を ''（空文字）に書き戻す
+ */
+function _clearProjectIdLinks(projectId) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  var salesSheet = ss.getSheetByName('売上');
+  if (salesSheet && salesSheet.getLastRow() >= 2 && salesSheet.getLastColumn() >= 20) {
+    var sRange = salesSheet.getRange(2, 20, salesSheet.getLastRow() - 1, 1);
+    var sValues = sRange.getValues();
+    var sModified = false;
+    for (var i = 0; i < sValues.length; i++) {
+      if (sValues[i][0] === projectId) {
+        sValues[i][0] = '';
+        sModified = true;
+      }
+    }
+    if (sModified) sRange.setValues(sValues);
+  }
+
+  var costSheet = ss.getSheetByName('コスト');
+  if (costSheet && costSheet.getLastRow() >= 2 && costSheet.getLastColumn() >= 22) {
+    var cRange = costSheet.getRange(2, 22, costSheet.getLastRow() - 1, 1);
+    var cValues = cRange.getValues();
+    var cModified = false;
+    for (var j = 0; j < cValues.length; j++) {
+      if (cValues[j][0] === projectId) {
+        cValues[j][0] = '';
+        cModified = true;
+      }
+    }
+    if (cModified) cRange.setValues(cValues);
+  }
 }
 
 /**

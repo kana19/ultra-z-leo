@@ -48,9 +48,16 @@
       </div>
 
       <div class="pc-card" data-tab-panel="project-grossprofit" style="display:none">
-        <div id="project-grossprofit-body">
+        <div class="pc-project-subview-nav">
+          <button class="pc-subview-btn pc-subview-btn--active" data-subview="report">粗利レポート</button>
+          <button class="pc-subview-btn" data-subview="master">案件マスタ管理</button>
+          <button class="pc-subview-btn" data-subview="link">紐付け作業</button>
+        </div>
+        <div class="pc-project-subview" data-subview-panel="report">
           <div class="pc-loading">読み込み中...</div>
         </div>
+        <div class="pc-project-subview" data-subview-panel="master" style="display:none"></div>
+        <div class="pc-project-subview" data-subview-panel="link" style="display:none"></div>
       </div>
     </div>
   </main>
