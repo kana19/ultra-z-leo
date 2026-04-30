@@ -1,8 +1,8 @@
-/* pc-common.js — PC版共通：サイドバー生成・ヘッダー時刻・直近履歴 */
+/* pc-common.js — PC版共通：サイドバー生成・ヘッダー時刻 */
 'use strict';
 
 /**
- * PC版サイドバー5項目構造（戦略思想§3-9-3 確定）
+ * PC版サイドバー5項目構造（戦略思想§3-9-3 経営判断UX大原則・取引一覧統合化）
  *   - type: 'item'    単独メニュー（区分外・例：ホーム）
  *   - type: 'section' 区分見出し＋配下メニュー
  *
@@ -12,27 +12,20 @@
  *   - visibilityFlag  featureVisibility のキー名（無ければ常時表示）
  *   - placeholder     true なら遷移せずトースト表示（実装予定機能）
  *
- * 5項目定義（§3-9-3 §1-3）：
- *   ① 売上・仕入原価     sales.html（案件粗利タブはタブ内で実装・divisionCode='1' のみ）
- *   ② 販管費             cost-sga.html（divisionCode='2' のみ）
- *   ③ 雇用・委託・外注   clockin.html / 月末経理プレースホルダ
- *   ④ 履歴・修正         history.html
- *   ⑤ 設定               settings.html
+ * 5項目定義：
+ *   ① ホーム（独立メニュー）
+ *   ② 売上・仕入原価・販管費 → 取引一覧（transactions.html）に統合
+ *   ③ 雇用・委託・外注       入店記録 / 月末経理プレースホルダ
+ *   ④ 履歴・修正             history.html
+ *   ⑤ 設定                   settings.html
  */
 const PC_NAV = [
   { type: 'item', href: 'index.html', label: 'ホーム' },
   {
     type: 'section',
-    label: '売上・仕入原価',
+    label: '売上・仕入原価・販管費',
     children: [
-      { href: 'sales.html', label: '売上・コスト入力' }
-    ]
-  },
-  {
-    type: 'section',
-    label: '販管費',
-    children: [
-      { href: 'cost-sga.html', label: '販管費入力' }
+      { href: 'transactions.html', label: '取引一覧' }
     ]
   },
   {
@@ -90,14 +83,11 @@ function pcRenderSidebar(activeHref) {
     return '';
   }).join('');
 
+  // 直近入力履歴サイドバーは廃止（取引一覧画面が同等機能を担うため）
   const html = `
     <aside class="pc-sidebar">
       <div class="pc-sidebar__logo">ウルトラZAIMUくん</div>
       <nav class="pc-nav">${navHtml}</nav>
-      <div class="pc-recent" id="pc-recent">
-        <div class="pc-recent__title">直近入力履歴</div>
-        <div id="pc-recent-list" class="text-muted" style="font-size:11px;">読み込み中...</div>
-      </div>
     </aside>
   `;
   return html;
@@ -155,46 +145,6 @@ function pcStartClock() {
   }, 30000);
 }
 
-/* ── 直近入力履歴 ──────────────────────────── */
-async function pcLoadRecent() {
-  const el = document.getElementById('pc-recent-list');
-  if (!el) return;
-  const month = new Date().toISOString().slice(0,7);
-  try {
-    const res = await callGAS('getHistory', { month }).catch(() => null);
-    if (!res || res.status !== 'ok' || !Array.isArray(res.data)) {
-      el.textContent = '履歴なし';
-      return;
-    }
-    const items = res.data
-      .filter(it => it.type === 'sales' || it.type === 'cost')
-      .sort((a, b) => String(b.date).localeCompare(String(a.date)))
-      .slice(0, 10);
-
-    if (items.length === 0) { el.textContent = '履歴なし'; return; }
-
-    el.innerHTML = items.map(it => {
-      const tag = it.type === 'sales' ? 'sales' : 'cost';
-      const label = it.type === 'sales' ? '売上' : 'コスト';
-      const amt = formatYen(Number(it.amount) || 0);
-      return `
-        <div class="pc-recent__item">
-          <div class="pc-recent__row1">
-            <span>${escHtml(it.date || '')}</span>
-            <span>${amt}</span>
-          </div>
-          <div class="pc-recent__row2">
-            <span class="pc-recent__tag pc-recent__tag--${tag}">${label}</span>
-            ${escHtml(it.itemName || it.divisionName || '')}
-          </div>
-        </div>
-      `;
-    }).join('');
-  } catch (e) {
-    el.textContent = '取得失敗';
-  }
-}
-
 /* ── PC版ページブート ──────────────────────── */
 function pcBootstrap(activeHref, title) {
   const app = document.getElementById('pc-app');
@@ -203,6 +153,5 @@ function pcBootstrap(activeHref, title) {
   const main = document.getElementById('pc-main');
   if (main) main.insertAdjacentHTML('afterbegin', pcRenderHeader(title));
   pcStartClock();
-  pcLoadRecent();
   pcBindPlaceholders();
 }

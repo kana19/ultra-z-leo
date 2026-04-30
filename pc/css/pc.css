@@ -505,3 +505,50 @@ body.pc-body {
 /* 紐付け作業：種別タグ */
 .pc-type-sales { color: var(--uz-green); font-size: 11px; }
 .pc-type-cost  { color: var(--uz-red);   font-size: 11px; }
+
+/* ── 取引一覧（transactions.html）統合UI ─────────────────── */
+.pc-tx-grossprofit-section {
+  margin-top: 24px;
+  background: rgba(212,175,55,0.06);
+  border: 1px solid rgba(212,175,55,0.18);
+  border-radius: 8px;
+}
+.pc-tx-grossprofit-section h3 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  color: var(--uz-gold);
+}
+.pc-tx-row-link-disabled {
+  color: var(--uz-text3, rgba(255,255,255,0.4));
+  font-size: 11px;
+}
+.pc-tx-row-checkbox {
+  width: 32px;
+  text-align: center;
+}
+.pc-tx-project-master-btn { margin-left: auto; }
+
+/* ホーム画面の取引一覧誘導カード */
+.pc-dashboard-card {
+  display: block;
+  text-decoration: none;
+  background: var(--uz-surface);
+  border: 1px solid var(--uz-gold-dk, var(--uz-gold));
+  border-left: 3px solid var(--uz-gold);
+  border-radius: 6px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  color: var(--uz-text);
+  transition: background 0.15s;
+}
+.pc-dashboard-card:hover { background: var(--uz-surface2); }
+.pc-dashboard-card h3 {
+  margin: 0 0 4px;
+  font-size: 13px;
+  color: var(--uz-gold);
+}
+.pc-dashboard-card p {
+  margin: 0;
+  font-size: 11px;
+  color: var(--uz-text2);
+}
