@@ -45,9 +45,17 @@
       <div class="pc-card">
         <div class="pc-section-title">スタッフマスタ</div>
         <table class="pc-table" id="staff-table">
-          <thead><tr><th>ID</th><th>氏名</th><th>備考（オーナーのみ）</th></tr></thead>
+          <thead><tr>
+            <th style="width:60px;">ID</th>
+            <th>氏名</th>
+            <th style="width:200px;">雇用形態</th>
+            <th>備考（オーナーのみ）</th>
+          </tr></thead>
           <tbody id="staff-body"></tbody>
         </table>
+        <p class="pc-note" style="margin-top:8px;">
+          雇用形態の変更はその場で保存されます。常勤雇用（社員）は社員固定給扱い・集計対象外、臨時アルバイトは変動費、委託・外注は案件直接費として扱われます。
+        </p>
       </div>
 
     </div>

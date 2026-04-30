@@ -16,24 +16,12 @@ let txCostMaster = [];        // 全件（divisionCode='1'/'2' 含む）
 let txSelectedKeys = new Set(); // "sheetName:rowIndex"
 
 /**
- * 案件粗利機能の表示判定（堅牢化版）：
- *   1. js/app.js の getFeatureVisibility() があれば優先
- *   2. localStorage の templateId フォールバック
- *   3. 何も読めない場合は false
+ * 案件機能の表示判定：
+ *   サイクルA以降は全業態で常時表示（戦略思想§3-9-3 経営判断UX大原則・全業態標準搭載）
+ *   業態別表示制御（featureVisibility.project_grossprofit）は廃止済み
  */
 function _txShouldShowProject() {
-  if (typeof getFeatureVisibility === 'function') {
-    try {
-      const fv = getFeatureVisibility();
-      return !!(fv && fv.project_grossprofit === true);
-    } catch (e) { /* fallthrough */ }
-  }
-  try {
-    const tid = localStorage.getItem('uz_template_id');
-    return tid === 'non-shop' || tid === 'custom';
-  } catch (e) {
-    return false;
-  }
+  return true;
 }
 
 /**
@@ -61,9 +49,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   const monthInput = document.getElementById('pc-tx-filter-month');
   monthInput.value = new Date().toISOString().slice(0, 7);
 
-  // 業態別の機能表示制御
+  // 案件機能は全業態で常時表示（戦略思想§3-9-3 サイクルA・project_grossprofit 廃止）
   _applyProjectFeatureVisibility();
-  document.addEventListener('uz:settings-synced', _applyProjectFeatureVisibility);
 
   // フィルタ＆ボタンイベント
   document.getElementById('pc-tx-filter-type').addEventListener('change', render);
@@ -83,13 +70,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 function _applyProjectFeatureVisibility() {
-  const show = _txShouldShowProject();
+  // 全業態で案件機能を常時表示（サイクルA）。HTML 側の display:none 初期値を解除する
   const projectFilter = document.querySelector('.pc-tx-filter-project');
   const masterBtn = document.getElementById('pc-tx-project-master-btn');
   const grossSection = document.getElementById('pc-tx-grossprofit-section');
-  if (projectFilter) projectFilter.style.display = show ? '' : 'none';
-  if (masterBtn) masterBtn.style.display = show ? '' : 'none';
-  if (grossSection && !show) grossSection.style.display = 'none';
+  if (projectFilter) projectFilter.style.display = '';
+  if (masterBtn) masterBtn.style.display = '';
+  if (grossSection) grossSection.style.display = '';
 }
 
 /* =====================

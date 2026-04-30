@@ -875,7 +875,8 @@ function _buildCIFormBodyHTML() {
         <label class="ci-field-label" for="ci-emp-type">雇用形態</label>
         <select id="ci-emp-type" class="ci-select" aria-label="雇用形態">
           <option value="">選択してください</option>
-          <option value="employed">雇用</option>
+          <option value="employed_full">常勤雇用（社員）</option>
+          <option value="employed_temp">臨時アルバイト</option>
           <option value="contractor">委託・外注</option>
         </select>
       </div>
@@ -983,7 +984,11 @@ function _applyStaffEmpType() {
   if (!sel || !empSel) return;
   const idx   = parseInt(sel.value, 10);
   if (isNaN(idx) || !_ciStaffList[idx]) { empSel.value = ''; return; }
-  empSel.value = _ciStaffList[idx].employmentType || 'employed';
+  // employmentType 3種化（サイクルA）：旧 'employed' / 未設定は employed_full に寄せる
+  const raw = _ciStaffList[idx].employmentType;
+  empSel.value = (raw === 'employed_full' || raw === 'employed_temp' || raw === 'contractor')
+    ? raw
+    : 'employed_full';
 }
 
 /**

@@ -168,7 +168,7 @@ function updateAttendance(data) {
   sheet.getRange(row, 1).setValue(data.date           || '');
   sheet.getRange(row, 2).setValue(data.staffId        || '');
   sheet.getRange(row, 3).setValue(data.staffName      || '');
-  sheet.getRange(row, 4).setValue(data.employmentType || 'employed');
+  sheet.getRange(row, 4).setValue(_normalizeEmploymentType_(data.employmentType));
   sheet.getRange(row, 5).setValue(data.clockIn        || '');
   sheet.getRange(row, 6).setValue(data.clockOut       || '');
   return { status: 'ok' };
@@ -377,11 +377,10 @@ function getSettings() {
   var staffList = [], serviceList = [];
   try { if (staffJson)   staffList   = JSON.parse(staffJson);   } catch(e) {}
   try { if (serviceJson) serviceList = JSON.parse(serviceJson); } catch(e) {}
-  // employmentType 未設定の既存スタッフに "employed" デフォルト付与
+  // employmentType を3種化（employed_full / employed_temp / contractor）
+  // 旧 'employed' および未設定は 'employed_full' に自動マイグレーション（戦略思想§3-9-3 サイクルA）
   staffList = staffList.map(function(s) {
-    if (!s.employmentType) {
-      s.employmentType = 'employed';
-    }
+    s.employmentType = _normalizeEmploymentType_(s.employmentType);
     return s;
   });
   // storeType は hostess / standard / off のみ許容。未設定や不正値は 'off' に寄せる
@@ -424,9 +423,7 @@ function saveSettings(data) {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('settings');
   if (!sheet) return { status: 'error', message: 'settingsシートが見つかりません' };
   var staffList = (data.staffList || []).map(function(s) {
-    if (!s.employmentType) {
-      s.employmentType = 'employed';
-    }
+    s.employmentType = _normalizeEmploymentType_(s.employmentType);
     return s;
   });
   sheet.getRange('A1').setValue('storeName');
@@ -473,7 +470,7 @@ function saveStaffList(staffList) {
     return {
       id: String(s.id || ''),
       name: String(s.name || ''),
-      employmentType: s.employmentType === 'contractor' ? 'contractor' : 'employed',
+      employmentType: _normalizeEmploymentType_(s.employmentType),
       passwordHash: String(s.passwordHash || ''),
       passwordUpdatedAt: s.passwordUpdatedAt ? String(s.passwordUpdatedAt) : ''
     };
@@ -483,18 +480,32 @@ function saveStaffList(staffList) {
   return { status: 'ok' };
 }
 
+/**
+ * employmentType 正規化（3種化対応）
+ *  - 'employed_full' / 'employed_temp' / 'contractor' のみ許容
+ *  - 旧 'employed' および未設定は 'employed_full' に寄せる（人事台帳としての一貫性確保）
+ *  - 戦略思想§3-9-3 サイクルA：人件費の2段階構造（稼働メモ→月末確定→コスト反映）の前提
+ */
+function _normalizeEmploymentType_(value) {
+  if (value === 'employed_full' || value === 'employed_temp' || value === 'contractor') {
+    return value;
+  }
+  // 旧 'employed' は常勤雇用（社員）として扱う
+  return 'employed_full';
+}
+
 function clockIn(data) {
   var staffId        = data.staffId;
   var staffName      = data.staffName;
-  var employmentType = data.employmentType === 'contractor' ? 'contractor' : 'employed';
+  var employmentType = _normalizeEmploymentType_(data.employmentType);
   var clockInTime    = data.clockInTime;
   var clockOutTime   = data.clockOutTime || '';
   var date           = data.date;
   if (!staffId || !clockInTime || !date) {
     return { status: 'error', message: 'パラメータ不足' };
   }
-  var sheet = getOrCreateSheet_('attendance', ['日付','スタッフID','スタッフ名','雇用形態','入店時刻','退店時刻','登録日時']);
-  sheet.appendRow([date, staffId, staffName, employmentType, clockInTime, clockOutTime, new Date().toISOString()]);
+  var sheet = getOrCreateSheet_('attendance', ['日付','スタッフID','スタッフ名','雇用形態','入店時刻','退店時刻','登録日時','案件ID']);
+  sheet.appendRow([date, staffId, staffName, employmentType, clockInTime, clockOutTime, new Date().toISOString(), '']);
   return { status: 'ok', rowIndex: sheet.getLastRow() };
 }
 
@@ -535,7 +546,8 @@ function getAttendanceColMap_(sheet) {
     staffName:      headers.indexOf('スタッフ名') + 1,
     employmentType: headers.indexOf('雇用形態')   + 1,
     clockIn:        headers.indexOf('入店時刻')   + 1,
-    clockOut:       headers.indexOf('退店時刻')   + 1
+    clockOut:       headers.indexOf('退店時刻')   + 1,
+    projectId:      headers.indexOf('案件ID')    + 1   // 新規・サイクルA（後付け紐付け運用）
   };
   return map;
 }
@@ -555,7 +567,7 @@ function getAttendance(data) {
       : String(row[colMap.date - 1] || '').substring(0, 10);
     var staffId   = row[colMap.staffId - 1];
     var staffName = row[colMap.staffName - 1];
-    var employmentType = colMap.employmentType > 0 ? (row[colMap.employmentType - 1] || 'employed') : 'employed';
+    var employmentType = _normalizeEmploymentType_(colMap.employmentType > 0 ? row[colMap.employmentType - 1] : '');
     var clockIn   = row[colMap.clockIn - 1];
     var clockOut  = row[colMap.clockOut - 1];
     if (!staffId) continue;
@@ -598,9 +610,8 @@ function getAttendanceByMonth(month) {
         ? Utilities.formatDate(row[colMap.date - 1], tz, 'yyyy-MM-dd')
         : String(row[colMap.date - 1] || '').substring(0, 10);
       if (month && !dateStr.startsWith(month)) return;
-      var employmentType = colMap.employmentType > 0
-        ? String(row[colMap.employmentType - 1] || 'employed')
-        : 'employed';
+      var employmentType = _normalizeEmploymentType_(colMap.employmentType > 0 ? row[colMap.employmentType - 1] : '');
+      var projectId      = colMap.projectId > 0 ? String(row[colMap.projectId - 1] || '') : '';
       data.push({
         rowIndex: i + 2,
         date:           dateStr,
@@ -608,7 +619,8 @@ function getAttendanceByMonth(month) {
         staffName:      String(row[colMap.staffName - 1] || ''),
         employmentType: employmentType,
         clockIn:        String(row[colMap.clockIn - 1]  || ''),
-        clockOut:       row[colMap.clockOut - 1] !== '' ? String(row[colMap.clockOut - 1]) : null
+        clockOut:       row[colMap.clockOut - 1] !== '' ? String(row[colMap.clockOut - 1]) : null,
+        projectId:      projectId   // 新規・サイクルA
       });
     });
     data.sort(function(a, b) { return b.date.localeCompare(a.date); });

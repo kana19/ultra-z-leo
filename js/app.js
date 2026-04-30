@@ -262,14 +262,29 @@ function applyUILabels() {
   }
 }
 
+/* ── 雇用形態ラベル（3種化対応） ─────────────────────────────
+ * 戦略思想§3-9-3 サイクルA：employmentType を3種化（人事台帳の一貫性）
+ *   - employed_full : 常勤雇用（社員・正社員ホステス・店長等／集計対象外）
+ *   - employed_temp : 臨時アルバイト（短期バイト・週末ヘルプ等／変動費）
+ *   - contractor    : 委託・外注（ホステス委託・派遣・外部キャスト等／案件直接費）
+ *   - 旧 'employed'・未設定値はすべて 'employed_full' として表示する（後方互換）
+ */
+function employmentTypeLabel(value) {
+  switch (value) {
+    case 'employed_full': return '常勤雇用';
+    case 'employed_temp': return '臨時アルバイト';
+    case 'contractor':    return '委託・外注';
+    default:              return '常勤雇用';   // 旧 'employed' 含む後方互換
+  }
+}
+
 /* ── 機能表示フラグ（featureVisibility）─────────────────────
  * 戦略思想§3-9-3 §3-8 準拠：
  *   - templateId に応じて機能の表示／非表示を導出する
  *   - custom テンプレート時のみ localStorage の uz_feature_visibility を優先
  *   - 通常は templateId から動的導出（管理ポータル設定不要）
  *
- * 3キー：
- *   - project_grossprofit : 案件粗利機能（PC版売上タブ内タブ）
+ * 2キー（サイクルA：project_grossprofit を廃止し全業態で案件機能を標準搭載）：
  *   - clockin_menu        : 入店記録メニュー
  *   - payroll_menu        : 月末経理メニュー（プレースホルダ・本体未実装）
  */
@@ -279,19 +294,19 @@ const FEATURE_VISIBILITY_KEY = 'uz_feature_visibility';
  * templateIdから featureVisibility を動的導出する。
  * custom テンプレートの場合のみ、localStorage の uz_feature_visibility を読み出して優先する。
  * @param {string} templateId
- * @returns {{project_grossprofit:boolean, clockin_menu:boolean, payroll_menu:boolean}}
+ * @returns {{clockin_menu:boolean, payroll_menu:boolean}}
  */
 function deriveFeatureVisibility(templateId) {
   const tid = templateId || getTemplateId();
 
   if (tid === 'hostess-shop') {
-    return { project_grossprofit: false, clockin_menu: true,  payroll_menu: true  };
+    return { clockin_menu: true,  payroll_menu: true  };
   }
   if (tid === 'general-shop') {
-    return { project_grossprofit: false, clockin_menu: true,  payroll_menu: false };
+    return { clockin_menu: true,  payroll_menu: false };
   }
   if (tid === 'non-shop') {
-    return { project_grossprofit: true,  clockin_menu: false, payroll_menu: false };
+    return { clockin_menu: false, payroll_menu: false };
   }
   if (tid === 'custom') {
     try {
@@ -299,23 +314,23 @@ function deriveFeatureVisibility(templateId) {
       if (stored) {
         const parsed = JSON.parse(stored);
         return Object.assign(
-          { project_grossprofit: true, clockin_menu: true, payroll_menu: false },
+          { clockin_menu: true, payroll_menu: false },
           parsed
         );
       }
     } catch (e) {
       console.warn('[app.js] uz_feature_visibility の読み込みに失敗:', e);
     }
-    return { project_grossprofit: true, clockin_menu: true, payroll_menu: false };
+    return { clockin_menu: true, payroll_menu: false };
   }
 
   // 不明値は安全側のデフォルト
-  return { project_grossprofit: false, clockin_menu: true, payroll_menu: false };
+  return { clockin_menu: true, payroll_menu: false };
 }
 
 /**
  * 現在の templateId に対応する featureVisibility を取得する。
- * @returns {{project_grossprofit:boolean, clockin_menu:boolean, payroll_menu:boolean}}
+ * @returns {{clockin_menu:boolean, payroll_menu:boolean}}
  */
 function getFeatureVisibility() {
   return deriveFeatureVisibility(getTemplateId());

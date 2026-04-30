@@ -100,18 +100,86 @@ async function saveCM() {
   }
 }
 
+/**
+ * employmentType 正規化（3種化対応・サイクルA）
+ *   旧 'employed' および未設定はすべて 'employed_full' に寄せる
+ */
+function normalizeEmpType(value) {
+  if (value === 'employed_full' || value === 'employed_temp' || value === 'contractor') return value;
+  return 'employed_full';
+}
+
 function renderStaff() {
   let staff = settings?.staffList ?? settings?.staff ?? [];
   if (typeof staff === 'string') { try { staff = JSON.parse(staff); } catch { staff = []; } }
   if (!Array.isArray(staff)) staff = [];
   const body = document.getElementById('staff-body');
   if (staff.length === 0) {
-    body.innerHTML = `<tr><td colspan="3" class="text-muted" style="text-align:center;padding:20px;">登録なし</td></tr>`;
+    body.innerHTML = `<tr><td colspan="4" class="text-muted" style="text-align:center;padding:20px;">登録なし</td></tr>`;
     return;
   }
-  body.innerHTML = staff.map(s => `<tr>
-    <td>${escHtml(s.id||'')}</td>
-    <td>${escHtml(s.name||'')}</td>
-    <td>${escHtml(s.note||'')}</td>
-  </tr>`).join('');
+  body.innerHTML = staff.map(s => {
+    const empType = normalizeEmpType(s.employmentType);
+    const sid = escHtml(String(s.id || ''));
+    const opts = [
+      ['employed_full', '常勤雇用（社員）'],
+      ['employed_temp', '臨時アルバイト'],
+      ['contractor',    '委託・外注']
+    ].map(([v, label]) =>
+      `<option value="${v}"${v === empType ? ' selected' : ''}>${label}</option>`
+    ).join('');
+    return `<tr>
+      <td>${sid}</td>
+      <td>${escHtml(s.name||'')}</td>
+      <td>
+        <select class="pc-select staff-emp-select" data-staff-id="${sid}" style="width:180px;">
+          ${opts}
+        </select>
+      </td>
+      <td>${escHtml(s.note||'')}</td>
+    </tr>`;
+  }).join('');
+
+  // 雇用形態セレクトに変更ハンドラを束ねる（インライン保存）
+  body.querySelectorAll('.staff-emp-select').forEach(sel => {
+    sel.addEventListener('change', () => saveStaffEmpType(sel));
+  });
+}
+
+/**
+ * 雇用形態セレクトを変更したらその場でGASに保存する
+ *  - 全員分の最新 staffList を再構築して saveStaffList で送信
+ *  - 楽観的に settings.staffList を更新
+ */
+async function saveStaffEmpType(selectEl) {
+  const targetId = selectEl.dataset.staffId;
+  const newType = normalizeEmpType(selectEl.value);
+  let list = settings?.staffList ?? settings?.staff ?? [];
+  if (typeof list === 'string') { try { list = JSON.parse(list); } catch { list = []; } }
+  if (!Array.isArray(list)) list = [];
+
+  const updated = list.map(s => {
+    if (String(s.id) === String(targetId)) {
+      return { ...s, employmentType: newType };
+    }
+    return s;
+  });
+
+  selectEl.disabled = true;
+  let res;
+  try {
+    res = await callGAS('saveStaffList', { staffList: updated });
+  } catch (e) {
+    selectEl.disabled = false;
+    showToast('通信エラー：' + (e.message || 'unknown'), 'error');
+    return;
+  }
+  selectEl.disabled = false;
+
+  if (res && res.status === 'ok') {
+    settings.staffList = updated;
+    showToast('雇用形態を保存しました', 'success');
+  } else {
+    showToast('保存失敗：' + (res && res.message || '不明なエラー'), 'error');
+  }
 }

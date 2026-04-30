@@ -54,9 +54,10 @@ const PC_NAV = [
 
 function pcRenderSidebar(activeHref) {
   // featureVisibility 取得（app.js の getFeatureVisibility を参照）
+  // サイクルA：project_grossprofit は廃止・案件機能は全業態で常時表示
   const fv = (typeof getFeatureVisibility === 'function')
     ? getFeatureVisibility()
-    : { project_grossprofit: false, clockin_menu: true, payroll_menu: false };
+    : { clockin_menu: true, payroll_menu: false };
 
   const navHtml = PC_NAV.map(n => {
     if (n.type === 'item') {

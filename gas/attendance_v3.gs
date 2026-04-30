@@ -1,10 +1,11 @@
 /**
  * ウルトラZAIMUくん LEO版 GAS — attendance_v3.gs
- * attendance列構成 v3（8列）対応・マイグレーション・全アクション
+ * attendance列構成 v3（9列）対応・マイグレーション・全アクション
  *
  * 列構成:
  * A: 入店日, B: スタッフID, C: スタッフ名, D: 雇用形態,
- * E: 入店時刻, F: 退店日, G: 退店時刻, H: 登録日時
+ * E: 入店時刻, F: 退店日, G: 退店時刻, H: 登録日時,
+ * I: 案件ID（サイクルA・PC操作で後付け紐付け運用）
  *
  * 既存の doGet の switch 文に以下を追記してください:
  * ─────────────────────────────────────────────────────────
@@ -225,6 +226,7 @@ function _doClockInV3(data) {
   const clockOutDate   = clockOutTime
     ? _resolveClockOutDate(clockInDate, clockInTime, clockOutTime, data.clockOutDate || '')
     : '';
+  const projectId      = String(data.projectId || '');
 
   sheet.appendRow([
     clockInDate,              // A
@@ -235,6 +237,7 @@ function _doClockInV3(data) {
     clockOutDate,             // F
     clockOutTime,             // G
     new Date(),               // H
+    projectId,                // I 案件ID（サイクルA・通常は空文字でPC操作で後付け）
   ]);
 
   return { status: 'ok', rowIndex: sheet.getLastRow() };
@@ -317,6 +320,12 @@ function _doUpdateAttendanceV3(data) {
     }
   }
 
+  // I列(9) projectId 更新（payload に含まれる場合のみ・空文字での解除も許容）
+  // サイクルA：稼働メモ→案件 後付け紐付けのPC操作経路
+  if (data.projectId !== undefined) {
+    sheet.getRange(rowIndex, 9).setValue(String(data.projectId || ''));
+  }
+
   return { status: 'ok' };
 }
 
@@ -335,7 +344,9 @@ function _doGetAttendanceByMonthV3(data) {
   const lastRow = sheet.getLastRow();
   if (lastRow < 1) return { status: 'ok', data: [] };
 
-  const rows   = sheet.getRange(1, 1, lastRow, 8).getValues();
+  // 9列目（I列・案件ID）が存在する場合のみ projectId を読み出す（後方互換）
+  const lastCol = Math.max(8, Math.min(9, sheet.getLastColumn()));
+  const rows   = sheet.getRange(1, 1, lastRow, lastCol).getValues();
   const result = [];
 
   for (var i = 0; i < rows.length; i++) {
@@ -348,6 +359,7 @@ function _doGetAttendanceByMonthV3(data) {
     const rawCoDate = row[5];
     const coTimeRaw = row[6];
     const regAt     = row[7];
+    const projectId = lastCol >= 9 ? String(row[8] || '') : '';   // I列・案件ID（サイクルA）
 
     const clockInDate  = rawCiDate instanceof Date  ? _dateToStr(rawCiDate)  : String(rawCiDate  || '');
     const clockOutDate = rawCoDate instanceof Date   ? _dateToStr(rawCoDate)  : String(rawCoDate  || '');
@@ -383,6 +395,7 @@ function _doGetAttendanceByMonthV3(data) {
       clockOutDate,
       is_overnight,
       workMinutes,
+      projectId,                   // I列・案件ID（サイクルA・後付け紐付け運用）
     });
   }
 

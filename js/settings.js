@@ -19,11 +19,13 @@ const STORE_TYPE_KEY     = 'uz_store_type';
 
 /* ── デフォルト値 ────────────────────────────────────────── */
 const DEFAULT_STORE_NAME = 'スナック LEO';
+// 雇用形態は3種化（戦略思想§3-9-3 サイクルA）：
+//   employed_full / employed_temp / contractor
 const DEFAULT_STAFF = [
-  { id: 1, name: 'さくら', employmentType: 'employed' },
-  { id: 2, name: 'あかね', employmentType: 'employed' },
-  { id: 3, name: 'みか',   employmentType: 'employed' },
-  { id: 4, name: 'ゆき',   employmentType: 'employed' },
+  { id: 1, name: 'さくら', employmentType: 'employed_full' },
+  { id: 2, name: 'あかね', employmentType: 'employed_full' },
+  { id: 3, name: 'みか',   employmentType: 'employed_full' },
+  { id: 4, name: 'ゆき',   employmentType: 'employed_full' },
 ];
 const DEFAULT_SERVICES = [
   { code: 'S001', name: '店内売上',     taxRate: 10 },
@@ -258,10 +260,8 @@ function renderStaffList() {
   }
 
   container.innerHTML = list.map(s => {
-    const empType = s.employmentType || 'employed';
-    const badge = empType === 'contractor'
-      ? `<span class="staff-emp-badge staff-emp-badge--contractor">委託・外注</span>`
-      : `<span class="staff-emp-badge staff-emp-badge--employed">雇用</span>`;
+    const empType = _normalizeEmpType(s.employmentType);
+    const badge = _empTypeBadge(empType);
     return `
       <div class="staff-row" id="staff-row-${s.id}">
         <span class="staff-row__name">${escHtml(s.name)}</span>
@@ -283,6 +283,31 @@ function renderStaffList() {
   }).join('');
 }
 
+/**
+ * 雇用形態 3種化（サイクルA）：旧 'employed' / 未設定は employed_full に寄せる
+ */
+function _normalizeEmpType(value) {
+  if (value === 'employed_full' || value === 'employed_temp' || value === 'contractor') return value;
+  return 'employed_full';
+}
+
+/**
+ * 雇用形態バッジ HTML 生成
+ *   - employed_full : 常勤雇用（既存 employed バッジ流用）
+ *   - employed_temp : 臨時アルバイト（新規・既存 employed バッジ流用＋ラベル変更）
+ *   - contractor    : 委託・外注（既存 contractor バッジ流用）
+ */
+function _empTypeBadge(empType) {
+  if (empType === 'contractor') {
+    return `<span class="staff-emp-badge staff-emp-badge--contractor">委託・外注</span>`;
+  }
+  if (empType === 'employed_temp') {
+    return `<span class="staff-emp-badge staff-emp-badge--employed">臨時アルバイト</span>`;
+  }
+  // employed_full（旧 employed 含む）
+  return `<span class="staff-emp-badge staff-emp-badge--employed">常勤雇用</span>`;
+}
+
 function editStaff(id) {
   const list  = getStaffList();
   const staff = list.find(s => s.id === id);
@@ -291,7 +316,7 @@ function editStaff(id) {
   const row = document.getElementById(`staff-row-${id}`);
   if (!row) return;
 
-  const empType = staff.employmentType || 'employed';
+  const empType = _normalizeEmpType(staff.employmentType);
   row.innerHTML = `
     <input type="text"
            id="staff-edit-name-${id}"
@@ -305,7 +330,8 @@ function editStaff(id) {
             class="form-select"
             style="height:40px;font-size:13px;flex-shrink:0;"
             aria-label="雇用形態">
-      <option value="employed"${empType === 'employed' ? ' selected' : ''}>雇用</option>
+      <option value="employed_full"${empType === 'employed_full' ? ' selected' : ''}>常勤雇用（社員）</option>
+      <option value="employed_temp"${empType === 'employed_temp' ? ' selected' : ''}>臨時アルバイト</option>
       <option value="contractor"${empType === 'contractor' ? ' selected' : ''}>委託・外注</option>
     </select>
     <input type="text"
@@ -362,7 +388,7 @@ async function saveEditStaff(id) {
 
   const newList = list.map(s =>
     s.id === id
-      ? { ...s, name, employmentType: empEl.value, ...(passwordUpdate || {}) }
+      ? { ...s, name, employmentType: _normalizeEmpType(empEl.value), ...(passwordUpdate || {}) }
       : s
   );
   _saveStaffList(newList);
@@ -413,7 +439,7 @@ function bindStaffAdd() {
 
     const maxId         = list.length > 0 ? Math.max(...list.map(s => s.id)) : 0;
     const newId         = maxId + 1;
-    const employmentType = empSelect ? empSelect.value : 'employed';
+    const employmentType = _normalizeEmpType(empSelect ? empSelect.value : '');
     const passwordHash  = await hashStaffPassword(newId, password);
     const passwordUpdatedAt = new Date().toISOString();
     const newList       = [...list, {
@@ -426,7 +452,7 @@ function bindStaffAdd() {
     _saveStaffList(newList);
 
     input.value = '';
-    if (empSelect) empSelect.value = 'employed';
+    if (empSelect) empSelect.value = 'employed_full';
     if (pwInput) pwInput.value = '';
     renderStaffList();
     showToast(`${name}を追加しました ✓`, 'success');
