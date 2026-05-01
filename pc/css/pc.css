@@ -28,47 +28,47 @@ body.pc-body {
   overflow: hidden;
 }
 
-.pc-sidebar__logo {
-  padding: 18px 16px;
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--uz-gold);
+/* ── 店名ロゴ（クリックで損益概観 index.html へ遷移）───── */
+.pc-sidebar-logo {
+  display: block;
+  padding: 16px 14px;
+  text-decoration: none;
   border-bottom: 1px solid var(--uz-border);
+  cursor: pointer;
   letter-spacing: 0.04em;
+}
+.pc-sidebar-logo:hover { background: var(--uz-surface2); }
+.pc-sidebar-logo-text {
+  color: var(--uz-gold);
+  font-weight: 700;
+  font-size: 15px;
+  display: block;
+}
+.pc-sidebar-logo-sub {
+  color: var(--uz-text2);
+  font-size: 11px;
+  display: block;
+  margin-top: 2px;
 }
 
 .pc-nav { padding: 8px 0; }
-.pc-nav a {
-  display: block;
+.pc-nav__link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   padding: 10px 16px;
   color: var(--uz-text);
   text-decoration: none;
   font-size: 13px;
   border-left: 3px solid transparent;
 }
-.pc-nav a:hover { background: var(--uz-surface2); }
-.pc-nav a.active {
+.pc-nav__link:hover { background: var(--uz-surface2); }
+.pc-nav__link.active {
   background: var(--uz-surface2);
   border-left-color: var(--uz-gold);
   color: var(--uz-gold);
 }
-
-/* ── 4区分構造（§3-9-3）──────────────────── */
-.pc-sidebar__section-label {
-  font-size: 11px;
-  color: var(--uz-text2);
-  letter-spacing: 0.05em;
-  padding: 12px 16px 4px;
-  text-transform: none;
-  font-weight: 600;
-}
-.pc-sidebar__section-children { padding-left: 8px; }
-.pc-sidebar__section-children a { padding-left: 16px; font-size: 12px; }
-.pc-sidebar__nav-item--placeholder {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-.pc-sidebar__nav-item--placeholder:hover { background: transparent; }
+.pc-nav__icon { font-size: 14px; line-height: 1; }
 
 .pc-recent {
   flex: 1;
@@ -650,30 +650,46 @@ body.pc-body {
   border-top: 1px solid var(--uz-border);
 }
 
-/* 売上・コスト追加モーダル */
-.tx-modal {
-  position: fixed;
-  inset: 0;
-  z-index: 200;
+/* ===== インライン編集（戦略思想§3-5・3デバイス統合§8-1）===== */
+.tx-toolbar-hint {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--uz-text2);
+  letter-spacing: 0.05em;
 }
-.tx-modal-backdrop {
-  position: absolute;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.55);
+.tx-cell {
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 3px;
+  display: inline-block;
+  min-height: 22px;
+  min-width: 40px;
 }
-.tx-modal-panel {
-  position: relative;
-  width: min(560px, 90vw);
-  max-height: 85vh;
-  overflow-y: auto;
-  margin: 5vh auto 0;
-  padding: 20px;
-  background: var(--uz-surface);
-  border: 1px solid var(--uz-border2);
-  border-radius: 8px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+.tx-cell:hover { background: var(--uz-surface2); }
+.tx-cell.is-editing {
+  padding: 0;
+  background: var(--uz-bg);
+  outline: 2px solid var(--uz-gold);
 }
-.tx-modal-panel h3 {
-  margin: 0 0 12px;
-  color: var(--uz-gold);
+.tx-cell input,
+.tx-cell select {
+  width: 100%;
+  height: 100%;
+  border: none;
+  background: transparent;
+  color: var(--uz-text);
+  padding: 4px 6px;
+  font: inherit;
+  box-sizing: border-box;
 }
+.tx-cell input:focus,
+.tx-cell select:focus { outline: none; }
+.tx-row-new {
+  background: rgba(212, 175, 55, 0.08);
+  border-left: 3px solid var(--uz-gold);
+}
+.tx-row-locked {
+  opacity: 0.6;
+  pointer-events: none;
+}
+.tx-row-unpaid { background: var(--uz-amber-bg); }

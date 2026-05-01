@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1280">
+<title>月末経理 | ウルトラZAIMUくん PC版</title>
+<link rel="icon" type="image/png" href="../icons/icon-192.png">
+<link rel="stylesheet" href="../css/base.css">
+<link rel="stylesheet" href="css/pc.css">
+</head>
+<body class="pc-body">
+<div id="pc-app" class="pc-layout">
+  <main class="pc-main" id="pc-main">
+    <div class="pc-body-inner">
+      <div class="pc-card" style="text-align:center;padding:48px 24px;">
+        <h2 style="color:var(--uz-gold);margin-bottom:12px;">月末経理</h2>
+        <p style="color:var(--uz-text2);line-height:1.8;">
+          月末経理機能（人件費2段階構造の確定処理：稼働メモ → 月末確定 → コスト反映）は実装予定です。<br>
+          確定した稼働分のみ給料賃金（itemCode=20）／外注工賃（itemCode=21）等としてコストシートに自動反映され、青色申告書の損益計算に組み込まれます。
+        </p>
+      </div>
+    </div>
+  </main>
+</div>
+<script src="../js/app.js"></script>
+<script src="js/pc-common.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    pcBootstrap('payroll.html', '月末経理');
+  });
+</script>
+</body>
+</html>

@@ -2,113 +2,53 @@
 'use strict';
 
 /**
- * PC版サイドバー5項目構造（戦略思想§3-9-3 経営判断UX大原則・取引一覧統合化）
- *   - type: 'item'    単独メニュー（区分外・例：ホーム）
- *   - type: 'section' 区分見出し＋配下メニュー
+ * PC版サイドバー（戦略思想§3-9-3 5項目構造・3デバイス統合§8-9）
+ *   店名ロゴ（クリックで損益概観 index.html へ遷移・独立メニューなし）
+ *   ＋ フラット4メニュー：取引一覧／月末経理／入店記録／設定
  *
- * children の各項目：
+ * 各項目：
  *   - href            遷移先
  *   - label           表示ラベル
- *   - visibilityFlag  featureVisibility のキー名（無ければ常時表示）
- *   - placeholder     true なら遷移せずトースト表示（実装予定機能）
- *
- * 5項目定義：
- *   ① ホーム（独立メニュー）
- *   ② 売上・仕入原価・販管費 → 取引一覧（transactions.html）に統合
- *   ③ 雇用・委託・外注       入店記録 / 月末経理プレースホルダ
- *   ④ 履歴・修正             history.html
- *   ⑤ 設定                   settings.html
+ *   - icon            行頭アイコン（任意）
+ *   - visibilityKey   featureVisibility のキー名（false で非表示／無ければ常時表示）
+ *   - uiLabelKey      業態別ラベル切替キー（deriveUILabels 経由）
  */
 const PC_NAV = [
-  { type: 'item', href: 'index.html', label: 'ホーム' },
-  {
-    type: 'section',
-    label: '売上・仕入原価・販管費',
-    children: [
-      { href: 'transactions.html', label: '取引一覧' }
-    ]
-  },
-  {
-    type: 'section',
-    label: '雇用・委託・外注',
-    children: [
-      { href: 'clockin.html', label: '入店記録', visibilityFlag: 'clockin_menu' },
-      { href: '#payroll-placeholder', label: '月末経理（実装予定）', visibilityFlag: 'payroll_menu', placeholder: true }
-    ]
-  },
-  {
-    type: 'section',
-    label: '履歴・修正',
-    children: [
-      { href: 'history.html', label: '履歴・修正' }
-    ]
-  },
-  {
-    type: 'section',
-    label: '設定',
-    children: [
-      { href: 'settings.html', label: '設定' }
-    ]
-  }
+  { href: 'transactions.html', label: '取引一覧', icon: '📋' },
+  { href: 'payroll.html',      label: '月末経理', icon: '💰', visibilityKey: 'payroll_menu' },
+  { href: 'clockin.html',      label: '入店記録', icon: '🕐', uiLabelKey: 'clockin_record', visibilityKey: 'clockin_menu' },
+  { href: 'settings.html',     label: '設定',     icon: '⚙️' }
 ];
 
 function pcRenderSidebar(activeHref) {
   // featureVisibility 取得（app.js の getFeatureVisibility を参照）
-  // サイクルA：project_grossprofit は廃止・案件機能は全業態で常時表示
   const fv = (typeof getFeatureVisibility === 'function')
     ? getFeatureVisibility()
     : { clockin_menu: true, payroll_menu: false };
 
-  const navHtml = PC_NAV.map(n => {
-    if (n.type === 'item') {
-      const cls = n.href === activeHref ? 'active' : '';
-      return `<a href="${n.href}" class="pc-nav__link ${cls}">${escHtml(n.label)}</a>`;
-    }
-    if (n.type === 'section') {
-      const childrenHtml = (n.children || [])
-        .filter(c => !c.visibilityFlag || fv[c.visibilityFlag] !== false)
-        .map(c => {
-          if (c.placeholder) {
-            return `<a href="#" class="pc-nav__link pc-sidebar__nav-item--placeholder" data-pc-placeholder="1">${escHtml(c.label)}</a>`;
-          }
-          const cls = c.href === activeHref ? 'active' : '';
-          return `<a href="${c.href}" class="pc-nav__link ${cls}">${escHtml(c.label)}</a>`;
-        }).join('');
-      // children が全て非表示の場合は section ごと非表示
-      if (!childrenHtml) return '';
-      return `
-        <div class="pc-sidebar__section-label">${escHtml(n.label)}</div>
-        <div class="pc-sidebar__section-children">${childrenHtml}</div>
-      `;
-    }
-    return '';
-  }).join('');
+  // 業態別ラベル取得（app.js の deriveUILabels を参照）
+  const uiLabels = (typeof deriveUILabels === 'function') ? deriveUILabels() : {};
 
-  // 直近入力履歴サイドバーは廃止（取引一覧画面が同等機能を担うため）
+  const navHtml = PC_NAV
+    .filter(n => !n.visibilityKey || fv[n.visibilityKey] !== false)
+    .map(n => {
+      const cls = n.href === activeHref ? 'pc-nav__link active' : 'pc-nav__link';
+      const labelText = (n.uiLabelKey && uiLabels[n.uiLabelKey]) ? uiLabels[n.uiLabelKey] : n.label;
+      const iconHtml = n.icon ? `<span class="pc-nav__icon" aria-hidden="true">${n.icon}</span>` : '';
+      return `<a href="${n.href}" class="${cls}">${iconHtml}<span>${escHtml(labelText)}</span></a>`;
+    }).join('');
+
+  // 店名ロゴ（クリックで損益概観 index.html へ遷移）
   const html = `
     <aside class="pc-sidebar">
-      <div class="pc-sidebar__logo">ウルトラZAIMUくん</div>
+      <a href="index.html" class="pc-sidebar-logo">
+        <span class="pc-sidebar-logo-text">ウルトラZAIMUくん</span>
+        <span class="pc-sidebar-logo-sub">LEO</span>
+      </a>
       <nav class="pc-nav">${navHtml}</nav>
     </aside>
   `;
   return html;
-}
-
-/**
- * プレースホルダ項目クリック時の挙動：遷移せずに通知表示
- */
-function pcBindPlaceholders() {
-  document.querySelectorAll('[data-pc-placeholder="1"]').forEach(el => {
-    el.addEventListener('click', e => {
-      e.preventDefault();
-      const msg = '実装予定の機能です';
-      if (typeof showToast === 'function') {
-        showToast(msg, 'info');
-      } else {
-        alert(msg);
-      }
-    });
-  });
 }
 
 function pcRenderHeader(title) {
@@ -154,5 +94,4 @@ function pcBootstrap(activeHref, title) {
   const main = document.getElementById('pc-main');
   if (main) main.insertAdjacentHTML('afterbegin', pcRenderHeader(title));
   pcStartClock();
-  pcBindPlaceholders();
 }
