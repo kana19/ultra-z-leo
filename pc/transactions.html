@@ -2,6 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=1280">
 <title>取引一覧 | ウルトラZAIMUくん PC版</title>
 <link rel="icon" type="image/png" href="../icons/icon-192.png">
 <link rel="stylesheet" href="../css/base.css">
@@ -11,59 +12,28 @@
 <div id="pc-app" class="pc-layout">
   <main class="pc-main" id="pc-main">
     <div class="pc-body-inner">
-      <div class="pc-card">
-        <div class="pc-filter-row">
-          <label>種別
-            <select id="pc-tx-filter-type" class="pc-select">
-              <option value="all">全て</option>
-              <option value="sales">売上のみ</option>
-              <option value="cost-cogs">仕入原価のみ</option>
-              <option value="cost-sga">販管費のみ</option>
-            </select>
-          </label>
-          <label>月
-            <input type="month" id="pc-tx-filter-month" class="pc-input">
-          </label>
-          <label class="pc-tx-filter-project">案件
-            <select id="pc-tx-filter-project" class="pc-select">
-              <option value="all">全て</option>
-              <option value="unlinked">未紐付け</option>
-            </select>
-          </label>
-          <label>状態
-            <select id="pc-tx-filter-status" class="pc-select">
-              <option value="all">全て</option>
-              <option value="unsettled">未収・未払のみ</option>
-              <option value="settled">消込済のみ</option>
-            </select>
-          </label>
-          <button id="pc-tx-add-btn" class="pc-btn">＋ 新規追加</button>
-          <button id="pc-tx-reload-btn" class="pc-btn pc-btn--ghost">再読み込み</button>
-          <button id="pc-tx-project-master-btn" class="pc-btn pc-btn--ghost pc-tx-project-master-btn">案件マスタ管理</button>
-        </div>
 
-        <div class="pc-bulk-action-row" id="pc-tx-bulk-bar" style="display:none">
-          <span class="pc-bulk-count" id="pc-tx-bulk-count">0件選択中</span>
-          <select id="pc-tx-bulk-project" class="pc-select">
-            <option value="">案件を選択...</option>
-            <option value="__unlink__">— 紐付け解除 —</option>
-          </select>
-          <button id="pc-tx-bulk-apply" class="pc-primary-btn" disabled>一括紐付け</button>
-        </div>
-
-        <div style="overflow-x:auto;">
-          <table class="pc-table" id="pc-tx-table">
-            <thead id="pc-tx-thead"></thead>
-            <tbody id="pc-tx-tbody"></tbody>
-          </table>
-        </div>
+      <div class="tx-toolbar">
+        <label>月
+          <select id="tx-month" class="pc-select"></select>
+        </label>
+        <button id="tx-reload" class="pc-btn pc-btn--ghost">再読み込み</button>
+        <button id="tx-add-sales" class="pc-btn">＋ 売上を追加</button>
+        <button id="tx-add-cost" class="pc-btn">＋ コストを追加</button>
       </div>
 
-      <div class="pc-card pc-tx-grossprofit-section" id="pc-tx-grossprofit-section">
-        <h3>案件粗利集計</h3>
-        <p class="pc-note">紐付けされた行を横串で集計しています。集計対象は「仕入原価／外注工賃／給料賃金（臨時雇用分）／税理士等の報酬（特定案件分）」のみで、固定費（光熱費・地代等）は対象外。青色申告決算書の損益計算には影響しません。</p>
-        <div id="pc-tx-grossprofit-content"></div>
-      </div>
+      <h3 class="tx-section-title">売上＝親 ／ 紐付けコスト＝子（取引ペア紐付けモデル）</h3>
+      <div id="tx-hierarchy" class="tx-hierarchy"></div>
+
+      <h3 class="tx-section-title">未紐付けコスト（集計対象4区分・対象月）</h3>
+      <p class="pc-note">対象は仕入原価系すべて／給料賃金／外注工賃／税理士等の報酬。固定費（光熱費・地代等）は紐付け対象外で青色申告書の損益計算には影響しません。</p>
+      <div id="tx-unlinked-costs" class="tx-unlinked"></div>
+
+      <div id="link-popover" class="link-popover" style="display:none"></div>
+
+      <div id="modal-sales" class="tx-modal" style="display:none"></div>
+      <div id="modal-cost" class="tx-modal" style="display:none"></div>
+
     </div>
   </main>
 </div>

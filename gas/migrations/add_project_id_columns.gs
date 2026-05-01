@@ -78,7 +78,8 @@ function addProjectIdColumns() {
     Logger.log('attendance シートが存在しないためスキップ（初回打刻時に9列で自動作成されます）');
   }
 
-  // projectsシートは _getOrCreateProjectsSheet() が初回呼び出し時に自動生成するため不要
+  // 取引ペア紐付けモデルでは projects シートは使用しない（旧モデル時代の遺物）
+  // 物理削除はユーザー側でスプレッドシート上のタブを右クリック → 削除で実施
 
   Logger.log('addProjectIdColumns マイグレーション完了');
 }

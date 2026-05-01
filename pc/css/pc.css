@@ -552,3 +552,128 @@ body.pc-body {
   font-size: 11px;
   color: var(--uz-text2);
 }
+
+/* ===== 取引一覧（取引ペア紐付けモデル）===== */
+.tx-toolbar {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--uz-border);
+  margin-bottom: 16px;
+}
+.tx-section-title {
+  margin-top: 32px;
+  margin-bottom: 8px;
+  font-size: 14px;
+  color: var(--uz-text2);
+  border-bottom: 1px solid var(--uz-border);
+  padding-bottom: 4px;
+}
+.tx-hierarchy { display: flex; flex-direction: column; gap: 12px; }
+.tx-sales-node {
+  border: 1px solid var(--uz-border);
+  border-radius: 6px;
+  background: var(--uz-surface);
+  overflow: hidden;
+}
+.tx-sales-node.has-profit { border-color: var(--uz-border2); }
+.tx-parent-row {
+  display: grid;
+  grid-template-columns: 32px 110px 1fr 140px 200px 140px;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--uz-surface2);
+  font-weight: 600;
+}
+.tx-children { background: var(--uz-surface); }
+.tx-child-row {
+  display: grid;
+  grid-template-columns: 32px 110px 1fr 140px 100px;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 14px 6px 36px;
+  border-top: 1px solid var(--uz-border);
+  font-size: 13px;
+  color: var(--uz-text2);
+}
+.tx-tree-marker { color: var(--uz-gold); }
+.tx-amount { text-align: right; font-variant-numeric: tabular-nums; }
+.tx-profit { font-size: 13px; color: var(--uz-gold); }
+.tx-empty, .tx-empty-small { padding: 24px; text-align: center; color: var(--uz-text2); }
+.tx-unlinked { display: flex; flex-direction: column; gap: 4px; }
+.tx-unlinked-row {
+  display: grid;
+  grid-template-columns: 110px 1fr 140px;
+  gap: 12px;
+  padding: 6px 14px;
+  border-bottom: 1px dashed var(--uz-border);
+  font-size: 13px;
+}
+
+/* 紐付け候補ポップオーバー */
+.link-popover {
+  position: absolute;
+  z-index: 100;
+  width: 480px;
+  max-height: 400px;
+  overflow-y: auto;
+  background: var(--uz-surface);
+  border: 1px solid var(--uz-border2);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
+}
+.popover-header {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--uz-border);
+  font-weight: 600;
+  background: var(--uz-surface2);
+}
+.popover-body { padding: 6px; }
+.popover-row {
+  display: grid;
+  grid-template-columns: 24px 110px 1fr 120px;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  cursor: pointer;
+  border-radius: 4px;
+}
+.popover-row:hover { background: var(--uz-surface2); }
+.popover-empty { padding: 24px; text-align: center; color: var(--uz-text2); }
+.popover-footer {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  padding: 10px 14px;
+  border-top: 1px solid var(--uz-border);
+}
+
+/* 売上・コスト追加モーダル */
+.tx-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+}
+.tx-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+}
+.tx-modal-panel {
+  position: relative;
+  width: min(560px, 90vw);
+  max-height: 85vh;
+  overflow-y: auto;
+  margin: 5vh auto 0;
+  padding: 20px;
+  background: var(--uz-surface);
+  border: 1px solid var(--uz-border2);
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+}
+.tx-modal-panel h3 {
+  margin: 0 0 12px;
+  color: var(--uz-gold);
+}

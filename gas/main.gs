@@ -29,13 +29,10 @@ function doGet(e) {
                                         result = { status: 'ok' };                       break;
       case 'runAttendanceMigrationV3':  result = setupAttendanceMigrationV3();            break;
       case 'getSalesCategoryRanking':   result = getSalesCategoryRanking_(data.months);   break;
-      // §3-9-3 案件粗利機能
-      case 'getProjects':               result = getProjects();                           break;
-      case 'addProject':                result = addProject(data);                        break;
-      case 'updateProject':             result = updateProject(data);                     break;
-      case 'deleteProject':             result = deleteProject(data);                     break;
-      case 'linkProject':               result = linkProject(data);                       break;
-      case 'getProjectGrossProfit':     result = getProjectGrossProfit(data);             break;
+      // 戦略思想§3-9-3 取引ペア紐付けモデル（売上行ID＝親キー、コストV列＝子キー）
+      case 'linkTransactions':          result = linkTransactions(data);                  break;
+      case 'getTransactionsHierarchy':  result = getTransactionsHierarchy(data);          break;
+      case 'getLinkCandidates':         result = getLinkCandidates(data);                 break;
       default: result = { status: 'error', message: '不明なアクション: ' + action };
     }
   } catch (err) {
@@ -47,13 +44,16 @@ function doGet(e) {
 }
 
 /**
- * 売上追記（20列・T列:projectId 含む）
- * projectId は Phase A 案件粗利機能用。スマホ・iPad側からは送信されない（PC版のみ）
+ * 売上追記（20列・T列:売上行ID 含む）
+ * T列(20) には取引ペア紐付けモデルの 親キー「売上行ID」を自動採番して格納する
+ * 形式：s-YYYYMMDDNNNN（接頭辞 s- ＋日付8桁＋当日内連番4桁ゼロ埋め）
+ * 戦略思想§3-9-3 取引ペア紐付けモデル：売上行ID＝親キー、コストV列＝子キー
  */
 function addSales(data) {
   var date = data.date || '';
   var parts = date.split('-');
   var sheet = getOrCreateSheet('売上');
+  var salesRowId = generateSalesRowId(date);
   sheet.appendRow([
     date, Number(parts[0]) || '', Number(parts[1]) || '',
     data.customerCode || '', data.serviceName || '',
@@ -63,16 +63,104 @@ function addSales(data) {
     Number(data.tax) || 0, Number(data.amountInTax) || 0,
     data.memo || '', '', '',
     Number(data.uncollected) || 0, '', new Date(), 0,
-    String(data.projectId || '')   // T列(20) projectId（案件粗利機能・§3-9-3）
+    salesRowId                                     // T列(20) 売上行ID（自動採番・取引ペア紐付けモデル）
   ]);
-  return { status: 'ok' };
+  return { status: 'ok', salesRowId: salesRowId };
 }
 
 /**
- * コスト追記（22列・T列:withholdingAmount・U列:clientId・V列:projectId）
+ * 売上行ID 自動採番（取引ペア紐付けモデル）
+ * 形式：s-YYYYMMDDNNNN
+ *   - 接頭辞 's-' 固定
+ *   - YYYYMMDD：売上日付の8桁
+ *   - NNNN    ：当日内連番（4桁ゼロ埋め）
+ * 採番方式：T列を走査して同日 's-YYYYMMDD' 接頭一致行をカウントし、+1 をゼロ埋め
+ * 同一実行コンテキスト内では SpreadsheetApp の同期書き込みで重複は発生しない前提
+ */
+function generateSalesRowId(date) {
+  var ymd = String(date || '').replace(/-/g, '').substring(0, 8);
+  if (ymd.length < 8) {
+    // 異常系：日付不正時はフォールバックで最低限の形式を返す
+    var d = new Date();
+    ymd = Utilities.formatDate(d, 'Asia/Tokyo', 'yyyyMMdd');
+  }
+  var sheet = SpreadsheetApp.getActive().getSheetByName('売上');
+  if (!sheet) return 's-' + ymd + '0001';
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return 's-' + ymd + '0001';
+  var idValues = sheet.getRange(2, 20, lastRow - 1, 1).getValues();
+  var prefix = 's-' + ymd;
+  var sameDayCount = 0;
+  for (var i = 0; i < idValues.length; i++) {
+    var id = idValues[i][0];
+    if (typeof id === 'string' && id.indexOf(prefix) === 0) {
+      sameDayCount++;
+    }
+  }
+  var seq = String(sameDayCount + 1);
+  while (seq.length < 4) seq = '0' + seq;
+  return prefix + seq;
+}
+
+/**
+ * 既存売上行への売上行ID 遡及採番（冪等）
+ * T列が空欄、または新形式 ^s-\d{12}$ に合致しない行を対象に s-YYYYMMDDNNNN を付番する
+ * 旧モデルの projectId（'p-' + 8桁・10文字）が残っている場合も新形式で上書きされる
+ * getTransactionsHierarchy 冒頭から呼び出される（実行毎の追加コストは行カウントに比例）
+ */
+function migrateSalesRowIds() {
+  var sheet = SpreadsheetApp.getActive().getSheetByName('売上');
+  if (!sheet) return;
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return;
+
+  var dateValues = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+  var idValues = sheet.getRange(2, 20, lastRow - 1, 1).getValues();
+
+  // 既存の有効ID（新形式）から日付ごとの最大連番を把握
+  var sameDayMaxSeq = {};
+  for (var i = 0; i < idValues.length; i++) {
+    var id = idValues[i][0];
+    if (typeof id === 'string' && /^s-\d{12}$/.test(id)) {
+      var ymd = id.substring(2, 10);
+      var seq = parseInt(id.substring(10), 10);
+      if (!isNaN(seq)) {
+        sameDayMaxSeq[ymd] = Math.max(sameDayMaxSeq[ymd] || 0, seq);
+      }
+    }
+  }
+
+  // T列が空欄、または新形式に合致しない行に採番
+  var updates = [];
+  for (var j = 0; j < idValues.length; j++) {
+    var current = idValues[j][0];
+    var isValid = (typeof current === 'string' && /^s-\d{12}$/.test(current));
+    if (isValid) continue;
+    var dateVal = dateValues[j][0];
+    var dateStr = (dateVal instanceof Date)
+      ? Utilities.formatDate(dateVal, 'Asia/Tokyo', 'yyyy-MM-dd')
+      : String(dateVal || '').substring(0, 10);
+    if (!dateStr || dateStr.length < 10) continue;
+    var ymd2 = dateStr.replace(/-/g, '');
+    var nextSeq = (sameDayMaxSeq[ymd2] || 0) + 1;
+    sameDayMaxSeq[ymd2] = nextSeq;
+    var seqStr = String(nextSeq);
+    while (seqStr.length < 4) seqStr = '0' + seqStr;
+    updates.push({ row: j + 2, id: 's-' + ymd2 + seqStr });
+  }
+
+  for (var k = 0; k < updates.length; k++) {
+    sheet.getRange(updates[k].row, 20).setValue(updates[k].id);
+  }
+}
+
+/**
+ * コスト追記（22列・T列:withholdingAmount・U列:clientId・V列:紐付け先売上行ID）
  * withholdingAmount は payload で渡された場合のみ格納（通常は0）
  * clientId は Phase A 管理ポータル実装時まで空文字で受領（箱のみ）
- * projectId は §3-9-3 案件粗利機能用。スマホ・iPad側からは送信されない（PC版のみ）
+ * V列 は取引ペア紐付けモデルの 子キー（紐付け先売上行ID）
+ *  PC版の通常追加経路では空文字を入れて作成し、紐付けは linkTransactions で後付けする
+ *  後方互換のため payload.projectId も受け付ける（同一意味で扱う）
  */
 function addCost(data) {
   var date = data.date || '';
@@ -89,7 +177,7 @@ function addCost(data) {
     Number(data.unpaid) || 0, '', new Date(), 0,
     Number(data.withholdingAmount) || 0,   // T列(20)
     String(data.clientId || ''),            // U列(21)
-    String(data.projectId || '')            // V列(22) projectId（案件粗利機能・§3-9-3）
+    String(data.projectId || '')            // V列(22) 紐付け先売上行ID（取引ペア紐付けモデル・§3-9-3）
   ]);
   return { status: 'ok' };
 }
@@ -114,15 +202,15 @@ function updateSales(data) {
   sheet.getRange(row, 12).setValue(Number(data.amountInTax)  || 0);
   sheet.getRange(row, 13).setValue(data.memo         || '');
   sheet.getRange(row, 16).setValue(Number(data.uncollected)  || 0);
-  // payload に含まれていれば T列(projectId) も更新（未送信時は既存値保持）
-  if (data.projectId !== undefined) {
-    sheet.getRange(row, 20).setValue(String(data.projectId || ''));
-  }
+  // 売上T列(20) は売上行ID（自動採番・不変）のため、payload で送られても更新しない
+  // 取引ペア紐付けモデルでは売上行ID は採番後 immutable（戦略思想§3-9-3）
   return { status: 'ok' };
 }
 
 /**
- * コスト修正（T列:withholdingAmount・U列:clientId・V列:projectId を含む）
+ * コスト修正（T列:withholdingAmount・U列:clientId・V列:売上行ID を含む）
+ * V列 は取引ペア紐付けモデルの 子キー（紐付け先売上行ID）
+ * 通常は linkTransactions アクション経由で更新するが、後方互換のため payload.projectId も受け付ける
  */
 function updateCost(data) {
   if (!data.rowIndex) return { status: 'error', message: 'rowIndexが必要です' };
@@ -337,8 +425,10 @@ function getHistory(month) {
 }
 
 /**
- * 売上シートは 20列構成（T列:案件ID 含む）
- * コストシートは 22列構成（T列:withholdingAmount・U列:clientId・V列:案件ID 含む）
+ * 売上シートは 20列構成（T列:売上行ID 含む・取引ペア紐付けモデル親キー）
+ * コストシートは 22列構成（T列:withholdingAmount・U列:clientId・V列:紐付け先売上行ID 含む・取引ペア紐付けモデル子キー）
+ *  既存スプレッドシートのヘッダ文字列は migration で書き換えないため、旧顧客環境では「案件ID」表記のまま残置される
+ *  GAS は列番号アクセスのためヘッダ文字列の差は機能に影響しない
  */
 function getOrCreateSheet(name) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -346,9 +436,9 @@ function getOrCreateSheet(name) {
   if (!sheet) {
     sheet = ss.insertSheet(name);
     if (name === '売上') {
-      sheet.appendRow(['日付','年','月','顧客コード','売上対象','サービスコード','サービス','諸口品目名','金額(税抜)','税率','消費税','税込金額','メモ','入金日','入金額','未収フラグ','消込状況','登録日時','ロックフラグ','案件ID']);
+      sheet.appendRow(['日付','年','月','顧客コード','売上対象','サービスコード','サービス','諸口品目名','金額(税抜)','税率','消費税','税込金額','メモ','入金日','入金額','未収フラグ','消込状況','登録日時','ロックフラグ','売上行ID']);
     } else if (name === 'コスト') {
-      sheet.appendRow(['日付','年','月','区分コード','経費区分','科目コード','科目','諸口科目名','金額(税抜)','税率','消費税','税込金額','メモ','支払日','支払額','未払フラグ','消込状況','登録日時','ロックフラグ','源泉徴収額','クライアントID','案件ID']);
+      sheet.appendRow(['日付','年','月','区分コード','経費区分','科目コード','科目','諸口科目名','金額(税抜)','税率','消費税','税込金額','メモ','支払日','支払額','未払フラグ','消込状況','登録日時','ロックフラグ','源泉徴収額','クライアントID','紐付け先売上行ID']);
     }
     sheet.setFrozenRows(1);
   }
@@ -923,47 +1013,18 @@ function setupTemplateAndPassword() {
 }
 
 // =============================================================
-// 案件粗利機能（§3-9-3 §9）
-// projectsシート（7列・案件マスタ）と関連アクション6個
-// 大前提：会計データ構造を1ミリも変えず・projectIdオプショナル後付け・PC版のみ
+// 取引ペア紐付けモデル（戦略思想§3-9-3）
+// 売上行ID（売上T列）＝親キー、売上行ID紐付け（コストV列）＝子キー
+// 集計対象4区分：仕入原価系すべて／給料賃金（itemCode=20）／外注工賃（21）／税理士等の報酬（25）
+// 大前提：会計データ構造（売上20列・コスト22列・getSummary）は1ミリも動かさない
 // =============================================================
 
 /**
- * projects シート取得（無ければ作成）
- * 列：projectId / projectName / customerName / startDate / endDate / status / memo
+ * 日付値を 'yyyy-MM-dd' 文字列に正規化（取引ペア紐付けモデル共通ヘルパー）
+ *  - Date 型はタイムゾーン Asia/Tokyo で yyyy-MM-dd フォーマット
+ *  - 文字列は先頭10文字を返す（'YYYY-MM-DD' 想定）
  */
-function _getOrCreateProjectsSheet() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheet = ss.getSheetByName('projects');
-  if (!sheet) {
-    sheet = ss.insertSheet('projects');
-    sheet.getRange(1, 1, 1, 7).setValues([
-      ['projectId', 'projectName', 'customerName', 'startDate', 'endDate', 'status', 'memo']
-    ]);
-    sheet.setFrozenRows(1);
-  }
-  return sheet;
-}
-
-/**
- * projectId 生成：'p-' + 8桁ランダム英数字（重複時最大100回リトライ）
- */
-function _generateProjectId(existingIds) {
-  var chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
-  for (var attempt = 0; attempt < 100; attempt++) {
-    var id = 'p-';
-    for (var i = 0; i < 8; i++) {
-      id += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    if (existingIds.indexOf(id) === -1) return id;
-  }
-  throw new Error('projectId 重複生成上限');
-}
-
-/**
- * 日付値を 'yyyy-MM-dd' 文字列に正規化
- */
-function _toProjectDateStr(val) {
+function toDateStr_(val) {
   if (val instanceof Date) {
     return Utilities.formatDate(val, 'Asia/Tokyo', 'yyyy-MM-dd');
   }
@@ -971,260 +1032,225 @@ function _toProjectDateStr(val) {
 }
 
 /**
- * 案件マスタ取得
+ * 紐付け対象判定（コスト行の集計対象4区分）
+ *  - divisionCode='1'：仕入原価系すべて
+ *  - itemCode='20'   ：給料賃金
+ *  - itemCode='21'   ：外注工賃
+ *  - itemCode='25'   ：税理士等の報酬
  */
-function getProjects() {
-  var sheet = _getOrCreateProjectsSheet();
-  var lastRow = sheet.getLastRow();
-  if (lastRow < 2) return { status: 'ok', data: [] };
+function _isLinkableCostRow_(costRow) {
+  var divisionCode = String(costRow[3] || '');
+  var subjectCode = String(costRow[5] || '');
+  if (divisionCode === '1') return true;
+  if (subjectCode === '20') return true;
+  if (subjectCode === '21') return true;
+  if (subjectCode === '25') return true;
+  return false;
+}
 
-  var values = sheet.getRange(2, 1, lastRow - 1, 7).getValues();
-  var projects = values.map(function(row) {
+/**
+ * 取引ペア紐付け（コスト行の V列 に売上行ID を書き込む／空文字で解除）
+ * payload:
+ *   - rowIndex   ：コストシートの行番号（2以上）
+ *   - salesRowId ：紐付け先売上行ID（'s-YYYYMMDDNNNN' 形式・空文字で解除）
+ */
+function linkTransactions(data) {
+  var rowIndex = parseInt(data.rowIndex, 10);
+  var salesRowId = String(data.salesRowId || '').trim();
+
+  if (!rowIndex || rowIndex < 2) {
+    return { status: 'error', message: 'invalid rowIndex' };
+  }
+  if (salesRowId !== '' && !/^s-\d{12}$/.test(salesRowId)) {
+    return { status: 'error', message: 'invalid salesRowId format' };
+  }
+
+  var sheet = SpreadsheetApp.getActive().getSheetByName('コスト');
+  if (!sheet) return { status: 'error', message: 'コストシートが見つかりません' };
+  if (rowIndex > sheet.getLastRow()) {
+    return { status: 'error', message: 'rowIndex out of range' };
+  }
+
+  sheet.getRange(rowIndex, 22).setValue(salesRowId);
+  return { status: 'ok', data: { rowIndex: rowIndex, salesRowId: salesRowId } };
+}
+
+/**
+ * 対象月の取引階層（売上＝親、紐付け済みコスト＝子、未紐付けコスト一覧）を1回で返す
+ * 戦略思想§5-1「商売の都合優先」：往復回数を1回に抑えて画面描画速度を確保する
+ * payload:
+ *   - month ：'YYYY-MM' 形式（省略時は当月）
+ * response.data:
+ *   - month        : 対象月
+ *   - salesNodes[] : { salesRowId, salesRowIndex, salesDate, salesItem, salesAmount, memo,
+ *                      linkedCosts[], grossProfit, grossProfitRate }
+ *   - unlinkedCosts[] : { rowIndex, date, subject, amount, memo }（4区分のみ・対象月）
+ */
+function getTransactionsHierarchy(data) {
+  // 初回呼び出し時に既存売上行へ売上行ID 遡及採番（冪等処理）
+  migrateSalesRowIds();
+
+  var month = String(data && data.month || '').trim();
+  var targetYM;
+  if (month && /^\d{4}-\d{2}$/.test(month)) {
+    targetYM = month;
+  } else {
+    targetYM = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM');
+  }
+
+  var ss = SpreadsheetApp.getActive();
+  var salesSheet = ss.getSheetByName('売上');
+  var costSheet = ss.getSheetByName('コスト');
+
+  var salesData = [];
+  if (salesSheet) {
+    var sLast = salesSheet.getLastRow();
+    if (sLast >= 2) {
+      salesData = salesSheet.getRange(2, 1, sLast - 1, 20).getValues();
+    }
+  }
+  var costData = [];
+  if (costSheet) {
+    var cLast = costSheet.getLastRow();
+    if (cLast >= 2) {
+      costData = costSheet.getRange(2, 1, cLast - 1, 22).getValues();
+    }
+  }
+
+  // 対象月の売上行を抽出（売上行ID は新形式 ^s-\d{12}$ のみ採用）
+  var targetSalesRows = [];
+  for (var i = 0; i < salesData.length; i++) {
+    var row = salesData[i];
+    var dateStr = toDateStr_(row[0]);
+    if (!dateStr || dateStr.indexOf(targetYM) !== 0) continue;
+    var salesRowId = String(row[19] || '');
+    if (!/^s-\d{12}$/.test(salesRowId)) continue;
+    targetSalesRows.push({
+      rowIndex: i + 2,
+      salesRowId: salesRowId,
+      salesDate: dateStr,
+      salesItem: String(row[6] || ''),
+      salesAmount: Number(row[11] || 0),
+      memo: String(row[12] || '')
+    });
+  }
+
+  // 紐付け済みコストを売上行IDでグルーピング（4区分のみ集計対象）
+  var costsByLinkedId = {};
+  for (var k = 0; k < costData.length; k++) {
+    var crow = costData[k];
+    var linkedId = String(crow[21] || '');
+    if (!linkedId) continue;
+    if (!_isLinkableCostRow_(crow)) continue;
+    if (!costsByLinkedId[linkedId]) costsByLinkedId[linkedId] = [];
+    costsByLinkedId[linkedId].push({
+      rowIndex: k + 2,
+      date: toDateStr_(crow[0]),
+      subject: String(crow[6] || ''),
+      amount: Number(crow[11] || 0)
+    });
+  }
+
+  // 売上ノード構築（粗利＝売上税込 - 紐付けコスト税込合計）
+  var salesNodes = targetSalesRows.map(function(sales) {
+    var linkedCosts = costsByLinkedId[sales.salesRowId] || [];
+    var costSum = 0;
+    for (var n = 0; n < linkedCosts.length; n++) costSum += linkedCosts[n].amount;
+    var grossProfit = sales.salesAmount - costSum;
+    var grossProfitRate = sales.salesAmount > 0 ? grossProfit / sales.salesAmount : 0;
     return {
-      projectId: String(row[0] || ''),
-      projectName: String(row[1] || ''),
-      customerName: String(row[2] || ''),
-      startDate: _toProjectDateStr(row[3]),
-      endDate: _toProjectDateStr(row[4]),
-      status: String(row[5] || 'active'),
-      memo: String(row[6] || '')
+      salesRowId: sales.salesRowId,
+      salesRowIndex: sales.rowIndex,
+      salesDate: sales.salesDate,
+      salesItem: sales.salesItem,
+      salesAmount: sales.salesAmount,
+      memo: sales.memo,
+      linkedCosts: linkedCosts,
+      grossProfit: grossProfit,
+      grossProfitRate: grossProfitRate
     };
   });
-  return { status: 'ok', data: projects };
-}
+  salesNodes.sort(function(a, b) { return b.salesDate.localeCompare(a.salesDate); });
 
-/**
- * 案件追加（projectId 自動生成）
- */
-function addProject(data) {
-  var sheet = _getOrCreateProjectsSheet();
-  var lastRow = sheet.getLastRow();
-  var existingIds = lastRow >= 2
-    ? sheet.getRange(2, 1, lastRow - 1, 1).getValues().map(function(r) { return r[0]; })
-    : [];
+  // 対象月の未紐付けコスト（4区分のみ）
+  var unlinkedCosts = [];
+  for (var p = 0; p < costData.length; p++) {
+    var ucrow = costData[p];
+    var udateStr = toDateStr_(ucrow[0]);
+    if (!udateStr || udateStr.indexOf(targetYM) !== 0) continue;
+    var uLinkedId = String(ucrow[21] || '');
+    if (uLinkedId) continue;
+    if (!_isLinkableCostRow_(ucrow)) continue;
+    unlinkedCosts.push({
+      rowIndex: p + 2,
+      date: udateStr,
+      subject: String(ucrow[6] || ''),
+      amount: Number(ucrow[11] || 0),
+      memo: String(ucrow[12] || '')
+    });
+  }
+  unlinkedCosts.sort(function(a, b) { return b.date.localeCompare(a.date); });
 
-  var projectId = _generateProjectId(existingIds);
-  sheet.appendRow([
-    projectId,
-    data.projectName || '',
-    data.customerName || '',
-    data.startDate || '',
-    data.endDate || '',
-    data.status || 'active',
-    data.memo || ''
-  ]);
-  return { status: 'ok', data: { projectId: projectId } };
-}
-
-/**
- * 案件更新
- */
-function updateProject(data) {
-  if (!data.projectId) return { status: 'error', message: 'projectIdが必要です' };
-  var sheet = _getOrCreateProjectsSheet();
-  var lastRow = sheet.getLastRow();
-  if (lastRow < 2) return { status: 'error', message: '案件が存在しません' };
-
-  var ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
-  for (var i = 0; i < ids.length; i++) {
-    if (ids[i][0] === data.projectId) {
-      var rowIdx = i + 2;
-      sheet.getRange(rowIdx, 2).setValue(data.projectName || '');
-      sheet.getRange(rowIdx, 3).setValue(data.customerName || '');
-      sheet.getRange(rowIdx, 4).setValue(data.startDate || '');
-      sheet.getRange(rowIdx, 5).setValue(data.endDate || '');
-      sheet.getRange(rowIdx, 6).setValue(data.status || 'active');
-      sheet.getRange(rowIdx, 7).setValue(data.memo || '');
-      return { status: 'ok' };
+  return {
+    status: 'ok',
+    data: {
+      month: targetYM,
+      salesNodes: salesNodes,
+      unlinkedCosts: unlinkedCosts
     }
-  }
-  return { status: 'error', message: 'projectId が見つかりません' };
+  };
 }
 
 /**
- * 案件削除
- *  - data.force=false（既定）：紐付け行存在時は warning を返して中止
- *  - data.force=true        ：紐付けされた売上T列・コストV列を空欄化してから案件行を削除
+ * 紐付け候補（指定売上行の前後1ヶ月・集計対象4区分・他売上に紐付け済みは除外）
+ * 自身に既紐付けの行は currentlyLinked=true で残す（解除のチェックUI用）
  */
-function deleteProject(data) {
-  if (!data.projectId) return { status: 'error', message: 'projectIdが必要です' };
-  var sheet = _getOrCreateProjectsSheet();
-  var lastRow = sheet.getLastRow();
-  if (lastRow < 2) return { status: 'error', message: '案件が存在しません' };
-
-  if (!data.force) {
-    var linked = _countLinkedRows(data.projectId);
-    if (linked > 0) {
-      return { status: 'warning', message: linked + '件の紐付け行が存在します', linkedCount: linked };
-    }
-  } else {
-    // force 削除時：紐付けされた売上・コスト行の projectId を空欄化
-    _clearProjectIdLinks(data.projectId);
+function getLinkCandidates(data) {
+  var salesRowId = String(data && data.salesRowId || '').trim();
+  if (!/^s-\d{12}$/.test(salesRowId)) {
+    return { status: 'error', message: 'invalid salesRowId' };
   }
 
-  var ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
-  for (var i = 0; i < ids.length; i++) {
-    if (ids[i][0] === data.projectId) {
-      sheet.deleteRow(i + 2);
-      return { status: 'ok' };
-    }
-  }
-  return { status: 'error', message: 'projectId が見つかりません' };
-}
+  var ymd = salesRowId.substring(2, 10);
+  var baseDate = new Date(
+    parseInt(ymd.substring(0, 4), 10),
+    parseInt(ymd.substring(4, 6), 10) - 1,
+    parseInt(ymd.substring(6, 8), 10)
+  );
+  var fromDate = new Date(baseDate);
+  fromDate.setMonth(fromDate.getMonth() - 1);
+  var toDate = new Date(baseDate);
+  toDate.setMonth(toDate.getMonth() + 1);
+  var fromStr = Utilities.formatDate(fromDate, 'Asia/Tokyo', 'yyyy-MM-dd');
+  var toStr = Utilities.formatDate(toDate, 'Asia/Tokyo', 'yyyy-MM-dd');
 
-/**
- * 案件削除（force）時に紐付けされた売上・コスト行の projectId を空欄化する
- * 売上 T列(20)・コスト V列(22) を一括で読んで該当 projectId を ''（空文字）に書き戻す
- */
-function _clearProjectIdLinks(projectId) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var costSheet = SpreadsheetApp.getActive().getSheetByName('コスト');
+  if (!costSheet) return { status: 'ok', data: [] };
+  var lastRow = costSheet.getLastRow();
+  if (lastRow < 2) return { status: 'ok', data: [] };
+  var costData = costSheet.getRange(2, 1, lastRow - 1, 22).getValues();
 
-  var salesSheet = ss.getSheetByName('売上');
-  if (salesSheet && salesSheet.getLastRow() >= 2 && salesSheet.getLastColumn() >= 20) {
-    var sRange = salesSheet.getRange(2, 20, salesSheet.getLastRow() - 1, 1);
-    var sValues = sRange.getValues();
-    var sModified = false;
-    for (var i = 0; i < sValues.length; i++) {
-      if (sValues[i][0] === projectId) {
-        sValues[i][0] = '';
-        sModified = true;
-      }
-    }
-    if (sModified) sRange.setValues(sValues);
-  }
+  var candidates = [];
+  for (var i = 0; i < costData.length; i++) {
+    var row = costData[i];
+    var dateStr = toDateStr_(row[0]);
+    if (!dateStr || dateStr < fromStr || dateStr > toStr) continue;
+    if (!_isLinkableCostRow_(row)) continue;
 
-  var costSheet = ss.getSheetByName('コスト');
-  if (costSheet && costSheet.getLastRow() >= 2 && costSheet.getLastColumn() >= 22) {
-    var cRange = costSheet.getRange(2, 22, costSheet.getLastRow() - 1, 1);
-    var cValues = cRange.getValues();
-    var cModified = false;
-    for (var j = 0; j < cValues.length; j++) {
-      if (cValues[j][0] === projectId) {
-        cValues[j][0] = '';
-        cModified = true;
-      }
-    }
-    if (cModified) cRange.setValues(cValues);
-  }
-}
+    // 既に他売上行に紐付け済みのものは除外（自身に紐付け済みは候補に残す）
+    var currentLinkedId = String(row[21] || '');
+    if (currentLinkedId && currentLinkedId !== salesRowId) continue;
 
-/**
- * 売上T列・コストV列を走査して projectId 紐付け行数をカウント
- */
-function _countLinkedRows(projectId) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var count = 0;
-
-  var salesSheet = ss.getSheetByName('売上');
-  if (salesSheet && salesSheet.getLastRow() >= 2 && salesSheet.getLastColumn() >= 20) {
-    var salesIds = salesSheet.getRange(2, 20, salesSheet.getLastRow() - 1, 1).getValues();
-    count += salesIds.filter(function(r) { return r[0] === projectId; }).length;
-  }
-
-  var costSheet = ss.getSheetByName('コスト');
-  if (costSheet && costSheet.getLastRow() >= 2 && costSheet.getLastColumn() >= 22) {
-    var costIds = costSheet.getRange(2, 22, costSheet.getLastRow() - 1, 1).getValues();
-    count += costIds.filter(function(r) { return r[0] === projectId; }).length;
-  }
-
-  return count;
-}
-
-/**
- * 既存売上行・コスト行に projectId を紐付ける
- * data.sheetName='売上'→T列(20) / 'コスト'→V列(22)
- */
-function linkProject(data) {
-  if (!data.sheetName) return { status: 'error', message: 'sheetNameが必要です' };
-  if (!data.rowIndex) return { status: 'error', message: 'rowIndexが必要です' };
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheet = ss.getSheetByName(data.sheetName);
-  if (!sheet) return { status: 'error', message: 'シートが見つかりません' };
-
-  var col = data.sheetName === '売上' ? 20 : (data.sheetName === 'コスト' ? 22 : 0);
-  if (!col) return { status: 'error', message: 'シート名が不正です（売上/コストのみ）' };
-  sheet.getRange(Number(data.rowIndex), col).setValue(String(data.projectId || ''));
-  return { status: 'ok' };
-}
-
-/**
- * 案件別 売上・原価・粗利集計
- * data.projectId が指定されていればその案件のみ・無指定なら全案件
- * 売上シート T列(20=index 19)・コストシート V列(22=index 21) で紐付け済み行を集計
- */
-function getProjectGrossProfit(data) {
-  data = data || {};
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var targetId = data.projectId || null;
-
-  // 案件マスタ取得
-  var projectsResult = getProjects();
-  var projects = projectsResult.data || [];
-
-  // 売上集計（T列(20)＝index 19・税込金額 L列(12)=index 11）
-  var salesByProject = {};
-  var salesSheet = ss.getSheetByName('売上');
-  if (salesSheet && salesSheet.getLastRow() >= 2 && salesSheet.getLastColumn() >= 20) {
-    var sRows = salesSheet.getRange(2, 1, salesSheet.getLastRow() - 1, 20).getValues();
-    sRows.forEach(function(r) {
-      var pid = String(r[19] || '');
-      if (!pid) return;
-      if (targetId && pid !== targetId) return;
-      salesByProject[pid] = (salesByProject[pid] || 0) + (Number(r[11]) || 0);
+    candidates.push({
+      rowIndex: i + 2,
+      date: dateStr,
+      subject: String(row[6] || ''),
+      amount: Number(row[11] || 0),
+      memo: String(row[12] || ''),
+      currentlyLinked: currentLinkedId === salesRowId
     });
   }
 
-  // コスト集計（V列(22)＝index 21・税込金額 L列(12)=index 11）
-  // 集計対象は4区分のみ（経営判断としての貢献利益概念・固定費は対象外）：
-  //   ① 仕入原価系すべて（divisionCode='1' / D列(4)=index 3）
-  //   ② 給料賃金（itemCode='20'・臨時雇用分の紐付け運用）
-  //   ③ 外注工賃（itemCode='21'）
-  //   ④ 税理士等の報酬（itemCode='25'・特定案件支払分の紐付け運用）
-  var costByProject = {};
-  var costSheet = ss.getSheetByName('コスト');
-  if (costSheet && costSheet.getLastRow() >= 2 && costSheet.getLastColumn() >= 22) {
-    var cRows = costSheet.getRange(2, 1, costSheet.getLastRow() - 1, 22).getValues();
-    cRows.forEach(function(r) {
-      var pid = String(r[21] || '');
-      if (!pid) return;
-      if (targetId && pid !== targetId) return;
-      var divCode = String(r[3] || '');   // D列(4) divisionCode = index 3
-      var itemCode = String(r[5] || '');  // F列(6) itemCode      = index 5
-      var isTargetCost = (divCode === '1') ||
-                         (itemCode === '20') ||
-                         (itemCode === '21') ||
-                         (itemCode === '25');
-      if (!isTargetCost) return;
-      costByProject[pid] = (costByProject[pid] || 0) + (Number(r[11]) || 0);
-    });
-  }
-
-  // 統合
-  var allIds = {};
-  Object.keys(salesByProject).forEach(function(k) { allIds[k] = true; });
-  Object.keys(costByProject).forEach(function(k) { allIds[k] = true; });
-
-  var result = [];
-  Object.keys(allIds).forEach(function(pid) {
-    var project = null;
-    for (var i = 0; i < projects.length; i++) {
-      if (projects[i].projectId === pid) { project = projects[i]; break; }
-    }
-    var sales = salesByProject[pid] || 0;
-    var cost = costByProject[pid] || 0;
-    var gross = sales - cost;
-    var rate = sales > 0 ? (gross / sales * 100) : null;
-    result.push({
-      projectId: pid,
-      projectName: project ? project.projectName : '(削除済)',
-      customerName: project ? project.customerName : '',
-      status: project ? project.status : 'unknown',
-      sales: sales,
-      cost: cost,
-      grossProfit: gross,
-      grossProfitRate: rate
-    });
-  });
-
-  return { status: 'ok', data: result };
+  candidates.sort(function(a, b) { return b.date.localeCompare(a.date); });
+  return { status: 'ok', data: candidates };
 }
