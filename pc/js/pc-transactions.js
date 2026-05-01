@@ -252,8 +252,9 @@
   }
 
   function renderNewSalesRow(d) {
+    const submitDisabled = Number(d.amount) > 0 ? '' : 'disabled';
     return `
-      <div class="tx-sales-node tx-row-new" data-row-kind="sales-new">
+      <div class="tx-sales-node tx-row-new" data-row-kind="sales-new" data-draft-type="sales">
         <div class="tx-parent-row" data-row-kind="sales-new">
           <span class="tx-tree-marker">●</span>
           <span class="tx-cell" data-field="date" data-cell-type="date">${escTx(d.date)}</span>
@@ -261,7 +262,10 @@
           <span class="tx-cell tx-amount" data-field="amount" data-cell-type="amount">${formatYen(d.amount)}</span>
           <span class="tx-cell" data-field="memo" data-cell-type="text">${escTx(d.memo || '')}</span>
           <span class="tx-profit">税率 ${d.taxRate}%</span>
-          <button class="pc-btn pc-btn--sm btn-cancel-new" type="button">取消</button>
+          <div class="tx-row-actions">
+            <button class="btn-draft-submit" type="button" ${submitDisabled}>登録</button>
+            <button class="btn-draft-cancel" type="button">取消</button>
+          </div>
         </div>
       </div>
     `;
@@ -269,13 +273,17 @@
 
   function renderNewCostRow(d) {
     const subjectDisplay = `[${d.divisionCode === '1' ? '仕入原価' : '販管費'}] ${d.itemCode} ${d.itemName}`;
+    const submitDisabled = Number(d.amount) > 0 ? '' : 'disabled';
     return `
-      <div class="tx-unlinked-row tx-row-new" data-row-kind="cost-new">
+      <div class="tx-unlinked-row tx-row-new" data-row-kind="cost-new" data-draft-type="cost">
         <span class="tx-cell" data-field="date" data-cell-type="date">${escTx(d.date)}</span>
         <span class="tx-cell" data-field="itemCode" data-cell-type="cost-item" data-display="${escTx(subjectDisplay)}">${escTx(subjectDisplay)}</span>
         <span class="tx-cell tx-amount" data-field="amount" data-cell-type="amount">${formatYen(d.amount)}</span>
         <span class="tx-cell" data-field="memo" data-cell-type="text">${escTx(d.memo || '')}</span>
-        <button class="pc-btn pc-btn--sm btn-cancel-new" type="button">取消</button>
+        <div class="tx-row-actions">
+          <button class="btn-draft-submit" type="button" ${submitDisabled}>登録</button>
+          <button class="btn-draft-cancel" type="button">取消</button>
+        </div>
       </div>
     `;
   }
@@ -315,8 +323,15 @@
         await unlinkCost(costRow);
       });
     });
+    // 新規行 登録ボタン（明示確定）
+    document.querySelectorAll('#tx-hierarchy .btn-draft-submit').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        await handleDraftSubmit();
+      });
+    });
     // 新規行 取消ボタン
-    document.querySelectorAll('#tx-hierarchy .btn-cancel-new').forEach(btn => {
+    document.querySelectorAll('#tx-hierarchy .btn-draft-cancel').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         cancelNewRow();
@@ -328,7 +343,13 @@
     document.querySelectorAll('#tx-unlinked-costs .tx-cell').forEach(cell => {
       cell.addEventListener('click', () => startEdit(cell));
     });
-    document.querySelectorAll('#tx-unlinked-costs .btn-cancel-new').forEach(btn => {
+    document.querySelectorAll('#tx-unlinked-costs .btn-draft-submit').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        await handleDraftSubmit();
+      });
+    });
+    document.querySelectorAll('#tx-unlinked-costs .btn-draft-cancel').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         cancelNewRow();
@@ -460,16 +481,29 @@
   }
 
   function onEditKeydown(e) {
+    const isDraft = _activeEdit && (_activeEdit.kind === 'sales-new' || _activeEdit.kind === 'cost-new');
     if (e.key === 'Enter') {
       e.preventDefault();
-      commitEdit(false);
+      if (isDraft) {
+        // draft 行：Enter は「登録」ボタン同等動作（金額0なら commit のみで何も起きない）
+        Promise.resolve(commitEdit(true)).then(() => {
+          if (_newRowDraft && Number(_newRowDraft.amount) > 0) submitNewRowDraft();
+        });
+      } else {
+        commitEdit(false);
+      }
     } else if (e.key === 'Escape') {
       e.preventDefault();
-      cancelEdit();
+      if (isDraft) {
+        // draft 行：Esc は「取消」ボタン同等動作（行ごと破棄）
+        cancelNewRow();
+      } else {
+        cancelEdit();
+      }
     } else if (e.key === 'Tab') {
       e.preventDefault();
       const dir = e.shiftKey ? -1 : 1;
-      commitEdit(false).then(() => moveCellFocus(dir));
+      Promise.resolve(commitEdit(false)).then(() => moveCellFocus(dir));
     }
   }
 
@@ -495,21 +529,14 @@
     const cell = a.el;
     cell.classList.remove('is-editing');
 
-    // ドラフト更新値を反映
-    let changed = false;
-    let draftRollback = false;
+    // 新規ドラフト行：値を draft に反映し、当該セルの表示と「登録」ボタン disabled 状態だけ更新する。
+    // 全体再描画はしない（フォーカス維持のため）。明示「登録」ボタンが押されるまで送信しない。
     if (a.kind === 'sales-new' || a.kind === 'cost-new') {
-      changed = applyDraftEdit(a.field, a.inputEl);
-      // 売上行追加：金額が0のまま blur ＋ 他フィールドも未変更なら、行外クリック扱いで破棄しない（金額編集中なら破棄）
-      // 金額確定で >0 なら自動確定 submit
-      if (_newRowDraft && a.field === 'amount' && Number(_newRowDraft.amount) > 0) {
-        await submitNewRowDraft();
-        return;
+      applyDraftEdit(a.field, a.inputEl);
+      if (_newRowDraft) {
+        updateDraftCellDisplay(cell, a.field);
+        updateDraftSubmitState();
       }
-      // 金額が 0 のまま確定された場合：行外クリック相当として破棄（簡易仕様：他フィールド編集後に金額0のままなら自動破棄）
-      // ただし他のフィールド編集中は破棄しない
-      // 表示更新のみ
-      renderDraftUpdated();
       return;
     }
 
@@ -668,10 +695,50 @@
     return before !== _newRowDraft[field];
   }
 
-  function renderDraftUpdated() {
+  /**
+   * draft セルの表示を更新する（全体再描画せずフォーカスを維持するため）
+   */
+  function updateDraftCellDisplay(cell, field) {
     if (!_newRowDraft) return;
-    if (_newRowDraft.kind === 'sales-new') renderHierarchy();
-    else renderUnlinkedCosts();
+    const d = _newRowDraft;
+    if (field === 'date') {
+      cell.textContent = d.date || '';
+    } else if (field === 'amount') {
+      cell.textContent = formatYen(Number(d.amount) || 0);
+    } else if (field === 'memo') {
+      cell.textContent = d.memo || '';
+    } else if (field === 'serviceCode') {
+      const display = '売上：' + (d.serviceName || '');
+      cell.textContent = display;
+      cell.dataset.display = display;
+      const profit = cell.parentElement && cell.parentElement.querySelector('.tx-profit');
+      if (profit) profit.textContent = '税率 ' + (Number(d.taxRate) || 10) + '%';
+    } else if (field === 'itemCode') {
+      const display = `[${d.divisionCode === '1' ? '仕入原価' : '販管費'}] ${d.itemCode} ${d.itemName}`;
+      cell.textContent = display;
+      cell.dataset.display = display;
+    }
+  }
+
+  /**
+   * draft 行の「登録」ボタン disabled 状態を amount に応じて更新する
+   */
+  function updateDraftSubmitState() {
+    if (!_newRowDraft) return;
+    const sectionSel = (_newRowDraft.kind === 'sales-new') ? '#tx-hierarchy' : '#tx-unlinked-costs';
+    const btn = document.querySelector(sectionSel + ' .btn-draft-submit');
+    if (!btn) return;
+    btn.disabled = !(Number(_newRowDraft.amount) > 0);
+  }
+
+  /**
+   * 「登録」ボタンクリック時：編集中セルがあれば先に commit してから submit する
+   */
+  async function handleDraftSubmit() {
+    if (_activeEdit) await commitEdit(true);
+    if (!_newRowDraft) return;
+    if (!(Number(_newRowDraft.amount) > 0)) return;
+    await submitNewRowDraft();
   }
 
   async function submitNewRowDraft() {

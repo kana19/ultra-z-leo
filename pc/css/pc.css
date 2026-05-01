@@ -688,6 +688,39 @@ body.pc-body {
   background: rgba(212, 175, 55, 0.08);
   border-left: 3px solid var(--uz-gold);
 }
+/* ===== 新規ドラフト行の行末ボタン（明示確定UI・戦略思想§1-4） ===== */
+.tx-row-actions {
+  display: inline-flex;
+  gap: 8px;
+  margin-left: auto;
+  padding-left: 12px;
+}
+.btn-draft-submit {
+  background: var(--uz-gold);
+  color: var(--uz-bg);
+  border: none;
+  padding: 4px 14px;
+  border-radius: 3px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn-draft-submit:disabled {
+  background: var(--uz-border);
+  color: var(--uz-text2);
+  cursor: not-allowed;
+}
+.btn-draft-cancel {
+  background: transparent;
+  color: var(--uz-text2);
+  border: 1px solid var(--uz-border);
+  padding: 4px 14px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+.btn-draft-cancel:hover {
+  background: var(--uz-surface2);
+  color: var(--uz-text);
+}
 .tx-row-locked {
   opacity: 0.6;
   pointer-events: none;
