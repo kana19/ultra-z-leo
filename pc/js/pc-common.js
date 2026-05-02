@@ -1,23 +1,13 @@
 /* pc-common.js — PC版共通：サイドバー生成・ヘッダー時刻 */
 'use strict';
 
-/**
- * PC版サイドバー（戦略思想§3-9-3 5項目構造・3デバイス統合§8-9）
- *   店名ロゴ（クリックで損益概観 index.html へ遷移・独立メニューなし）
- *   ＋ フラット4メニュー：取引一覧／月末経理／入店記録／設定
- *
- * 各項目：
- *   - href            遷移先
- *   - label           表示ラベル
- *   - icon            行頭アイコン（任意）
- *   - visibilityKey   featureVisibility のキー名（false で非表示／無ければ常時表示）
- *   - uiLabelKey      業態別ラベル切替キー（deriveUILabels 経由）
- */
+// PC版サイドバーメニュー定義（戦略思想メモ§3-9-3 確定の4項目構造）
+// 順序・href・ラベルはここで一元管理する
 const PC_NAV = [
-  { href: 'transactions.html', label: '取引一覧', icon: '📋' },
-  { href: 'payroll.html',      label: '月末経理', icon: '💰', visibilityKey: 'payroll_menu' },
-  { href: 'clockin.html',      label: '入店記録', icon: '🕐', uiLabelKey: 'clockin_record', visibilityKey: 'clockin_menu' },
-  { href: 'settings.html',     label: '設定',     icon: '⚙️' }
+  { href: 'monthly.html',    label: '月次管理',  icon: '○' },
+  { href: 'projects.html',   label: '案件管理',  icon: '★' },
+  { href: 'attendance.html', label: '出勤管理',  icon: '👤', visibilityKey: 'attendance_menu' },
+  { href: 'settings.html',   label: '設定',      icon: '⚙' }
 ];
 
 function pcRenderSidebar(activeHref) {

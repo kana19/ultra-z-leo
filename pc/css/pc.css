@@ -726,3 +726,13 @@ body.pc-body {
   pointer-events: none;
 }
 .tx-row-unpaid { background: var(--uz-amber-bg); }
+
+.pc-placeholder {
+  padding: 40px;
+  text-align: center;
+  color: var(--uz-text2);
+  font-size: 16px;
+  border: 1px dashed var(--uz-border);
+  border-radius: 8px;
+  margin: 20px;
+}
