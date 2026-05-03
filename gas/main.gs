@@ -37,6 +37,9 @@ function doGet(e) {
       case 'markAsProject':             result = markAsProject(data);                     break;
       case 'unmarkAsProject':           result = unmarkAsProject(data);                   break;
       case 'getProjectSummary':         result = getProjectSummary(data);                 break;
+      // PC版月次管理画面（インライン編集保存・ロック解除申請・技術仕様§4-6 §3）
+      case 'updateRow':                 result = updateRow(data);                         break;
+      case 'requestUnlock':             result = requestUnlock(data);                     break;
       default: result = { status: 'error', message: '不明なアクション: ' + action };
     }
   } catch (err) {
@@ -396,10 +399,14 @@ function getHistory(month) {
         serviceCode: String(row[5] || ''),
         itemName: String(row[6] || row[4] || ''),
         taxRate: Number(row[9]) || 0,
+        taxAmount: Number(row[10]) || 0,        // K列(11) 消費税額
         amount: Number(row[11]) || 0,
         memo: String(row[12] || ''),
         uncollected: Number(row[15]) || 0,
-        projectId: String(row[19] || '')   // T列(20=index 19)・案件粗利機能
+        projectId: String(row[19] || ''),       // T列(20=index 19)・既存名義（後方互換のため残置）
+        salesRowId: String(row[19] || ''),      // T列(20=index 19)・取引ペア紐付けモデル親キー
+        isProject: String(row[20]).trim() === '1', // U列(21=index 20)・案件化フラグ（§3-9-3 2画面分離）
+        isLocked:  Number(row[18]) === 1        // S列(19=index 18)・ロックフラグ
       });
     });
   }
@@ -420,11 +427,14 @@ function getHistory(month) {
         itemName: String(row[6] || row[4] || ''),
         miscItemName: String(row[7] || ''),
         taxRate: Number(row[9]) || 0,
+        taxAmount: Number(row[10]) || 0,        // K列(11) 消費税額
         amount: Number(row[11]) || 0,
         memo: String(row[12] || ''),
         unpaid: Number(row[15]) || 0,
         withholdingAmount: Number(row[19]) || 0,
-        projectId: String(row[21] || '')   // V列(22=index 21)・案件粗利機能
+        projectId: String(row[21] || ''),       // V列(22=index 21)・既存名義（後方互換のため残置）
+        linkedSalesRowId: String(row[21] || ''),// V列(22=index 21)・紐付け先売上行ID（projectIdの別名）
+        isLocked: Number(row[18]) === 1         // S列(19=index 18)・ロックフラグ
       });
     });
   }
@@ -1057,46 +1067,73 @@ function _isLinkableCostRow_(costRow) {
 }
 
 /**
- * 取引ペア紐付け（コスト行の V列 に売上行ID を書き込む／空文字で解除）
- * 紐付け成立時、対応する売上行の U列(isProject) を自動的に '1' に昇格させる（戦略思想§3-9-3 2画面分離モデル）
+ * 取引ペア紐付け（複数コスト行を1リクエストで処理可能・技術仕様§9-6 / 指示書5§1-5）
+ *  - items 配列（推奨）：[{ rowIndex, salesRowId }, ...]
+ *    全件 V列 を更新後、対象 salesRowId の親売上行を1度だけ参照して U列='1' に更新する
+ *    （複数アイテムが同一 salesRowId を指していても親売上の参照は1回で済ます）
+ *  - 後方互換：data.rowIndex + data.salesRowId 形式の単発 payload も内部で items[] に変換して処理
  *  - 紐付け解除（salesRowId 空）の場合、売上側の U列 は変更しない（案件管理画面に残し続ける運用）
- *  - 既に U列='1' の場合は書き込みを省略
- * payload:
- *   - rowIndex   ：コストシートの行番号（2以上）
- *   - salesRowId ：紐付け先売上行ID（'s-YYYYMMDDNNNN' 形式・空文字で解除）
  */
 function linkTransactions(data) {
-  var rowIndex = parseInt(data.rowIndex, 10);
-  var salesRowId = String(data.salesRowId || '').trim();
-
-  if (!rowIndex || rowIndex < 2) {
-    return { status: 'error', message: 'invalid rowIndex' };
+  // payload 正規化：items 配列を優先・なければ単発を1要素配列として扱う（後方互換）
+  var items;
+  if (data && Array.isArray(data.items)) {
+    items = data.items;
+  } else if (data && data.rowIndex !== undefined) {
+    items = [{ rowIndex: data.rowIndex, salesRowId: data.salesRowId }];
+  } else {
+    return { status: 'error', message: 'invalid payload: items[] または rowIndex+salesRowId が必要' };
   }
-  if (salesRowId !== '' && !/^s-\d{12}$/.test(salesRowId)) {
-    return { status: 'error', message: 'invalid salesRowId format' };
+  if (items.length === 0) {
+    return { status: 'error', message: 'items[] が空です' };
   }
 
   var ss = SpreadsheetApp.getActive();
-  var sheet = ss.getSheetByName('コスト');
-  if (!sheet) return { status: 'error', message: 'コストシートが見つかりません' };
-  if (rowIndex > sheet.getLastRow()) {
-    return { status: 'error', message: 'rowIndex out of range' };
+  var costSheet = ss.getSheetByName('コスト');
+  if (!costSheet) return { status: 'error', message: 'コストシートが見つかりません' };
+  var costLastRow = costSheet.getLastRow();
+
+  // バリデーションを一括で行ってから書き込みを開始する（部分書き込みで整合性が崩れるのを防ぐ）
+  var normalized = [];
+  for (var i = 0; i < items.length; i++) {
+    var rIdx = parseInt(items[i].rowIndex, 10);
+    var sId  = String(items[i].salesRowId || '').trim();
+    if (!rIdx || rIdx < 2) {
+      return { status: 'error', message: 'invalid rowIndex at items[' + i + ']' };
+    }
+    if (rIdx > costLastRow) {
+      return { status: 'error', message: 'rowIndex out of range at items[' + i + ']' };
+    }
+    if (sId !== '' && !/^s-\d{12}$/.test(sId)) {
+      return { status: 'error', message: 'invalid salesRowId format at items[' + i + ']' };
+    }
+    normalized.push({ rowIndex: rIdx, salesRowId: sId });
   }
 
-  sheet.getRange(rowIndex, 22).setValue(salesRowId);
+  // V列書き込み（全件）
+  for (var j = 0; j < normalized.length; j++) {
+    costSheet.getRange(normalized[j].rowIndex, 22).setValue(normalized[j].salesRowId);
+  }
 
-  // 紐付け成立時、親売上の U列(isProject) を自動 '1' 化（既に '1' なら書き込み省略）
-  if (salesRowId) {
-    var salesSheet = ss.getSheetByName('売上');
-    if (salesSheet) {
-      var sLast = salesSheet.getLastRow();
-      if (sLast >= 2) {
-        var idValues = salesSheet.getRange(2, 20, sLast - 1, 2).getValues(); // T列・U列
-        for (var i = 0; i < idValues.length; i++) {
-          if (String(idValues[i][0]) === salesRowId) {
-            if (String(idValues[i][1]) !== '1') {
-              salesSheet.getRange(i + 2, 21).setValue('1');
+  // 紐付け成立した salesRowId の親売上行を1度だけ参照して U列='1' に
+  var salesRowIndex = null;
+  var distinctSalesRowIds = {};
+  for (var k = 0; k < normalized.length; k++) {
+    if (normalized[k].salesRowId) distinctSalesRowIds[normalized[k].salesRowId] = true;
+  }
+  var salesSheet = ss.getSheetByName('売上');
+  if (salesSheet) {
+    var sLast = salesSheet.getLastRow();
+    if (sLast >= 2) {
+      var idValues = salesSheet.getRange(2, 20, sLast - 1, 2).getValues(); // T列・U列
+      for (var sid in distinctSalesRowIds) {
+        for (var m = 0; m < idValues.length; m++) {
+          if (String(idValues[m][0]) === sid) {
+            if (String(idValues[m][1]) !== '1') {
+              salesSheet.getRange(m + 2, 21).setValue('1');
             }
+            // 後方互換のため最後にヒットした行を返す（旧 payload 時の単発相当）
+            salesRowIndex = m + 2;
             break;
           }
         }
@@ -1104,7 +1141,13 @@ function linkTransactions(data) {
     }
   }
 
-  return { status: 'ok', data: { rowIndex: rowIndex, salesRowId: salesRowId } };
+  return {
+    status: 'ok',
+    data: {
+      linkedCount: normalized.length,
+      salesRowIndex: salesRowIndex
+    }
+  };
 }
 
 /**
@@ -1236,32 +1279,55 @@ function getTransactionsHierarchy(data) {
 }
 
 /**
- * 紐付け候補（指定売上行の前後1ヶ月・集計対象4区分・他売上に紐付け済みは除外）
- * 自身に既紐付けの行は currentlyLinked=true で残す（解除のチェックUI用）
+ * 紐付け候補取得（双方向対応・指示書5§1-4 / 技術仕様§9-6）
+ *
+ * direction='sales-to-cost'（売上→コスト）：
+ *   - 範囲：salesDate の前月頭〜salesDate
+ *   - 対象：集計対象4区分（divisionCode='1' / itemCode='20','21','25'）
+ *   - 他売上に紐付け済みのコスト行は除外、自身に紐付け済みは currentlyLinked=true で残す
+ *
+ * direction='cost-to-sales'（コスト→売上）：
+ *   - 範囲：costDate〜costDate の翌月末
+ *   - 対象：T列(売上行ID) が新形式 ^s-\d{12}$ の売上行（未採番行は除外・紐付けキーなし）
+ *   - isProject の状態は問わない（既案件への追加紐付け可能・追加紐付けで親売上はそのまま U='1'）
+ *
+ * 後方互換：direction 省略・salesRowId 単独 payload は sales-to-cost として処理。
+ *  ただし戻り値は新スキーマ { status:'ok', data:{ direction, candidates } } 統一（旧 array 形は廃止）
  */
 function getLinkCandidates(data) {
+  var direction = String(data && data.direction || '').trim();
+  // 後方互換：direction 省略時は sales-to-cost として扱う
+  if (!direction) direction = 'sales-to-cost';
+
+  if (direction === 'sales-to-cost') return _getLinkCandidatesSalesToCost_(data);
+  if (direction === 'cost-to-sales') return _getLinkCandidatesCostToSales_(data);
+  return { status: 'error', message: 'invalid direction: ' + direction };
+}
+
+/**
+ * 売上→コスト候補（前月頭〜salesDate・集計対象4区分・他売上に紐付け済みは除外）
+ */
+function _getLinkCandidatesSalesToCost_(data) {
   var salesRowId = String(data && data.salesRowId || '').trim();
   if (!/^s-\d{12}$/.test(salesRowId)) {
     return { status: 'error', message: 'invalid salesRowId' };
   }
-
-  var ymd = salesRowId.substring(2, 10);
-  var baseDate = new Date(
-    parseInt(ymd.substring(0, 4), 10),
-    parseInt(ymd.substring(4, 6), 10) - 1,
-    parseInt(ymd.substring(6, 8), 10)
-  );
-  var fromDate = new Date(baseDate);
-  fromDate.setMonth(fromDate.getMonth() - 1);
-  var toDate = new Date(baseDate);
-  toDate.setMonth(toDate.getMonth() + 1);
-  var fromStr = Utilities.formatDate(fromDate, 'Asia/Tokyo', 'yyyy-MM-dd');
-  var toStr = Utilities.formatDate(toDate, 'Asia/Tokyo', 'yyyy-MM-dd');
+  // salesDate は payload 優先・なければ salesRowId の埋め込み日付から復元
+  var salesDateStr = String(data && data.salesDate || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(salesDateStr)) {
+    var ymd = salesRowId.substring(2, 10);
+    salesDateStr = ymd.substring(0, 4) + '-' + ymd.substring(4, 6) + '-' + ymd.substring(6, 8);
+  }
+  var baseDate = _parseDateStr_(salesDateStr);
+  // 範囲：salesDate の前月頭〜salesDate
+  var fromDate = new Date(baseDate.getFullYear(), baseDate.getMonth() - 1, 1);
+  var fromStr = _fmtDateStr_(fromDate);
+  var toStr   = salesDateStr;
 
   var costSheet = SpreadsheetApp.getActive().getSheetByName('コスト');
-  if (!costSheet) return { status: 'ok', data: [] };
+  if (!costSheet) return { status: 'ok', data: { direction: 'sales-to-cost', candidates: [] } };
   var lastRow = costSheet.getLastRow();
-  if (lastRow < 2) return { status: 'ok', data: [] };
+  if (lastRow < 2) return { status: 'ok', data: { direction: 'sales-to-cost', candidates: [] } };
   var costData = costSheet.getRange(2, 1, lastRow - 1, 22).getValues();
 
   var candidates = [];
@@ -1270,23 +1336,71 @@ function getLinkCandidates(data) {
     var dateStr = toDateStr_(row[0]);
     if (!dateStr || dateStr < fromStr || dateStr > toStr) continue;
     if (!_isLinkableCostRow_(row)) continue;
-
-    // 既に他売上行に紐付け済みのものは除外（自身に紐付け済みは候補に残す）
+    // 他売上に紐付け済みは除外。自身に紐付け済みは currentlyLinked=true で残す
     var currentLinkedId = String(row[21] || '');
     if (currentLinkedId && currentLinkedId !== salesRowId) continue;
-
     candidates.push({
       rowIndex: i + 2,
       date: dateStr,
       subject: String(row[6] || ''),
+      divisionCode: String(row[3] || ''),
+      itemCode: String(row[5] || ''),
       amount: Number(row[11] || 0),
       memo: String(row[12] || ''),
       currentlyLinked: currentLinkedId === salesRowId
     });
   }
-
   candidates.sort(function(a, b) { return b.date.localeCompare(a.date); });
-  return { status: 'ok', data: candidates };
+  return { status: 'ok', data: { direction: 'sales-to-cost', candidates: candidates } };
+}
+
+/**
+ * コスト→売上候補（costDate〜翌月末・新形式salesRowIdを持つ売上のみ・isProject状態は問わない）
+ */
+function _getLinkCandidatesCostToSales_(data) {
+  var costDateStr = String(data && data.costDate || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(costDateStr)) {
+    return { status: 'error', message: 'invalid costDate' };
+  }
+  var baseDate = _parseDateStr_(costDateStr);
+  // 範囲：costDate〜翌月末
+  var toDate = new Date(baseDate.getFullYear(), baseDate.getMonth() + 2, 0); // 翌月末
+  var fromStr = costDateStr;
+  var toStr   = _fmtDateStr_(toDate);
+
+  var salesSheet = SpreadsheetApp.getActive().getSheetByName('売上');
+  if (!salesSheet) return { status: 'ok', data: { direction: 'cost-to-sales', candidates: [] } };
+  var lastRow = salesSheet.getLastRow();
+  if (lastRow < 2) return { status: 'ok', data: { direction: 'cost-to-sales', candidates: [] } };
+  var salesData = salesSheet.getRange(2, 1, lastRow - 1, 21).getValues();
+
+  var candidates = [];
+  for (var i = 0; i < salesData.length; i++) {
+    var row = salesData[i];
+    var dateStr = toDateStr_(row[0]);
+    if (!dateStr || dateStr < fromStr || dateStr > toStr) continue;
+    var sId = String(row[19] || '');
+    if (!/^s-\d{12}$/.test(sId)) continue;  // T列未採番の過去データは候補から除外
+    candidates.push({
+      rowIndex: i + 2,
+      salesRowId: sId,
+      date: dateStr,
+      subject: String(row[6] || row[4] || ''),
+      amount: Number(row[11] || 0),
+      memo: String(row[12] || ''),
+      isProject: String(row[20]).trim() === '1'
+    });
+  }
+  candidates.sort(function(a, b) { return a.date.localeCompare(b.date); });
+  return { status: 'ok', data: { direction: 'cost-to-sales', candidates: candidates } };
+}
+
+function _parseDateStr_(s) {
+  var p = String(s || '').split('-');
+  return new Date(parseInt(p[0], 10), parseInt(p[1], 10) - 1, parseInt(p[2], 10));
+}
+function _fmtDateStr_(d) {
+  return Utilities.formatDate(d, 'Asia/Tokyo', 'yyyy-MM-dd');
 }
 
 // =============================================================
@@ -1414,4 +1528,164 @@ function getProjectSummary(data) {
       projectGrossProfit: projectSales - projectCostTotal
     }
   };
+}
+
+// =============================================================
+// PC版月次管理画面：インライン編集保存・ロック解除申請（指示書5§1-2 §1-3 / 技術仕様§4-6 §3）
+// =============================================================
+
+/**
+ * 月次管理画面のインライン編集保存（部分更新）
+ * 既存 updateSales / updateCost とは別系統。スマホ・iPad版の挙動には影響しない
+ *
+ * payload:
+ *   - sheetName : "売上" または "コスト"
+ *   - rowIndex  : 対象行番号（2以上）
+ *   - fields    : 部分更新フィールド（指定キーのみ書き込み・他は元値維持）
+ *       date / amount / taxRate / memo / subjectCode / subjectName
+ *
+ * 動作仕様（指示書5§1-2）：
+ *   1. S列(19)='1' の行は更新拒否（'ロック行は更新できません'）
+ *   2. amount または taxRate が含まれる場合、サーバー側で§6-4 整数演算で再計算し
+ *      I列(税抜)・J列(税率)・K列(消費税)・L列(税込) をまとめて書き込む
+ *   3. subjectCode は F列、subjectName は G列に書き込む（売上・コスト共通）
+ *   4. isProject / projectId など案件化系フィールドは fields に紛れ込んでも無視
+ *      （markAsProject / linkTransactions / unmarkAsProject 経由の設計を厳守）
+ *   5. レスポンス：updatedFields[] と recalculated（再計算した場合のみ）を返す
+ */
+function updateRow(data) {
+  var sheetName = String(data && data.sheetName || '').trim();
+  var rowIndex  = parseInt(data && data.rowIndex, 10);
+  var fields    = (data && typeof data.fields === 'object' && data.fields) ? data.fields : {};
+
+  if (sheetName !== '売上' && sheetName !== 'コスト') {
+    return { status: 'error', message: 'invalid sheetName' };
+  }
+  if (!rowIndex || rowIndex < 2) {
+    return { status: 'error', message: 'invalid rowIndex' };
+  }
+
+  var sheet = SpreadsheetApp.getActive().getSheetByName(sheetName);
+  if (!sheet) return { status: 'error', message: sheetName + 'シートが見つかりません' };
+  if (rowIndex > sheet.getLastRow()) {
+    return { status: 'error', message: 'rowIndex out of range' };
+  }
+
+  // ロックチェック：S列(19)=1 は更新拒否
+  var lockFlag = Number(sheet.getRange(rowIndex, 19).getValue()) || 0;
+  if (lockFlag === 1) {
+    return { status: 'error', message: 'ロック行は更新できません' };
+  }
+
+  var updated = [];
+
+  // 日付：A・B・C列まとめて更新
+  if (fields.date !== undefined) {
+    var d = String(fields.date || '');
+    var p = d.split('-');
+    sheet.getRange(rowIndex, 1).setValue(d);
+    sheet.getRange(rowIndex, 2).setValue(Number(p[0]) || '');
+    sheet.getRange(rowIndex, 3).setValue(Number(p[1]) || '');
+    updated.push('date');
+  }
+
+  // 科目コード（F列） / 科目名（G列）
+  if (fields.subjectCode !== undefined) {
+    sheet.getRange(rowIndex, 6).setValue(String(fields.subjectCode || ''));
+    updated.push('subjectCode');
+  }
+  if (fields.subjectName !== undefined) {
+    sheet.getRange(rowIndex, 7).setValue(String(fields.subjectName || ''));
+    updated.push('subjectName');
+  }
+
+  // メモ（M列）
+  if (fields.memo !== undefined) {
+    sheet.getRange(rowIndex, 13).setValue(String(fields.memo || ''));
+    updated.push('memo');
+  }
+
+  // 金額・税率：いずれかが含まれていればサーバー側で§6-4 整数演算で再計算
+  var recalculated = null;
+  if (fields.amount !== undefined || fields.taxRate !== undefined) {
+    // 既存値を読み込み、payload で指定があれば上書き
+    var currentRate   = Number(sheet.getRange(rowIndex, 10).getValue()) || 0;
+    var currentInAmt  = Number(sheet.getRange(rowIndex, 12).getValue()) || 0;
+    var inAmt = (fields.amount !== undefined)
+      ? Math.max(0, Math.floor(Number(fields.amount) || 0))
+      : currentInAmt;
+    var rate  = (fields.taxRate !== undefined)
+      ? (Number(fields.taxRate) || 0)
+      : currentRate;
+    var taxExcluded;
+    var tax;
+    if (rate <= 0) {
+      taxExcluded = inAmt;
+      tax = 0;
+    } else {
+      taxExcluded = Math.floor((inAmt * 100) / (100 + rate));
+      if (taxExcluded === 0 && inAmt > 0) {
+        taxExcluded = inAmt;
+        tax = 0;
+      } else {
+        tax = inAmt - taxExcluded;
+      }
+    }
+    sheet.getRange(rowIndex,  9).setValue(taxExcluded); // I列(税抜)
+    sheet.getRange(rowIndex, 10).setValue(rate);        // J列(税率)
+    sheet.getRange(rowIndex, 11).setValue(tax);         // K列(消費税)
+    sheet.getRange(rowIndex, 12).setValue(inAmt);       // L列(税込)
+    if (fields.amount !== undefined) updated.push('amount');
+    if (fields.taxRate !== undefined) updated.push('taxRate');
+    recalculated = { taxAmount: tax, taxExcluded: taxExcluded };
+  }
+
+  // isProject / projectId などは仕様により無視（書き込まない）
+
+  var resp = {
+    status: 'ok',
+    data: {
+      sheetName: sheetName,
+      rowIndex: rowIndex,
+      updatedFields: updated
+    }
+  };
+  if (recalculated) resp.data.recalculated = recalculated;
+  return resp;
+}
+
+/**
+ * ロック解除申請（PC版「月次管理」ロック行の解除申請ボタンから呼ばれる・3デバイス統合§3）
+ * _unlock_requests シート（なければ作成）に申請レコードを追記する
+ * 承認画面（スマホ・iPad）の実装は別指示書で対応（本指示書ではスキーマと append のみ）
+ *
+ * payload:
+ *   - sheetName : "売上" または "コスト"
+ *   - rowIndex  : 対象行番号
+ *   - reason    : （任意）申請理由
+ */
+function requestUnlock(data) {
+  var sheetName = String(data && data.sheetName || '').trim();
+  var rowIndex  = parseInt(data && data.rowIndex, 10);
+  var reason    = String(data && data.reason || '');
+  var clientId  = String(data && data.clientId || '');
+
+  if (sheetName !== '売上' && sheetName !== 'コスト') {
+    return { status: 'error', message: 'invalid sheetName' };
+  }
+  if (!rowIndex || rowIndex < 2) {
+    return { status: 'error', message: 'invalid rowIndex' };
+  }
+
+  var ss = SpreadsheetApp.getActive();
+  var sheet = ss.getSheetByName('_unlock_requests');
+  if (!sheet) {
+    sheet = ss.insertSheet('_unlock_requests');
+    sheet.appendRow(['clientId', 'sheetName', 'rowIndex', 'reason', 'requestedAt', 'status']);
+    sheet.setFrozenRows(1);
+  }
+  var requestedAt = new Date();
+  sheet.appendRow([clientId, sheetName, rowIndex, reason, requestedAt, 'pending']);
+  var requestId = sheet.getLastRow(); // 行番号を ID として返す（簡易・ユニーク）
+  return { status: 'ok', data: { requestId: requestId } };
 }

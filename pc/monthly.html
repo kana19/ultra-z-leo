@@ -41,12 +41,17 @@
         </label>
       </section>
 
-      <!-- テーブル -->
+      <!-- 行追加ボタン（テーブル上部・指示書5§2-2 / 戦略思想§4-3） -->
+      <section class="pc-add-buttons">
+        <button type="button" id="btn-add-sales">+ 売上行を追加</button>
+        <button type="button" id="btn-add-cost">+ コスト行を追加</button>
+      </section>
+
+      <!-- フラットテーブル（code列廃止・指示書5§2-1 / 技術仕様§9-4） -->
       <section class="pc-table-wrap">
         <table class="pc-monthly-table" id="monthly-table">
           <thead>
             <tr>
-              <th>code</th>
               <th>発生日</th>
               <th>種別</th>
               <th>科目</th>
@@ -54,6 +59,7 @@
               <th>税率</th>
               <th class="num">消費税</th>
               <th>メモ</th>
+              <th>案件</th>
               <th>操作</th>
             </tr>
           </thead>
@@ -63,14 +69,26 @@
         </table>
       </section>
 
-      <!-- ドラフト行追加ボタン -->
-      <section class="pc-add-buttons">
-        <button type="button" id="btn-add-sales">+ 売上行を追加</button>
-        <button type="button" id="btn-add-cost">+ コスト行を追加</button>
-      </section>
-
     </div>
   </main>
+</div>
+
+<!-- 紐付け候補モーダル（指示書5§2-4・JS から開閉する） -->
+<div class="pc-link-candidates-modal" id="pc-link-candidates-modal" hidden>
+  <div class="pc-link-candidates-backdrop" data-action="cancel"></div>
+  <div class="pc-link-candidates-panel" role="dialog" aria-modal="true" aria-labelledby="pc-link-candidates-title">
+    <header class="pc-link-candidates-header">
+      <h2 id="pc-link-candidates-title">紐付け候補を選択</h2>
+      <button type="button" class="pc-link-candidates-close" aria-label="閉じる" data-action="cancel">×</button>
+    </header>
+    <p class="pc-link-candidates-hint" id="pc-link-candidates-hint"></p>
+    <div class="pc-link-candidates-list" id="pc-link-candidates-list" role="group"></div>
+    <p class="pc-link-candidates-error" id="pc-link-candidates-error" hidden></p>
+    <footer class="pc-link-candidates-footer">
+      <button type="button" class="pc-btn pc-btn-secondary" data-action="cancel">取消</button>
+      <button type="button" class="pc-btn pc-btn-primary" data-action="confirm" id="pc-link-candidates-confirm">確定</button>
+    </footer>
+  </div>
 </div>
 
 <script src="../js/app.js"></script>

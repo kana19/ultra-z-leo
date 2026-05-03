@@ -1,12 +1,12 @@
 /**
  * ウルトラZAIMUくんレオ PC版 — pc-monthly.js
  * 月次管理画面のロジック
- * 戦略思想メモ§3-9-3 / 3デバイス統合仕様§8-3 / 技術仕様書§9-4 準拠
+ * 戦略思想§3-9-3 / §1-4 / §4-3 / 3デバイス統合§6-4 §8-3 §8-4 / 技術仕様§4-5 §4-6 §9-4 §9-4-1 §9-5 §9-6 準拠
  */
 'use strict';
 
 /* ── 状態 ──────────────────────────────────────────────── */
-let _monthlyData = [];                 // 統合後の全行配列（並び順は date 昇順／同日内 sales→cost）
+let _monthlyData = [];                 // 統合後の全行配列（並び：date desc, rowIndex asc）
 let _settings = { costMaster: [], serviceList: [] };
 let _filterState = {
   month:   _todayYM(),
@@ -14,10 +14,11 @@ let _filterState = {
   type:    'all',
   project: 'all',
 };
-let _draftRows = [];                   // 未確定ドラフト行配列
+let _draftRows = [];                   // 未確定ドラフト行配列（テーブル最上段に表示）
 let _editingRowKey = null;             // 編集中の rowKey（同時編集は1行のみ）
-let _editingDraft = {};                // 編集中の途中値（保存時は破棄）
+let _editingDraft = {};                // 編集中の途中値
 let _draftSeq = 0;                     // ドラフトIDカウンタ
+let _modalState = null;                // 紐付け候補モーダル状態 { direction, candidates, onConfirm, onClose, keydownHandler }
 
 /* ── ユーティリティ ──────────────────────────────────────── */
 function _todayYM() {
@@ -37,12 +38,9 @@ function _formatYenPlain(n) {
   return v.toLocaleString('ja-JP');
 }
 
+// 内消費税は app.js の calcTax(taxIncluded, taxRate)（§6-4 整数演算実装）を経由
 function _calcTaxAmount(amountInclTax, taxRate) {
-  const a = Number(amountInclTax) || 0;
-  const r = Number(taxRate) || 0;
-  if (r === 0 || a === 0) return 0;
-  const ex = Math.floor(a / (1 + r / 100));
-  return a - ex;
+  return calcTax(amountInclTax, taxRate).tax;
 }
 
 function _rowKey(row) {
@@ -51,7 +49,7 @@ function _rowKey(row) {
     : `row-${row.source}-${row.rowIndex}`;
 }
 
-/* ── 種別分類 ────────────────────────────────────────────── */
+/* ── 種別分類（コスト科目→typeCode・指示書5§2-1 / 集計対象4区分判定） ── */
 function _classifyCost(divisionCode, itemCode) {
   const dv = String(divisionCode || '');
   const ic = String(itemCode || '');
@@ -59,6 +57,14 @@ function _classifyCost(divisionCode, itemCode) {
   if (dv === '2' && ic === '21') return { type: '委託・外注', typeCode: 'gai' };
   if (dv === '2' && ic === '20') return { type: '人件費', typeCode: 'jin' };
   return { type: '販管費', typeCode: 'h' };
+}
+
+// 紐付け対象判定（GAS と同じ条件・指示書5§3-2）
+function _isLinkableCost(row) {
+  if (row.source !== 'cost') return false;
+  if (row.divisionCode === '1') return true;
+  if (row.subjectCode === '21' || row.subjectCode === '20' || row.subjectCode === '25') return true;
+  return false;
 }
 
 /* ── 起動 ────────────────────────────────────────────────── */
@@ -69,6 +75,7 @@ async function initMonthly() {
   buildMonthDropdown(_filterState.month);
   bindFilterEvents();
   bindAddButtons();
+  bindModalEvents();
   await loadMonthlyData(_filterState.month);
 }
 
@@ -77,7 +84,7 @@ function buildMonthDropdown(currentMonth) {
   if (!sel) return;
   sel.innerHTML = '';
   const now = new Date();
-  // 過去12ヶ月＋当月（仕様§2-5・既定=当月）
+  // 過去12ヶ月＋当月（既定=当月）
   const months = [];
   for (let i = 0; i <= 12; i++) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
@@ -115,7 +122,7 @@ async function loadMonthlyData(month) {
     _settings.serviceList = Array.isArray(settings.serviceList) ? settings.serviceList : [];
 
     _monthlyData = mergeAndClassify(history);
-    generateDisplayCodes(_monthlyData);
+    _sortRows(_monthlyData);
     // 月切替時は編集状態とドラフトを破棄
     _editingRowKey = null;
     _editingDraft = {};
@@ -131,6 +138,7 @@ function mergeAndClassify(historyRows) {
   const out = [];
   for (const r of historyRows) {
     if (r.type === 'sales') {
+      const salesRowId = String(r.salesRowId || r.projectId || '');
       out.push({
         source:     'sales',
         rowIndex:   Number(r.rowIndex),
@@ -142,20 +150,18 @@ function mergeAndClassify(historyRows) {
         subjectCode: String(r.serviceCode || ''),
         amount:     Number(r.amount) || 0,
         taxRate:    Number(r.taxRate) || 0,
-        taxAmount:  _calcTaxAmount(r.amount, r.taxRate),
+        taxAmount:  (typeof r.taxAmount === 'number' && r.taxAmount > 0)
+                       ? r.taxAmount
+                       : _calcTaxAmount(r.amount, r.taxRate),
         memo:       String(r.memo || ''),
-        // sales の isProject は U列（getHistory 未返却）。初期は false。
-        // markAsProject 実行直後にクライアント状態で true にする（ページリロードで消える既知制限）
-        isProject:  false,
+        isProject:  !!r.isProject,                  // U列='1' を GAS が boolean 化して返す
         isUnpaid:   Number(r.uncollected) === 1,
-        // S列（ロックフラグ）は getHistory 未返却のため常に false（解除申請ボタン非表示）
-        isLocked:   false,
-        salesRowId: String(r.projectId || ''),     // 売上のT列＝salesRowId（親キー）
-        displayCode: '',
+        isLocked:   !!r.isLocked,                   // S列=1 を GAS が boolean 化して返す
+        salesRowId: salesRowId,
       });
     } else if (r.type === 'cost') {
       const cls = _classifyCost(r.divisionCode, r.itemCode);
-      const linkedTo = String(r.projectId || ''); // V列＝紐付け先売上行ID（コストにとっての isProject 根拠）
+      const linkedTo = String(r.linkedSalesRowId !== undefined ? r.linkedSalesRowId : (r.projectId || ''));
       out.push({
         source:     'cost',
         rowIndex:   Number(r.rowIndex),
@@ -168,35 +174,26 @@ function mergeAndClassify(historyRows) {
         divisionCode: String(r.divisionCode || ''),
         amount:     Number(r.amount) || 0,
         taxRate:    Number(r.taxRate) || 0,
-        taxAmount:  _calcTaxAmount(r.amount, r.taxRate),
+        taxAmount:  (typeof r.taxAmount === 'number' && r.taxAmount > 0)
+                       ? r.taxAmount
+                       : _calcTaxAmount(r.amount, r.taxRate),
         memo:       String(r.memo || ''),
-        isProject:  linkedTo.length > 0,           // V列に値あり＝紐付け済み＝案件
+        isProject:  linkedTo.length > 0,            // V列に値あり＝紐付け済み＝案件
         isUnpaid:   Number(r.unpaid) === 1,
-        isLocked:   false,                          // S列未対応（同上）
-        salesRowId: linkedTo,                       // コスト側は紐付け先salesRowId
-        displayCode: '',
+        isLocked:   !!r.isLocked,
+        salesRowId: linkedTo,
       });
     }
   }
   return out;
 }
 
-function generateDisplayCodes(rows) {
-  // date 昇順、同日内 sales→cost の順にソート（仕様§2-3 step1）
+// 並び順：発生日 desc（直近が最上段）・同日内は rowIndex asc で安定（戦略思想§4-3）
+function _sortRows(rows) {
   rows.sort((a, b) => {
-    if (a.date !== b.date) return a.date < b.date ? -1 : 1;
-    if (a.source !== b.source) return a.source === 'sales' ? -1 : 1;
+    if (a.date !== b.date) return a.date < b.date ? 1 : -1;
     return a.rowIndex - b.rowIndex;
   });
-  // 種別記号ごとに月内連番（仕様§2-3 step2-4）
-  const counters = { u: 0, shi: 0, h: 0, gai: 0, jin: 0 };
-  for (const r of rows) {
-    counters[r.typeCode] = (counters[r.typeCode] || 0) + 1;
-    const yymmdd = String(r.date || '').slice(2, 10).replace(/-/g, '');
-    const n = counters[r.typeCode];
-    const seq = n < 100 ? String(n).padStart(2, '0') : String(n).padStart(3, '0');
-    r.displayCode = `${yymmdd}-${r.typeCode}-${seq}`;
-  }
 }
 
 /* ── フィルタ ────────────────────────────────────────────── */
@@ -232,8 +229,10 @@ function renderTable() {
   const tbody = document.getElementById('monthly-tbody');
   if (!tbody) return;
   const rows = applyFilters(_monthlyData);
-  const html = rows.map(r => renderRow(r)).join('') + _draftRows.map(d => renderDraftRow(d)).join('');
-  tbody.innerHTML = html || '<tr><td colspan="9" class="loading">該当する行がありません</td></tr>';
+  // ドラフト行を最上段（指示書5§2-2 step3 / §3-5）
+  const draftHtml = _draftRows.map(d => renderDraftRow(d)).join('');
+  const rowHtml   = rows.map(r => renderRow(r)).join('');
+  tbody.innerHTML = (draftHtml + rowHtml) || '<tr><td colspan="9" class="loading">該当する行がありません</td></tr>';
   bindRowEvents();
 }
 
@@ -246,7 +245,6 @@ function renderRow(row) {
     row.isLocked ? 'pc-row--locked' : '',
   ].filter(Boolean).join(' ');
 
-  // セル：編集中はinput/select、それ以外はテキスト
   const cellDate    = isEditing
     ? `<input type="date" class="pc-edit-input" data-field="date" value="${_escHtml(row.date)}">`
     : _escHtml(row.date);
@@ -264,7 +262,10 @@ function renderRow(row) {
     ? `<input type="text" class="pc-edit-input" data-field="memo" value="${_escHtml(row.memo)}">`
     : _escHtml(row.memo);
 
-  const codeCell = `${_escHtml(row.displayCode)}${row.isProject ? ' <span class="pc-row--project-marker" title="案件">🔶</span>' : ''}`;
+  // 案件列：🔶（isProject=true）／空（false）
+  const cellProject = row.isProject
+    ? `<span class="pc-project-cell is-project" title="案件">🔶</span>`
+    : `<span class="pc-project-cell"></span>`;
 
   // 操作列
   let actionsHtml = '';
@@ -273,22 +274,23 @@ function renderRow(row) {
       <button type="button" class="pc-action-btn pc-action-btn--save" data-action="save-edit">保存</button>
       <button type="button" class="pc-action-btn" data-action="cancel-edit">取消</button>
     `;
+  } else if (row.isLocked) {
+    // ロック行は「解除申請」のみ（編集不可）
+    actionsHtml = `<button type="button" class="pc-action-btn pc-action-btn--unlock" data-action="request-unlock">解除申請</button>`;
   } else {
-    if (row.source === 'sales' && !row.isProject && !row.isLocked) {
+    // 案件化ボタン（売上：!isProject ／ コスト：isLinkable && !isProject）
+    if (row.source === 'sales' && !row.isProject) {
+      actionsHtml += `<button type="button" class="pc-action-btn pc-action-btn--project" data-action="mark-project">案件化</button>`;
+    } else if (row.source === 'cost' && !row.isProject && _isLinkableCost(row)) {
       actionsHtml += `<button type="button" class="pc-action-btn pc-action-btn--project" data-action="mark-project">案件化</button>`;
     }
-    if (row.isUnpaid && !row.isLocked) {
+    if (row.isUnpaid) {
       actionsHtml += `<button type="button" class="pc-action-btn pc-action-btn--reconcile" data-action="reconcile">消込</button>`;
-    }
-    if (row.isLocked) {
-      // S列未対応のため事実上非表示（条件で常にfalse）。次フェーズで isLocked が来たら自動的に表示される
-      actionsHtml += `<button type="button" class="pc-action-btn" data-action="request-unlock">解除申請</button>`;
     }
   }
 
   return `
     <tr class="${classes}" data-row-key="${_escHtml(key)}" data-source="${row.source}" data-row-index="${row.rowIndex}">
-      <td>${codeCell}</td>
       <td data-field-cell="date">${cellDate}</td>
       <td>${_escHtml(row.type)}</td>
       <td data-field-cell="subject">${cellSubject}</td>
@@ -296,6 +298,7 @@ function renderRow(row) {
       <td data-field-cell="taxRate">${cellTaxRate}</td>
       <td class="num">${cellTax}</td>
       <td data-field-cell="memo">${cellMemo}</td>
+      <td>${cellProject}</td>
       <td class="pc-row--actions">${actionsHtml}</td>
     </tr>
   `;
@@ -303,19 +306,20 @@ function renderRow(row) {
 
 function renderDraftRow(draft) {
   const key = _rowKey(draft);
-  const cls = _classifyCost(draft.divisionCode, draft.itemCode || draft.subjectCode);
-  const typeLabel = draft.source === 'sales' ? '売上' : cls.type;
+  const cls = _classifyCost(draft.divisionCode, draft.subjectCode);
+  const typeLabel = draft.realSource === 'sales' ? '売上' : cls.type;
+  const draftTax = _calcTaxAmount(draft.amount, draft.taxRate);
 
   return `
     <tr class="pc-row--draft" data-row-key="${_escHtml(key)}" data-draft-id="${draft.draftId}">
-      <td><span class="pc-text-muted">（新規）</span></td>
       <td><input type="date" class="pc-edit-input" data-field="date" value="${_escHtml(draft.date)}"></td>
       <td>${_escHtml(typeLabel)}</td>
       <td>${renderSubjectSelect(draft, 'draft')}</td>
       <td class="num"><input type="number" class="pc-edit-input pc-edit-input--num" data-field="amount" value="${draft.amount || ''}" placeholder="0"></td>
       <td>${renderTaxRateSelect(draft.taxRate, 'draft')}</td>
-      <td class="num">${_formatYenPlain(_calcTaxAmount(draft.amount, draft.taxRate))}</td>
+      <td class="num">${_formatYenPlain(draftTax)}</td>
       <td><input type="text" class="pc-edit-input" data-field="memo" value="${_escHtml(draft.memo)}" placeholder="メモ"></td>
+      <td><span class="pc-project-cell"></span></td>
       <td class="pc-row--actions">
         <button type="button" class="pc-action-btn pc-action-btn--save" data-action="commit-draft">登録</button>
         <button type="button" class="pc-action-btn" data-action="discard-draft">取消</button>
@@ -325,7 +329,7 @@ function renderDraftRow(draft) {
 }
 
 function renderSubjectSelect(row, mode) {
-  if (row.source === 'sales') {
+  if (row.realSource === 'sales' || row.source === 'sales') {
     const opts = (_settings.serviceList || []).map(s => {
       const code = String(s.code || s.serviceCode || '');
       const name = String(s.name || s.serviceName || '');
@@ -360,22 +364,30 @@ function bindRowEvents() {
   const tbody = document.getElementById('monthly-tbody');
   if (!tbody) return;
 
-  // 編集セルクリック → 編集開始
   tbody.querySelectorAll('tr[data-row-key]').forEach(tr => {
     const key = tr.getAttribute('data-row-key');
     const isDraft = key.startsWith('draft-');
 
     if (!isDraft) {
-      // 既存行：編集可能セルをクリックでstartEdit
-      tr.querySelectorAll('td[data-field-cell]').forEach(td => {
-        const field = td.getAttribute('data-field-cell');
-        if (!isFieldEditable(field, tr.getAttribute('data-source'))) return;
-        td.addEventListener('click', (e) => {
-          // 既にinputが入っていれば素通り
-          if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
-          startEdit(key, field);
+      const row = _monthlyData.find(r => _rowKey(r) === key);
+      // ロック行は編集モードに入らない・クリックでトースト
+      if (row && row.isLocked) {
+        tr.querySelectorAll('td[data-field-cell]').forEach(td => {
+          td.addEventListener('click', () => {
+            showToast('ロックされています', 'info', 2000);
+          });
         });
-      });
+      } else {
+        // 編集可能セルクリックで startEdit
+        tr.querySelectorAll('td[data-field-cell]').forEach(td => {
+          const field = td.getAttribute('data-field-cell');
+          if (!isFieldEditable(field, tr.getAttribute('data-source'))) return;
+          td.addEventListener('click', (e) => {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+            startEdit(key, field);
+          });
+        });
+      }
     }
 
     // 編集中入力のキー操作
@@ -386,13 +398,15 @@ function bindRowEvents() {
           if (isDraft) discardDraftRow(key.replace('draft-', ''));
           else cancelEdit();
         } else if (e.key === 'Enter' && !e.shiftKey) {
-          // 同列の次行へ移動
+          // 仕様§3-4：Tab/Enter は次セルへフォーカスを動かすだけ・自動保存しない
           e.preventDefault();
-          const field = inp.getAttribute('data-field');
-          moveEditToNextRow(tr, field);
+          if (!isDraft) {
+            const field = inp.getAttribute('data-field');
+            moveEditToNextRow(tr, field);
+          }
+          // ドラフト行はEnter抑止（誤確定防止・§1-4 / §3-5）
         }
       });
-      // 編集中値を _editingDraft に蓄積（送信は保存ボタン依存・現指示書では破棄）
       inp.addEventListener('input', () => {
         if (isDraft) {
           const draftId = key.replace('draft-', '');
@@ -409,7 +423,6 @@ function bindRowEvents() {
       });
     });
 
-    // 操作ボタン
     tr.querySelectorAll('button[data-action]').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -425,13 +438,12 @@ function bindRowEvents() {
           case 'discard-draft':  discardDraftRow(rowKey.replace('draft-', '')); break;
         }
       });
-      // 戦略思想§1-4「AI自動確定の禁止」：登録系ボタンはEnter/space ではなくマウスクリック・space のみ反応
-      // ブラウザ既定で button は Enter/Space に反応するため、ドラフト登録ボタンに限り Enter を抑止
-      if (btn.getAttribute('data-action') === 'commit-draft') {
+      // §1-4 AI自動確定禁止：登録・案件化系ボタンは Enter キーで反応させない
+      const action = btn.getAttribute('data-action');
+      if (action === 'commit-draft' || action === 'mark-project') {
         btn.addEventListener('keydown', (e) => {
           if (e.key === 'Enter') {
             e.preventDefault();
-            // Enter での誤確定を防ぐ：何もしない
           }
         });
       }
@@ -440,9 +452,8 @@ function bindRowEvents() {
 }
 
 function isFieldEditable(field, source) {
-  // 仕様§2-4 「編集 可」列：date / subject(=subjectCode) / amount / taxRate / memo
-  const editable = ['date', 'subject', 'amount', 'taxRate', 'memo'];
-  return editable.includes(field);
+  // 仕様§2-4 / §3-4：date / subject(=subjectCode) / amount / taxRate / memo
+  return ['date', 'subject', 'amount', 'taxRate', 'memo'].includes(field);
 }
 
 function captureFieldValue(target, inp, field) {
@@ -450,7 +461,6 @@ function captureFieldValue(target, inp, field) {
   if (field === 'amount') v = Number(v) || 0;
   if (field === 'taxRate') v = Number(v) || 0;
   if (field === 'subject') field = 'subjectCode';
-  // selectで data-name を持つ場合は表示用 subject 名も同期
   if (inp.tagName === 'SELECT' && field === 'subjectCode') {
     const opt = inp.options[inp.selectedIndex];
     if (opt && opt.dataset && opt.dataset.name) {
@@ -467,27 +477,26 @@ function captureFieldValue(target, inp, field) {
 }
 
 function updateDraftTaxDisplay(tr, draft) {
-  const taxCell = tr.querySelector('td.num + td.num + td.num') || tr.querySelectorAll('td.num')[1];
-  // 「金額(税込)」「消費税」両方が num。消費税は 7番目（0-index 6）の <td class="num">。
   const numCells = tr.querySelectorAll('td.num');
+  // 金額・消費税の2列が num。最後の num が消費税列
   if (numCells && numCells.length >= 2) {
     numCells[numCells.length - 1].textContent = _formatYenPlain(_calcTaxAmount(draft.amount, draft.taxRate));
   }
-  // 種別表示はドラフト切替時に再描画したい場合のみ上書き（ここでは触らない）
 }
 
 /* ── インライン編集 ──────────────────────────────────────── */
 function startEdit(rowKey, field) {
   if (_editingRowKey === rowKey) return;
-  // 別行を編集中ならまずキャンセル
   if (_editingRowKey) cancelEdit();
-  _editingRowKey = rowKey;
-  // 元値を退避
   const row = _monthlyData.find(r => _rowKey(r) === rowKey);
-  if (!row) { _editingRowKey = null; return; }
+  if (!row) return;
+  if (row.isLocked) {
+    showToast('ロックされています', 'info', 2000);
+    return;
+  }
+  _editingRowKey = rowKey;
   _editingDraft = { ...row };
   renderTable();
-  // 当該フィールドにフォーカス
   setTimeout(() => {
     const tr = document.querySelector(`tr[data-row-key="${CSS.escape(rowKey)}"]`);
     if (!tr) return;
@@ -501,10 +510,66 @@ function startEdit(rowKey, field) {
   }, 0);
 }
 
-function commitEdit() {
-  // 仕様§2-6：本指示書範囲では updateRow 未実装。警告トースト表示してドラフト変更を破棄
-  showToast('編集保存機能は次指示書で実装予定', 'info', 3000);
-  cancelEdit();
+// 「保存」ボタン押下のみで updateRow を呼ぶ（Tab/Enter/フォーカス外しでは送信しない・§1-4 / §3-4）
+async function commitEdit() {
+  const rowKey = _editingRowKey;
+  if (!rowKey) return;
+  const row = _monthlyData.find(r => _rowKey(r) === rowKey);
+  if (!row) { cancelEdit(); return; }
+
+  // 編集ドラフトから差分を抽出して fields 構築
+  const fields = {};
+  if (_editingDraft.date && _editingDraft.date !== row.date) fields.date = _editingDraft.date;
+  if (_editingDraft.amount !== undefined && Number(_editingDraft.amount) !== Number(row.amount)) {
+    fields.amount = Number(_editingDraft.amount);
+  }
+  if (_editingDraft.taxRate !== undefined && Number(_editingDraft.taxRate) !== Number(row.taxRate)) {
+    fields.taxRate = Number(_editingDraft.taxRate);
+  }
+  if (_editingDraft.memo !== undefined && _editingDraft.memo !== row.memo) {
+    fields.memo = _editingDraft.memo;
+  }
+  if (_editingDraft.subjectCode && _editingDraft.subjectCode !== row.subjectCode) {
+    fields.subjectCode = _editingDraft.subjectCode;
+    fields.subjectName = _editingDraft.subject || '';
+  }
+
+  if (Object.keys(fields).length === 0) {
+    cancelEdit();
+    return;
+  }
+
+  try {
+    const res = await callGAS('updateRow', {
+      sheetName: row.sheetName,
+      rowIndex: row.rowIndex,
+      fields: fields,
+    });
+    if (!res || res.status !== 'ok') {
+      const msg = (res && res.message) || '不明なエラー';
+      showToast(`保存失敗：${msg}`, 'error', 3500);
+      return;
+    }
+    // ローカル state にも反映
+    Object.assign(row, {
+      date:    fields.date    !== undefined ? fields.date    : row.date,
+      amount:  fields.amount  !== undefined ? fields.amount  : row.amount,
+      taxRate: fields.taxRate !== undefined ? fields.taxRate : row.taxRate,
+      memo:    fields.memo    !== undefined ? fields.memo    : row.memo,
+      subjectCode: fields.subjectCode !== undefined ? fields.subjectCode : row.subjectCode,
+      subject:     fields.subjectName !== undefined ? fields.subjectName : row.subject,
+    });
+    if (res.data && res.data.recalculated) {
+      row.taxAmount = Number(res.data.recalculated.taxAmount) || 0;
+    } else {
+      row.taxAmount = _calcTaxAmount(row.amount, row.taxRate);
+    }
+    showToast('保存しました', 'success', 2000);
+    cancelEdit();
+  } catch (err) {
+    console.error('[pc-monthly] commitEdit', err);
+    showToast(`保存失敗：${err.message || err}`, 'error', 3500);
+  }
 }
 
 function cancelEdit() {
@@ -514,15 +579,15 @@ function cancelEdit() {
 }
 
 function moveEditToNextRow(currentTr, field) {
-  const allRows = _monthlyData;
-  if (!allRows.length) return;
+  // フィルタ後の表示順での次行に移動
+  const visibleRows = applyFilters(_monthlyData);
   const currentKey = currentTr.getAttribute('data-row-key');
-  const idx = allRows.findIndex(r => _rowKey(r) === currentKey);
-  if (idx < 0 || idx >= allRows.length - 1) {
+  const idx = visibleRows.findIndex(r => _rowKey(r) === currentKey);
+  if (idx < 0 || idx >= visibleRows.length - 1) {
     cancelEdit();
     return;
   }
-  const nextKey = _rowKey(allRows[idx + 1]);
+  const nextKey = _rowKey(visibleRows[idx + 1]);
   startEdit(nextKey, field);
 }
 
@@ -533,23 +598,23 @@ function bindAddButtons() {
 }
 
 function addDraftRow(source) {
-  // 既に編集中の行があれば破棄して新規ドラフトに集中
   if (_editingRowKey) cancelEdit();
   _draftSeq++;
   const today = (typeof todayStr === 'function') ? todayStr() : new Date().toISOString().slice(0, 10);
   const draft = {
     source: 'draft',
-    realSource: source,            // 'sales' or 'cost'
+    realSource: source,
     draftId: _draftSeq,
     date: today,
     subject: '',
     subjectCode: '',
     divisionCode: source === 'cost' ? '2' : '',
     amount: 0,
-    taxRate: source === 'sales' ? 10 : 10,
+    taxRate: 10,
     memo: '',
   };
-  _draftRows.push(draft);
+  // 最上段に挿入（§2-2 step3）
+  _draftRows.unshift(draft);
   renderTable();
 }
 
@@ -580,7 +645,6 @@ async function commitDraftRow(draftId) {
         uncollected: 0,
       });
     } else {
-      // コスト科目マスタから divisionCode / divisionName / itemName を補完
       const cm = (_settings.costMaster || []).find(it => String(it.code) === String(draft.subjectCode));
       const divisionCode = (cm && cm.divisionCode) || draft.divisionCode || '2';
       const divisionName = divisionCode === '1' ? '仕入原価' : '販管費';
@@ -631,28 +695,375 @@ function validateDraftRow(draft) {
   return errs;
 }
 
-/* ── アクションボタン ────────────────────────────────────── */
+/* ── 案件化フロー（売上→コスト・コスト→売上 の双方向） ─── */
 async function onMarkAsProject(rowKey) {
   const row = _monthlyData.find(r => _rowKey(r) === rowKey);
-  if (!row || row.source !== 'sales') return;
-  if (!confirm('この売上を案件として管理しますか？')) return;
-  try {
-    const res = await callGAS('markAsProject', { rowIndex: row.rowIndex });
-    if (!res || res.status !== 'ok') {
-      showToast(`案件化失敗：${(res && res.message) || '不明なエラー'}`, 'error', 3500);
-      return;
-    }
-    // 楽観的更新：当該行の isProject を true に。salesRowId が新規採番されていれば反映
-    row.isProject = true;
-    if (res.data && res.data.salesRowId) row.salesRowId = String(res.data.salesRowId);
-    showToast('案件化しました', 'success', 2000);
-    renderTable();
-  } catch (err) {
-    console.error('[pc-monthly] onMarkAsProject', err);
-    showToast(`案件化失敗：${err.message || err}`, 'error', 3500);
+  if (!row) return;
+  if (row.source === 'sales') {
+    await onMarkAsProjectFromSales(row);
+  } else if (row.source === 'cost') {
+    await onMarkAsProjectFromCost(row);
   }
 }
 
+// 売上→コスト方向：候補をチェックボックスで複数選択 → 確定
+async function onMarkAsProjectFromSales(row) {
+  // salesRowId が空の場合は markAsProject 呼び出し時に GAS が救済採番する。
+  // ただし候補取得には salesDate が必要・getLinkCandidates の現実装は salesRowId を必須とするため
+  // T列未採番行は先に markAsProject を呼んで採番してから候補取得 → 改めて確定の2段構えにする…
+  // が複雑になるため、本指示書では salesRowId が無い行は自動採番のみ実施・候補なしダイアログに進める
+  const candidates = await fetchLinkCandidatesForSales(row);
+  if (candidates === null) return; // エラー時はトースト済み
+
+  if (candidates.length === 0) {
+    // 候補ゼロ：「経費0件案件として登録しますか？」ダイアログ（§3-1 step3）
+    openZeroCandidatesPrompt({
+      message: '該当範囲に紐付け候補がありません。経費0件案件として登録しますか？',
+      confirmLabel: '登録する',
+      onConfirm: async () => {
+        await callMarkAndLink(row, []);
+      }
+    });
+    return;
+  }
+
+  openLinkCandidatesModal({
+    direction: 'sales-to-cost',
+    hint: `「${row.date} の前月頭〜${row.date}」までに発生した集計対象4区分の経費`,
+    candidates: candidates,
+    onConfirm: async (selectedCostRowIndexes) => {
+      await callMarkAndLink(row, selectedCostRowIndexes);
+    }
+  });
+}
+
+async function fetchLinkCandidatesForSales(row) {
+  if (!row.salesRowId) {
+    // salesRowId 未採番の場合は候補取得不可・ゼロ件として扱う
+    return [];
+  }
+  try {
+    const res = await callGAS('getLinkCandidates', {
+      direction: 'sales-to-cost',
+      salesRowId: row.salesRowId,
+      salesDate: row.date,
+    });
+    if (!res || res.status !== 'ok') {
+      showToast(`候補取得失敗：${(res && res.message) || '不明なエラー'}`, 'error', 3500);
+      return null;
+    }
+    return (res.data && Array.isArray(res.data.candidates)) ? res.data.candidates : [];
+  } catch (err) {
+    console.error('[pc-monthly] fetchLinkCandidatesForSales', err);
+    showToast(`候補取得失敗：${err.message || err}`, 'error', 3500);
+    return null;
+  }
+}
+
+// 案件化＋紐付けの GAS 呼び出し（売上→コスト確定時）
+async function callMarkAndLink(salesRow, selectedCostRowIndexes) {
+  try {
+    // 1. markAsProject（U列='1' 化＋必要なら T列救済採番）
+    const markRes = await callGAS('markAsProject', { rowIndex: salesRow.rowIndex });
+    if (!markRes || markRes.status !== 'ok') {
+      throw new Error((markRes && markRes.message) || '案件化に失敗しました');
+    }
+    const newSalesRowId = (markRes.data && markRes.data.salesRowId) || salesRow.salesRowId;
+    salesRow.isProject = true;
+    if (newSalesRowId) salesRow.salesRowId = String(newSalesRowId);
+
+    // 2. linkTransactions（複数 items 一括・§1-5）
+    if (selectedCostRowIndexes && selectedCostRowIndexes.length > 0) {
+      const items = selectedCostRowIndexes.map(rIdx => ({
+        rowIndex: rIdx,
+        salesRowId: salesRow.salesRowId,
+      }));
+      const linkRes = await callGAS('linkTransactions', { items });
+      if (!linkRes || linkRes.status !== 'ok') {
+        throw new Error((linkRes && linkRes.message) || '紐付けに失敗しました');
+      }
+      // ローカル state：選択コスト行に🔶を反映
+      for (const rIdx of selectedCostRowIndexes) {
+        const c = _monthlyData.find(r => r.source === 'cost' && r.rowIndex === rIdx);
+        if (c) {
+          c.isProject = true;
+          c.salesRowId = salesRow.salesRowId;
+        }
+      }
+    }
+    showToast('案件化しました', 'success', 2000);
+    closeLinkCandidatesModal();
+    renderTable();
+  } catch (err) {
+    console.error('[pc-monthly] callMarkAndLink', err);
+    showLinkCandidatesError(err.message || String(err));
+  }
+}
+
+// コスト→売上方向：候補をラジオで単一選択 → 確定
+async function onMarkAsProjectFromCost(row) {
+  const candidates = await fetchLinkCandidatesForCost(row);
+  if (candidates === null) return;
+
+  if (candidates.length === 0) {
+    // §3-2 step3：閉じるのみのダイアログ（経費0件案件は概念上売上案件化時のみ）
+    openZeroCandidatesPrompt({
+      message: '該当範囲に売上候補がありません。',
+      confirmLabel: null,                  // 確定ボタン非表示
+      onConfirm: null
+    });
+    return;
+  }
+
+  openLinkCandidatesModal({
+    direction: 'cost-to-sales',
+    hint: `「${row.date} 〜 ${row.date} の翌月末」までに発生した売上`,
+    candidates: candidates,
+    onConfirm: async (selectedSalesRowId) => {
+      // selectedSalesRowId はラジオ選択された売上の rowIndex
+      await callMarkAndLinkFromCost(row, selectedSalesRowId);
+    }
+  });
+}
+
+async function fetchLinkCandidatesForCost(row) {
+  try {
+    const res = await callGAS('getLinkCandidates', {
+      direction: 'cost-to-sales',
+      costRowIndex: row.rowIndex,
+      costDate: row.date,
+    });
+    if (!res || res.status !== 'ok') {
+      showToast(`候補取得失敗：${(res && res.message) || '不明なエラー'}`, 'error', 3500);
+      return null;
+    }
+    return (res.data && Array.isArray(res.data.candidates)) ? res.data.candidates : [];
+  } catch (err) {
+    console.error('[pc-monthly] fetchLinkCandidatesForCost', err);
+    showToast(`候補取得失敗：${err.message || err}`, 'error', 3500);
+    return null;
+  }
+}
+
+async function callMarkAndLinkFromCost(costRow, selectedSalesRowIndex) {
+  try {
+    const sales = _findSalesByRowIndex(selectedSalesRowIndex) || _findSalesInCandidates(selectedSalesRowIndex);
+    if (!sales || !sales.salesRowId) {
+      // ローカルにいない（フィルタ外・別月）売上の場合は markAsProject の戻り salesRowId を信頼
+      const markRes = await callGAS('markAsProject', { rowIndex: selectedSalesRowIndex });
+      if (!markRes || markRes.status !== 'ok') {
+        throw new Error((markRes && markRes.message) || '案件化に失敗しました');
+      }
+      const newSalesRowId = String((markRes.data && markRes.data.salesRowId) || '');
+      if (!newSalesRowId) throw new Error('salesRowId が取得できませんでした');
+      const linkRes = await callGAS('linkTransactions', {
+        items: [{ rowIndex: costRow.rowIndex, salesRowId: newSalesRowId }],
+      });
+      if (!linkRes || linkRes.status !== 'ok') {
+        throw new Error((linkRes && linkRes.message) || '紐付けに失敗しました');
+      }
+      costRow.isProject = true;
+      costRow.salesRowId = newSalesRowId;
+      showToast('案件として紐付けました', 'success', 2000);
+      closeLinkCandidatesModal();
+      renderTable();
+      return;
+    }
+
+    // ローカルに見つかった場合：markAsProject → linkTransactions
+    const markRes = await callGAS('markAsProject', { rowIndex: sales.rowIndex });
+    if (!markRes || markRes.status !== 'ok') {
+      throw new Error((markRes && markRes.message) || '案件化に失敗しました');
+    }
+    const linkRes = await callGAS('linkTransactions', {
+      items: [{ rowIndex: costRow.rowIndex, salesRowId: sales.salesRowId }],
+    });
+    if (!linkRes || linkRes.status !== 'ok') {
+      throw new Error((linkRes && linkRes.message) || '紐付けに失敗しました');
+    }
+    sales.isProject = true;
+    costRow.isProject = true;
+    costRow.salesRowId = sales.salesRowId;
+    showToast('案件として紐付けました', 'success', 2000);
+    closeLinkCandidatesModal();
+    renderTable();
+  } catch (err) {
+    console.error('[pc-monthly] callMarkAndLinkFromCost', err);
+    showLinkCandidatesError(err.message || String(err));
+  }
+}
+
+function _findSalesByRowIndex(rowIndex) {
+  return _monthlyData.find(r => r.source === 'sales' && r.rowIndex === Number(rowIndex));
+}
+function _findSalesInCandidates(rowIndex) {
+  if (!_modalState || !Array.isArray(_modalState.candidates)) return null;
+  const c = _modalState.candidates.find(x => Number(x.rowIndex) === Number(rowIndex));
+  if (!c) return null;
+  return { rowIndex: c.rowIndex, salesRowId: c.salesRowId };
+}
+
+/* ── 紐付け候補モーダル（共通UI・指示書5§2-4 / §3-3） ─── */
+function bindModalEvents() {
+  const modal = document.getElementById('pc-link-candidates-modal');
+  if (!modal) return;
+  modal.addEventListener('click', (e) => {
+    const action = e.target && e.target.dataset && e.target.dataset.action;
+    if (action === 'cancel') {
+      closeLinkCandidatesModal();
+    } else if (action === 'confirm') {
+      handleModalConfirm();
+    }
+  });
+}
+
+function openLinkCandidatesModal({ direction, hint, candidates, onConfirm }) {
+  const modal = document.getElementById('pc-link-candidates-modal');
+  const list  = document.getElementById('pc-link-candidates-list');
+  const hintEl = document.getElementById('pc-link-candidates-hint');
+  const errEl  = document.getElementById('pc-link-candidates-error');
+  if (!modal || !list || !hintEl) return;
+
+  hintEl.textContent = hint || '';
+  if (errEl) { errEl.hidden = true; errEl.textContent = ''; }
+
+  const inputType = direction === 'cost-to-sales' ? 'radio' : 'checkbox';
+  const inputName = 'pc-link-cand';
+
+  list.innerHTML = candidates.map((c, i) => {
+    const checked = (direction === 'sales-to-cost' && c.currentlyLinked) ? 'checked' : '';
+    const projectFlag = (direction === 'cost-to-sales' && c.isProject)
+      ? `<span class="pc-link-candidates-row__project-flag" title="既に案件化済み">🔶</span>`
+      : '';
+    const hashCls = (direction === 'sales-to-cost' && c.currentlyLinked) ? 'is-current-link' : '';
+    const valueAttr = (direction === 'cost-to-sales')
+      ? String(c.rowIndex)        // ラジオ：売上 rowIndex
+      : String(c.rowIndex);       // チェックボックス：コスト rowIndex
+    return `
+      <label class="pc-link-candidates-row ${hashCls}">
+        <input type="${inputType}" name="${inputName}" value="${valueAttr}" ${checked}>
+        <span>${_escHtml(c.date || '')}</span>
+        <span>${_escHtml(c.subject || '')}${projectFlag}</span>
+        <span class="pc-link-candidates-row__amount">${_formatYenPlain(c.amount || 0)}</span>
+        <span class="pc-link-candidates-row__memo">${_escHtml(c.memo || '')}</span>
+      </label>
+    `;
+  }).join('');
+
+  _modalState = { direction, candidates, onConfirm, mode: 'list' };
+
+  // ESC キー
+  const keydownHandler = (e) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      closeLinkCandidatesModal();
+    }
+  };
+  document.addEventListener('keydown', keydownHandler);
+  _modalState.keydownHandler = keydownHandler;
+
+  modal.hidden = false;
+}
+
+// 候補ゼロ用の特殊モーダル（「経費0件案件として登録しますか？」 or 「該当範囲に売上候補がありません」）
+function openZeroCandidatesPrompt({ message, confirmLabel, onConfirm }) {
+  const modal = document.getElementById('pc-link-candidates-modal');
+  const list  = document.getElementById('pc-link-candidates-list');
+  const hintEl = document.getElementById('pc-link-candidates-hint');
+  const errEl  = document.getElementById('pc-link-candidates-error');
+  const confirmBtn = document.getElementById('pc-link-candidates-confirm');
+  if (!modal || !list || !hintEl) return;
+
+  hintEl.textContent = '';
+  if (errEl) { errEl.hidden = true; errEl.textContent = ''; }
+  list.innerHTML = `<div class="pc-link-candidates-empty">${_escHtml(message)}</div>`;
+
+  if (confirmBtn) {
+    if (confirmLabel) {
+      confirmBtn.hidden = false;
+      confirmBtn.textContent = confirmLabel;
+    } else {
+      confirmBtn.hidden = true;
+    }
+  }
+
+  _modalState = { direction: 'zero', onConfirm, mode: 'zero' };
+
+  const keydownHandler = (e) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      closeLinkCandidatesModal();
+    }
+  };
+  document.addEventListener('keydown', keydownHandler);
+  _modalState.keydownHandler = keydownHandler;
+
+  modal.hidden = false;
+}
+
+async function handleModalConfirm() {
+  if (!_modalState) return;
+  const direction = _modalState.direction;
+  const onConfirm = _modalState.onConfirm;
+  if (!onConfirm) return;
+
+  if (_modalState.mode === 'zero') {
+    // 経費0件案件として登録
+    await onConfirm();
+    return;
+  }
+
+  if (direction === 'sales-to-cost') {
+    const list = document.getElementById('pc-link-candidates-list');
+    const checked = list ? list.querySelectorAll('input[type="checkbox"]:checked') : [];
+    const selected = Array.from(checked).map(i => Number(i.value)).filter(n => !isNaN(n));
+    await onConfirm(selected);
+    return;
+  }
+
+  if (direction === 'cost-to-sales') {
+    const list = document.getElementById('pc-link-candidates-list');
+    const r = list ? list.querySelector('input[type="radio"]:checked') : null;
+    if (!r) {
+      showLinkCandidatesError('売上を1件選択してください');
+      return;
+    }
+    const selectedRowIndex = Number(r.value);
+    if (isNaN(selectedRowIndex)) {
+      showLinkCandidatesError('選択値が不正です');
+      return;
+    }
+    await onConfirm(selectedRowIndex);
+    return;
+  }
+}
+
+function closeLinkCandidatesModal() {
+  const modal = document.getElementById('pc-link-candidates-modal');
+  if (modal) modal.hidden = true;
+  if (_modalState && _modalState.keydownHandler) {
+    document.removeEventListener('keydown', _modalState.keydownHandler);
+  }
+  // confirm ボタンの非表示状態を戻す
+  const confirmBtn = document.getElementById('pc-link-candidates-confirm');
+  if (confirmBtn) {
+    confirmBtn.hidden = false;
+    confirmBtn.textContent = '確定';
+  }
+  _modalState = null;
+}
+
+function showLinkCandidatesError(msg) {
+  const errEl = document.getElementById('pc-link-candidates-error');
+  if (!errEl) {
+    showToast(msg, 'error', 3500);
+    return;
+  }
+  errEl.textContent = msg;
+  errEl.hidden = false;
+}
+
+/* ── アクションボタン（消込・解除申請） ──────────────────── */
 async function onReconcile(rowKey) {
   const row = _monthlyData.find(r => _rowKey(r) === rowKey);
   if (!row) return;
@@ -690,7 +1101,24 @@ async function onReconcile(rowKey) {
   }
 }
 
-function onRequestUnlock(rowKey) {
-  // 仕様§2-10：UIは仕込んでおき onclick で「未実装機能：次フェーズで対応」のトースト表示に留める
-  showToast('解除申請機能は次フェーズで実装予定', 'info', 3000);
+async function onRequestUnlock(rowKey) {
+  const row = _monthlyData.find(r => _rowKey(r) === rowKey);
+  if (!row) return;
+  const reason = prompt('解除申請の理由（任意）', '');
+  if (reason === null) return; // キャンセル
+  try {
+    const res = await callGAS('requestUnlock', {
+      sheetName: row.sheetName,
+      rowIndex: row.rowIndex,
+      reason: reason || '',
+    });
+    if (!res || res.status !== 'ok') {
+      showToast(`解除申請失敗：${(res && res.message) || '不明なエラー'}`, 'error', 3500);
+      return;
+    }
+    showToast('解除申請を送信しました', 'success', 2500);
+  } catch (err) {
+    console.error('[pc-monthly] onRequestUnlock', err);
+    showToast(`解除申請失敗：${err.message || err}`, 'error', 3500);
+  }
 }

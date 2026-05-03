@@ -352,15 +352,32 @@ function formatYen(amount) {
 }
 
 /**
- * 税込→税抜計算
- * @param {number} taxIncluded 税込金額
- * @param {number} taxRate 税率（%）
+ * 税込金額から税抜・消費税を逆算する（全デバイス共通・3デバイス統合仕様§6-4）
+ *
+ * §6-4 正規ロジック：税抜 = floor(税込 / (1 + 税率/100))、消費税 = 税込 − 税抜
+ * 浮動小数点誤差を避けるため、JS では (1 + rate/100) を経由せず整数演算で実装する：
+ *   taxExcluded = floor(taxIncluded * 100 / (100 + rate))
+ * これは数学的に等価だが、たとえば 55000 / 1.1 が 49999.99999999999 になる FP誤差を回避する
+ * （例：55000円・10% → 税抜 50000・消費税 5000。FP では 5001 になるバグを修正）
+ *
+ * 極小金額への配慮：税抜が 0 に丸められる場合（例：1円・10%）は税込全額を税抜扱いにし
+ * 消費税 0 を返す。負値や `-1` を返さない（§0-3 テスト3）。
+ *
+ * @param {number} taxIncluded 税込金額（円・整数）
+ * @param {number} taxRate     税率（%・10 / 8 / 0 のいずれか）
  * @returns {{ taxExcluded: number, tax: number }}
  */
 function calcTax(taxIncluded, taxRate) {
-  if (taxRate === 0) return { taxExcluded: taxIncluded, tax: 0 };
-  const taxExcluded = Math.floor(taxIncluded / (1 + taxRate / 100));
-  const tax = taxIncluded - taxExcluded;
+  const inAmt = Number.isFinite(Number(taxIncluded)) ? Math.max(0, Math.floor(Number(taxIncluded))) : 0;
+  const rate  = Number.isFinite(Number(taxRate)) ? Number(taxRate) : 0;
+  if (rate <= 0) {
+    return { taxExcluded: inAmt, tax: 0 };
+  }
+  const taxExcluded = Math.floor((inAmt * 100) / (100 + rate));
+  if (taxExcluded === 0 && inAmt > 0) {
+    return { taxExcluded: inAmt, tax: 0 };
+  }
+  const tax = inAmt - taxExcluded;
   return { taxExcluded, tax };
 }
 
