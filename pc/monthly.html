@@ -11,10 +11,68 @@
 <div id="pc-app" class="pc-layout">
   <main class="pc-main" id="pc-main">
     <div class="pc-body-inner">
-      <div class="pc-placeholder">月次管理（実装予定）</div>
+
+      <!-- フィルタ -->
+      <section class="pc-filter-bar" aria-label="月次管理フィルタ">
+        <label>月：<select id="filter-month"></select></label>
+        <label>状態：
+          <select id="filter-status">
+            <option value="all">すべて</option>
+            <option value="unpaid">未収・未払のみ</option>
+            <option value="locked">ロック行のみ</option>
+          </select>
+        </label>
+        <label>種別：
+          <select id="filter-type">
+            <option value="all">すべて</option>
+            <option value="売上">売上</option>
+            <option value="仕入原価">仕入原価</option>
+            <option value="販管費">販管費</option>
+            <option value="委託・外注">委託・外注</option>
+            <option value="人件費">人件費</option>
+          </select>
+        </label>
+        <label>案件マーカー：
+          <select id="filter-project">
+            <option value="all">すべて</option>
+            <option value="project">案件のみ</option>
+            <option value="normal">通常のみ</option>
+          </select>
+        </label>
+      </section>
+
+      <!-- テーブル -->
+      <section class="pc-table-wrap">
+        <table class="pc-monthly-table" id="monthly-table">
+          <thead>
+            <tr>
+              <th>code</th>
+              <th>発生日</th>
+              <th>種別</th>
+              <th>科目</th>
+              <th class="num">金額(税込)</th>
+              <th>税率</th>
+              <th class="num">消費税</th>
+              <th>メモ</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="monthly-tbody">
+            <tr><td colspan="9" class="loading">読み込み中…</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- ドラフト行追加ボタン -->
+      <section class="pc-add-buttons">
+        <button type="button" id="btn-add-sales">+ 売上行を追加</button>
+        <button type="button" id="btn-add-cost">+ コスト行を追加</button>
+      </section>
+
     </div>
   </main>
 </div>
+
 <script src="../js/app.js"></script>
 <script src="js/pc-common.js"></script>
 <script src="js/pc-monthly.js"></script>
