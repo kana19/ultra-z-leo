@@ -825,19 +825,25 @@ body.pc-body {
 .pc-row--unpaid:hover {
   background: rgba(212, 175, 55, 0.18);
 }
+/* ロック行：薄グレーアウトのみ。pointer-events は外し、JS 側 isLocked 分岐で
+   セル編集を抑止しつつ「解除申請」ボタンを押せる状態を保つ（指示書6§3-6） */
 .pc-row--locked {
   background: rgba(160, 144, 112, 0.10);
   color: var(--uz-text3);
-  pointer-events: none;
 }
 .pc-row--draft {
   background: rgba(212, 175, 55, 0.08);
   border-left: 3px solid var(--uz-gold);
 }
+/* 編集モード：amber-bg で薄く強調（指示書6§3-5 step3） */
 .pc-row--editing td {
-  background: var(--uz-bg);
+  background: var(--uz-amber-bg);
   outline: 1px solid var(--uz-gold);
   outline-offset: -1px;
+}
+/* 編集可能セル：行クリックで編集モードに入れることを cursor で示唆（§3-5 step1） */
+.pc-monthly-table tbody tr:not(.pc-row--locked):not(.pc-row--draft):not(.pc-row--editing) td[data-field-cell] {
+  cursor: pointer;
 }
 
 /* ── 編集インライン入力（テーブルセル内 input/select） ─ */
@@ -997,6 +1003,49 @@ body.pc-body {
 .pc-link-candidates-close:hover {
   color: var(--uz-text);
 }
+/* 対象取引情報ヘッダー（指示書6§2 / 技術仕様§9-4-1）
+   list 領域の外に置くことで body スクロール時も追従して常時表示される */
+.pc-link-candidates-target[hidden] { display: none; }
+.pc-link-candidates-target {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 6px;
+  padding: 10px 16px;
+  background: var(--uz-surface2);
+  color: var(--uz-text);
+  border-bottom: 1px solid var(--uz-border);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.pc-link-candidates-target__label {
+  color: var(--uz-gold);
+  font-weight: 700;
+  flex: 0 0 auto;
+}
+.pc-link-candidates-target__date,
+.pc-link-candidates-target__type,
+.pc-link-candidates-target__subject {
+  flex: 0 0 auto;
+}
+.pc-link-candidates-target__sep {
+  color: var(--uz-text3);
+  flex: 0 0 auto;
+}
+.pc-link-candidates-target__amount {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  flex: 0 0 auto;
+}
+.pc-link-candidates-target__memo {
+  color: var(--uz-text2);
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .pc-link-candidates-hint {
   margin: 0;
   padding: 10px 16px;
@@ -1107,4 +1156,55 @@ body.pc-body {
 .pc-action-btn--unlock:hover {
   background: rgba(160, 144, 112, 0.15);
   color: var(--uz-text);
+}
+
+/* ── ドラフトコスト行の区分タブ（指示書6§1：技術仕様§9-4 / 戦略思想§1-5-2） ── */
+.pc-division-tabs {
+  display: inline-flex;
+  gap: 2px;
+  background: var(--uz-surface);
+  border: 1px solid var(--uz-border);
+  border-radius: 4px;
+  padding: 1px;
+}
+.pc-division-tab {
+  padding: 3px 8px;
+  font-size: 11px;
+  font-family: inherit;
+  font-weight: 600;
+  background: transparent;
+  color: var(--uz-text2);
+  border: 1px solid transparent;
+  border-radius: 3px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.pc-division-tab:hover {
+  background: var(--uz-amber-bg);
+  color: var(--uz-text);
+}
+.pc-division-tab.is-active {
+  background: var(--uz-gold);
+  color: var(--uz-bg);
+  border-color: var(--uz-gold);
+}
+.pc-division-tab.is-active:hover {
+  background: var(--uz-gold);
+  filter: brightness(1.05);
+}
+
+/* ── ドラフト登録ボタン disabled（§1-7：登録活性化条件未達時） ── */
+.pc-action-btn[disabled],
+.pc-action-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* 科目プルダウン disabled（区分未選択時のプレースホルダー表示） */
+.pc-edit-input[disabled],
+.pc-edit-input:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  background: var(--uz-surface);
 }

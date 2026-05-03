@@ -81,6 +81,8 @@
       <h2 id="pc-link-candidates-title">紐付け候補を選択</h2>
       <button type="button" class="pc-link-candidates-close" aria-label="閉じる" data-action="cancel">×</button>
     </header>
+    <!-- 対象取引情報ヘッダー（指示書6§2 / 技術仕様§9-4-1）：sticky 表示で常時識別可能 -->
+    <div class="pc-link-candidates-target" id="pc-link-candidates-target" hidden></div>
     <p class="pc-link-candidates-hint" id="pc-link-candidates-hint"></p>
     <div class="pc-link-candidates-list" id="pc-link-candidates-list" role="group"></div>
     <p class="pc-link-candidates-error" id="pc-link-candidates-error" hidden></p>

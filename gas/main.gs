@@ -64,13 +64,17 @@ function addSales(data) {
   var sheet = getOrCreateSheet('売上');
   var salesRowId = generateSalesRowId(date);
   var isProject = String(data.isProject) === '1' ? '1' : '';
+  // §6-4 整数演算で税額を再計算（クライアント送信値は参考情報・サーバーが正規値を確定）
+  var rate = Number(data.taxRate) || 0;
+  var inAmt = Math.max(0, Math.floor(Number(data.amountInTax) || 0));
+  var t = calcTax_(inAmt, rate);
   sheet.appendRow([
     date, Number(parts[0]) || '', Number(parts[1]) || '',
     data.customerCode || '', data.serviceName || '',
     data.serviceCode  || '', data.serviceName || '',
     data.miscItemName || '',
-    Number(data.amountExTax) || 0, Number(data.taxRate) || 0,
-    Number(data.tax) || 0, Number(data.amountInTax) || 0,
+    t.taxExcluded, rate,
+    t.taxAmount, inAmt,
     data.memo || '', '', '',
     Number(data.uncollected) || 0, '', new Date(), 0,
     salesRowId,                                    // T列(20) 売上行ID（自動採番・取引ペア紐付けモデル）
@@ -177,13 +181,17 @@ function addCost(data) {
   var date = data.date || '';
   var parts = date.split('-');
   var sheet = getOrCreateSheet('コスト');
+  // §6-4 整数演算で税額を再計算（クライアント送信値は参考情報・サーバーが正規値を確定）
+  var rate = Number(data.taxRate) || 0;
+  var inAmt = Math.max(0, Math.floor(Number(data.taxIncluded) || 0));
+  var t = calcTax_(inAmt, rate);
   sheet.appendRow([
     date, Number(parts[0]) || '', Number(parts[1]) || '',
     data.divisionCode || '', data.divisionName || '',
     data.itemCode     || '', data.itemName     || '',
     data.miscItemName || '',
-    Number(data.taxExcluded) || 0, Number(data.taxRate) || 0,
-    Number(data.tax) || 0, Number(data.taxIncluded) || 0,
+    t.taxExcluded, rate,
+    t.taxAmount, inAmt,
     data.memo || '', '', '',
     Number(data.unpaid) || 0, '', new Date(), 0,
     Number(data.withholdingAmount) || 0,   // T列(20)
@@ -207,10 +215,14 @@ function updateSales(data) {
   sheet.getRange(row,  5).setValue(data.serviceName  || '');
   sheet.getRange(row,  6).setValue(data.serviceCode  || '');
   sheet.getRange(row,  7).setValue(data.serviceName  || '');
-  sheet.getRange(row,  9).setValue(Number(data.amountExTax)  || 0);
-  sheet.getRange(row, 10).setValue(Number(data.taxRate)      || 0);
-  sheet.getRange(row, 11).setValue(Number(data.tax)          || 0);
-  sheet.getRange(row, 12).setValue(Number(data.amountInTax)  || 0);
+  // §6-4 整数演算で税額を再計算（クライアント送信値の tax / amountExTax は無視）
+  var _sRate  = Number(data.taxRate) || 0;
+  var _sInAmt = Math.max(0, Math.floor(Number(data.amountInTax) || 0));
+  var _sTax   = calcTax_(_sInAmt, _sRate);
+  sheet.getRange(row,  9).setValue(_sTax.taxExcluded);
+  sheet.getRange(row, 10).setValue(_sRate);
+  sheet.getRange(row, 11).setValue(_sTax.taxAmount);
+  sheet.getRange(row, 12).setValue(_sInAmt);
   sheet.getRange(row, 13).setValue(data.memo         || '');
   sheet.getRange(row, 16).setValue(Number(data.uncollected)  || 0);
   // 売上T列(20) は売上行ID（自動採番・不変）のため、payload で送られても更新しない
@@ -239,10 +251,14 @@ function updateCost(data) {
   sheet.getRange(row,  6).setValue(data.itemCode     || '');
   sheet.getRange(row,  7).setValue(data.itemName     || '');
   sheet.getRange(row,  8).setValue(data.miscItemName || '');
-  sheet.getRange(row,  9).setValue(Number(data.taxExcluded)  || 0);
-  sheet.getRange(row, 10).setValue(Number(data.taxRate)      || 0);
-  sheet.getRange(row, 11).setValue(Number(data.tax)          || 0);
-  sheet.getRange(row, 12).setValue(Number(data.taxIncluded)  || 0);
+  // §6-4 整数演算で税額を再計算（クライアント送信値の tax / taxExcluded は無視）
+  var _cRate  = Number(data.taxRate) || 0;
+  var _cInAmt = Math.max(0, Math.floor(Number(data.taxIncluded) || 0));
+  var _cTax   = calcTax_(_cInAmt, _cRate);
+  sheet.getRange(row,  9).setValue(_cTax.taxExcluded);
+  sheet.getRange(row, 10).setValue(_cRate);
+  sheet.getRange(row, 11).setValue(_cTax.taxAmount);
+  sheet.getRange(row, 12).setValue(_cInAmt);
   sheet.getRange(row, 13).setValue(data.memo         || '');
   sheet.getRange(row, 16).setValue(Number(data.unpaid)       || 0);
   // payload に含まれていれば T列・U列・V列も更新（未送信時は既存値保持）
@@ -1038,6 +1054,32 @@ function setupTemplateAndPassword() {
 // =============================================================
 
 /**
+ * 税込額・税率から税抜額・消費税額を整数演算で算出（全デバイス共通・3デバイス統合§6-4）
+ * クライアント側 js/app.js calcTax と同等の正規ロジック。
+ * 浮動小数点の +1 ズレ（55000×10% → 5001 になるバグ）を回避するため、
+ * (1 + rate/100) を経由せず taxExcluded = floor(inAmt * 100 / (100 + rate)) で整数演算。
+ *
+ * 用途：addSales / addCost / updateSales / updateCost / updateRow の K列(消費税)・I列(税抜)
+ *       書き込み時に一律呼び出し、クライアントが送る tax / taxExcluded を信頼せず再計算する。
+ *
+ * @param {number} taxIncluded 税込金額（円・整数。負値はクランプして0として扱う）
+ * @param {number} taxRate     税率（%・10/8/0 等）
+ * @returns {{taxExcluded:number, taxAmount:number}}
+ */
+function calcTax_(taxIncluded, taxRate) {
+  var inAmt = Math.max(0, Math.floor(Number(taxIncluded) || 0));
+  var rate  = Number(taxRate) || 0;
+  if (rate <= 0) {
+    return { taxExcluded: inAmt, taxAmount: 0 };
+  }
+  var taxExcluded = Math.floor((inAmt * 100) / (100 + rate));
+  if (taxExcluded === 0 && inAmt > 0) {
+    return { taxExcluded: inAmt, taxAmount: 0 };
+  }
+  return { taxExcluded: taxExcluded, taxAmount: inAmt - taxExcluded };
+}
+
+/**
  * 日付値を 'yyyy-MM-dd' 文字列に正規化（取引ペア紐付けモデル共通ヘルパー）
  *  - Date 型はタイムゾーン Asia/Tokyo で yyyy-MM-dd フォーマット
  *  - 文字列は先頭10文字を返す（'YYYY-MM-DD' 想定）
@@ -1617,27 +1659,15 @@ function updateRow(data) {
     var rate  = (fields.taxRate !== undefined)
       ? (Number(fields.taxRate) || 0)
       : currentRate;
-    var taxExcluded;
-    var tax;
-    if (rate <= 0) {
-      taxExcluded = inAmt;
-      tax = 0;
-    } else {
-      taxExcluded = Math.floor((inAmt * 100) / (100 + rate));
-      if (taxExcluded === 0 && inAmt > 0) {
-        taxExcluded = inAmt;
-        tax = 0;
-      } else {
-        tax = inAmt - taxExcluded;
-      }
-    }
-    sheet.getRange(rowIndex,  9).setValue(taxExcluded); // I列(税抜)
-    sheet.getRange(rowIndex, 10).setValue(rate);        // J列(税率)
-    sheet.getRange(rowIndex, 11).setValue(tax);         // K列(消費税)
-    sheet.getRange(rowIndex, 12).setValue(inAmt);       // L列(税込)
+    // §0 統一：calcTax_（整数演算）で再計算
+    var _t = calcTax_(inAmt, rate);
+    sheet.getRange(rowIndex,  9).setValue(_t.taxExcluded); // I列(税抜)
+    sheet.getRange(rowIndex, 10).setValue(rate);           // J列(税率)
+    sheet.getRange(rowIndex, 11).setValue(_t.taxAmount);   // K列(消費税)
+    sheet.getRange(rowIndex, 12).setValue(inAmt);          // L列(税込)
     if (fields.amount !== undefined) updated.push('amount');
     if (fields.taxRate !== undefined) updated.push('taxRate');
-    recalculated = { taxAmount: tax, taxExcluded: taxExcluded };
+    recalculated = { taxAmount: _t.taxAmount, taxExcluded: _t.taxExcluded };
   }
 
   // isProject / projectId などは仕様により無視（書き込まない）

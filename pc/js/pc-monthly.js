@@ -306,26 +306,138 @@ function renderRow(row) {
 
 function renderDraftRow(draft) {
   const key = _rowKey(draft);
+  const isCost = draft.realSource === 'cost';
   const cls = _classifyCost(draft.divisionCode, draft.subjectCode);
-  const typeLabel = draft.realSource === 'sales' ? '売上' : cls.type;
+  // 種別表示：売上は固定、コストは区分タブUI（§1：戦略思想§1-4 / 技術仕様§9-4）
+  const typeCellHtml = isCost
+    ? renderCostDivisionTabs(draft)
+    : `<span>売上</span>`;
+  // 科目セル：コストは区分連動絞り込みプルダウン、売上はサービスマスタプルダウン
+  const subjectCellHtml = isCost
+    ? renderCostSubjectSelectFiltered(draft)
+    : renderSubjectSelect(draft, 'draft');
   const draftTax = _calcTaxAmount(draft.amount, draft.taxRate);
+  const submitDisabled = _isDraftValid(draft) ? '' : 'disabled';
 
   return `
     <tr class="pc-row--draft" data-row-key="${_escHtml(key)}" data-draft-id="${draft.draftId}">
       <td><input type="date" class="pc-edit-input" data-field="date" value="${_escHtml(draft.date)}"></td>
-      <td>${_escHtml(typeLabel)}</td>
-      <td>${renderSubjectSelect(draft, 'draft')}</td>
+      <td>${typeCellHtml}</td>
+      <td>${subjectCellHtml}</td>
       <td class="num"><input type="number" class="pc-edit-input pc-edit-input--num" data-field="amount" value="${draft.amount || ''}" placeholder="0"></td>
       <td>${renderTaxRateSelect(draft.taxRate, 'draft')}</td>
       <td class="num">${_formatYenPlain(draftTax)}</td>
       <td><input type="text" class="pc-edit-input" data-field="memo" value="${_escHtml(draft.memo)}" placeholder="メモ"></td>
       <td><span class="pc-project-cell"></span></td>
       <td class="pc-row--actions">
-        <button type="button" class="pc-action-btn pc-action-btn--save" data-action="commit-draft">登録</button>
+        <button type="button" class="pc-action-btn pc-action-btn--save" data-action="commit-draft" ${submitDisabled}>登録</button>
         <button type="button" class="pc-action-btn" data-action="discard-draft">取消</button>
       </td>
     </tr>
   `;
+}
+
+/**
+ * コストドラフト行の区分タブ（仕入原価 / 販管費）
+ * 区分未選択時はどちらも非アクティブ・科目プルダウンは disabled になる
+ * クリック時 selectDraftDivision() で区分切替＋科目リセット＋再描画
+ */
+function renderCostDivisionTabs(draft) {
+  const cur = String(draft.divisionCode || '');
+  return `
+    <div class="pc-division-tabs" role="tablist">
+      <button type="button" class="pc-division-tab ${cur === '1' ? 'is-active' : ''}"
+              data-action="select-division" data-division-code="1" role="tab">仕入原価</button>
+      <button type="button" class="pc-division-tab ${cur === '2' ? 'is-active' : ''}"
+              data-action="select-division" data-division-code="2" role="tab">販管費</button>
+    </div>
+  `;
+}
+
+/**
+ * コストドラフト用 区分連動科目プルダウン（§1：技術仕様§9-4 §13-3）
+ *  - 区分未選択：disabled・「先に区分を選択してください」
+ *  - 区分=1（仕入原価）：costMaster の divisionCode='1' のみ＋諸口
+ *  - 区分=2（販管費）  ：costMaster の divisionCode!='1' のみ＋諸口
+ *  PC版は smartphoneVisible フラグ無視（全科目表示・技術仕様§3-3 §13-3）
+ */
+function renderCostSubjectSelectFiltered(draft) {
+  const div = String(draft.divisionCode || '');
+  if (!div) {
+    return `<select class="pc-edit-input" data-field="subjectCode" disabled>
+              <option value="">先に区分を選択してください</option>
+            </select>`;
+  }
+  const items = (_settings.costMaster || [])
+    .filter(it => it && it.name && String(it.name).trim() !== '')
+    .filter(it => {
+      const itDiv = String(it.divisionCode || '');
+      return div === '1' ? itDiv === '1' : itDiv !== '1';
+    });
+  // 諸口を末尾に追加（divisionCode に紐付く）
+  items.push({
+    code: `MISC_${div}`, name: '諸口', taxRate: 10,
+    divisionCode: div, type: 'misc',
+  });
+  const opts = ['<option value="">（科目を選択）</option>'].concat(
+    items.map(it => {
+      const code = String(it.code || '');
+      const name = String(it.name || '');
+      const sel = (String(draft.subjectCode || '') === code) ? 'selected' : '';
+      return `<option value="${_escHtml(code)}" data-name="${_escHtml(name)}" data-tax="${Number(it.taxRate) || 0}" data-div="${_escHtml(it.divisionCode || div)}" ${sel}>${_escHtml(name)}</option>`;
+    })
+  ).join('');
+  return `<select class="pc-edit-input" data-field="subjectCode">${opts}</select>`;
+}
+
+/**
+ * ドラフト行の登録ボタン活性化判定（§1-7 / 戦略思想§1-4 §1-5-2）
+ *  - 発生日：YYYY-MM-DD 形式
+ *  - 区分タブ：コストは divisionCode 必須（売上は不要）
+ *  - 科目：subjectCode 必須
+ *  - 税率：taxRate が数値（0% も valid）
+ *  - 金額：0円超の整数
+ * いずれか満たさない場合は false → 登録ボタン disabled でAI自動確定を物理的に阻止
+ */
+function _isDraftValid(draft) {
+  if (!draft) return false;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(draft.date || ''))) return false;
+  const isCost = draft.realSource === 'cost';
+  if (isCost && !String(draft.divisionCode || '')) return false;
+  if (!String(draft.subjectCode || '')) return false;
+  const rate = Number(draft.taxRate);
+  if (!Number.isFinite(rate)) return false;
+  const amt = Number(draft.amount);
+  if (!Number.isFinite(amt) || amt <= 0) return false;
+  return true;
+}
+
+/**
+ * ドラフト行の区分タブクリックハンドラ
+ *  - 同一タブクリックは no-op
+ *  - 異なるタブ選択時：subjectCode / subject をリセットし、taxRate を初期 10% に戻す
+ *  - 行を再描画して科目プルダウンを再生成
+ */
+function selectDraftDivision(draftId, divisionCode) {
+  const d = _draftRows.find(x => String(x.draftId) === String(draftId));
+  if (!d) return;
+  if (String(d.divisionCode || '') === String(divisionCode)) return;
+  d.divisionCode = String(divisionCode);
+  d.subjectCode = '';
+  d.subject = '';
+  d.taxRate = 10;
+  renderTable();
+}
+
+/**
+ * ドラフト行の登録ボタン disabled 状態のみ更新（DOM部分更新・focus保持用）
+ * 入力中（amount/memo/date/taxRate/subjectCode の input イベント）から呼ばれる
+ */
+function _updateDraftSubmitState(tr, draft) {
+  const btn = tr.querySelector('button[data-action="commit-draft"]');
+  if (!btn) return;
+  if (_isDraftValid(draft)) btn.removeAttribute('disabled');
+  else btn.setAttribute('disabled', 'disabled');
 }
 
 function renderSubjectSelect(row, mode) {
@@ -338,9 +450,16 @@ function renderSubjectSelect(row, mode) {
     }).join('');
     return `<select class="pc-edit-input" data-field="subjectCode">${opts || '<option value="">（マスタ未設定）</option>'}</select>`;
   }
-  // cost
+  // cost：行の divisionCode で絞り込む（§3-3 #4 区分連動絞り込み）
+  // 既存行の編集では区分自体は変更不可とし、同区分内での科目変更のみ許容する
+  const rowDiv = String(row.divisionCode || '');
   const opts = (_settings.costMaster || [])
     .filter(it => it && it.name)
+    .filter(it => {
+      if (!rowDiv) return true; // 区分不明は全件表示（後方互換）
+      const itDiv = String(it.divisionCode || '');
+      return rowDiv === '1' ? itDiv === '1' : itDiv !== '1';
+    })
     .map(it => {
       const code = String(it.code || '');
       const name = String(it.name || '');
@@ -415,6 +534,13 @@ function bindRowEvents() {
             const field = inp.getAttribute('data-field');
             captureFieldValue(d, inp, field);
             updateDraftTaxDisplay(tr, d);
+            // §1-7：登録ボタン活性化条件をリアルタイム判定
+            _updateDraftSubmitState(tr, d);
+            // 科目プルダウン変更時は税率セレクトの表示も同期（taxRate は既に更新済み）
+            if (field === 'subjectCode') {
+              const taxSel = tr.querySelector('select[data-field="taxRate"]');
+              if (taxSel) taxSel.value = String(Number(d.taxRate) || 0);
+            }
           }
         } else {
           const field = inp.getAttribute('data-field');
@@ -429,13 +555,19 @@ function bindRowEvents() {
         const action = btn.getAttribute('data-action');
         const rowKey = tr.getAttribute('data-row-key');
         switch (action) {
-          case 'mark-project':   onMarkAsProject(rowKey);   break;
-          case 'reconcile':      onReconcile(rowKey);       break;
-          case 'request-unlock': onRequestUnlock(rowKey);   break;
-          case 'save-edit':      commitEdit();              break;
-          case 'cancel-edit':    cancelEdit();              break;
-          case 'commit-draft':   commitDraftRow(rowKey.replace('draft-', '')); break;
-          case 'discard-draft':  discardDraftRow(rowKey.replace('draft-', '')); break;
+          case 'mark-project':    onMarkAsProject(rowKey);   break;
+          case 'reconcile':       onReconcile(rowKey);       break;
+          case 'request-unlock':  onRequestUnlock(rowKey);   break;
+          case 'save-edit':       commitEdit();              break;
+          case 'cancel-edit':     cancelEdit();              break;
+          case 'commit-draft':    commitDraftRow(rowKey.replace('draft-', '')); break;
+          case 'discard-draft':   discardDraftRow(rowKey.replace('draft-', '')); break;
+          case 'select-division': {
+            const draftId = rowKey.replace('draft-', '');
+            const divCode = btn.getAttribute('data-division-code');
+            selectDraftDivision(draftId, divCode);
+            break;
+          }
         }
       });
       // §1-4 AI自動確定禁止：登録・案件化系ボタンは Enter キーで反応させない
@@ -608,7 +740,8 @@ function addDraftRow(source) {
     date: today,
     subject: '',
     subjectCode: '',
-    divisionCode: source === 'cost' ? '2' : '',
+    // §1：コストは初期 区分未選択（販管費/仕入原価のタブで明示選択させる）
+    divisionCode: '',
     amount: 0,
     taxRate: 10,
     memo: '',
@@ -621,9 +754,10 @@ function addDraftRow(source) {
 async function commitDraftRow(draftId) {
   const draft = _draftRows.find(d => String(d.draftId) === String(draftId));
   if (!draft) return;
-  const errors = validateDraftRow(draft);
-  if (errors.length) {
-    showToast(errors[0], 'error', 3000);
+  // §1-7：disabled の登録ボタン誤発火対策（キーボード経由等）も含む二重防御
+  if (!_isDraftValid(draft)) {
+    const errors = validateDraftRow(draft);
+    showToast(errors[0] || '入力に不足があります', 'error', 3000);
     return;
   }
 
@@ -645,8 +779,9 @@ async function commitDraftRow(draftId) {
         uncollected: 0,
       });
     } else {
+      // 区分タブで明示選択された divisionCode を最優先とする（マスタ未登録の諸口にも対応）
       const cm = (_settings.costMaster || []).find(it => String(it.code) === String(draft.subjectCode));
-      const divisionCode = (cm && cm.divisionCode) || draft.divisionCode || '2';
+      const divisionCode = String(draft.divisionCode || (cm && cm.divisionCode) || '2');
       const divisionName = divisionCode === '1' ? '仕入原価' : '販管費';
       const itemName = (cm && cm.name) || draft.subject || '';
       const tax = _calcTaxAmount(draft.amount, draft.taxRate);
@@ -689,7 +824,13 @@ function discardDraftRow(draftId) {
 function validateDraftRow(draft) {
   const errs = [];
   if (!draft.date || !/^\d{4}-\d{2}-\d{2}$/.test(draft.date)) errs.push('発生日を入力してください');
+  // §1：コストは区分タブ未選択を弾く
+  if (draft.realSource === 'cost' && !String(draft.divisionCode || '')) {
+    errs.push('区分（仕入原価／販管費）を選択してください');
+  }
   if (!draft.subjectCode && !draft.subject) errs.push('科目を選択してください');
+  const rate = Number(draft.taxRate);
+  if (!Number.isFinite(rate)) errs.push('税率を選択してください');
   const amt = Number(draft.amount) || 0;
   if (amt <= 0) errs.push('金額を入力してください');
   return errs;
@@ -719,6 +860,7 @@ async function onMarkAsProjectFromSales(row) {
     // 候補ゼロ：「経費0件案件として登録しますか？」ダイアログ（§3-1 step3）
     openZeroCandidatesPrompt({
       message: '該当範囲に紐付け候補がありません。経費0件案件として登録しますか？',
+      target: { kind: 'sales', date: row.date, subject: row.subject, amount: row.amount, memo: row.memo },
       confirmLabel: '登録する',
       onConfirm: async () => {
         await callMarkAndLink(row, []);
@@ -730,6 +872,7 @@ async function onMarkAsProjectFromSales(row) {
   openLinkCandidatesModal({
     direction: 'sales-to-cost',
     hint: `「${row.date} の前月頭〜${row.date}」までに発生した集計対象4区分の経費`,
+    target: { kind: 'sales', date: row.date, subject: row.subject, amount: row.amount, memo: row.memo },
     candidates: candidates,
     onConfirm: async (selectedCostRowIndexes) => {
       await callMarkAndLink(row, selectedCostRowIndexes);
@@ -809,6 +952,7 @@ async function onMarkAsProjectFromCost(row) {
     // §3-2 step3：閉じるのみのダイアログ（経費0件案件は概念上売上案件化時のみ）
     openZeroCandidatesPrompt({
       message: '該当範囲に売上候補がありません。',
+      target: { kind: 'cost', date: row.date, type: row.type, subject: row.subject, amount: row.amount, memo: row.memo },
       confirmLabel: null,                  // 確定ボタン非表示
       onConfirm: null
     });
@@ -818,6 +962,7 @@ async function onMarkAsProjectFromCost(row) {
   openLinkCandidatesModal({
     direction: 'cost-to-sales',
     hint: `「${row.date} 〜 ${row.date} の翌月末」までに発生した売上`,
+    target: { kind: 'cost', date: row.date, type: row.type, subject: row.subject, amount: row.amount, memo: row.memo },
     candidates: candidates,
     onConfirm: async (selectedSalesRowId) => {
       // selectedSalesRowId はラジオ選択された売上の rowIndex
@@ -917,13 +1062,15 @@ function bindModalEvents() {
   });
 }
 
-function openLinkCandidatesModal({ direction, hint, candidates, onConfirm }) {
+function openLinkCandidatesModal({ direction, hint, target, candidates, onConfirm }) {
   const modal = document.getElementById('pc-link-candidates-modal');
   const list  = document.getElementById('pc-link-candidates-list');
   const hintEl = document.getElementById('pc-link-candidates-hint');
   const errEl  = document.getElementById('pc-link-candidates-error');
   if (!modal || !list || !hintEl) return;
 
+  // §2 対象取引情報ヘッダー（売上案件化時・コスト案件化時 共通）
+  _renderModalTargetHeader(target);
   hintEl.textContent = hint || '';
   if (errEl) { errEl.hidden = true; errEl.textContent = ''; }
 
@@ -966,7 +1113,7 @@ function openLinkCandidatesModal({ direction, hint, candidates, onConfirm }) {
 }
 
 // 候補ゼロ用の特殊モーダル（「経費0件案件として登録しますか？」 or 「該当範囲に売上候補がありません」）
-function openZeroCandidatesPrompt({ message, confirmLabel, onConfirm }) {
+function openZeroCandidatesPrompt({ message, target, confirmLabel, onConfirm }) {
   const modal = document.getElementById('pc-link-candidates-modal');
   const list  = document.getElementById('pc-link-candidates-list');
   const hintEl = document.getElementById('pc-link-candidates-hint');
@@ -974,6 +1121,8 @@ function openZeroCandidatesPrompt({ message, confirmLabel, onConfirm }) {
   const confirmBtn = document.getElementById('pc-link-candidates-confirm');
   if (!modal || !list || !hintEl) return;
 
+  // §2 対象取引情報ヘッダー（候補0件時もどの取引に対する確認かを明示）
+  _renderModalTargetHeader(target);
   hintEl.textContent = '';
   if (errEl) { errEl.hidden = true; errEl.textContent = ''; }
   list.innerHTML = `<div class="pc-link-candidates-empty">${_escHtml(message)}</div>`;
@@ -1050,7 +1199,52 @@ function closeLinkCandidatesModal() {
     confirmBtn.hidden = false;
     confirmBtn.textContent = '確定';
   }
+  // 対象取引情報ヘッダーをクリア（次回オープン時の混入防止）
+  const targetEl = document.getElementById('pc-link-candidates-target');
+  if (targetEl) {
+    targetEl.innerHTML = '';
+    targetEl.hidden = true;
+  }
   _modalState = null;
+}
+
+/**
+ * 候補プルダウンモーダルの対象取引情報ヘッダーを描画（指示書6§2 / 技術仕様§9-4-1）
+ *  target = null/undefined → 非表示
+ *  target = { kind: 'sales'|'cost', date, type?, subject, amount, memo }
+ *    - kind='sales' → 「対象売上：YYYY-MM-DD / 科目 / ¥金額 / メモ」
+ *    - kind='cost'  → 「対象コスト：YYYY-MM-DD / 種別 / 科目 / ¥金額 / メモ」
+ *  メモ空欄時は区切り「/」ごと省略
+ */
+function _renderModalTargetHeader(target) {
+  const targetEl = document.getElementById('pc-link-candidates-target');
+  if (!targetEl) return;
+  if (!target) {
+    targetEl.innerHTML = '';
+    targetEl.hidden = true;
+    return;
+  }
+  const labelText = target.kind === 'sales' ? '対象売上：' : '対象コスト：';
+  const sep = `<span class="pc-link-candidates-target__sep">/</span>`;
+  const parts = [
+    `<span class="pc-link-candidates-target__label">${_escHtml(labelText)}</span>`,
+    `<span class="pc-link-candidates-target__date">${_escHtml(target.date || '')}</span>`,
+  ];
+  if (target.kind === 'cost' && target.type) {
+    parts.push(sep);
+    parts.push(`<span class="pc-link-candidates-target__type">${_escHtml(target.type)}</span>`);
+  }
+  parts.push(sep);
+  parts.push(`<span class="pc-link-candidates-target__subject">${_escHtml(target.subject || '')}</span>`);
+  parts.push(sep);
+  parts.push(`<span class="pc-link-candidates-target__amount">¥${_formatYenPlain(target.amount || 0)}</span>`);
+  const memoTrim = String(target.memo || '').trim();
+  if (memoTrim) {
+    parts.push(sep);
+    parts.push(`<span class="pc-link-candidates-target__memo">${_escHtml(memoTrim)}</span>`);
+  }
+  targetEl.innerHTML = parts.join('');
+  targetEl.hidden = false;
 }
 
 function showLinkCandidatesError(msg) {
