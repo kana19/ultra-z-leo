@@ -680,12 +680,10 @@ function updateTaxNote() {
   if (!el) return;
   const taxInc = parseInt(document.getElementById('ef-amount')?.value || '0', 10) || 0;
   const rate   = getSelectedTaxRate();
-  if (rate === 0) {
-    el.textContent = `税抜 ¥${taxInc.toLocaleString()}  /  消費税 ¥0`;
-  } else {
-    const taxExc = Math.floor(taxInc / (1 + rate / 100));
-    el.textContent = `税抜 ¥${taxExc.toLocaleString()}  /  消費税 ¥${(taxInc - taxExc).toLocaleString()}`;
-  }
+  // 全デバイス共通の §6-4 整数演算実装（calcTax）を経由する
+  // 旧 floor(taxInc / (1 + rate/100)) は 55000円・10% で 5001円 になる FP誤差バグ
+  const { taxExcluded: taxExc, tax } = calcTax(taxInc, rate);
+  el.textContent = `税抜 ¥${taxExc.toLocaleString()}  /  消費税 ¥${tax.toLocaleString()}`;
 }
 
 /* ── 保存処理 ─────────────────────────────────────────────── */
@@ -705,8 +703,7 @@ async function saveEdit() {
       const serviceName = document.getElementById('ef-name')?.value?.trim() || item.itemName;
       const taxRate     = getSelectedTaxRate();
       const taxInc      = parseInt(document.getElementById('ef-amount')?.value || '0', 10) || 0;
-      const taxExc      = taxRate === 0 ? taxInc : Math.floor(taxInc / (1 + taxRate / 100));
-      const tax         = taxInc - taxExc;
+      const { taxExcluded: taxExc, tax } = calcTax(taxInc, taxRate);
       const memo        = document.getElementById('ef-memo')?.value        || '';
       const uncollected = document.getElementById('ef-flag')?.checked      ? 1 : 0;
 
@@ -728,8 +725,7 @@ async function saveEdit() {
       const itemName  = document.getElementById('ef-name')?.value?.trim() || item.itemName;
       const taxRate   = getSelectedTaxRate();
       const taxInc    = parseInt(document.getElementById('ef-amount')?.value || '0', 10) || 0;
-      const taxExc    = taxRate === 0 ? taxInc : Math.floor(taxInc / (1 + taxRate / 100));
-      const tax       = taxInc - taxExc;
+      const { taxExcluded: taxExc, tax } = calcTax(taxInc, taxRate);
       const memo      = document.getElementById('ef-memo')?.value      || '';
       const unpaid    = document.getElementById('ef-flag')?.checked    ? 1 : 0;
 
