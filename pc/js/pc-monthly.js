@@ -445,8 +445,14 @@ function renderRow(row) {
       : `<span class="pc-project-cell"></span>`;
   }
 
+  // 指示書10§5：tr 自体を focusable に（tabindex=0）。↑↓ で行間移動が可能になるのは
+  //  tr に直接 focus が当たっているとき（input/select/button 上では browser default を維持）
+  //  ロック行・編集中（input が focus される）・ドラフト行は対象外
+  const rowFocusable = !row.isLocked && !isEditing;
+  const tabindexAttr = rowFocusable ? ' tabindex="0"' : '';
+
   return `
-    <tr class="${classes}" data-row-key="${_escHtml(key)}" data-source="${row.source}" data-row-index="${row.rowIndex}">
+    <tr class="${classes}" data-row-key="${_escHtml(key)}" data-source="${row.source}" data-row-index="${row.rowIndex}"${tabindexAttr}>
       <td data-field-cell="date">${cellDate}</td>
       <td>${_escHtml(row.type)}</td>
       <td data-field-cell="subject">${cellSubject}</td>
@@ -763,16 +769,15 @@ function bindTbodyDelegation() {
       return;
     }
 
-    // ↑↓：INPUT 上のみ・編集中の非ドラフト行で行移動（指示書9§5）
-    //  SELECT は既定動作（option 選択）を尊重・preventDefault しない
-    if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && isEditInput && tr) {
-      const rowKey = tr.getAttribute('data-row-key');
-      if (rowKey.startsWith('draft-')) return;        // ドラフト行は対象外
-      if (inp.tagName !== 'INPUT') return;            // SELECT 上では既定動作維持
+    // ↑↓：tr 自身に focus がある「行選択状態」のときのみ行移動を発火（指示書10§5）
+    //   input / select / button が focus 中は browser default を維持（カーソル移動・option 切替・無動作）
+    //   tr の focus は tabindex="0" + Tab/click 等でユーザーが意図的に位置づけたときのみ
+    //   ドラフト行は tabindex なしのため自然に対象外（rowFocusable=false）
+    if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && e.target.tagName === 'TR' && tr) {
       e.preventDefault();
-      const field = inp.getAttribute('data-field');
-      if (e.key === 'ArrowDown') moveEditToNextRow(tr, field);
-      else moveEditToPrevRow(tr, field);
+      // 行選択状態からの遷移：先頭フィールド date を edit focus の起点とする
+      if (e.key === 'ArrowDown') moveEditToNextRow(tr, 'date');
+      else moveEditToPrevRow(tr, 'date');
       return;
     }
 
@@ -959,6 +964,15 @@ function addDraftRow(source) {
   // 最上段に挿入（§2-2 step3）
   _draftRows.unshift(draft);
   renderTable();
+  // 指示書10§2：新規ドラフト作成後、当該行の最初のフォーカス可能要素（日付 input）にフォーカス
+  //  → 直後に Esc を押せば tbody keydown ハンドラに確実に届き、ドラフト破棄が動作する
+  setTimeout(() => {
+    const tr = document.querySelector(`tr[data-row-key="draft-${draft.draftId}"]`);
+    if (tr) {
+      const firstInput = tr.querySelector('input, select');
+      if (firstInput) firstInput.focus();
+    }
+  }, 0);
 }
 
 async function commitDraftRow(draftId) {

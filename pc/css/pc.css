@@ -773,8 +773,15 @@ body.pc-body {
 }
 
 /* ── フラットテーブル ──────────────────────────────────── */
+/* 指示書10§3：overflow-x:auto を撤去
+ *   CSS仕様：overflow-x が non-visible だと overflow-y も auto に格上げされ
+ *   .pc-table-wrap 自身がスクロールコンテナ化する。max-height 未設定だと
+ *   実際には body スクロールしか発生しないため、thead の position:sticky は
+ *   .pc-table-wrap 内部でしか効かず viewport 上端に固定されない。
+ *   8列テーブルは通常の PC 解像度で十分収まるため、横スクロールが必要な場合は
+ *   body 全体で対応する（戦略思想§4-3 世界標準UI）。
+ */
 .pc-table-wrap {
-  overflow-x: auto;
   border: 1px solid var(--uz-border);
   border-radius: 6px;
   background: var(--uz-surface);
@@ -815,6 +822,12 @@ body.pc-body {
 }
 .pc-monthly-table tbody tr:hover {
   background: rgba(212, 175, 55, 0.04);
+}
+/* 指示書10§5：tr 自身が focus されている「行選択状態」を視覚化（↑↓ で行移動が可能なサイン） */
+.pc-monthly-table tbody tr:focus {
+  outline: 2px solid var(--uz-gold);
+  outline-offset: -2px;
+  background: rgba(212, 175, 55, 0.08);
 }
 
 /* ── 行スタイル（バッジ・状態） ───────────────────────── */
