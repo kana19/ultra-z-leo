@@ -9,16 +9,15 @@
 let _monthlyData = [];                 // 統合後の全行配列（並び：date desc, rowIndex asc）
 let _settings = { costMaster: [], serviceList: [] };
 let _filterState = {
-  month:   _todayYM(),
-  status:  'all',
-  type:    'all',
-  project: 'all',
+  month:   _todayYM(),                 // 月プルダウンのみ残置（指示書8§1：状態・種別・案件マーカーは列見出しフィルタへ移行）
 };
+let _activeFilters = {};               // 列見出しフィルタ { type: Set, subject: Set, taxRate: Set, project: Set }
 let _draftRows = [];                   // 未確定ドラフト行配列（テーブル最上段に表示）
 let _editingRowKey = null;             // 編集中の rowKey（同時編集は1行のみ）
 let _editingDraft = {};                // 編集中の途中値
 let _draftSeq = 0;                     // ドラフトIDカウンタ
 let _modalState = null;                // 紐付け候補モーダル状態 { direction, candidates, onConfirm, onClose, keydownHandler }
+let _colFilterDocClickHandler = null;  // 列見出しフィルタの外側クリック検知ハンドラ（解除用）
 
 /* ── ユーティリティ ──────────────────────────────────────── */
 function _todayYM() {
@@ -76,6 +75,7 @@ async function initMonthly() {
   bindFilterEvents();
   bindAddButtons();
   bindModalEvents();
+  bindColFilterButtons();
   await loadMonthlyData(_filterState.month);
 }
 
@@ -103,7 +103,7 @@ function buildMonthDropdown(currentMonth) {
 /* ── データ取得・統合 ────────────────────────────────────── */
 async function loadMonthlyData(month) {
   const tbody = document.getElementById('monthly-tbody');
-  if (tbody) tbody.innerHTML = '<tr><td colspan="9" class="loading">読み込み中…</td></tr>';
+  if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="loading">読み込み中…</td></tr>';
 
   try {
     const [historyRes, settingsRes] = await Promise.all([
@@ -130,7 +130,7 @@ async function loadMonthlyData(month) {
     renderTable();
   } catch (err) {
     console.error('[pc-monthly] loadMonthlyData failed', err);
-    if (tbody) tbody.innerHTML = `<tr><td colspan="9" class="loading">読み込みに失敗しました：${_escHtml(err.message || err)}</td></tr>`;
+    if (tbody) tbody.innerHTML = `<tr><td colspan="8" class="loading">読み込みに失敗しました：${_escHtml(err.message || err)}</td></tr>`;
   }
 }
 
@@ -196,14 +196,26 @@ function _sortRows(rows) {
   });
 }
 
-/* ── フィルタ ────────────────────────────────────────────── */
+/* ── フィルタ（列見出しフィルタ・指示書8§2 / 戦略思想§4-3） ─── */
+// 列ごとの値抽出。文字列に正規化して Set/比較に使う
+function _getColValue(row, col) {
+  if (col === 'type')    return row.type;
+  if (col === 'subject') return row.subject;
+  if (col === 'taxRate') return row.taxRate;
+  if (col === 'project') return !!row.isProject;
+  return '';
+}
+// フィルタ適用：_activeFilters に登録された各列について、行の値が許可セットに含まれるかを確認
 function applyFilters(rows) {
+  const cols = Object.keys(_activeFilters);
+  if (cols.length === 0) return rows;
   return rows.filter(r => {
-    if (_filterState.status === 'unpaid' && !r.isUnpaid) return false;
-    if (_filterState.status === 'locked' && !r.isLocked) return false;
-    if (_filterState.type !== 'all' && r.type !== _filterState.type) return false;
-    if (_filterState.project === 'project' && !r.isProject) return false;
-    if (_filterState.project === 'normal' && r.isProject) return false;
+    for (const col of cols) {
+      const allowed = _activeFilters[col];
+      if (!allowed || allowed.size === 0) continue;
+      const v = String(_getColValue(r, col));
+      if (!allowed.has(v)) return false;
+    }
     return true;
   });
 }
@@ -212,16 +224,171 @@ function bindFilterEvents() {
   const monthSel = document.getElementById('filter-month');
   monthSel?.addEventListener('change', async () => {
     _filterState.month = monthSel.value;
+    _activeFilters = {};   // 月切替時は列見出しフィルタもリセット
     await loadMonthlyData(_filterState.month);
   });
-  ['filter-status', 'filter-type', 'filter-project'].forEach(id => {
-    const el = document.getElementById(id);
-    el?.addEventListener('change', () => {
-      const key = id.replace('filter-', '');
-      _filterState[key] = el.value;
-      renderTable();
+}
+
+/**
+ * 列見出しに▼フィルタボタンを追加（th[data-filter-col] に対応）
+ * クリックで _openColFilter(col, btn) を呼び、絞り込みドロップダウンを開く
+ * フィルタ適用中はボタンに btn-col-filter--active を付与
+ */
+function bindColFilterButtons() {
+  document.querySelectorAll('th[data-filter-col]').forEach(th => {
+    const col = th.getAttribute('data-filter-col');
+    if (!col) return;
+    if (th.querySelector('.btn-col-filter')) return;  // 二重バインド防止
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn-col-filter';
+    btn.dataset.col = col;
+    btn.textContent = '▼';
+    btn.title = `${th.firstChild ? th.firstChild.textContent.trim() : col} で絞り込み`;
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      _openColFilter(col, btn);
+    });
+    th.appendChild(btn);
+  });
+}
+
+function _refreshColFilterButtonStates() {
+  document.querySelectorAll('.btn-col-filter').forEach(btn => {
+    const col = btn.dataset.col;
+    const set = _activeFilters[col];
+    if (set && set.size > 0) btn.classList.add('btn-col-filter--active');
+    else btn.classList.remove('btn-col-filter--active');
+  });
+}
+
+/**
+ * 列見出しフィルタのドロップダウンを開く（指示書8§2）
+ * 値の母集団：他の全フィルタは適用するが、自列のフィルタだけは外して集計（Excel互換）
+ *  → 「自列の値を全部見える状態」で他列での絞り込みを反映する
+ */
+function _openColFilter(col, btnEl) {
+  _closeColFilter();
+  const universe = _monthlyData.filter(r => {
+    for (const c of Object.keys(_activeFilters)) {
+      if (c === col) continue;
+      const allowed = _activeFilters[c];
+      if (!allowed || allowed.size === 0) continue;
+      const v = String(_getColValue(r, c));
+      if (!allowed.has(v)) return false;
+    }
+    return true;
+  });
+  const valueSet = new Set();
+  for (const r of universe) valueSet.add(String(_getColValue(r, col)));
+  const values = Array.from(valueSet).sort((a, b) => {
+    if (col === 'taxRate') return Number(a) - Number(b);
+    return a.localeCompare(b);
+  });
+  const active = _activeFilters[col];
+  // 既存のフィルタが無ければ全チェック・あれば該当のみチェック
+  const isChecked = (v) => !active || active.size === 0 || active.has(v);
+
+  const dropdown = document.createElement('div');
+  dropdown.className = 'col-filter-dropdown';
+  dropdown.id = '_col-filter-dropdown';
+  dropdown.dataset.col = col;
+  const allCheckedNow = values.every(isChecked);
+  const itemsHtml = values.map(v => `
+    <label><input type="checkbox" data-cf-value="${_escHtml(v)}" ${isChecked(v) ? 'checked' : ''}> ${_escHtml(_formatColLabel(col, v))}</label>
+  `).join('') || '<div class="col-filter-empty">表示できる値がありません</div>';
+  dropdown.innerHTML = `
+    <label class="col-filter-all"><input type="checkbox" data-cf-all ${allCheckedNow ? 'checked' : ''}> すべて選択</label>
+    <hr>
+    <div class="col-filter-list">${itemsHtml}</div>
+    <div class="col-filter-actions">
+      <button type="button" data-cf-action="clear">クリア</button>
+      <button type="button" data-cf-action="apply">適用</button>
+    </div>
+  `;
+  document.body.appendChild(dropdown);
+  const rect = btnEl.getBoundingClientRect();
+  dropdown.style.top  = (rect.bottom + window.scrollY + 2) + 'px';
+  dropdown.style.left = (rect.left   + window.scrollX) + 'px';
+
+  // 「すべて選択」⇄ 個別チェック の同期
+  const allInput = dropdown.querySelector('input[data-cf-all]');
+  const valInputs = Array.from(dropdown.querySelectorAll('input[data-cf-value]'));
+  if (allInput) {
+    allInput.addEventListener('change', () => {
+      valInputs.forEach(inp => { inp.checked = allInput.checked; });
+    });
+  }
+  valInputs.forEach(inp => {
+    inp.addEventListener('change', () => {
+      if (allInput) allInput.checked = valInputs.every(i => i.checked);
     });
   });
+  // クリア・適用
+  dropdown.addEventListener('click', (e) => {
+    const a = e.target && e.target.dataset && e.target.dataset.cfAction;
+    if (a === 'clear') {
+      delete _activeFilters[col];
+      _closeColFilter();
+      renderTable();
+    } else if (a === 'apply') {
+      const checked = valInputs.filter(i => i.checked).map(i => i.value);
+      if (checked.length === values.length) {
+        delete _activeFilters[col];
+      } else {
+        _activeFilters[col] = new Set(checked);
+      }
+      _closeColFilter();
+      renderTable();
+    }
+  });
+
+  // 外側クリックで閉じる
+  setTimeout(() => {
+    _colFilterDocClickHandler = (e) => {
+      if (!dropdown.contains(e.target) && e.target !== btnEl) {
+        _closeColFilter();
+      }
+    };
+    document.addEventListener('click', _colFilterDocClickHandler);
+  }, 0);
+}
+
+function _closeColFilter() {
+  const d = document.getElementById('_col-filter-dropdown');
+  if (d) d.remove();
+  if (_colFilterDocClickHandler) {
+    document.removeEventListener('click', _colFilterDocClickHandler);
+    _colFilterDocClickHandler = null;
+  }
+}
+
+function _formatColLabel(col, v) {
+  if (col === 'taxRate') return `${Number(v) || 0}%`;
+  if (col === 'project') return v === 'true' ? '案件' : '通常';
+  return String(v);
+}
+
+/**
+ * フィルタ適用中の集計行（指示書8§2）
+ *  - 「絞り込み結果：XX件 / 金額合計：¥XXX,XXX / 消費税合計：¥XX,XXX」
+ *  - フィルタ未適用時は tfoot 非表示
+ */
+function _renderFilterSummary(visibleRows) {
+  const tfoot = document.getElementById('monthly-tfoot');
+  const cell  = document.getElementById('monthly-filter-summary');
+  if (!tfoot || !cell) return;
+  const hasFilter = Object.keys(_activeFilters).some(c => _activeFilters[c] && _activeFilters[c].size > 0);
+  if (!hasFilter) { tfoot.hidden = true; cell.textContent = ''; return; }
+  let count = 0, sumAmount = 0, sumTax = 0;
+  for (const r of visibleRows) {
+    if (r.source === 'draft') continue;  // ドラフト行は集計対象外
+    count++;
+    sumAmount += Number(r.amount)    || 0;
+    sumTax    += Number(r.taxAmount) || 0;
+  }
+  cell.textContent = `絞り込み結果：${count}件 / 金額合計：¥${_formatYenPlain(sumAmount)} / 消費税合計：¥${_formatYenPlain(sumTax)}`;
+  tfoot.hidden = false;
 }
 
 /* ── 描画 ────────────────────────────────────────────────── */
@@ -232,8 +399,10 @@ function renderTable() {
   // ドラフト行を最上段（指示書5§2-2 step3 / §3-5）
   const draftHtml = _draftRows.map(d => renderDraftRow(d)).join('');
   const rowHtml   = rows.map(r => renderRow(r)).join('');
-  tbody.innerHTML = (draftHtml + rowHtml) || '<tr><td colspan="9" class="loading">該当する行がありません</td></tr>';
+  tbody.innerHTML = (draftHtml + rowHtml) || '<tr><td colspan="8" class="loading">該当する行がありません</td></tr>';
   bindRowEvents();
+  _refreshColFilterButtonStates();
+  _renderFilterSummary(rows);
 }
 
 function renderRow(row) {
@@ -262,38 +431,27 @@ function renderRow(row) {
     ? `<input type="text" class="pc-edit-input" data-field="memo" value="${_escHtml(row.memo)}">`
     : _escHtml(row.memo);
 
-  // 案件列：🔶（isProject=true）／空（false）
-  const cellProject = row.isProject
-    ? `<span class="pc-project-cell is-project" title="案件">🔶</span>`
-    : `<span class="pc-project-cell"></span>`;
-
-  // 操作列
-  let actionsHtml = '';
+  // 案件列：状態別に1セルへ集約（指示書8§1：操作列廃止・☆/★/解除申請/編集中ボタンを統合）
+  //  - 編集中：保存・取消
+  //  - ロック：解除申請
+  //  - 案件済（isProject=true）：★（解除）
+  //  - 未案件（isProject=false かつ案件化可能）：☆（案件化）
+  //  - 案件化対象外コスト：空セル
+  let cellProject;
   if (isEditing) {
-    actionsHtml = `
+    cellProject = `
       <button type="button" class="pc-action-btn pc-action-btn--save" data-action="save-edit">保存</button>
       <button type="button" class="pc-action-btn" data-action="cancel-edit">取消</button>
     `;
   } else if (row.isLocked) {
-    // ロック行は「解除申請」のみ（編集不可）
-    actionsHtml = `<button type="button" class="pc-action-btn pc-action-btn--unlock" data-action="request-unlock">解除申請</button>`;
+    cellProject = `<button type="button" class="pc-action-btn pc-action-btn--unlock" data-action="request-unlock">解除申請</button>`;
+  } else if (row.isProject) {
+    cellProject = `<button type="button" class="btn-star btn-star--active" data-action="unmark-project" title="案件登録解除">★</button>`;
   } else {
-    // 案件化／解除ボタン
-    //  - 売上 + !isProject：案件化（売上→コスト紐付けモーダルを開く）
-    //  - 売上 + isProject ：解除（案件登録解除・指示書7§2）
-    //  - コスト + !isProject + isLinkable：案件化（コスト→売上紐付けモーダルを開く）
-    if (row.source === 'sales') {
-      if (row.isProject) {
-        actionsHtml += `<button type="button" class="btn-unmark-project" data-action="unmark-project">解除</button>`;
-      } else {
-        actionsHtml += `<button type="button" class="pc-action-btn pc-action-btn--project" data-action="mark-project">案件化</button>`;
-      }
-    } else if (row.source === 'cost' && !row.isProject && _isLinkableCost(row)) {
-      actionsHtml += `<button type="button" class="pc-action-btn pc-action-btn--project" data-action="mark-project">案件化</button>`;
-    }
-    if (row.isUnpaid) {
-      actionsHtml += `<button type="button" class="pc-action-btn pc-action-btn--reconcile" data-action="reconcile">消込</button>`;
-    }
+    const canMark = row.source === 'sales' || (row.source === 'cost' && _isLinkableCost(row));
+    cellProject = canMark
+      ? `<button type="button" class="btn-star" data-action="mark-project" title="案件化">☆</button>`
+      : `<span class="pc-project-cell"></span>`;
   }
 
   return `
@@ -305,8 +463,7 @@ function renderRow(row) {
       <td data-field-cell="taxRate">${cellTaxRate}</td>
       <td class="num">${cellTax}</td>
       <td data-field-cell="memo">${cellMemo}</td>
-      <td>${cellProject}</td>
-      <td class="pc-row--actions">${actionsHtml}</td>
+      <td class="pc-project-col">${cellProject}</td>
     </tr>
   `;
 }
@@ -335,8 +492,7 @@ function renderDraftRow(draft) {
       <td>${renderTaxRateSelect(draft.taxRate, 'draft')}</td>
       <td class="num">${_formatYenPlain(draftTax)}</td>
       <td><input type="text" class="pc-edit-input" data-field="memo" value="${_escHtml(draft.memo)}" placeholder="メモ"></td>
-      <td><span class="pc-project-cell"></span></td>
-      <td class="pc-row--actions">
+      <td class="pc-project-col">
         <button type="button" class="pc-action-btn pc-action-btn--save" data-action="commit-draft" ${submitDisabled}>登録</button>
         <button type="button" class="pc-action-btn" data-action="discard-draft">取消</button>
       </td>
@@ -848,35 +1004,147 @@ async function onMarkAsProject(rowKey) {
   }
 }
 
-// 案件登録解除（指示書7§2 / 戦略思想§1-5-2 AI自動確定禁止：提案ボタン → 確認モーダル → 確定の3ステップ）
-//  - 売上行の U列 を空欄に戻す（GAS unmarkAsProject）
-//  - 紐付け済みコストの V列（紐付け先売上行ID）は GAS 側で意図的に保持
-//    → 紐付け解除は別途案件管理画面または各コストの個別操作で実施
+/**
+ * 案件登録解除ディスパッチャ（指示書8§1-3 / 戦略思想§1-5-2 AI自動確定禁止）
+ * 売上行の★クリック：紐付き済みコストをチェックボックスで提示し、外したものは同時に紐付け解除
+ * コスト行の★クリック：単一の紐付け解除確認モーダル
+ * 3ステップ厳守：提案 → ユーザー確認（チェック操作）→ 確定（解除するボタン）
+ */
 async function onUnmarkAsProject(rowKey) {
   const row = _monthlyData.find(r => _rowKey(r) === rowKey);
-  if (!row) return;
-  if (row.source !== 'sales' || !row.isProject) return;
+  if (!row || !row.isProject) return;
+  if (row.source === 'cost') {
+    return _onUnlinkCostFromSales(row);
+  }
+  if (row.source !== 'sales') return;
 
-  const message = `${row.date} / ${row.subject} / ¥${_formatYenPlain(row.amount)} の案件登録を解除します。紐付け済みのコストの紐付けは別途解除が必要です。`;
+  // 売上：現在表示中の月から、この売上に紐付く全コスト行を抽出
+  const linkedCosts = row.salesRowId
+    ? _monthlyData.filter(r => r.source === 'cost' && r.salesRowId === row.salesRowId)
+    : [];
+
+  if (linkedCosts.length === 0) {
+    // 紐付き0件：案件登録のみ解除（指示書8§1-3 経費0件分岐）
+    openZeroCandidatesPrompt({
+      message: '紐付き経費はありません。案件登録のみ解除します。',
+      target: { kind: 'sales', date: row.date, subject: row.subject, amount: row.amount, memo: row.memo },
+      confirmLabel: '解除する',
+      onConfirm: async () => {
+        try { await _executeUnmarkSales(row, []); }
+        catch (err) { showLinkCandidatesError(err.message || String(err)); }
+      }
+    });
+    return;
+  }
+
+  _openUnmarkSalesModal(row, linkedCosts);
+}
+
+// AI提案：紐付きコスト一覧を全チェック済みのチェックボックスで表示
+//  - 既存の紐付け候補モーダルDOMを流用（_renderModalTargetHeader でヘッダー表示）
+//  - チェックを外したコスト行のみ V列を空に戻す（紐付け解除）
+//  - 売上の U列は常に解除する（チェック状態に関係なく）
+function _openUnmarkSalesModal(salesRow, linkedCosts) {
+  const modal = document.getElementById('pc-link-candidates-modal');
+  const list  = document.getElementById('pc-link-candidates-list');
+  const hintEl = document.getElementById('pc-link-candidates-hint');
+  const errEl  = document.getElementById('pc-link-candidates-error');
+  const confirmBtn = document.getElementById('pc-link-candidates-confirm');
+  if (!modal || !list || !hintEl) return;
+
+  _renderModalTargetHeader({ kind: 'sales', date: salesRow.date, subject: salesRow.subject, amount: salesRow.amount, memo: salesRow.memo });
+  hintEl.textContent = 'チェックを外した経費は同時に紐付け解除されます。チェックを残した経費は紐付きを保持したまま、案件登録のみ解除されます。';
+  if (errEl) { errEl.hidden = true; errEl.textContent = ''; }
+
+  list.innerHTML = linkedCosts.map(c => `
+    <label class="pc-link-candidates-row">
+      <input type="checkbox" name="pc-unmark-cost" value="${c.rowIndex}" checked>
+      <span>${_escHtml(c.date || '')}</span>
+      <span>${_escHtml(c.subject || '')}</span>
+      <span class="pc-link-candidates-row__amount">${_formatYenPlain(c.amount || 0)}</span>
+      <span class="pc-link-candidates-row__memo">${_escHtml(c.memo || '')}</span>
+    </label>
+  `).join('');
+
+  if (confirmBtn) {
+    confirmBtn.hidden = false;
+    confirmBtn.textContent = '解除する';
+  }
+
+  _modalState = {
+    direction: 'unmark-sales',
+    mode: 'unmark-sales',
+    onConfirm: async () => {
+      const checkedInputs = list.querySelectorAll('input[type="checkbox"]:checked');
+      const keepRowIndexes = new Set(Array.from(checkedInputs).map(i => Number(i.value)));
+      const unlinkRowIndexes = linkedCosts
+        .map(c => c.rowIndex)
+        .filter(rIdx => !keepRowIndexes.has(rIdx));
+      try { await _executeUnmarkSales(salesRow, unlinkRowIndexes); }
+      catch (err) { showLinkCandidatesError(err.message || String(err)); }
+    },
+  };
+
+  const keydownHandler = (e) => {
+    if (e.key === 'Escape') { e.preventDefault(); closeLinkCandidatesModal(); }
+  };
+  document.addEventListener('keydown', keydownHandler);
+  _modalState.keydownHandler = keydownHandler;
+
+  modal.hidden = false;
+}
+
+// 解除実行：unmarkAsProject（売上U列クリア）+ linkTransactions(salesRowId='')（コストV列クリア）
+//  GAS の linkTransactions は salesRowId 空文字を渡すと紐付け解除として動作する
+//  （売上U列はそちらでは触らないので、明示的に unmarkAsProject を別途呼び出す）
+async function _executeUnmarkSales(salesRow, costRowIndexesToUnlink) {
+  const unmarkRes = await callGAS('unmarkAsProject', {
+    rowIndex: salesRow.rowIndex,
+    sheetName: '売上',
+  });
+  if (!unmarkRes || unmarkRes.status !== 'ok') {
+    throw new Error((unmarkRes && unmarkRes.message) || '案件解除に失敗しました');
+  }
+  salesRow.isProject = false;
+
+  if (costRowIndexesToUnlink.length > 0) {
+    const items = costRowIndexesToUnlink.map(rIdx => ({ rowIndex: rIdx, salesRowId: '' }));
+    const linkRes = await callGAS('linkTransactions', { items });
+    if (!linkRes || linkRes.status !== 'ok') {
+      throw new Error((linkRes && linkRes.message) || '紐付け解除に失敗しました');
+    }
+    for (const rIdx of costRowIndexesToUnlink) {
+      const c = _monthlyData.find(r => r.source === 'cost' && r.rowIndex === rIdx);
+      if (c) { c.isProject = false; c.salesRowId = ''; }
+    }
+  }
+  showToast('案件登録を解除しました', 'success', 2000);
+  closeLinkCandidatesModal();
+  renderTable();
+}
+
+// コスト行の★クリック：単発の紐付け解除確認（売上U列は触らない）
+async function _onUnlinkCostFromSales(costRow) {
+  if (costRow.source !== 'cost' || !costRow.isProject) return;
   openZeroCandidatesPrompt({
-    message: message,
-    target: null,
+    message: '紐付けを解除します。売上側の案件登録はそのまま残ります。',
+    target: { kind: 'cost', date: costRow.date, type: costRow.type, subject: costRow.subject, amount: costRow.amount, memo: costRow.memo },
     confirmLabel: '解除する',
     onConfirm: async () => {
       try {
-        const res = await callGAS('unmarkAsProject', {
-          rowIndex: row.rowIndex,
-          sheetName: '売上',
+        const res = await callGAS('linkTransactions', {
+          items: [{ rowIndex: costRow.rowIndex, salesRowId: '' }],
         });
         if (!res || res.status !== 'ok') {
-          throw new Error((res && res.message) || '解除に失敗しました');
+          throw new Error((res && res.message) || '紐付け解除に失敗しました');
         }
-        row.isProject = false;
-        showToast('案件登録を解除しました', 'success', 2000);
+        costRow.isProject = false;
+        costRow.salesRowId = '';
+        showToast('紐付けを解除しました', 'success', 2000);
         closeLinkCandidatesModal();
         renderTable();
       } catch (err) {
-        console.error('[pc-monthly] onUnmarkAsProject', err);
+        console.error('[pc-monthly] _onUnlinkCostFromSales', err);
         showLinkCandidatesError(err.message || String(err));
       }
     }
@@ -1192,8 +1460,8 @@ async function handleModalConfirm() {
   const onConfirm = _modalState.onConfirm;
   if (!onConfirm) return;
 
-  if (_modalState.mode === 'zero') {
-    // 経費0件案件として登録
+  if (_modalState.mode === 'zero' || _modalState.mode === 'unmark-sales') {
+    // zero：経費0件案件として登録 ／ unmark-sales：チェックボックス状態は onConfirm 内部で取得
     await onConfirm();
     return;
   }

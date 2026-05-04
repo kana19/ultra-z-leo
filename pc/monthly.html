@@ -12,33 +12,9 @@
   <main class="pc-main" id="pc-main">
     <div class="pc-body-inner">
 
-      <!-- フィルタ -->
+      <!-- フィルタ：月選択のみ（指示書8§1：状態・種別・案件マーカープルダウンは列見出しフィルタへ移行） -->
       <section class="pc-filter-bar" aria-label="月次管理フィルタ">
         <label>月：<select id="filter-month"></select></label>
-        <label>状態：
-          <select id="filter-status">
-            <option value="all">すべて</option>
-            <option value="unpaid">未収・未払のみ</option>
-            <option value="locked">ロック行のみ</option>
-          </select>
-        </label>
-        <label>種別：
-          <select id="filter-type">
-            <option value="all">すべて</option>
-            <option value="売上">売上</option>
-            <option value="仕入原価">仕入原価</option>
-            <option value="販管費">販管費</option>
-            <option value="委託・外注">委託・外注</option>
-            <option value="人件費">人件費</option>
-          </select>
-        </label>
-        <label>案件マーカー：
-          <select id="filter-project">
-            <option value="all">すべて</option>
-            <option value="project">案件のみ</option>
-            <option value="normal">通常のみ</option>
-          </select>
-        </label>
       </section>
 
       <!-- 行追加ボタン（テーブル上部・指示書5§2-2 / 戦略思想§4-3） -->
@@ -53,19 +29,21 @@
           <thead>
             <tr>
               <th>発生日</th>
-              <th>種別</th>
-              <th>科目</th>
+              <th data-filter-col="type">種別</th>
+              <th data-filter-col="subject">科目</th>
               <th class="num">金額(税込)</th>
-              <th>税率</th>
+              <th data-filter-col="taxRate">税率</th>
               <th class="num">消費税</th>
               <th>メモ</th>
-              <th>案件</th>
-              <th>操作</th>
+              <th data-filter-col="project">案件</th>
             </tr>
           </thead>
           <tbody id="monthly-tbody">
-            <tr><td colspan="9" class="loading">読み込み中…</td></tr>
+            <tr><td colspan="8" class="loading">読み込み中…</td></tr>
           </tbody>
+          <tfoot id="monthly-tfoot" hidden>
+            <tr><td colspan="8" class="pc-filter-summary" id="monthly-filter-summary"></td></tr>
+          </tfoot>
         </table>
       </section>
 

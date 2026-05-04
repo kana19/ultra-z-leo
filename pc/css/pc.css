@@ -904,15 +904,83 @@ body.pc-body {
 .pc-action-btn--save:hover {
   background: rgba(76, 175, 128, 0.22);
 }
-/* 案件登録解除ボタン（指示書7§2：戦略思想§1-5-2 AI自動確定禁止の3ステップ厳守・確認モーダル付き） */
-.btn-unmark-project {
-  background: var(--uz-red);
-  color: #fff;
+/* ☆/★ボタン（指示書8§1：操作列廃止に伴い案件セルへ統合） */
+.btn-star {
+  background: none;
   border: none;
-  border-radius: 4px;
-  padding: 3px 8px;
+  font-size: 16px;
+  cursor: pointer;
+  color: var(--uz-text2);
+  padding: 2px 4px;
+  transition: color 0.15s;
+}
+.btn-star:hover { color: var(--uz-gold); }
+.btn-star--active { color: var(--uz-gold); }
+
+/* 列見出しフィルタボタン（指示書8§2：Excelライク絞り込み） */
+.btn-col-filter {
+  background: none;
+  border: none;
+  font-size: 10px;
+  cursor: pointer;
+  color: var(--uz-text2);
+  padding: 0 2px;
+  vertical-align: middle;
+}
+.btn-col-filter--active {
+  color: var(--uz-gold);
+  font-weight: bold;
+}
+
+/* 列見出しフィルタドロップダウン */
+.col-filter-dropdown {
+  position: absolute;
+  background: var(--uz-surface2);
+  border: 1px solid var(--uz-border2);
+  border-radius: 6px;
+  padding: 8px;
+  z-index: 100;
+  min-width: 160px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+.col-filter-dropdown label {
+  display: block;
+  padding: 3px 0;
+  font-size: 13px;
+  cursor: pointer;
+}
+.col-filter-dropdown hr { border: 0; border-top: 1px solid var(--uz-border); margin: 6px 0; }
+.col-filter-dropdown .col-filter-list { max-height: 240px; overflow-y: auto; }
+.col-filter-dropdown .col-filter-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--uz-border);
+}
+.col-filter-dropdown .col-filter-actions button {
+  background: var(--uz-surface);
+  color: var(--uz-text);
+  border: 1px solid var(--uz-border);
+  border-radius: 3px;
+  padding: 3px 10px;
   font-size: 12px;
   cursor: pointer;
+}
+.col-filter-dropdown .col-filter-actions button[data-cf-action="apply"] {
+  background: var(--uz-gold);
+  color: var(--uz-bg);
+  border-color: var(--uz-gold);
+}
+.col-filter-empty { color: var(--uz-text3); font-size: 12px; padding: 8px 0; }
+
+/* フィルタ集計行（指示書8§2） */
+.pc-filter-summary {
+  padding: 6px 12px;
+  font-size: 12px;
+  color: var(--uz-gold);
+  border-top: 1px solid var(--uz-border);
 }
 
 /* ── 行追加ボタン ───────────────────────────────────────── */
@@ -955,6 +1023,14 @@ body.pc-body {
 .pc-project-cell.is-project {
   color: var(--uz-gold);
 }
+
+/* 案件列セル：☆/★/解除申請/保存・取消ボタンを集約（指示書8§1：操作列廃止） */
+.pc-project-col {
+  white-space: nowrap;
+  text-align: center;
+}
+.pc-project-col .pc-action-btn { margin-right: 4px; }
+.pc-project-col .pc-action-btn:last-child { margin-right: 0; }
 
 /* ═══════════════════════════════════════════════════════════
    紐付け候補モーダル（指示書5§2-4 / §3-1〜§3-3）
