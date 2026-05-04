@@ -37,13 +37,21 @@
               <th data-filter-col="memo">メモ</th>
               <th data-filter-col="project">案件</th>
             </tr>
+            <!-- フィルタ集計行（指示書8-6§2）：thead 直下に sticky 配置・各列セルに集計値を直接表示 -->
+            <tr class="monthly-summary-row" id="monthly-summary-row" hidden>
+              <td class="monthly-summary-cell" data-summary-col="count"></td>
+              <td></td>
+              <td></td>
+              <td class="num monthly-summary-cell" data-summary-col="amount"></td>
+              <td></td>
+              <td class="num monthly-summary-cell" data-summary-col="tax"></td>
+              <td></td>
+              <td></td>
+            </tr>
           </thead>
           <tbody id="monthly-tbody">
             <tr><td colspan="8" class="loading">読み込み中…</td></tr>
           </tbody>
-          <tfoot id="monthly-tfoot" hidden>
-            <tr><td colspan="8" class="pc-filter-summary" id="monthly-filter-summary"></td></tr>
-          </tfoot>
         </table>
       </section>
 

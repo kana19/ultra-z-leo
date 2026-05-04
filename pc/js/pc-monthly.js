@@ -383,17 +383,17 @@ function _closeColFilter() {
 }
 
 /**
- * フィルタ適用中の集計行（指示書8§2 / 8-2§4）
- *  - 「絞り込み結果：XX件 / 金額合計：¥XXX,XXX / 消費税合計：¥XX,XXX」
- *  - フィルタ未適用時は tfoot 非表示
- *  - ドラフト行は集計対象外
+ * フィルタ適用中の集計行（指示書8§2 / 8-2§4 / 8-6§2）
+ *  thead 直下の sticky 行に各列対応のセルを更新する：
+ *    発生日列 → 件数 / 金額列 → 金額合計 / 消費税列 → 消費税合計（その他列は空欄）
+ *  フィルタ未適用時は集計行を非表示。ドラフト行は集計対象外。
+ *  Excel AutoFilter ステータスバー / SaaS（kintone・Notion）の集計UI と同等（戦略思想§4-3）。
  */
 function _renderFilterSummary(visibleRows) {
-  const tfoot = document.getElementById('monthly-tfoot');
-  const cell  = document.getElementById('monthly-filter-summary');
-  if (!tfoot || !cell) return;
+  const summaryRow = document.getElementById('monthly-summary-row');
+  if (!summaryRow) return;
   const hasFilter = Object.keys(_activeFilters).some(c => _hasActiveColFilter(c));
-  if (!hasFilter) { tfoot.hidden = true; cell.textContent = ''; return; }
+  if (!hasFilter) { summaryRow.hidden = true; return; }
   let count = 0, sumAmount = 0, sumTax = 0;
   for (const r of visibleRows) {
     if (r.source === 'draft') continue;
@@ -401,8 +401,14 @@ function _renderFilterSummary(visibleRows) {
     sumAmount += Number(r.amount)    || 0;
     sumTax    += Number(r.taxAmount) || 0;
   }
-  cell.textContent = `絞り込み結果：${count}件 / 金額合計：¥${_formatYenPlain(sumAmount)} / 消費税合計：¥${_formatYenPlain(sumTax)}`;
-  tfoot.hidden = false;
+  const setCell = (col, txt) => {
+    const c = summaryRow.querySelector(`[data-summary-col="${col}"]`);
+    if (c) c.textContent = txt;
+  };
+  setCell('count',  `${count}件`);
+  setCell('amount', `¥${_formatYenPlain(sumAmount)}`);
+  setCell('tax',    `¥${_formatYenPlain(sumTax)}`);
+  summaryRow.hidden = false;
 }
 
 /* ── 描画 ────────────────────────────────────────────────── */
@@ -511,11 +517,11 @@ function renderDraftRow(draft) {
       <td><input type="text" class="pc-edit-input" data-field="memo" value="${_escHtml(draft.memo)}" placeholder="メモ"></td>
       <td class="pc-project-col">
         <button type="button" class="pc-action-btn pc-action-btn--save" data-action="commit-draft" ${submitDisabled}>登録</button>
-        <button type="button" class="pc-action-btn" data-action="discard-draft">取消</button>
       </td>
     </tr>
   `;
 }
+// 指示書8-6§1：ドラフト行の取消ボタンは削除（破棄は Esc キーで実施・戦略思想§4-3 世界標準）
 
 /**
  * コストドラフト行の区分タブ（仕入原価 / 販管費）
@@ -762,21 +768,30 @@ function bindTbodyDelegation() {
         if (isDraft) discardDraftRow(rowKey.replace('draft-', ''));
         else cancelEdit();
       } else if (e.key === 'Enter' && !e.shiftKey) {
-        // 仕様§3-4：Tab/Enter は次セルへフォーカスを動かすだけ・自動保存しない
         e.preventDefault();
-        if (!isDraft) {
+        if (isDraft) {
+          // 指示書8-6§1：ドラフト行 Enter で必須項目バリデーション通過時のみ commitDraftRow 発火
+          //  Excel・銀行ATM 等の世界標準（戦略思想§4-3）。ユーザー手入力フォームの Enter 送信は
+          //  AI 自動確定禁止（§1-4 / §1-5-2）の対象外
+          const draftId = rowKey.replace('draft-', '');
+          const d = _draftRows.find(x => String(x.draftId) === String(draftId));
+          if (d && _isDraftValid(d)) commitDraftRow(draftId);
+          // バリデーション未通過時は no-op（disabled な登録ボタンと同じ挙動）
+        } else {
+          // 既存行編集中：仕様§3-4 Tab/Enter は次セル移動のみ
           const field = inp.getAttribute('data-field');
           moveEditToNextRow(tr, field);
         }
-        // ドラフト行は Enter 抑止のみ（誤確定防止・§1-4 / §3-5）
       }
       return;
     }
-    // §1-4 AI自動確定禁止：登録・案件化系ボタン上での Enter キーを抑止
+    // §1-4 AI自動確定禁止：AI 提案系ボタン上の Enter キーを抑止
+    //  指示書8-6§1：commit-draft はユーザー手入力フォームの確定なので Enter 抑止対象外（§1-5-2 非該当）
+    //  mark-project / unmark-project は AI 提案＋ユーザー確認の3ステップを経るため Enter 抑止を維持
     const actionEl = e.target.closest && e.target.closest('[data-action]');
     if (actionEl && e.key === 'Enter') {
       const action = actionEl.getAttribute('data-action');
-      if (action === 'commit-draft' || action === 'mark-project' || action === 'unmark-project') {
+      if (action === 'mark-project' || action === 'unmark-project') {
         e.preventDefault();
       }
     }
