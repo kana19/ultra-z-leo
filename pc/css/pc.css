@@ -796,11 +796,15 @@ body.pc-body {
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
-.pc-monthly-table thead th {
-  background: var(--uz-surface2);
+/* 指示書9§3：thead 自体を sticky 化することで、列ヘッダ＋集計行（2行構成）が一体で固定される。
+   個別 th/td の position:sticky と top px 値の組み合わせは行高ズレの原因になるため撤去。 */
+.pc-monthly-table thead {
   position: sticky;
   top: 0;
-  z-index: 1;
+  z-index: 2;
+}
+.pc-monthly-table thead th {
+  background: var(--uz-surface2);
   font-size: 11px;
   font-weight: 700;
   color: var(--uz-gold);
@@ -975,20 +979,22 @@ body.pc-body {
 }
 .col-filter-empty { color: var(--uz-text3); font-size: 12px; padding: 8px 0; }
 
-/* フィルタ集計行（指示書8-6§2）：thead 内2行目に sticky 配置・列ごとに対応する集計値を表示
-   thead 1行目の高さ = padding 8px×2 + font-size 11px + line-height ≒ 30px
-   集計行の top はその高さ分オフセットして1行目の直下に重ならず固定する */
+/* フィルタ集計行（指示書8-6§2 / 9§3）：thead 自体が sticky のため top 値は不要。
+   背景色とフォント色だけで thead 1行目から視覚的に区別する。 */
 .pc-monthly-table thead tr.monthly-summary-row td {
   background: var(--uz-amber-bg);
-  position: sticky;
-  top: 30px;
-  z-index: 1;
   font-size: 12px;
   font-weight: 700;
   color: var(--uz-gold);
   border-bottom: 1px solid var(--uz-border);
 }
 .monthly-summary-cell { white-space: nowrap; }
+
+/* 指示書9§4：金額入力欄のブラウザ既定スピナー（▲▼）を非表示
+   id=monthly-table 内のみに限定して他画面の number 入力には影響させない */
+#monthly-table input[type="number"]::-webkit-inner-spin-button,
+#monthly-table input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+#monthly-table input[type="number"] { -moz-appearance: textfield; }
 
 /* ── 行追加ボタン ───────────────────────────────────────── */
 .pc-add-buttons {

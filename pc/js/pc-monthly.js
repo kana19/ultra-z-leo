@@ -6,11 +6,12 @@
 'use strict';
 
 /* ── 状態 ──────────────────────────────────────────────── */
+// 指示書9§1：月選択UIを廃止。常に今月のデータを読み込む。月跨ぎは列見出しフィルタで対応
+const now = new Date();
+const _currentMonth = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+
 let _monthlyData = [];                 // 統合後の全行配列（並び：date desc, rowIndex asc）
 let _settings = { costMaster: [], serviceList: [] };
-let _filterState = {
-  month:   _todayYM(),                 // 月プルダウンのみ残置（指示書8§1：状態・種別・案件マーカーは列見出しフィルタへ移行）
-};
 let _activeFilters = {};               // 列見出しフィルタ { type: Set, subject: Set, taxRate: Set, project: Set }
 let _draftRows = [];                   // 未確定ドラフト行配列（テーブル最上段に表示）
 let _editingRowKey = null;             // 編集中の rowKey（同時編集は1行のみ）
@@ -20,10 +21,7 @@ let _modalState = null;                // 紐付け候補モーダル状態 { di
 let _colFilterDocClickHandler = null;  // 列見出しフィルタの外側クリック検知ハンドラ（解除用）
 
 /* ── ユーティリティ ──────────────────────────────────────── */
-function _todayYM() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-}
+// _todayYM は指示書9§1 で廃止（月フィルタ UI 撤去・_currentMonth 定数で代替）
 
 function _escHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, c =>
@@ -71,34 +69,11 @@ document.addEventListener('DOMContentLoaded', initMonthly);
 
 async function initMonthly() {
   pcBootstrap('monthly.html', '月次管理');
-  buildMonthDropdown(_filterState.month);
-  bindFilterEvents();
   bindAddButtons();
   bindModalEvents();
   bindColFilterButtons();
   bindTbodyDelegation();   // 指示書8-5§1：tbody 単位の統一イベントデリゲーション
-  await loadMonthlyData(_filterState.month);
-}
-
-function buildMonthDropdown(currentMonth) {
-  const sel = document.getElementById('filter-month');
-  if (!sel) return;
-  sel.innerHTML = '';
-  const now = new Date();
-  // 過去12ヶ月＋当月（既定=当月）
-  const months = [];
-  for (let i = 0; i <= 12; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const v = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-    months.push({ v, label: `${d.getFullYear()}年${d.getMonth() + 1}月` });
-  }
-  for (const m of months) {
-    const opt = document.createElement('option');
-    opt.value = m.v;
-    opt.textContent = m.label;
-    if (m.v === currentMonth) opt.selected = true;
-    sel.appendChild(opt);
-  }
+  await loadMonthlyData(_currentMonth);
 }
 
 /* ── データ取得・統合 ────────────────────────────────────── */
@@ -239,14 +214,7 @@ function _hasActiveColFilter(col) {
   return !!v && v.size > 0;
 }
 
-function bindFilterEvents() {
-  const monthSel = document.getElementById('filter-month');
-  monthSel?.addEventListener('change', async () => {
-    _filterState.month = monthSel.value;
-    _activeFilters = {};   // 月切替時は列見出しフィルタもリセット
-    await loadMonthlyData(_filterState.month);
-  });
-}
+// 指示書9§1：月選択 change リスナーは撤去（月フィルタUI 廃止のため）
 
 /**
  * 列見出しに▼フィルタボタンを追加（th[data-filter-col] に対応）
@@ -755,39 +723,60 @@ function bindTbodyDelegation() {
     }
   });
 
-  // ─── keydown：Escape/Enter による編集制御＋AI自動確定抑止 ───
+  // ─── keydown：Excel 標準キー操作（指示書9§5 / 戦略思想§4-3） ───
+  //  Esc → 取消（任意の focus 位置で動作・登録ボタン上で Esc を押してもドラフト破棄できるよう統一）
+  //  Enter → 保存（pc-edit-input 上のみ・ドラフトは _isDraftValid 通過時 commitDraftRow / 編集中は commitEdit）
+  //  ↑↓ → 行間フォーカス移動（INPUT 限定・SELECT 上では既定動作・ドラフト行は対象外）
+  //  Tab / Delete → ブラウザ既定動作（独自 preventDefault せず）
+  //  AI 自動確定禁止：mark-project / unmark-project ボタン上の Enter キーは preventDefault で抑止
   tbody.addEventListener('keydown', (e) => {
+    const tr = e.target.closest && e.target.closest('tr[data-row-key]');
     const inp = e.target;
-    if (inp && inp.classList && inp.classList.contains('pc-edit-input')) {
-      const tr = inp.closest('tr[data-row-key]');
-      if (!tr) return;
+    const isEditInput = inp && inp.classList && inp.classList.contains('pc-edit-input');
+
+    // Esc：focus 位置に関わらず統一処理（指示書9§2：登録ボタン上 Esc でもドラフト破棄）
+    if (e.key === 'Escape' && tr) {
       const rowKey = tr.getAttribute('data-row-key');
-      const isDraft = rowKey.startsWith('draft-');
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        if (isDraft) discardDraftRow(rowKey.replace('draft-', ''));
-        else cancelEdit();
-      } else if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        if (isDraft) {
-          // 指示書8-6§1：ドラフト行 Enter で必須項目バリデーション通過時のみ commitDraftRow 発火
-          //  Excel・銀行ATM 等の世界標準（戦略思想§4-3）。ユーザー手入力フォームの Enter 送信は
-          //  AI 自動確定禁止（§1-4 / §1-5-2）の対象外
-          const draftId = rowKey.replace('draft-', '');
-          const d = _draftRows.find(x => String(x.draftId) === String(draftId));
-          if (d && _isDraftValid(d)) commitDraftRow(draftId);
-          // バリデーション未通過時は no-op（disabled な登録ボタンと同じ挙動）
-        } else {
-          // 既存行編集中：仕様§3-4 Tab/Enter は次セル移動のみ
-          const field = inp.getAttribute('data-field');
-          moveEditToNextRow(tr, field);
-        }
+      e.preventDefault();
+      if (rowKey.startsWith('draft-')) {
+        discardDraftRow(rowKey.replace('draft-', ''));
+      } else if (_editingRowKey) {
+        cancelEdit();
       }
       return;
     }
-    // §1-4 AI自動確定禁止：AI 提案系ボタン上の Enter キーを抑止
-    //  指示書8-6§1：commit-draft はユーザー手入力フォームの確定なので Enter 抑止対象外（§1-5-2 非該当）
-    //  mark-project / unmark-project は AI 提案＋ユーザー確認の3ステップを経るため Enter 抑止を維持
+
+    // Enter：pc-edit-input 上のみ・保存に専念（指示書9§5：次セル移動は撤去）
+    if (e.key === 'Enter' && !e.shiftKey && isEditInput && tr) {
+      const rowKey = tr.getAttribute('data-row-key');
+      e.preventDefault();
+      if (rowKey.startsWith('draft-')) {
+        // 指示書8-6§1：必須項目バリデーション通過時のみ commitDraftRow 発火
+        const draftId = rowKey.replace('draft-', '');
+        const d = _draftRows.find(x => String(x.draftId) === String(draftId));
+        if (d && _isDraftValid(d)) commitDraftRow(draftId);
+        // 未通過時は no-op
+      } else if (_editingRowKey) {
+        // 編集中：commitEdit で保存
+        commitEdit();
+      }
+      return;
+    }
+
+    // ↑↓：INPUT 上のみ・編集中の非ドラフト行で行移動（指示書9§5）
+    //  SELECT は既定動作（option 選択）を尊重・preventDefault しない
+    if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && isEditInput && tr) {
+      const rowKey = tr.getAttribute('data-row-key');
+      if (rowKey.startsWith('draft-')) return;        // ドラフト行は対象外
+      if (inp.tagName !== 'INPUT') return;            // SELECT 上では既定動作維持
+      e.preventDefault();
+      const field = inp.getAttribute('data-field');
+      if (e.key === 'ArrowDown') moveEditToNextRow(tr, field);
+      else moveEditToPrevRow(tr, field);
+      return;
+    }
+
+    // §1-4 AI 自動確定禁止：AI 提案系ボタン上の Enter キーを抑止（commit-draft は対象外＝§1-5-2 非該当）
     const actionEl = e.target.closest && e.target.closest('[data-action]');
     if (actionEl && e.key === 'Enter') {
       const action = actionEl.getAttribute('data-action');
@@ -931,6 +920,19 @@ function moveEditToNextRow(currentTr, field) {
   startEdit(nextKey, field);
 }
 
+// 指示書9§5：↑キーでフィルタ後の表示順での前行に移動
+function moveEditToPrevRow(currentTr, field) {
+  const visibleRows = applyFilters(_monthlyData);
+  const currentKey = currentTr.getAttribute('data-row-key');
+  const idx = visibleRows.findIndex(r => _rowKey(r) === currentKey);
+  if (idx <= 0) {
+    cancelEdit();
+    return;
+  }
+  const prevKey = _rowKey(visibleRows[idx - 1]);
+  startEdit(prevKey, field);
+}
+
 /* ── ドラフト行 ──────────────────────────────────────────── */
 function bindAddButtons() {
   document.getElementById('btn-add-sales')?.addEventListener('click', () => addDraftRow('sales'));
@@ -1017,7 +1019,7 @@ async function commitDraftRow(draftId) {
     }
     showToast('登録しました', 'success', 2000);
     discardDraftRow(draftId);
-    await loadMonthlyData(_filterState.month);
+    await loadMonthlyData(_currentMonth);
   } catch (err) {
     console.error('[pc-monthly] commitDraftRow', err);
     showToast(`登録失敗：${err.message || err}`, 'error', 3500);
