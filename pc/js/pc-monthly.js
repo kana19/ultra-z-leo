@@ -278,9 +278,16 @@ function renderRow(row) {
     // ロック行は「解除申請」のみ（編集不可）
     actionsHtml = `<button type="button" class="pc-action-btn pc-action-btn--unlock" data-action="request-unlock">解除申請</button>`;
   } else {
-    // 案件化ボタン（売上：!isProject ／ コスト：isLinkable && !isProject）
-    if (row.source === 'sales' && !row.isProject) {
-      actionsHtml += `<button type="button" class="pc-action-btn pc-action-btn--project" data-action="mark-project">案件化</button>`;
+    // 案件化／解除ボタン
+    //  - 売上 + !isProject：案件化（売上→コスト紐付けモーダルを開く）
+    //  - 売上 + isProject ：解除（案件登録解除・指示書7§2）
+    //  - コスト + !isProject + isLinkable：案件化（コスト→売上紐付けモーダルを開く）
+    if (row.source === 'sales') {
+      if (row.isProject) {
+        actionsHtml += `<button type="button" class="btn-unmark-project" data-action="unmark-project">解除</button>`;
+      } else {
+        actionsHtml += `<button type="button" class="pc-action-btn pc-action-btn--project" data-action="mark-project">案件化</button>`;
+      }
     } else if (row.source === 'cost' && !row.isProject && _isLinkableCost(row)) {
       actionsHtml += `<button type="button" class="pc-action-btn pc-action-btn--project" data-action="mark-project">案件化</button>`;
     }
@@ -556,6 +563,7 @@ function bindRowEvents() {
         const rowKey = tr.getAttribute('data-row-key');
         switch (action) {
           case 'mark-project':    onMarkAsProject(rowKey);   break;
+          case 'unmark-project':  onUnmarkAsProject(rowKey); break;
           case 'reconcile':       onReconcile(rowKey);       break;
           case 'request-unlock':  onRequestUnlock(rowKey);   break;
           case 'save-edit':       commitEdit();              break;
@@ -572,7 +580,7 @@ function bindRowEvents() {
       });
       // §1-4 AI自動確定禁止：登録・案件化系ボタンは Enter キーで反応させない
       const action = btn.getAttribute('data-action');
-      if (action === 'commit-draft' || action === 'mark-project') {
+      if (action === 'commit-draft' || action === 'mark-project' || action === 'unmark-project') {
         btn.addEventListener('keydown', (e) => {
           if (e.key === 'Enter') {
             e.preventDefault();
@@ -649,26 +657,19 @@ async function commitEdit() {
   const row = _monthlyData.find(r => _rowKey(r) === rowKey);
   if (!row) { cancelEdit(); return; }
 
-  // 編集ドラフトから差分を抽出して fields 構築
+  // 編集ドラフトから fields 構築
+  // amount / taxRate は常に送信（指示書7§1：GAS 側 calcTax_ 整数演算で K列消費税を毎回正規化するため）
+  // date / memo / subjectCode / subjectName は変更があった場合のみ送信
   const fields = {};
   if (_editingDraft.date && _editingDraft.date !== row.date) fields.date = _editingDraft.date;
-  if (_editingDraft.amount !== undefined && Number(_editingDraft.amount) !== Number(row.amount)) {
-    fields.amount = Number(_editingDraft.amount);
-  }
-  if (_editingDraft.taxRate !== undefined && Number(_editingDraft.taxRate) !== Number(row.taxRate)) {
-    fields.taxRate = Number(_editingDraft.taxRate);
-  }
+  fields.amount  = Number(_editingDraft.amount)  || 0;
+  fields.taxRate = Number(_editingDraft.taxRate) || 0;
   if (_editingDraft.memo !== undefined && _editingDraft.memo !== row.memo) {
     fields.memo = _editingDraft.memo;
   }
   if (_editingDraft.subjectCode && _editingDraft.subjectCode !== row.subjectCode) {
     fields.subjectCode = _editingDraft.subjectCode;
     fields.subjectName = _editingDraft.subject || '';
-  }
-
-  if (Object.keys(fields).length === 0) {
-    cancelEdit();
-    return;
   }
 
   try {
@@ -685,8 +686,8 @@ async function commitEdit() {
     // ローカル state にも反映
     Object.assign(row, {
       date:    fields.date    !== undefined ? fields.date    : row.date,
-      amount:  fields.amount  !== undefined ? fields.amount  : row.amount,
-      taxRate: fields.taxRate !== undefined ? fields.taxRate : row.taxRate,
+      amount:  fields.amount,
+      taxRate: fields.taxRate,
       memo:    fields.memo    !== undefined ? fields.memo    : row.memo,
       subjectCode: fields.subjectCode !== undefined ? fields.subjectCode : row.subjectCode,
       subject:     fields.subjectName !== undefined ? fields.subjectName : row.subject,
@@ -845,6 +846,41 @@ async function onMarkAsProject(rowKey) {
   } else if (row.source === 'cost') {
     await onMarkAsProjectFromCost(row);
   }
+}
+
+// 案件登録解除（指示書7§2 / 戦略思想§1-5-2 AI自動確定禁止：提案ボタン → 確認モーダル → 確定の3ステップ）
+//  - 売上行の U列 を空欄に戻す（GAS unmarkAsProject）
+//  - 紐付け済みコストの V列（紐付け先売上行ID）は GAS 側で意図的に保持
+//    → 紐付け解除は別途案件管理画面または各コストの個別操作で実施
+async function onUnmarkAsProject(rowKey) {
+  const row = _monthlyData.find(r => _rowKey(r) === rowKey);
+  if (!row) return;
+  if (row.source !== 'sales' || !row.isProject) return;
+
+  const message = `${row.date} / ${row.subject} / ¥${_formatYenPlain(row.amount)} の案件登録を解除します。紐付け済みのコストの紐付けは別途解除が必要です。`;
+  openZeroCandidatesPrompt({
+    message: message,
+    target: null,
+    confirmLabel: '解除する',
+    onConfirm: async () => {
+      try {
+        const res = await callGAS('unmarkAsProject', {
+          rowIndex: row.rowIndex,
+          sheetName: '売上',
+        });
+        if (!res || res.status !== 'ok') {
+          throw new Error((res && res.message) || '解除に失敗しました');
+        }
+        row.isProject = false;
+        showToast('案件登録を解除しました', 'success', 2000);
+        closeLinkCandidatesModal();
+        renderTable();
+      } catch (err) {
+        console.error('[pc-monthly] onUnmarkAsProject', err);
+        showLinkCandidatesError(err.message || String(err));
+      }
+    }
+  });
 }
 
 // 売上→コスト方向：候補をチェックボックスで複数選択 → 確定
