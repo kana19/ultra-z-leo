@@ -76,6 +76,7 @@ async function initMonthly() {
   bindAddButtons();
   bindModalEvents();
   bindColFilterButtons();
+  bindTbodyDelegation();   // 指示書8-5§1：tbody 単位の統一イベントデリゲーション
   await loadMonthlyData(_filterState.month);
 }
 
@@ -409,17 +410,16 @@ function renderTable() {
   const tbody = document.getElementById('monthly-tbody');
   if (!tbody) return;
   // 指示書8-3§1：実質的に有効なフィルタが1つも無ければ _monthlyData をそのまま使う（applyFilters は呼ばない）
-  //  → 空 Set 等の dormant な _activeFilters エントリで全行非表示になる事故を防ぐ
-  const rows = Object.keys(_activeFilters).some(c => _hasActiveColFilter(c))
-    ? applyFilters(_monthlyData)
-    : _monthlyData;
+  // 指示書8-5§3：filteredRows を1変数に確定し、本体描画と集計行に同じ参照を渡す（編集後の集計再計算を保証）
+  const hasActiveFilter = Object.keys(_activeFilters).some(c => _hasActiveColFilter(c));
+  const filteredRows = hasActiveFilter ? applyFilters(_monthlyData) : _monthlyData;
   // ドラフト行を最上段（指示書5§2-2 step3 / §3-5）
   const draftHtml = _draftRows.map(d => renderDraftRow(d)).join('');
-  const rowHtml   = rows.map(r => renderRow(r)).join('');
+  const rowHtml   = filteredRows.map(r => renderRow(r)).join('');
   tbody.innerHTML = (draftHtml + rowHtml) || '<tr><td colspan="8" class="loading">該当する行がありません</td></tr>';
-  bindRowEvents();
+  // bindRowEvents は撤去（指示書8-5§1：tbody-level delegation で1度だけ結線・renderTable の負荷も低減）
   _refreshColFilterButtonStates();
-  _renderFilterSummary(rows);
+  _renderFilterSummary(filteredRows);
 }
 
 function renderRow(row) {
@@ -622,13 +622,21 @@ function _updateDraftSubmitState(tr, draft) {
 
 function renderSubjectSelect(row, mode) {
   if (row.realSource === 'sales' || row.source === 'sales') {
-    const opts = (_settings.serviceList || []).map(s => {
+    const optsItems = (_settings.serviceList || []).map(s => {
       const code = String(s.code || s.serviceCode || '');
       const name = String(s.name || s.serviceName || '');
       const sel = (row.subjectCode === code || row.subject === name) ? 'selected' : '';
       return `<option value="${_escHtml(code)}" data-name="${_escHtml(name)}" ${sel}>${_escHtml(name)}</option>`;
     }).join('');
-    return `<select class="pc-edit-input" data-field="subjectCode">${opts || '<option value="">（マスタ未設定）</option>'}</select>`;
+    // 指示書8-5§2：draft 時は placeholder option を先頭に置き明示選択を強制
+    //  （browser が serviceList 先頭を auto-select 表示しても input イベントが発火せず draft.subjectCode='' のままで
+    //   登録ボタンが永続的に disabled になるバグの再発防止。serviceList が空でも placeholder は表示される）
+    if (mode === 'draft') {
+      const fallback = optsItems ? '' : '<option value="" disabled>（サービスマスタ未登録）</option>';
+      return `<select class="pc-edit-input" data-field="subjectCode"><option value="">（科目を選択）</option>${optsItems}${fallback}</select>`;
+    }
+    // edit 時は既存選択肢のみ（既選択中の subject を維持・誤クリアを防止）
+    return `<select class="pc-edit-input" data-field="subjectCode">${optsItems || '<option value="">（マスタ未設定）</option>'}</select>`;
   }
   // cost：行の divisionCode で絞り込む（§3-3 #4 区分連動絞り込み）
   // 既存行の編集では区分自体は変更不可とし、同区分内での科目変更のみ許容する
@@ -658,110 +666,120 @@ function renderTaxRateSelect(currentRate, mode) {
   return `<select class="pc-edit-input" data-field="taxRate">${opts}</select>`;
 }
 
-/* ── 行イベントバインド ──────────────────────────────────── */
-function bindRowEvents() {
+/* ── tbody 単位の統一イベントデリゲーション ────────────────
+ * 指示書8-5§1：操作列廃止後の DOM 構造変更で per-tr 結線が破綻する問題を根本解消するため、
+ *  click / input / keydown を tbody に1度だけ結線し、event.target.closest で振分ける。
+ *  initMonthly から1度だけ呼ばれる。renderTable は tbody.innerHTML を書換えるだけで再結線不要。
+ *  case 一覧は旧 bindRowEvents と完全互換。
+ */
+function bindTbodyDelegation() {
   const tbody = document.getElementById('monthly-tbody');
   if (!tbody) return;
 
-  tbody.querySelectorAll('tr[data-row-key]').forEach(tr => {
-    const key = tr.getAttribute('data-row-key');
-    const isDraft = key.startsWith('draft-');
-
-    if (!isDraft) {
-      const row = _monthlyData.find(r => _rowKey(r) === key);
-      // ロック行は編集モードに入らない・クリックでトースト
-      if (row && row.isLocked) {
-        tr.querySelectorAll('td[data-field-cell]').forEach(td => {
-          td.addEventListener('click', () => {
-            showToast('ロックされています', 'info', 2000);
-          });
-        });
-      } else {
-        // 編集可能セルクリックで startEdit
-        tr.querySelectorAll('td[data-field-cell]').forEach(td => {
-          const field = td.getAttribute('data-field-cell');
-          if (!isFieldEditable(field, tr.getAttribute('data-source'))) return;
-          td.addEventListener('click', (e) => {
-            if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
-            startEdit(key, field);
-          });
-        });
+  // ─── click：data-action ボタンの振分け＋編集セルクリック ───
+  tbody.addEventListener('click', (e) => {
+    // 1) data-action ボタンを最優先で処理（ドラフト登録/取消・☆/★案件化・解除申請・保存/取消・区分タブ）
+    const actionEl = e.target.closest('[data-action]');
+    if (actionEl && tbody.contains(actionEl)) {
+      const tr = actionEl.closest('tr[data-row-key]');
+      if (!tr) return;
+      const rowKey = tr.getAttribute('data-row-key');
+      const action = actionEl.getAttribute('data-action');
+      switch (action) {
+        case 'mark-project':    onMarkAsProject(rowKey);   break;
+        case 'unmark-project':  onUnmarkAsProject(rowKey); break;
+        case 'reconcile':       onReconcile(rowKey);       break;
+        case 'request-unlock':  onRequestUnlock(rowKey);   break;
+        case 'save-edit':       commitEdit();              break;
+        case 'cancel-edit':     cancelEdit();              break;
+        case 'commit-draft':    commitDraftRow(rowKey.replace('draft-', ''));   break;
+        case 'discard-draft':   discardDraftRow(rowKey.replace('draft-', ''));  break;
+        case 'select-division': {
+          const draftId = rowKey.replace('draft-', '');
+          const divCode = actionEl.getAttribute('data-division-code');
+          selectDraftDivision(draftId, divCode);
+          break;
+        }
       }
+      return;   // アクション処理後は編集セルクリックへ進まない
     }
 
-    // 編集中入力のキー操作
-    tr.querySelectorAll('.pc-edit-input').forEach(inp => {
-      inp.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') {
-          e.preventDefault();
-          if (isDraft) discardDraftRow(key.replace('draft-', ''));
-          else cancelEdit();
-        } else if (e.key === 'Enter' && !e.shiftKey) {
-          // 仕様§3-4：Tab/Enter は次セルへフォーカスを動かすだけ・自動保存しない
-          e.preventDefault();
-          if (!isDraft) {
-            const field = inp.getAttribute('data-field');
-            moveEditToNextRow(tr, field);
-          }
-          // ドラフト行はEnter抑止（誤確定防止・§1-4 / §3-5）
-        }
-      });
-      inp.addEventListener('input', () => {
-        if (isDraft) {
-          const draftId = key.replace('draft-', '');
-          const d = _draftRows.find(x => String(x.draftId) === String(draftId));
-          if (d) {
-            const field = inp.getAttribute('data-field');
-            captureFieldValue(d, inp, field);
-            updateDraftTaxDisplay(tr, d);
-            // §1-7：登録ボタン活性化条件をリアルタイム判定
-            _updateDraftSubmitState(tr, d);
-            // 科目プルダウン変更時は税率セレクトの表示も同期（taxRate は既に更新済み）
-            if (field === 'subjectCode') {
-              const taxSel = tr.querySelector('select[data-field="taxRate"]');
-              if (taxSel) taxSel.value = String(Number(d.taxRate) || 0);
-            }
-          }
-        } else {
-          const field = inp.getAttribute('data-field');
-          captureFieldValue(_editingDraft, inp, field);
-        }
-      });
-    });
+    // 2) 編集セルクリック（td[data-field-cell]）→ startEdit またはロック警告
+    const td = e.target.closest('td[data-field-cell]');
+    if (!td || !tbody.contains(td)) return;
+    // 既に input/select 上のクリックなら edit 開始しない（既に編集中フォーカス内）
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+    const tr = td.closest('tr[data-row-key]');
+    if (!tr) return;
+    const rowKey = tr.getAttribute('data-row-key');
+    if (rowKey.startsWith('draft-')) return;   // ドラフト行は click-to-edit 対象外
+    const row = _monthlyData.find(r => _rowKey(r) === rowKey);
+    if (!row) return;
+    if (row.isLocked) {
+      showToast('ロックされています', 'info', 2000);
+      return;
+    }
+    const field = td.getAttribute('data-field-cell');
+    if (!isFieldEditable(field, tr.getAttribute('data-source'))) return;
+    startEdit(rowKey, field);
+  });
 
-    // 指示書8-4§1：data-action を持つ要素を素直に拾う（button タグ限定を外し、将来 div/span 等が来ても拾える形へ）
-    tr.querySelectorAll('[data-action]').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const action = btn.getAttribute('data-action');
-        const rowKey = tr.getAttribute('data-row-key');
-        switch (action) {
-          case 'mark-project':    onMarkAsProject(rowKey);   break;
-          case 'unmark-project':  onUnmarkAsProject(rowKey); break;
-          case 'reconcile':       onReconcile(rowKey);       break;
-          case 'request-unlock':  onRequestUnlock(rowKey);   break;
-          case 'save-edit':       commitEdit();              break;
-          case 'cancel-edit':     cancelEdit();              break;
-          case 'commit-draft':    commitDraftRow(rowKey.replace('draft-', '')); break;
-          case 'discard-draft':   discardDraftRow(rowKey.replace('draft-', '')); break;
-          case 'select-division': {
-            const draftId = rowKey.replace('draft-', '');
-            const divCode = btn.getAttribute('data-division-code');
-            selectDraftDivision(draftId, divCode);
-            break;
-          }
-        }
-      });
-      // §1-4 AI自動確定禁止：登録・案件化系ボタンは Enter キーで反応させない
-      const action = btn.getAttribute('data-action');
-      if (action === 'commit-draft' || action === 'mark-project' || action === 'unmark-project') {
-        btn.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter') {
-            e.preventDefault();
-          }
-        });
+  // ─── input：ドラフト or 編集中の入力値捕捉 ───
+  tbody.addEventListener('input', (e) => {
+    const inp = e.target;
+    if (!inp || !inp.classList || !inp.classList.contains('pc-edit-input')) return;
+    const tr = inp.closest('tr[data-row-key]');
+    if (!tr) return;
+    const rowKey = tr.getAttribute('data-row-key');
+    const field  = inp.getAttribute('data-field');
+    if (rowKey.startsWith('draft-')) {
+      const draftId = rowKey.replace('draft-', '');
+      const d = _draftRows.find(x => String(x.draftId) === String(draftId));
+      if (!d) return;
+      captureFieldValue(d, inp, field);
+      updateDraftTaxDisplay(tr, d);
+      _updateDraftSubmitState(tr, d);   // §1-7：登録ボタン活性化条件のリアルタイム判定
+      // 科目プルダウン変更時は税率セレクト表示も同期（taxRate は captureFieldValue で更新済み）
+      if (field === 'subjectCode') {
+        const taxSel = tr.querySelector('select[data-field="taxRate"]');
+        if (taxSel) taxSel.value = String(Number(d.taxRate) || 0);
       }
-    });
+    } else {
+      captureFieldValue(_editingDraft, inp, field);
+    }
+  });
+
+  // ─── keydown：Escape/Enter による編集制御＋AI自動確定抑止 ───
+  tbody.addEventListener('keydown', (e) => {
+    const inp = e.target;
+    if (inp && inp.classList && inp.classList.contains('pc-edit-input')) {
+      const tr = inp.closest('tr[data-row-key]');
+      if (!tr) return;
+      const rowKey = tr.getAttribute('data-row-key');
+      const isDraft = rowKey.startsWith('draft-');
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        if (isDraft) discardDraftRow(rowKey.replace('draft-', ''));
+        else cancelEdit();
+      } else if (e.key === 'Enter' && !e.shiftKey) {
+        // 仕様§3-4：Tab/Enter は次セルへフォーカスを動かすだけ・自動保存しない
+        e.preventDefault();
+        if (!isDraft) {
+          const field = inp.getAttribute('data-field');
+          moveEditToNextRow(tr, field);
+        }
+        // ドラフト行は Enter 抑止のみ（誤確定防止・§1-4 / §3-5）
+      }
+      return;
+    }
+    // §1-4 AI自動確定禁止：登録・案件化系ボタン上での Enter キーを抑止
+    const actionEl = e.target.closest && e.target.closest('[data-action]');
+    if (actionEl && e.key === 'Enter') {
+      const action = actionEl.getAttribute('data-action');
+      if (action === 'commit-draft' || action === 'mark-project' || action === 'unmark-project') {
+        e.preventDefault();
+      }
+    }
   });
 }
 
