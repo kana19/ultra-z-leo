@@ -310,8 +310,10 @@ function _openColFilter(col, btnEl) {
   dropdown.id = '_col-filter-dropdown';
   dropdown.dataset.col = col;
   const allCheckedNow = values.length > 0 && values.every(isChecked);
+  // 指示書8-4§2：value 属性を必ず付与する。data-cf-value のみだと i.value が HTML 既定の "on" を返し、
+  // _activeFilters[col] が Set(["on"]) になって _getColValue の返り値と全件不一致 → 全行非表示の原因になる
   const itemsHtml = values.map(v => `
-    <label><input type="checkbox" data-cf-value="${_escHtml(v)}" ${isChecked(v) ? 'checked' : ''}> ${_escHtml(v)}</label>
+    <label><input type="checkbox" value="${_escHtml(v)}" data-cf-value="${_escHtml(v)}" ${isChecked(v) ? 'checked' : ''}> ${_escHtml(v)}</label>
   `).join('') || '<div class="col-filter-empty">表示できる値がありません</div>';
   dropdown.innerHTML = `
     <label class="col-filter-all"><input type="checkbox" data-cf-all ${allCheckedNow ? 'checked' : ''}> すべて選択</label>
@@ -727,7 +729,8 @@ function bindRowEvents() {
       });
     });
 
-    tr.querySelectorAll('button[data-action]').forEach(btn => {
+    // 指示書8-4§1：data-action を持つ要素を素直に拾う（button タグ限定を外し、将来 div/span 等が来ても拾える形へ）
+    tr.querySelectorAll('[data-action]').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         const action = btn.getAttribute('data-action');
