@@ -196,35 +196,30 @@ function _sortRows(rows) {
   });
 }
 
-/* ── フィルタ（列見出しフィルタ・指示書8§2 / 8-2§1 / 戦略思想§4-3） ─── */
+/* ── フィルタ（列見出しフィルタ・指示書8§2 / 8-2§1 / 8-3 / 戦略思想§4-3） ─── */
 // 列ごとの値抽出（指示書8-2§1：ドロップダウン表示ラベルと filter Set の値を一致させる）
 //  - type/subject/memo：行の文字列をそのまま返す
 //  - taxRate：「10%」「8%」「0%」等の表示文字列
 //  - project：「案件あり」「案件なし」（ラベル文字列・boolean ではない）
-//  - date  ：date 列は専用 UI（年・月の二段選択）で _activeFilters['date'] = {year, month}
-//             文字列フィルタでは扱わないため _getColValue では空文字を返す
+//  - date  ：「YYYY年M月」形式（指示書8-3§2：他列と同じチェックボックス方式に統一）
 function _getColValue(row, col) {
   if (col === 'type')    return String(row.type || (row.source === 'sales' ? '売上' : ''));
   if (col === 'subject') return String(row.subject || row.subjectName || '');
   if (col === 'taxRate') return `${Number(row.taxRate) || 0}%`;
   if (col === 'project') return row.isProject ? '案件あり' : '案件なし';
   if (col === 'memo')    return String(row.memo || '');
+  if (col === 'date') {
+    const m = String(row.date || '').match(/^(\d{4})-(\d{1,2})-/);
+    return m ? `${m[1]}年${Number(m[2])}月` : '';
+  }
   return '';
 }
 
 // フィルタ判定（exceptCol を除外して評価）
-//  - date 列は { year, month } オブジェクトフィルタ（指示書8-2§3）
-//  - その他は Set<string> フィルタ
+//  指示書8-3§2：date 列も他列と同じ Set<string> フィルタとして統一処理
 function _matchesActiveFiltersExcept(row, exceptCol) {
   for (const [col, val] of Object.entries(_activeFilters)) {
     if (col === exceptCol) continue;
-    if (col === 'date') {
-      if (!val) continue;
-      const [y, m] = String(row.date || '').split('-');
-      if (val.year && val.year !== 'all' && y !== val.year) return false;
-      if (val.month && val.month !== 'all' && Number(m) !== Number(val.month)) return false;
-      continue;
-    }
     if (!val || val.size === 0) continue;
     if (!val.has(_getColValue(row, col))) return false;
   }
@@ -237,14 +232,10 @@ function applyFilters(rows) {
   return rows.filter(r => _matchesActiveFiltersExcept(r, null));
 }
 
-// 列フィルタが現在「実質的に有効」かを判定（date は year/month のいずれかが指定済、それ以外は Set 非空）
+// 列フィルタが現在「実質的に有効」かを判定（指示書8-3§2：date を含め全列 Set 非空で判定）
 function _hasActiveColFilter(col) {
   const v = _activeFilters[col];
-  if (!v) return false;
-  if (col === 'date') {
-    return (v.year && v.year !== 'all') || (v.month && v.month !== 'all');
-  }
-  return v.size > 0;
+  return !!v && v.size > 0;
 }
 
 function bindFilterEvents() {
@@ -274,9 +265,7 @@ function bindColFilterButtons() {
     btn.title = `${th.firstChild ? th.firstChild.textContent.trim() : col} で絞り込み`;
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
-      // date 列のみ年・月の二段選択 UI（指示書8-2§3）
-      if (col === 'date') _openDateFilter(btn);
-      else _openColFilter(col, btn);
+      _openColFilter(col, btn);
     });
     th.appendChild(btn);
   });
@@ -302,6 +291,14 @@ function _openColFilter(col, btnEl) {
   for (const r of universe) valueSet.add(_getColValue(r, col));
   const values = Array.from(valueSet).sort((a, b) => {
     if (col === 'taxRate') return Number(String(a).replace('%', '')) - Number(String(b).replace('%', ''));
+    if (col === 'date') {
+      // 「YYYY年M月」を年×100+月の整数に変換して比較（lexicographic だと "12月" < "5月" と誤判定するため）
+      const parse = s => {
+        const m = String(s).match(/^(\d+)年(\d+)月$/);
+        return m ? Number(m[1]) * 100 + Number(m[2]) : 0;
+      };
+      return parse(a) - parse(b);
+    }
     return String(a).localeCompare(String(b));
   });
   const active = _activeFilters[col];
@@ -383,83 +380,6 @@ function _closeColFilter() {
 }
 
 /**
- * 発生日列フィルタのドロップダウン（指示書8-2§3：年・月の二段選択）
- *  - 年：母集団（他列フィルタ適用後）から一意な年を抽出 → プルダウン
- *  - 月：1〜12 + 「すべて」のプルダウン
- *  - 適用：_activeFilters['date'] = { year, month }（year='2026', month='all'|'1'..'12'）
- *  - クリア：delete _activeFilters['date']
- */
-function _openDateFilter(btnEl) {
-  _closeColFilter();
-  const universe = _monthlyData.filter(r => _matchesActiveFiltersExcept(r, 'date'));
-  const yearSet = new Set();
-  for (const r of universe) {
-    const y = String(r.date || '').split('-')[0];
-    if (y) yearSet.add(y);
-  }
-  const years = Array.from(yearSet).sort();
-  const cur = _activeFilters['date'] || {};
-  const curYear  = cur.year || (years.length > 0 ? years[years.length - 1] : '');
-  const curMonth = cur.month || 'all';
-
-  const yearOpts = years.length > 0
-    ? years.map(y => `<option value="${y}" ${curYear === y ? 'selected' : ''}>${y}</option>`).join('')
-    : '<option value="">(年データなし)</option>';
-  const monthOpts = ['all','1','2','3','4','5','6','7','8','9','10','11','12']
-    .map(m => {
-      const label = m === 'all' ? 'すべて' : `${m}月`;
-      const sel = curMonth === m ? 'selected' : '';
-      return `<option value="${m}" ${sel}>${label}</option>`;
-    }).join('');
-
-  const dropdown = document.createElement('div');
-  dropdown.className = 'col-filter-dropdown col-filter-dropdown--date';
-  dropdown.id = '_col-filter-dropdown';
-  dropdown.dataset.col = 'date';
-  dropdown.innerHTML = `
-    <label class="col-filter-date-row">年：<select id="_cf-date-year">${yearOpts}</select></label>
-    <label class="col-filter-date-row">月：<select id="_cf-date-month">${monthOpts}</select></label>
-    <div class="col-filter-actions">
-      <button type="button" data-cf-action="clear">クリア</button>
-      <button type="button" data-cf-action="apply">適用</button>
-    </div>
-  `;
-  document.body.appendChild(dropdown);
-  const rect = btnEl.getBoundingClientRect();
-  dropdown.style.top  = (rect.bottom + window.scrollY + 2) + 'px';
-  dropdown.style.left = (rect.left   + window.scrollX) + 'px';
-
-  dropdown.addEventListener('click', (e) => {
-    const a = e.target && e.target.dataset && e.target.dataset.cfAction;
-    if (a === 'clear') {
-      delete _activeFilters['date'];
-      _closeColFilter();
-      renderTable();
-    } else if (a === 'apply') {
-      const ySel = document.getElementById('_cf-date-year');
-      const mSel = document.getElementById('_cf-date-month');
-      const year  = ySel ? ySel.value : '';
-      const month = mSel ? mSel.value : 'all';
-      // 年なし＆月=all なら無効化
-      if (!year && (month === 'all' || !month)) {
-        delete _activeFilters['date'];
-      } else {
-        _activeFilters['date'] = { year, month };
-      }
-      _closeColFilter();
-      renderTable();
-    }
-  });
-
-  setTimeout(() => {
-    _colFilterDocClickHandler = (e) => {
-      if (!dropdown.contains(e.target) && e.target !== btnEl) _closeColFilter();
-    };
-    document.addEventListener('click', _colFilterDocClickHandler);
-  }, 0);
-}
-
-/**
  * フィルタ適用中の集計行（指示書8§2 / 8-2§4）
  *  - 「絞り込み結果：XX件 / 金額合計：¥XXX,XXX / 消費税合計：¥XX,XXX」
  *  - フィルタ未適用時は tfoot 非表示
@@ -486,7 +406,11 @@ function _renderFilterSummary(visibleRows) {
 function renderTable() {
   const tbody = document.getElementById('monthly-tbody');
   if (!tbody) return;
-  const rows = applyFilters(_monthlyData);
+  // 指示書8-3§1：実質的に有効なフィルタが1つも無ければ _monthlyData をそのまま使う（applyFilters は呼ばない）
+  //  → 空 Set 等の dormant な _activeFilters エントリで全行非表示になる事故を防ぐ
+  const rows = Object.keys(_activeFilters).some(c => _hasActiveColFilter(c))
+    ? applyFilters(_monthlyData)
+    : _monthlyData;
   // ドラフト行を最上段（指示書5§2-2 step3 / §3-5）
   const draftHtml = _draftRows.map(d => renderDraftRow(d)).join('');
   const rowHtml   = rows.map(r => renderRow(r)).join('');

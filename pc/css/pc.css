@@ -975,24 +975,6 @@ body.pc-body {
 }
 .col-filter-empty { color: var(--uz-text3); font-size: 12px; padding: 8px 0; }
 
-/* 発生日フィルタ：年・月の二段プルダウン（指示書8-2§3） */
-.col-filter-dropdown--date { min-width: 200px; }
-.col-filter-dropdown--date .col-filter-date-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 0;
-  font-size: 13px;
-}
-.col-filter-dropdown--date .col-filter-date-row select {
-  flex: 1;
-  background: var(--uz-surface);
-  color: var(--uz-text);
-  border: 1px solid var(--uz-border);
-  border-radius: 3px;
-  padding: 2px 4px;
-}
-
 /* フィルタ集計行（指示書8§2） */
 .pc-filter-summary {
   padding: 6px 12px;
