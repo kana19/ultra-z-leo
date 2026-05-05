@@ -417,8 +417,9 @@ function renderNewProjectDraft() {
         </label>
       </div>
       <div class="pj-draft-actions">
-        <button type="button" id="pj-draft-discard" class="pc-btn pc-btn--ghost" ${valid ? 'hidden' : ''}>取消</button>
         <button type="button" id="pj-draft-commit" class="pc-btn pc-btn-primary" ${valid ? '' : 'hidden'}>登録</button>
+        <span class="pj-draft-spacer"></span>
+        <button type="button" id="pj-draft-discard" class="pc-btn pc-btn--ghost" ${valid ? 'hidden' : ''}>取消</button>
       </div>
     </div>`;
 
@@ -500,7 +501,7 @@ async function commitNewDraft() {
   try {
     const res = await callGAS('addSales', {
       date: d.date,
-      service: d.serviceCode,
+      service: d.serviceName,       // GAS側はサービス名（文字列）を期待
       amount: d.amount,
       taxRate: d.taxRate,
       memo: d.memo,
@@ -509,9 +510,21 @@ async function commitNewDraft() {
     if (!res || res.status !== 'ok') {
       throw new Error((res && res.message) || '売上登録に失敗しました');
     }
+    const newSalesRowId = (res.data && res.data.salesRowId) || null;
     showToast('新規案件を登録しました', 'success', 2000);
     discardNewDraft();
     await loadProjects();
+
+    // 登録直後に経費紐付けモーダルを自動起動（ワンステップ短縮）
+    if (newSalesRowId) {
+      const node = _projectData?.salesNodes?.find(n => n.salesRowId === newSalesRowId);
+      if (node) {
+        const btn = document.querySelector(`.pj-action[data-action="add-cost"][data-sales-row-id="${newSalesRowId}"]`);
+        if (btn) {
+          setTimeout(() => onAddCost(btn), 300);
+        }
+      }
+    }
   } catch (err) {
     console.error('[pc-projects] commitNewDraft', err);
     showToast(`登録失敗：${err.message || err}`, 'error', 3500);

@@ -1571,4 +1571,8 @@ body.pc-body {
   margin-top: 10px;
   display: flex;
   gap: 8px;
+  align-items: center;
+}
+.pj-draft-spacer {
+  flex: 1;
 }
