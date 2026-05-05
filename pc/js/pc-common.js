@@ -87,16 +87,24 @@ function pcBootstrap(activeHref, title) {
 }
 
 /* ──────────────────────────────────────────────────────────
-   削除確認モーダル（指示書15・月次管理＋案件管理 共通）
+   削除確認モーダル（指示書15／15-2・月次管理＋案件管理 共通）
    戦略思想§1-5-2 AI自動確定禁止：必ず「削除ボタン→ダイアログ→削除する」の3ステップ
    呼び出し元は monthly.html / projects.html に同じ ID で配置されたモーダルDOMを共有
    options:
      - sheetName : '売上' or 'コスト'
      - rowIndex  : 対象行番号
      - date / type / subject / amount / memo : 対象行の表示情報
-     - isProject (bool) / linkedCostCount (number) : 警告メッセージ制御
+     - isProject (bool) : 案件売上かどうか（モーダルタイトル既定値の決定に使用）
+     - linkedCosts (Array<{rowIndex, date, subject, amount}>) :
+         紐付け経費の配列。length > 0 のときチェックボックス方式で描画。
+         省略 / 空配列のときは単純確認方式（既存挙動）。
      - modalTitle (string・省略時 '行を削除しますか？')
-     - onConfirm (async function) : 削除確定時に呼ばれる（実 GAS 呼び出し＋再描画は呼び出し元の責務）
+     - onConfirm (async function(selectedItems)) :
+         削除確定時に呼ばれる。selectedItems = {
+           deleteSales: true,
+           costsToDelete: number[],       // チェックON経費の rowIndex 配列
+           costsToUnlinkOnly: number[]    // チェックOFF経費の rowIndex 配列
+         }
    ────────────────────────────────────────────────────────── */
 let _pcDeleteModalState = null;
 
@@ -116,6 +124,9 @@ function openDeleteConfirmModal(options) {
   const errEl = document.getElementById('pc-delete-confirm-error');
   const confirmBtn = document.getElementById('pc-delete-confirm-btn');
 
+  const linkedCosts = Array.isArray(options.linkedCosts) ? options.linkedCosts : [];
+  const useCheckboxMode = linkedCosts.length > 0;
+
   if (titleEl) titleEl.textContent = options.modalTitle || '行を削除しますか？';
 
   // 対象情報の組み立て
@@ -125,23 +136,63 @@ function openDeleteConfirmModal(options) {
     const subject = escHtml(options.subject || '');
     const amount = _pcFmtYen(options.amount || 0);
     const memo = String(options.memo || '').trim();
-    const memoHtml = memo
-      ? `<div class="pc-delete-target-info__memo">メモ：${escHtml(memo)}</div>`
-      : '';
-    targetEl.innerHTML = `
-      <div class="pc-delete-target-info__label">削除対象</div>
-      <div class="pc-delete-target-info__main">${date} / ${type} / ${subject} / ¥${amount}</div>
-      ${memoHtml}
-    `;
+
+    if (useCheckboxMode) {
+      // 指示書15-2：チェックボックス方式（紐付け経費あり売上削除）
+      // 売上行はチェックON固定で操作不能（disabled）。経費は初期ON、外せば紐付けのみ解除
+      const salesRow = `
+        <label class="pc-delete-checkbox-row pc-delete-checkbox-row--locked">
+          <input type="checkbox" checked disabled data-target="sales">
+          <span>売上：${date} / ${subject} / ¥${amount}</span>
+        </label>
+      `;
+      const costRows = linkedCosts.map(c => {
+        const cDate = escHtml(c.date || '');
+        const cSubject = escHtml(c.subject || '');
+        const cAmount = _pcFmtYen(c.amount || 0);
+        const cRowIndex = Number(c.rowIndex);
+        return `
+          <label class="pc-delete-checkbox-row">
+            <input type="checkbox" checked data-target="cost" data-row-index="${cRowIndex}">
+            <span>経費：${cDate} / ${cSubject} / ¥${cAmount}</span>
+          </label>
+        `;
+      }).join('');
+      const memoHtml = memo
+        ? `<div class="pc-delete-target-info__memo">メモ：${escHtml(memo)}</div>`
+        : '';
+      targetEl.innerHTML = `
+        <div class="pc-delete-target-info__label">削除対象</div>
+        <div class="pc-delete-checkboxes">
+          ${salesRow}
+          ${costRows}
+        </div>
+        ${memoHtml}
+      `;
+    } else {
+      // 単純確認方式（既存挙動・紐付けなし or コスト単独削除）
+      const memoHtml = memo
+        ? `<div class="pc-delete-target-info__memo">メモ：${escHtml(memo)}</div>`
+        : '';
+      targetEl.innerHTML = `
+        <div class="pc-delete-target-info__label">削除対象</div>
+        <div class="pc-delete-target-info__main">${date} / ${type} / ${subject} / ¥${amount}</div>
+        ${memoHtml}
+      `;
+    }
   }
 
-  // 警告メッセージ：売上案件・経費紐付けあり時のみ表示
+  // 警告メッセージ
   if (warnEl) {
-    if (options.isProject && Number(options.linkedCostCount) > 0) {
-      warnEl.textContent = `⚠ この売上は案件化されています。紐付けされた${Number(options.linkedCostCount)}件の経費の紐付けは自動的に解除されます（経費自体は月次管理に残ります）。`;
+    if (useCheckboxMode) {
+      // 指示書15-2：2行構成で「売上は必ず消える」「経費はチェック外しで残せる」を明示
+      warnEl.innerHTML = `
+        <div>⚠ 売上は月次管理からも削除されます。</div>
+        <div>　 経費を月次管理に残す場合はチェックを外してください（紐付けのみ解除されます）。</div>
+      `;
       warnEl.hidden = false;
     } else {
-      warnEl.textContent = '';
+      warnEl.innerHTML = '';
       warnEl.hidden = true;
     }
   }
@@ -169,8 +220,10 @@ function openDeleteConfirmModal(options) {
           confirmBtn.style.opacity = '0.45';
           confirmBtn.style.cursor = 'not-allowed';
         }
+        // チェックボックス状態を集計して selectedItems を構築
+        const selectedItems = _pcCollectDeleteSelections(targetEl, linkedCosts);
         try {
-          await options.onConfirm();
+          await options.onConfirm(selectedItems);
         } catch (err) {
           showDeleteConfirmError(err && err.message ? err.message : String(err));
           if (confirmBtn) {
@@ -193,6 +246,29 @@ function openDeleteConfirmModal(options) {
   _pcDeleteModalState = { modal, onClick, onKeydown };
 
   modal.hidden = false;
+}
+
+// チェックボックス状態を集計して selectedItems を返す
+function _pcCollectDeleteSelections(targetEl, linkedCosts) {
+  const selectedItems = {
+    deleteSales: true,
+    costsToDelete: [],
+    costsToUnlinkOnly: [],
+  };
+  if (!targetEl || !Array.isArray(linkedCosts) || linkedCosts.length === 0) {
+    return selectedItems;
+  }
+  const checkboxes = targetEl.querySelectorAll('input[type="checkbox"][data-target="cost"]');
+  checkboxes.forEach(cb => {
+    const rowIndex = Number(cb.dataset.rowIndex);
+    if (!isFinite(rowIndex) || rowIndex <= 0) return;
+    if (cb.checked) {
+      selectedItems.costsToDelete.push(rowIndex);
+    } else {
+      selectedItems.costsToUnlinkOnly.push(rowIndex);
+    }
+  });
+  return selectedItems;
 }
 
 function closeDeleteConfirmModal() {

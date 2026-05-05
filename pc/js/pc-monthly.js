@@ -1859,13 +1859,21 @@ async function onDeleteRow(rowKey) {
   if (!row) return;
   if (row.isLocked) { showToast('ロック行は削除できません', 'info', 2000); return; }
 
-  // 売上案件削除時の紐付けコスト件数（メモリ上 _monthlyData を salesRowId で検索）
-  let linkedCostCount = 0;
-  if (row.source === 'sales' && row.isProject && row.salesRowId) {
-    linkedCostCount = _monthlyData.filter(
-      r => r.source === 'cost' && String(r.salesRowId || '') === String(row.salesRowId)
-    ).length;
+  // 指示書15-2：売上行で紐付け経費がある場合のみチェックボックス方式
+  // 紐付け経費を _monthlyData から salesRowId で抽出
+  let linkedCosts = [];
+  if (row.source === 'sales' && row.salesRowId) {
+    linkedCosts = _monthlyData
+      .filter(r => r.source === 'cost' && String(r.salesRowId || '') === String(row.salesRowId))
+      .map(r => ({
+        rowIndex: r.rowIndex,
+        date: r.date,
+        subject: r.subject,
+        amount: r.amount,
+      }));
   }
+
+  const hasLinked = linkedCosts.length > 0;
 
   openDeleteConfirmModal({
     sheetName: row.sheetName,
@@ -1876,16 +1884,39 @@ async function onDeleteRow(rowKey) {
     amount: row.amount,
     memo: row.memo,
     isProject: row.source === 'sales' && !!row.isProject,
-    linkedCostCount: linkedCostCount,
-    modalTitle: '行を削除しますか？',
-    onConfirm: async () => {
-      await _executeDeleteRow(row);
+    linkedCosts: linkedCosts,
+    modalTitle: hasLinked ? '案件を削除しますか？' : '行を削除しますか？',
+    onConfirm: async (selectedItems) => {
+      await _executeDeleteRow(row, selectedItems);
     },
   });
 }
 
-async function _executeDeleteRow(row) {
+async function _executeDeleteRow(row, selectedItems) {
   try {
+    // 指示書15-2：チェック付き経費を先に降順で物理削除（rowIndex ズレ防止）
+    // 売上削除時、残った（チェック外し）経費の V列は GAS deleteRow が自動空欄化するため
+    // フロント側で linkTransactions による空欄化処理は不要
+    if (selectedItems && Array.isArray(selectedItems.costsToDelete) && selectedItems.costsToDelete.length > 0) {
+      const sortedCostRows = [...selectedItems.costsToDelete].sort((a, b) => b - a);
+      for (const costRowIndex of sortedCostRows) {
+        const cRes = await callGAS('deleteRow', {
+          sheetName: 'コスト',
+          rowIndex: costRowIndex,
+        });
+        if (!cRes || cRes.status !== 'ok') {
+          const msg = (cRes && cRes.message) || 'コスト削除に失敗しました';
+          if (typeof showDeleteConfirmError === 'function') {
+            showDeleteConfirmError(msg);
+          } else {
+            showToast(`削除失敗：${msg}`, 'error', 3500);
+          }
+          return;
+        }
+      }
+    }
+
+    // 売上（または単独コスト）行を削除
     const res = await callGAS('deleteRow', {
       sheetName: row.sheetName,
       rowIndex: row.rowIndex,

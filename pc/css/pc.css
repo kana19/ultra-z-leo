@@ -1646,3 +1646,53 @@ body.pc-body {
   background: var(--uz-red) !important;
   color: #fff !important;
 }
+
+/* 指示書15-2：金額入力欄のスピナー（▲▼）を非表示
+   PC版全体に共通適用。誤入力防止と視覚的シンプルさの両立 */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+/* 指示書15-2：削除確認モーダルのチェックボックスエリア
+   売上削除時に紐付け経費を個別選択できるUI（売上行は disabled でON固定） */
+.pc-delete-checkboxes {
+  margin: 12px 0;
+  padding: 8px 12px;
+  background: var(--uz-amber-bg);
+  border-left: 3px solid var(--uz-gold);
+}
+.pc-delete-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  cursor: pointer;
+  line-height: 1.6;
+}
+.pc-delete-checkbox-row--locked {
+  cursor: default;
+  opacity: 0.85;
+}
+.pc-delete-checkbox-row input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: var(--uz-red);
+}
+.pc-delete-checkbox-row--locked input[type="checkbox"] {
+  cursor: default;
+}
+.pc-delete-checkbox-row span {
+  flex: 1;
+  color: var(--uz-text);
+  font-size: 13px;
+}
+.pc-delete-warning > div {
+  margin: 2px 0;
+  line-height: 1.6;
+}

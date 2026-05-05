@@ -300,16 +300,25 @@ async function onAddCost(btn) {
  */
 async function onDeleteProject(btn) {
   const salesRowIndex = Number(btn.dataset.salesRowIndex);
+  const salesRowId = String(btn.dataset.salesRowId || '');
   const salesDate = btn.dataset.salesDate || '';
   const salesItem = btn.dataset.salesItem || '';
   const salesAmount = Number(btn.dataset.salesAmount) || 0;
   const salesMemo = btn.dataset.salesMemo || '';
-  const linkedCount = Number(btn.dataset.linkedCount) || 0;
 
   if (typeof openDeleteConfirmModal !== 'function') {
     showToast('削除モーダル未定義（pc-common.js を確認してください）', 'error', 3500);
     return;
   }
+
+  // 指示書15-2：紐付け経費の配列を _projectData から取得
+  const node = _projectData?.salesNodes?.find(n => String(n.salesRowId) === salesRowId);
+  const linkedCosts = (Array.isArray(node?.linkedCosts) ? node.linkedCosts : []).map(c => ({
+    rowIndex: c.rowIndex,
+    date: c.date,
+    subject: c.subject,
+    amount: c.amount,
+  }));
 
   openDeleteConfirmModal({
     sheetName: '売上',
@@ -320,19 +329,40 @@ async function onDeleteProject(btn) {
     amount: salesAmount,
     memo: salesMemo,
     isProject: true,
-    linkedCostCount: linkedCount,
+    linkedCosts: linkedCosts,
     modalTitle: '案件を削除しますか？',
-    onConfirm: async () => {
-      await _executeDeleteProject(salesRowIndex);
+    onConfirm: async (selectedItems) => {
+      await _executeDeleteProject({ salesRowIndex }, selectedItems);
     },
   });
 }
 
-async function _executeDeleteProject(salesRowIndex) {
+async function _executeDeleteProject(target, selectedItems) {
   try {
+    // 指示書15-2：チェック付き経費を先に降順で物理削除（rowIndex ズレ防止）
+    if (selectedItems && Array.isArray(selectedItems.costsToDelete) && selectedItems.costsToDelete.length > 0) {
+      const sortedCostRows = [...selectedItems.costsToDelete].sort((a, b) => b - a);
+      for (const costRowIndex of sortedCostRows) {
+        const cRes = await callGAS('deleteRow', {
+          sheetName: 'コスト',
+          rowIndex: costRowIndex,
+        });
+        if (!cRes || cRes.status !== 'ok') {
+          const msg = (cRes && cRes.message) || 'コスト削除に失敗しました';
+          if (typeof showDeleteConfirmError === 'function') {
+            showDeleteConfirmError(msg);
+          } else {
+            showToast(`削除失敗：${msg}`, 'error', 3500);
+          }
+          return;
+        }
+      }
+    }
+
+    // 売上行を削除（チェック外し経費の V列は GAS deleteRow が自動空欄化）
     const res = await callGAS('deleteRow', {
       sheetName: '売上',
-      rowIndex: salesRowIndex,
+      rowIndex: target.salesRowIndex,
     });
     if (!res || res.status !== 'ok') {
       const msg = (res && res.message) || '削除に失敗しました';
