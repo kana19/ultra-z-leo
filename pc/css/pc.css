@@ -1576,3 +1576,73 @@ body.pc-body {
 .pj-draft-spacer {
   flex: 1;
 }
+
+/* ═══════════════════════════════════════════════════════════
+   削除確認モーダル（指示書15・月次管理＋案件管理 共用）
+   既存 .pc-link-candidates-modal レイアウトクラスを流用し
+   本文（対象情報＋警告）と danger ボタン色のみ新規定義
+   ═══════════════════════════════════════════════════════════ */
+.pc-delete-confirm-body {
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.pc-delete-target-info {
+  padding: 10px 14px;
+  background: var(--uz-amber-bg);
+  border-left: 3px solid var(--uz-gold);
+  color: var(--uz-text);
+  font-size: 13px;
+  line-height: 1.7;
+}
+.pc-delete-target-info__label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--uz-gold);
+  margin-bottom: 4px;
+}
+.pc-delete-target-info__main {
+  font-weight: 600;
+}
+.pc-delete-target-info__memo {
+  margin-top: 4px;
+  color: var(--uz-text2);
+  font-size: 12px;
+}
+.pc-delete-warning {
+  padding: 10px 14px;
+  background: var(--uz-red-bg);
+  border-left: 3px solid var(--uz-red);
+  color: var(--uz-text);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.pc-btn-danger {
+  background: var(--uz-red-bg);
+  color: var(--uz-red);
+  border-color: var(--uz-red);
+}
+.pc-btn-danger:hover {
+  background: var(--uz-red);
+  color: #fff;
+}
+/* 月次管理 案件列の削除ボタン（pc-action-btn と同サイズに揃える・赤系） */
+.pc-action-btn--delete {
+  background: var(--uz-red-bg);
+  color: var(--uz-red);
+  border: 1px solid var(--uz-red);
+}
+.pc-action-btn--delete:hover {
+  background: var(--uz-red);
+  color: #fff;
+}
+/* 案件管理 案件カード操作エリアの削除ボタン */
+.pj-action--delete {
+  border-color: var(--uz-red) !important;
+  color: var(--uz-red) !important;
+}
+.pj-action--delete:hover {
+  background: var(--uz-red) !important;
+  color: #fff !important;
+}

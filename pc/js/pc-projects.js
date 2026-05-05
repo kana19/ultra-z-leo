@@ -186,7 +186,9 @@ function renderProjectCard(node) {
       <div class="pj-card__profit-rate">${gpRate}%</div>
     </div>`;
 
-  // アクションボタン
+  // アクションボタン（指示書15：削除ボタン追加・3ボタン横並び）
+  // 売上メモは GAS getTransactionsHierarchy が node.memo として返す（salesMemo は未使用）
+  const salesMemo = String(node.memo || node.salesMemo || '');
   const actions = `
     <div class="pj-card__actions">
       <button type="button" class="pc-btn pc-btn--ghost pj-action" data-action="add-cost"
@@ -199,6 +201,14 @@ function renderProjectCard(node) {
               data-sales-row-index="${node.salesRowIndex}"
               data-sales-row-id="${_esc(node.salesRowId)}"
               data-sales-item="${_esc(node.salesItem)}">案件解除</button>
+      <button type="button" class="pc-btn pc-btn--ghost pj-action pj-action--delete" data-action="delete"
+              data-sales-row-index="${node.salesRowIndex}"
+              data-sales-row-id="${_esc(node.salesRowId)}"
+              data-sales-date="${_esc(node.salesDate)}"
+              data-sales-item="${_esc(node.salesItem)}"
+              data-sales-amount="${salesAmt}"
+              data-sales-memo="${_esc(salesMemo)}"
+              data-linked-count="${linked.length}">削除</button>
     </div>`;
 
   return `
@@ -220,6 +230,7 @@ function onCardClick(e) {
   const action = btn.dataset.action;
   if (action === 'add-cost') onAddCost(btn);
   else if (action === 'unmark') onUnmark(btn);
+  else if (action === 'delete') onDeleteProject(btn);   // 指示書15
 }
 
 /* ── + 経費を紐付け（追加紐付け） ──────────────────────────── */
@@ -280,6 +291,69 @@ async function onAddCost(btn) {
       }
     }
   });
+}
+
+/* ── 案件削除（指示書15・戦略思想§1-5-2 AI自動確定禁止） ───
+ * 1. 削除ボタン → openDeleteConfirmModal で確認ダイアログ
+ * 2. ユーザーが「削除する」を明示タップ → GAS deleteRow（売上行物理削除＋紐付けコスト V列空欄化）
+ * 3. 成功時 loadProjects で案件管理画面再描画（経費自体は月次管理に残る）
+ */
+async function onDeleteProject(btn) {
+  const salesRowIndex = Number(btn.dataset.salesRowIndex);
+  const salesDate = btn.dataset.salesDate || '';
+  const salesItem = btn.dataset.salesItem || '';
+  const salesAmount = Number(btn.dataset.salesAmount) || 0;
+  const salesMemo = btn.dataset.salesMemo || '';
+  const linkedCount = Number(btn.dataset.linkedCount) || 0;
+
+  if (typeof openDeleteConfirmModal !== 'function') {
+    showToast('削除モーダル未定義（pc-common.js を確認してください）', 'error', 3500);
+    return;
+  }
+
+  openDeleteConfirmModal({
+    sheetName: '売上',
+    rowIndex: salesRowIndex,
+    date: salesDate,
+    type: '売上',
+    subject: salesItem,
+    amount: salesAmount,
+    memo: salesMemo,
+    isProject: true,
+    linkedCostCount: linkedCount,
+    modalTitle: '案件を削除しますか？',
+    onConfirm: async () => {
+      await _executeDeleteProject(salesRowIndex);
+    },
+  });
+}
+
+async function _executeDeleteProject(salesRowIndex) {
+  try {
+    const res = await callGAS('deleteRow', {
+      sheetName: '売上',
+      rowIndex: salesRowIndex,
+    });
+    if (!res || res.status !== 'ok') {
+      const msg = (res && res.message) || '削除に失敗しました';
+      if (typeof showDeleteConfirmError === 'function') {
+        showDeleteConfirmError(msg);
+      } else {
+        showToast(`削除失敗：${msg}`, 'error', 3500);
+      }
+      return;
+    }
+    if (typeof closeDeleteConfirmModal === 'function') closeDeleteConfirmModal();
+    showToast('案件を削除しました', 'success', 2000);
+    await loadProjects();
+  } catch (err) {
+    console.error('[pc-projects] _executeDeleteProject', err);
+    if (typeof showDeleteConfirmError === 'function') {
+      showDeleteConfirmError(`削除エラー：${err.message || err}`);
+    } else {
+      showToast(`削除エラー：${err.message || err}`, 'error', 3500);
+    }
+  }
 }
 
 /* ── 案件解除 ─────────────────────────────────────────────── */

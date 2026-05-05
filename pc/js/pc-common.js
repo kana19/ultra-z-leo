@@ -85,3 +85,131 @@ function pcBootstrap(activeHref, title) {
   if (main) main.insertAdjacentHTML('afterbegin', pcRenderHeader(title));
   pcStartClock();
 }
+
+/* ──────────────────────────────────────────────────────────
+   削除確認モーダル（指示書15・月次管理＋案件管理 共通）
+   戦略思想§1-5-2 AI自動確定禁止：必ず「削除ボタン→ダイアログ→削除する」の3ステップ
+   呼び出し元は monthly.html / projects.html に同じ ID で配置されたモーダルDOMを共有
+   options:
+     - sheetName : '売上' or 'コスト'
+     - rowIndex  : 対象行番号
+     - date / type / subject / amount / memo : 対象行の表示情報
+     - isProject (bool) / linkedCostCount (number) : 警告メッセージ制御
+     - modalTitle (string・省略時 '行を削除しますか？')
+     - onConfirm (async function) : 削除確定時に呼ばれる（実 GAS 呼び出し＋再描画は呼び出し元の責務）
+   ────────────────────────────────────────────────────────── */
+let _pcDeleteModalState = null;
+
+function _pcFmtYen(n) {
+  const v = Number(n);
+  if (!isFinite(v)) return '0';
+  return v.toLocaleString('ja-JP');
+}
+
+function openDeleteConfirmModal(options) {
+  if (!options) return;
+  const modal = document.getElementById('pc-delete-confirm-modal');
+  if (!modal) return;
+  const titleEl = document.getElementById('pc-delete-confirm-title');
+  const targetEl = document.getElementById('pc-delete-target-info');
+  const warnEl = document.getElementById('pc-delete-warning');
+  const errEl = document.getElementById('pc-delete-confirm-error');
+  const confirmBtn = document.getElementById('pc-delete-confirm-btn');
+
+  if (titleEl) titleEl.textContent = options.modalTitle || '行を削除しますか？';
+
+  // 対象情報の組み立て
+  if (targetEl) {
+    const date = escHtml(options.date || '');
+    const type = escHtml(options.type || '');
+    const subject = escHtml(options.subject || '');
+    const amount = _pcFmtYen(options.amount || 0);
+    const memo = String(options.memo || '').trim();
+    const memoHtml = memo
+      ? `<div class="pc-delete-target-info__memo">メモ：${escHtml(memo)}</div>`
+      : '';
+    targetEl.innerHTML = `
+      <div class="pc-delete-target-info__label">削除対象</div>
+      <div class="pc-delete-target-info__main">${date} / ${type} / ${subject} / ¥${amount}</div>
+      ${memoHtml}
+    `;
+  }
+
+  // 警告メッセージ：売上案件・経費紐付けあり時のみ表示
+  if (warnEl) {
+    if (options.isProject && Number(options.linkedCostCount) > 0) {
+      warnEl.textContent = `⚠ この売上は案件化されています。紐付けされた${Number(options.linkedCostCount)}件の経費の紐付けは自動的に解除されます（経費自体は月次管理に残ります）。`;
+      warnEl.hidden = false;
+    } else {
+      warnEl.textContent = '';
+      warnEl.hidden = true;
+    }
+  }
+
+  if (errEl) { errEl.hidden = true; errEl.textContent = ''; }
+
+  if (confirmBtn) {
+    confirmBtn.disabled = false;
+    confirmBtn.style.opacity = '';
+    confirmBtn.style.cursor = '';
+  }
+
+  // 既存リスナーがあれば一旦破棄してから登録（多重呼び出し防止）
+  _pcCloseDeleteConfirmModalCleanup();
+
+  const onClick = async (e) => {
+    const action = e.target?.dataset?.action;
+    if (action === 'cancel') {
+      closeDeleteConfirmModal();
+    } else if (action === 'confirm') {
+      if (typeof options.onConfirm === 'function') {
+        // 二重実行防止
+        if (confirmBtn) {
+          confirmBtn.disabled = true;
+          confirmBtn.style.opacity = '0.45';
+          confirmBtn.style.cursor = 'not-allowed';
+        }
+        try {
+          await options.onConfirm();
+        } catch (err) {
+          showDeleteConfirmError(err && err.message ? err.message : String(err));
+          if (confirmBtn) {
+            confirmBtn.disabled = false;
+            confirmBtn.style.opacity = '';
+            confirmBtn.style.cursor = '';
+          }
+        }
+      } else {
+        closeDeleteConfirmModal();
+      }
+    }
+  };
+  const onKeydown = (e) => {
+    if (e.key === 'Escape') { e.preventDefault(); closeDeleteConfirmModal(); }
+  };
+
+  modal.addEventListener('click', onClick);
+  document.addEventListener('keydown', onKeydown);
+  _pcDeleteModalState = { modal, onClick, onKeydown };
+
+  modal.hidden = false;
+}
+
+function closeDeleteConfirmModal() {
+  const modal = document.getElementById('pc-delete-confirm-modal');
+  if (modal) modal.hidden = true;
+  _pcCloseDeleteConfirmModalCleanup();
+}
+
+function _pcCloseDeleteConfirmModalCleanup() {
+  if (!_pcDeleteModalState) return;
+  const { modal, onClick, onKeydown } = _pcDeleteModalState;
+  if (modal && onClick) modal.removeEventListener('click', onClick);
+  if (onKeydown) document.removeEventListener('keydown', onKeydown);
+  _pcDeleteModalState = null;
+}
+
+function showDeleteConfirmError(msg) {
+  const errEl = document.getElementById('pc-delete-confirm-error');
+  if (errEl) { errEl.textContent = msg || ''; errEl.hidden = !msg; }
+}

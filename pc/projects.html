@@ -49,6 +49,26 @@
   </div>
 </div>
 
+<!-- 削除確認モーダル（指示書15・月次管理＋案件管理 共用 DOM 構造） -->
+<div class="pc-link-candidates-modal" id="pc-delete-confirm-modal" hidden>
+  <div class="pc-link-candidates-backdrop" data-action="cancel"></div>
+  <div class="pc-link-candidates-panel" role="dialog" aria-modal="true" aria-labelledby="pc-delete-confirm-title">
+    <header class="pc-link-candidates-header">
+      <h2 id="pc-delete-confirm-title">行を削除しますか？</h2>
+      <button type="button" class="pc-link-candidates-close" aria-label="閉じる" data-action="cancel">×</button>
+    </header>
+    <div class="pc-delete-confirm-body">
+      <div class="pc-delete-target-info" id="pc-delete-target-info"></div>
+      <div class="pc-delete-warning" id="pc-delete-warning" hidden></div>
+    </div>
+    <p class="pc-link-candidates-error" id="pc-delete-confirm-error" hidden></p>
+    <footer class="pc-link-candidates-footer">
+      <button type="button" class="pc-btn pc-btn-secondary" data-action="cancel">キャンセル</button>
+      <button type="button" class="pc-btn pc-btn-danger" data-action="confirm" id="pc-delete-confirm-btn">削除する</button>
+    </footer>
+  </div>
+</div>
+
 <script src="../js/app.js"></script>
 <script src="js/pc-common.js"></script>
 <script src="js/pc-projects.js"></script>

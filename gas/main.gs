@@ -40,6 +40,8 @@ function doGet(e) {
       // PC版月次管理画面（インライン編集保存・ロック解除申請・技術仕様§4-6 §3）
       case 'updateRow':                 result = updateRow(data);                         break;
       case 'requestUnlock':             result = requestUnlock(data);                     break;
+      // 指示書15：行削除（売上・コスト両対応・ロック行拒否・売上削除時は紐付け経費のV列を空欄化）
+      case 'deleteRow':                 result = deleteRow(data);                         break;
       default: result = { status: 'error', message: '不明なアクション: ' + action };
     }
   } catch (err) {
@@ -1682,6 +1684,95 @@ function updateRow(data) {
   };
   if (recalculated) resp.data.recalculated = recalculated;
   return resp;
+}
+
+/**
+ * 行削除（指示書15・売上 / コスト 両対応）
+ * 戦略思想§1-5-2 AI自動確定禁止：呼び出し元 PC版で「削除→確認ダイアログ→削除する」の3ステップを保証する
+ * 物理削除に伴い rowIndex がズレるため、フロント側は本処理成功後に再取得して再描画する
+ *
+ * payload:
+ *   - sheetName : "売上" または "コスト"
+ *   - rowIndex  : 対象行番号（2以上）
+ *
+ * 動作仕様：
+ *   1. S列(19)='1' のロック行は削除拒否（'ロック行は削除できません'）
+ *   2. 売上削除時：T列(20) の売上行ID と一致するコスト行のV列(22) を空欄化（紐付け解除）
+ *      コスト行自体は削除しない（月次管理に未紐付け状態で残る）
+ *   3. コスト削除時：紐付け先売上のU列はそのまま（経費0件案件として残す・案件解除はユーザー操作で別途）
+ *   4. 物理削除は sheet.deleteRow(rowIndex) を呼ぶ
+ */
+function deleteRow(data) {
+  try {
+    var sheetName = String(data && data.sheetName || '').trim();
+    var rowIndex  = parseInt(data && data.rowIndex, 10);
+
+    if (sheetName !== '売上' && sheetName !== 'コスト') {
+      return { status: 'error', message: 'invalid sheetName' };
+    }
+    if (!rowIndex || rowIndex < 2) {
+      return { status: 'error', message: 'invalid rowIndex' };
+    }
+
+    var ss = SpreadsheetApp.getActive();
+    var sheet = ss.getSheetByName(sheetName);
+    if (!sheet) {
+      return { status: 'error', message: sheetName + 'シートが見つかりません' };
+    }
+
+    var lastRow = sheet.getLastRow();
+    if (rowIndex > lastRow) {
+      return { status: 'error', message: 'rowIndex out of range' };
+    }
+
+    // ロックチェック（S列=19）
+    var lockFlag = sheet.getRange(rowIndex, 19).getValue();
+    if (lockFlag === 1 || lockFlag === '1' || Number(lockFlag) === 1) {
+      return { status: 'error', message: 'ロック行は削除できません' };
+    }
+
+    var unlinkedCostRows = [];
+    var deletedSalesRowId = '';
+
+    if (sheetName === '売上') {
+      // 売上削除時：紐付け経費のV列(22) を空欄化
+      var salesRowId = sheet.getRange(rowIndex, 20).getValue(); // T列(20)
+      deletedSalesRowId = String(salesRowId || '');
+
+      if (deletedSalesRowId) {
+        var costSheet = ss.getSheetByName('コスト');
+        if (costSheet) {
+          var costLastRow = costSheet.getLastRow();
+          if (costLastRow >= 2) {
+            var vColRange = costSheet.getRange(2, 22, costLastRow - 1, 1);
+            var vValues = vColRange.getValues();
+            for (var i = 0; i < vValues.length; i++) {
+              if (String(vValues[i][0] || '') === deletedSalesRowId) {
+                var costRow = i + 2;
+                costSheet.getRange(costRow, 22).setValue('');
+                unlinkedCostRows.push(costRow);
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // 物理削除
+    sheet.deleteRow(rowIndex);
+
+    return {
+      status: 'ok',
+      data: {
+        sheetName: sheetName,
+        rowIndex: rowIndex,
+        unlinkedCostRows: unlinkedCostRows,
+        deletedSalesRowId: deletedSalesRowId
+      }
+    };
+  } catch (e) {
+    return { status: 'error', message: 'deleteRow失敗: ' + e.message };
+  }
 }
 
 /**

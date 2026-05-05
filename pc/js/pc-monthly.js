@@ -474,10 +474,10 @@ function renderRow(row) {
 
   // 案件列：状態別に1セルへ集約（指示書8§1：操作列廃止・☆/★/解除申請/編集中ボタンを統合）
   //  - 編集中：保存・取消
-  //  - ロック：解除申請
-  //  - 案件済（isProject=true）：★（解除）
-  //  - 未案件（isProject=false かつ案件化可能）：☆（案件化）
-  //  - 案件化対象外コスト：空セル
+  //  - ロック：解除申請（指示書15：削除ボタンは出さない）
+  //  - 案件済（isProject=true）：★（解除）+ 削除（指示書15）
+  //  - 未案件（isProject=false かつ案件化可能）：☆（案件化）+ 削除（指示書15）
+  //  - 案件化対象外コスト：削除（指示書15）
   let cellProject;
   if (isEditing) {
     cellProject = `
@@ -486,13 +486,18 @@ function renderRow(row) {
     `;
   } else if (row.isLocked) {
     cellProject = `<button type="button" class="pc-action-btn pc-action-btn--unlock" data-action="request-unlock">解除申請</button>`;
-  } else if (row.isProject) {
-    cellProject = `<button type="button" class="btn-star btn-star--active" data-action="unmark-project" title="案件登録解除">★</button>`;
   } else {
-    const canMark = row.source === 'sales' || (row.source === 'cost' && _isLinkableCost(row));
-    cellProject = canMark
-      ? `<button type="button" class="btn-star" data-action="mark-project" title="案件化">☆</button>`
-      : `<span class="pc-project-cell"></span>`;
+    const parts = [];
+    if (row.isProject) {
+      parts.push(`<button type="button" class="btn-star btn-star--active" data-action="unmark-project" title="案件登録解除">★</button>`);
+    } else {
+      const canMark = row.source === 'sales' || (row.source === 'cost' && _isLinkableCost(row));
+      if (canMark) {
+        parts.push(`<button type="button" class="btn-star" data-action="mark-project" title="案件化">☆</button>`);
+      }
+    }
+    parts.push(`<button type="button" class="pc-action-btn pc-action-btn--delete" data-action="delete-row" title="行を削除">削除</button>`);
+    cellProject = parts.join('');
   }
 
   // 指示書11§4：tr 自体を focusable に（tabindex=0・ロック行のみ除外）
@@ -731,6 +736,7 @@ function bindTbodyDelegation() {
         case 'request-unlock':  onRequestUnlock(rowKey);   break;
         case 'save-edit':       commitEdit();              break;
         case 'cancel-edit':     cancelEdit();              break;
+        case 'delete-row':      onDeleteRow(rowKey);       break;   // 指示書15
         case 'commit-draft':    commitDraftRow(rowKey.replace('draft-', ''));   break;
         case 'discard-draft':   discardDraftRow(rowKey.replace('draft-', ''));  break;
         case 'select-division': {
@@ -1839,5 +1845,71 @@ async function onRequestUnlock(rowKey) {
   } catch (err) {
     console.error('[pc-monthly] onRequestUnlock', err);
     showToast(`解除申請失敗：${err.message || err}`, 'error', 3500);
+  }
+}
+
+/* ── 行削除（指示書15・戦略思想§1-5-2 AI自動確定禁止 3ステップ厳守） ───
+ * 1. 削除ボタンクリック → openDeleteConfirmModal（pc-common.js）でダイアログ表示
+ * 2. ユーザーが「削除する」を明示タップ → _executeDeleteRow が GAS deleteRow 呼び出し
+ * 3. 成功時 loadMonthlyData で全件再取得（rowIndex ズレ解消）
+ * 売上案件削除時は紐付けコスト件数を _monthlyData から算出して警告表示する
+ */
+async function onDeleteRow(rowKey) {
+  const row = _monthlyData.find(r => _rowKey(r) === rowKey);
+  if (!row) return;
+  if (row.isLocked) { showToast('ロック行は削除できません', 'info', 2000); return; }
+
+  // 売上案件削除時の紐付けコスト件数（メモリ上 _monthlyData を salesRowId で検索）
+  let linkedCostCount = 0;
+  if (row.source === 'sales' && row.isProject && row.salesRowId) {
+    linkedCostCount = _monthlyData.filter(
+      r => r.source === 'cost' && String(r.salesRowId || '') === String(row.salesRowId)
+    ).length;
+  }
+
+  openDeleteConfirmModal({
+    sheetName: row.sheetName,
+    rowIndex: row.rowIndex,
+    date: row.date,
+    type: row.type,
+    subject: row.subject,
+    amount: row.amount,
+    memo: row.memo,
+    isProject: row.source === 'sales' && !!row.isProject,
+    linkedCostCount: linkedCostCount,
+    modalTitle: '行を削除しますか？',
+    onConfirm: async () => {
+      await _executeDeleteRow(row);
+    },
+  });
+}
+
+async function _executeDeleteRow(row) {
+  try {
+    const res = await callGAS('deleteRow', {
+      sheetName: row.sheetName,
+      rowIndex: row.rowIndex,
+    });
+    if (!res || res.status !== 'ok') {
+      const msg = (res && res.message) || '削除に失敗しました';
+      // ロック行拒否などはモーダル内エラー表示・モーダルは開いたまま
+      if (typeof showDeleteConfirmError === 'function') {
+        showDeleteConfirmError(msg);
+      } else {
+        showToast(`削除失敗：${msg}`, 'error', 3500);
+      }
+      return;
+    }
+    // モーダル閉じてからトースト＋データ再読込（rowIndex 再構築）
+    if (typeof closeDeleteConfirmModal === 'function') closeDeleteConfirmModal();
+    showToast('削除しました', 'success', 2000);
+    await loadMonthlyData('');
+  } catch (err) {
+    console.error('[pc-monthly] _executeDeleteRow', err);
+    if (typeof showDeleteConfirmError === 'function') {
+      showDeleteConfirmError(`削除エラー：${err.message || err}`);
+    } else {
+      showToast(`削除エラー：${err.message || err}`, 'error', 3500);
+    }
   }
 }
