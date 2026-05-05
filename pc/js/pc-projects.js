@@ -325,47 +325,197 @@ async function onUnmark(btn) {
   }
 }
 
-/* ── + 新規案件（補助フロー） ─────────────────────────────── */
+/* ── + 新規案件（補助フロー・インラインドラフトカード方式） ──── */
+let _newProjectDraft = null;   // ドラフト状態
+let _pjSettings = null;        // getSettings キャッシュ
+
+async function ensureSettings() {
+  if (_pjSettings) return _pjSettings;
+  try {
+    const res = await callGAS('getSettings', {});
+    if (res && res.status === 'ok' && res.data) {
+      _pjSettings = res.data;
+    } else {
+      _pjSettings = {};
+    }
+  } catch {
+    _pjSettings = {};
+  }
+  return _pjSettings;
+}
+
+function getServiceList() {
+  if (!_pjSettings) return [];
+  let svcs = _pjSettings.serviceList ?? _pjSettings.services ?? [];
+  if (typeof svcs === 'string') { try { svcs = JSON.parse(svcs); } catch { svcs = []; } }
+  if (!Array.isArray(svcs)) svcs = [];
+  return svcs;
+}
+
 async function onNewProject() {
-  const date = prompt('売上日（YYYY-MM-DD）', new Date().toISOString().slice(0, 10));
-  if (!date) return;
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    showToast('日付形式が不正です（YYYY-MM-DD）', 'error', 2500);
-    return;
+  if (_newProjectDraft) return; // 既にドラフト表示中
+  await ensureSettings();
+
+  const today = new Date().toISOString().slice(0, 10);
+  _newProjectDraft = { date: today, serviceCode: '', serviceName: '', amount: 0, taxRate: 10, memo: '' };
+
+  renderNewProjectDraft();
+}
+
+function renderNewProjectDraft() {
+  const listEl = document.getElementById('pj-list');
+  if (!listEl) return;
+
+  // ドラフトカードHTMLを先頭に挿入
+  const existing = document.getElementById('pj-draft-card');
+  if (existing) existing.remove();
+
+  const svcs = getServiceList();
+  const svcOpts = ['<option value="">（品目を選択）</option>'].concat(
+    svcs.map(s => {
+      const code = _esc(s.code || s.serviceCode || '');
+      const name = _esc(s.name || s.serviceName || '');
+      const tax = Number(s.taxRate) || 10;
+      const sel = (_newProjectDraft.serviceCode === code) ? 'selected' : '';
+      return `<option value="${code}" data-name="${name}" data-tax="${tax}" ${sel}>${name}</option>`;
+    })
+  ).join('');
+
+  const d = _newProjectDraft;
+  const valid = _isNewDraftValid(d);
+
+  const card = document.createElement('div');
+  card.id = 'pj-draft-card';
+  card.className = 'pj-card pj-card--draft';
+  card.innerHTML = `
+    <div class="pj-draft-form">
+      <div class="pj-card__section-label">新規案件（売上登録）</div>
+      <div class="pj-draft-fields">
+        <label class="pj-draft-field">
+          <span>発生日</span>
+          <input type="date" id="pj-draft-date" class="pc-edit-input" value="${_esc(d.date)}">
+        </label>
+        <label class="pj-draft-field">
+          <span>品目</span>
+          <select id="pj-draft-service" class="pc-edit-input">${svcOpts}</select>
+        </label>
+        <label class="pj-draft-field">
+          <span>金額（税込）</span>
+          <input type="number" id="pj-draft-amount" class="pc-edit-input pc-edit-input--num" value="${d.amount || ''}" placeholder="0">
+        </label>
+        <label class="pj-draft-field">
+          <span>税率</span>
+          <select id="pj-draft-tax" class="pc-edit-input">
+            <option value="10" ${d.taxRate === 10 ? 'selected' : ''}>10%</option>
+            <option value="8" ${d.taxRate === 8 ? 'selected' : ''}>8%</option>
+            <option value="0" ${d.taxRate === 0 ? 'selected' : ''}>0%</option>
+          </select>
+        </label>
+        <label class="pj-draft-field">
+          <span>メモ</span>
+          <input type="text" id="pj-draft-memo" class="pc-edit-input" value="${_esc(d.memo)}" placeholder="任意">
+        </label>
+      </div>
+      <div class="pj-draft-actions">
+        <button type="button" id="pj-draft-discard" class="pc-btn pc-btn--ghost" ${valid ? 'hidden' : ''}>取消</button>
+        <button type="button" id="pj-draft-commit" class="pc-btn pc-btn-primary" ${valid ? '' : 'hidden'}>登録</button>
+      </div>
+    </div>`;
+
+  listEl.insertBefore(card, listEl.firstChild);
+  bindDraftEvents(card);
+  card.querySelector('#pj-draft-date')?.focus();
+}
+
+function _isNewDraftValid(d) {
+  if (!d) return false;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d.date || '')) return false;
+  if (!d.serviceCode) return false;
+  const amt = Number(d.amount);
+  if (!Number.isFinite(amt) || amt <= 0) return false;
+  return true;
+}
+
+function _syncDraftFromDOM() {
+  if (!_newProjectDraft) return;
+  const dateEl = document.getElementById('pj-draft-date');
+  const svcEl = document.getElementById('pj-draft-service');
+  const amtEl = document.getElementById('pj-draft-amount');
+  const taxEl = document.getElementById('pj-draft-tax');
+  const memoEl = document.getElementById('pj-draft-memo');
+
+  if (dateEl) _newProjectDraft.date = dateEl.value;
+  if (svcEl) {
+    _newProjectDraft.serviceCode = svcEl.value;
+    const opt = svcEl.options[svcEl.selectedIndex];
+    _newProjectDraft.serviceName = opt?.dataset?.name || '';
+    if (opt?.dataset?.tax !== undefined) {
+      _newProjectDraft.taxRate = Number(opt.dataset.tax) || 10;
+      if (taxEl) taxEl.value = String(_newProjectDraft.taxRate);
+    }
   }
-  const item = prompt('売上品目名（科目）', '');
-  if (item === null) return;
-  if (!item.trim()) {
-    showToast('品目名を入力してください', 'error', 2500);
-    return;
-  }
-  const amountStr = prompt('売上金額（税込）', '');
-  if (amountStr === null) return;
-  const amount = Number(amountStr);
-  if (!isFinite(amount) || amount <= 0) {
-    showToast('金額が不正です', 'error', 2500);
-    return;
-  }
-  const taxRate = 10; // デフォルト10%
-  const memo = prompt('メモ（任意）', '') || '';
+  if (amtEl) _newProjectDraft.amount = Number(amtEl.value) || 0;
+  if (taxEl) _newProjectDraft.taxRate = Number(taxEl.value) || 0;
+  if (memoEl) _newProjectDraft.memo = memoEl.value;
+}
+
+function _updateDraftButtons() {
+  const valid = _isNewDraftValid(_newProjectDraft);
+  const discardBtn = document.getElementById('pj-draft-discard');
+  const commitBtn = document.getElementById('pj-draft-commit');
+  if (discardBtn) discardBtn.hidden = valid;
+  if (commitBtn) commitBtn.hidden = !valid;
+}
+
+function bindDraftEvents(card) {
+  // input/change イベントで状態同期＋ボタン切替
+  card.querySelectorAll('input, select').forEach(el => {
+    el.addEventListener('input', () => { _syncDraftFromDOM(); _updateDraftButtons(); });
+    el.addEventListener('change', () => { _syncDraftFromDOM(); _updateDraftButtons(); });
+  });
+
+  // Escキーで破棄
+  card.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { e.preventDefault(); discardNewDraft(); }
+  });
+
+  // 取消ボタン
+  document.getElementById('pj-draft-discard')?.addEventListener('click', discardNewDraft);
+  // 登録ボタン
+  document.getElementById('pj-draft-commit')?.addEventListener('click', commitNewDraft);
+}
+
+function discardNewDraft() {
+  _newProjectDraft = null;
+  const card = document.getElementById('pj-draft-card');
+  if (card) card.remove();
+}
+
+async function commitNewDraft() {
+  if (!_newProjectDraft || !_isNewDraftValid(_newProjectDraft)) return;
+  const d = _newProjectDraft;
+  const commitBtn = document.getElementById('pj-draft-commit');
+  if (commitBtn) commitBtn.disabled = true;
 
   try {
     const res = await callGAS('addSales', {
-      date: date,
-      service: item.trim(),
-      amount: amount,
-      taxRate: taxRate,
-      memo: memo,
+      date: d.date,
+      service: d.serviceCode,
+      amount: d.amount,
+      taxRate: d.taxRate,
+      memo: d.memo,
       isProject: '1',
     });
     if (!res || res.status !== 'ok') {
       throw new Error((res && res.message) || '売上登録に失敗しました');
     }
     showToast('新規案件を登録しました', 'success', 2000);
+    discardNewDraft();
     await loadProjects();
   } catch (err) {
-    console.error('[pc-projects] onNewProject', err);
+    console.error('[pc-projects] commitNewDraft', err);
     showToast(`登録失敗：${err.message || err}`, 'error', 3500);
+    if (commitBtn) commitBtn.disabled = false;
   }
 }
 

@@ -1538,3 +1538,37 @@ body.pc-body {
 .pj-action--warn:hover {
   background: var(--uz-red-bg);
 }
+
+/* ── 新規案件ドラフトカード ──────────────────────────────── */
+.pj-card--draft {
+  border-color: var(--uz-gold);
+  background: var(--uz-surface2);
+}
+.pj-draft-form {
+  padding: 14px 16px;
+}
+.pj-draft-fields {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+.pj-draft-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12px;
+  color: var(--uz-text2);
+}
+.pj-draft-field input,
+.pj-draft-field select {
+  min-width: 110px;
+}
+.pj-draft-field input[type="number"] {
+  width: 120px;
+}
+.pj-draft-actions {
+  margin-top: 10px;
+  display: flex;
+  gap: 8px;
+}
