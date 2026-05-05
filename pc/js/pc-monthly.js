@@ -1202,22 +1202,30 @@ function _openUnmarkSalesModal(salesRow, linkedCosts) {
 
   if (confirmBtn) {
     confirmBtn.hidden = false;
-    confirmBtn.textContent = '解除する';
+    confirmBtn.textContent = '実行';   // 指示書13-2§1：他モーダル共有のため close 時は '確定' に戻す
   }
 
-  // 指示書13§2：チェック状態の変化を監視して文言・ボタン活性を再計算
+  // 指示書13§2 / 13-2§2：チェック状態の変化を監視して文言・ボタン活性（および視覚的 disabled）を再計算
+  //  pc-btn-primary には :disabled 用 CSS が無く、disabled 属性のみでは視覚的に切り替わらないため
+  //  inline style で opacity / cursor を切り替えて disabled 状態を明示する
+  const setConfirmDisabled = (disabled) => {
+    if (!confirmBtn) return;
+    confirmBtn.disabled = disabled;
+    confirmBtn.style.opacity = disabled ? '0.45' : '';
+    confirmBtn.style.cursor  = disabled ? 'not-allowed' : '';
+  };
   const updateUnmarkSalesState = () => {
     const total = linkedCosts.length;
     const checkedCount = list.querySelectorAll('input[type="checkbox"]:checked').length;
     if (checkedCount === total) {
       hintEl.textContent = '解除する経費がありません。チェックを外して紐付けを解除する経費を選択してください。';
-      if (confirmBtn) confirmBtn.disabled = true;
+      setConfirmDisabled(true);
     } else if (checkedCount === 0) {
       hintEl.textContent = 'すべての経費の紐付けを解除し、案件登録を解除します。';
-      if (confirmBtn) confirmBtn.disabled = false;
+      setConfirmDisabled(false);
     } else {
       hintEl.textContent = 'チェックを外した経費の紐付けのみ解除します。案件登録と残りの経費の紐付けは維持されます。';
-      if (confirmBtn) confirmBtn.disabled = false;
+      setConfirmDisabled(false);
     }
   };
   list.addEventListener('change', updateUnmarkSalesState);
@@ -1707,11 +1715,14 @@ function closeLinkCandidatesModal() {
     document.removeEventListener('keydown', _modalState.keydownHandler);
   }
   // confirm ボタンの非表示・disabled 状態を戻す（指示書13§2：disabled 残留防止）
+  // 指示書13-2§2：inline style（opacity / cursor）も次回オープンに引き継がないようクリア
   const confirmBtn = document.getElementById('pc-link-candidates-confirm');
   if (confirmBtn) {
     confirmBtn.hidden = false;
     confirmBtn.textContent = '確定';
     confirmBtn.disabled = false;
+    confirmBtn.style.opacity = '';
+    confirmBtn.style.cursor = '';
   }
   // 対象取引情報ヘッダーをクリア（次回オープン時の混入防止）
   const targetEl = document.getElementById('pc-link-candidates-target');
