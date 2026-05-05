@@ -6,11 +6,9 @@
 'use strict';
 
 /* ── 状態 ──────────────────────────────────────────────── */
-// 指示書9§1：月選択UIを廃止。常に今月のデータを読み込む。月跨ぎは列見出しフィルタで対応
-const now = new Date();
-const _currentMonth = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+// 指示書9§1：月選択UIを廃止。指示書12§1：月パラメータを送らず GAS から全件取得し、月跨ぎは列見出しフィルタで対応
 
-let _monthlyData = [];                 // 統合後の全行配列（並び：date desc, rowIndex asc）
+let _monthlyData = [];                 // 統合後の全行配列（並び：date desc, rowIndex desc）
 let _settings = { costMaster: [], serviceList: [] };
 // 指示書11§3：20件ページング
 const PAGE_SIZE = 20;
@@ -24,7 +22,7 @@ let _modalState = null;                // 紐付け候補モーダル状態 { di
 let _colFilterDocClickHandler = null;  // 列見出しフィルタの外側クリック検知ハンドラ（解除用）
 
 /* ── ユーティリティ ──────────────────────────────────────── */
-// _todayYM は指示書9§1 で廃止（月フィルタ UI 撤去・_currentMonth 定数で代替）
+// _todayYM は指示書9§1 で廃止（月フィルタ UI 撤去）。指示書12§1 で _currentMonth も撤去（全月読込に変更）
 
 function _escHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, c =>
@@ -77,7 +75,7 @@ async function initMonthly() {
   bindColFilterButtons();
   bindTbodyDelegation();   // 指示書8-5§1：tbody 単位の統一イベントデリゲーション
   bindPaginationButtons(); // 指示書11§3：ページャ（前の20件 / 次の20件）
-  await loadMonthlyData(_currentMonth);
+  await loadMonthlyData('');   // 指示書12§1：月フィルタなし＝GAS 側全件取得
 }
 
 // 指示書11§3：ページャUIの click ハンドラを1度だけ結線
@@ -181,11 +179,11 @@ function mergeAndClassify(historyRows) {
   return out;
 }
 
-// 並び順：発生日 desc（直近が最上段）・同日内は rowIndex asc で安定（戦略思想§4-3）
+// 並び順：発生日 desc（直近が最上段）・同日内は rowIndex desc（指示書12§2：新規登録が上）
 function _sortRows(rows) {
   rows.sort((a, b) => {
     if (a.date !== b.date) return a.date < b.date ? 1 : -1;
-    return a.rowIndex - b.rowIndex;
+    return b.rowIndex - a.rowIndex;
   });
 }
 
@@ -863,11 +861,14 @@ function bindTbodyDelegation() {
     //   input / select / button が focus 中は browser default を維持（カーソル移動・option 切替・無動作）
     //   tr の focus は tabindex="0" + Tab/click 等でユーザーが意図的に位置づけたときのみ
     //   ドラフト行は tabindex なしのため自然に対象外（rowFocusable=false）
+    //   指示書12§3：移動先は input ではなく tr 自体に focus → 金色アウトライン維持で連続移動可
     if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && e.target.tagName === 'TR' && tr) {
       e.preventDefault();
-      // 行選択状態からの遷移：先頭フィールド date を edit focus の起点とする
-      if (e.key === 'ArrowDown') moveEditToNextRow(tr, 'date');
-      else moveEditToPrevRow(tr, 'date');
+      const focusableRows = Array.from(tbody.querySelectorAll('tr[data-row-key][tabindex="0"]'));
+      const idx = focusableRows.indexOf(tr);
+      if (idx < 0) return;
+      const nextTr = e.key === 'ArrowDown' ? focusableRows[idx + 1] : focusableRows[idx - 1];
+      if (nextTr) nextTr.focus();
       return;
     }
 
@@ -1002,32 +1003,6 @@ function cancelEdit() {
   renderTable();
 }
 
-function moveEditToNextRow(currentTr, field) {
-  // フィルタ後の表示順での次行に移動
-  const visibleRows = applyFilters(_monthlyData);
-  const currentKey = currentTr.getAttribute('data-row-key');
-  const idx = visibleRows.findIndex(r => _rowKey(r) === currentKey);
-  if (idx < 0 || idx >= visibleRows.length - 1) {
-    cancelEdit();
-    return;
-  }
-  const nextKey = _rowKey(visibleRows[idx + 1]);
-  startEdit(nextKey, field);
-}
-
-// 指示書9§5：↑キーでフィルタ後の表示順での前行に移動
-function moveEditToPrevRow(currentTr, field) {
-  const visibleRows = applyFilters(_monthlyData);
-  const currentKey = currentTr.getAttribute('data-row-key');
-  const idx = visibleRows.findIndex(r => _rowKey(r) === currentKey);
-  if (idx <= 0) {
-    cancelEdit();
-    return;
-  }
-  const prevKey = _rowKey(visibleRows[idx - 1]);
-  startEdit(prevKey, field);
-}
-
 /* ── ドラフト行 ──────────────────────────────────────────── */
 function bindAddButtons() {
   document.getElementById('btn-add-sales')?.addEventListener('click', () => addDraftRow('sales'));
@@ -1124,7 +1099,8 @@ async function commitDraftRow(draftId) {
     }
     showToast('登録しました', 'success', 2000);
     discardDraftRow(draftId);
-    await loadMonthlyData(_currentMonth);
+    await loadMonthlyData('');   // 指示書12§1：全件再読込
+
   } catch (err) {
     console.error('[pc-monthly] commitDraftRow', err);
     showToast(`登録失敗：${err.message || err}`, 'error', 3500);
