@@ -1164,7 +1164,7 @@ async function onUnmarkAsProject(rowKey) {
       target: { kind: 'sales', date: row.date, subject: row.subject, amount: row.amount, memo: row.memo },
       confirmLabel: '解除する',
       onConfirm: async () => {
-        try { await _executeUnmarkSales(row, []); }
+        try { await _executeUnmarkSales(row, [], true); }
         catch (err) { showLinkCandidatesError(err.message || String(err)); }
       }
     });
@@ -1175,9 +1175,10 @@ async function onUnmarkAsProject(rowKey) {
 }
 
 // AI提案：紐付きコスト一覧を全チェック済みのチェックボックスで表示
-//  - 既存の紐付け候補モーダルDOMを流用（_renderModalTargetHeader でヘッダー表示）
-//  - チェックを外したコスト行のみ V列を空に戻す（紐付け解除）
-//  - 売上の U列は常に解除する（チェック状態に関係なく）
+//  指示書13§2：チェック状態に応じて文言とボタン活性を動的に切替
+//   - 全アンチェック   → 「すべての経費の紐付けを解除し、案件登録を解除します。」（売上U列もクリア）
+//   - 一部アンチェック → 「チェックを外した経費の紐付けのみ解除します。案件登録と残りの経費の紐付けは維持されます。」（V列のみ）
+//   - 全チェック       → ボタン disabled（解除対象なし）
 function _openUnmarkSalesModal(salesRow, linkedCosts) {
   const modal = document.getElementById('pc-link-candidates-modal');
   const list  = document.getElementById('pc-link-candidates-list');
@@ -1187,7 +1188,6 @@ function _openUnmarkSalesModal(salesRow, linkedCosts) {
   if (!modal || !list || !hintEl) return;
 
   _renderModalTargetHeader({ kind: 'sales', date: salesRow.date, subject: salesRow.subject, amount: salesRow.amount, memo: salesRow.memo });
-  hintEl.textContent = 'チェックを外した経費は同時に紐付け解除されます。チェックを残した経費は紐付きを保持したまま、案件登録のみ解除されます。';
   if (errEl) { errEl.hidden = true; errEl.textContent = ''; }
 
   list.innerHTML = linkedCosts.map(c => `
@@ -1205,6 +1205,24 @@ function _openUnmarkSalesModal(salesRow, linkedCosts) {
     confirmBtn.textContent = '解除する';
   }
 
+  // 指示書13§2：チェック状態の変化を監視して文言・ボタン活性を再計算
+  const updateUnmarkSalesState = () => {
+    const total = linkedCosts.length;
+    const checkedCount = list.querySelectorAll('input[type="checkbox"]:checked').length;
+    if (checkedCount === total) {
+      hintEl.textContent = '解除する経費がありません。チェックを外して紐付けを解除する経費を選択してください。';
+      if (confirmBtn) confirmBtn.disabled = true;
+    } else if (checkedCount === 0) {
+      hintEl.textContent = 'すべての経費の紐付けを解除し、案件登録を解除します。';
+      if (confirmBtn) confirmBtn.disabled = false;
+    } else {
+      hintEl.textContent = 'チェックを外した経費の紐付けのみ解除します。案件登録と残りの経費の紐付けは維持されます。';
+      if (confirmBtn) confirmBtn.disabled = false;
+    }
+  };
+  list.addEventListener('change', updateUnmarkSalesState);
+  updateUnmarkSalesState();
+
   _modalState = {
     direction: 'unmark-sales',
     mode: 'unmark-sales',
@@ -1214,7 +1232,9 @@ function _openUnmarkSalesModal(salesRow, linkedCosts) {
       const unlinkRowIndexes = linkedCosts
         .map(c => c.rowIndex)
         .filter(rIdx => !keepRowIndexes.has(rIdx));
-      try { await _executeUnmarkSales(salesRow, unlinkRowIndexes); }
+      // 指示書13§2：全アンチェック=完全解除（売上U列クリア）／一部アンチェック=対象V列のみクリア
+      const fullUnmark = keepRowIndexes.size === 0;
+      try { await _executeUnmarkSales(salesRow, unlinkRowIndexes, fullUnmark); }
       catch (err) { showLinkCandidatesError(err.message || String(err)); }
     },
   };
@@ -1228,18 +1248,21 @@ function _openUnmarkSalesModal(salesRow, linkedCosts) {
   modal.hidden = false;
 }
 
-// 解除実行：unmarkAsProject（売上U列クリア）+ linkTransactions(salesRowId='')（コストV列クリア）
+// 解除実行（指示書13§2：fullUnmark=true → 売上U列も解除・false → コストV列のみ解除）
+//  - 全アンチェック（fullUnmark=true）：unmarkAsProject（売上U列クリア）+ linkTransactions(salesRowId='')
+//  - 一部アンチェック（fullUnmark=false）：linkTransactions のみ実行・売上の案件登録は維持
 //  GAS の linkTransactions は salesRowId 空文字を渡すと紐付け解除として動作する
-//  （売上U列はそちらでは触らないので、明示的に unmarkAsProject を別途呼び出す）
-async function _executeUnmarkSales(salesRow, costRowIndexesToUnlink) {
-  const unmarkRes = await callGAS('unmarkAsProject', {
-    rowIndex: salesRow.rowIndex,
-    sheetName: '売上',
-  });
-  if (!unmarkRes || unmarkRes.status !== 'ok') {
-    throw new Error((unmarkRes && unmarkRes.message) || '案件解除に失敗しました');
+async function _executeUnmarkSales(salesRow, costRowIndexesToUnlink, fullUnmark) {
+  if (fullUnmark) {
+    const unmarkRes = await callGAS('unmarkAsProject', {
+      rowIndex: salesRow.rowIndex,
+      sheetName: '売上',
+    });
+    if (!unmarkRes || unmarkRes.status !== 'ok') {
+      throw new Error((unmarkRes && unmarkRes.message) || '案件解除に失敗しました');
+    }
+    salesRow.isProject = false;
   }
-  salesRow.isProject = false;
 
   if (costRowIndexesToUnlink.length > 0) {
     const items = costRowIndexesToUnlink.map(rIdx => ({ rowIndex: rIdx, salesRowId: '' }));
@@ -1252,18 +1275,61 @@ async function _executeUnmarkSales(salesRow, costRowIndexesToUnlink) {
       if (c) { c.isProject = false; c.salesRowId = ''; }
     }
   }
-  showToast('案件登録を解除しました', 'success', 2000);
+  showToast(fullUnmark ? '案件登録を解除しました' : '紐付けを解除しました', 'success', 2000);
   closeLinkCandidatesModal();
   renderTable();
 }
 
 // コスト行の★クリック：単発の紐付け解除確認（売上U列は触らない）
+//  指示書13§1：紐付け先の親売上情報を金色背景＋金色左ボーダーで強調表示
 async function _onUnlinkCostFromSales(costRow) {
   if (costRow.source !== 'cost' || !costRow.isProject) return;
-  openZeroCandidatesPrompt({
-    message: '紐付けを解除します。売上側の案件登録はそのまま残ります。',
-    target: { kind: 'cost', date: costRow.date, type: costRow.type, subject: costRow.subject, amount: costRow.amount, memo: costRow.memo },
-    confirmLabel: '解除する',
+
+  // 紐付け先の親売上を _monthlyData から検索（V列=salesRowId が一致する売上行）
+  const parentSales = costRow.salesRowId
+    ? _monthlyData.find(r => r.source === 'sales' && String(r.salesRowId) === String(costRow.salesRowId))
+    : null;
+
+  const modal = document.getElementById('pc-link-candidates-modal');
+  const list  = document.getElementById('pc-link-candidates-list');
+  const hintEl = document.getElementById('pc-link-candidates-hint');
+  const errEl  = document.getElementById('pc-link-candidates-error');
+  const confirmBtn = document.getElementById('pc-link-candidates-confirm');
+  if (!modal || !list || !hintEl) return;
+
+  _renderModalTargetHeader({ kind: 'cost', date: costRow.date, type: costRow.type, subject: costRow.subject, amount: costRow.amount, memo: costRow.memo });
+  hintEl.textContent = '紐付けを解除します。売上側の案件登録はそのまま残ります。';
+  if (errEl) { errEl.hidden = true; errEl.textContent = ''; }
+
+  // 指示書13§1：紐付け先売上セクション（金色背景＋金色左ボーダー）
+  const parentBoxStyle = 'margin: 12px 16px; padding: 10px 14px; background: var(--uz-amber-bg); border-left: 4px solid var(--uz-gold); border-radius: 4px;';
+  const parentLabelStyle = 'font-size: 11px; font-weight: 700; color: var(--uz-gold); margin-bottom: 6px;';
+  const parentRowStyle = 'display: grid; grid-template-columns: 90px 60px 1fr 110px 1fr; gap: 10px; align-items: center; font-size: 13px;';
+  const parentAmountStyle = 'text-align: right; font-variant-numeric: tabular-nums; font-weight: 600;';
+  const parentMemoStyle = 'color: var(--uz-text2); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;';
+  const parentHtml = parentSales ? `
+    <div style="${parentBoxStyle}">
+      <div style="${parentLabelStyle}">紐付け先売上</div>
+      <div style="${parentRowStyle}">
+        <span>${_escHtml(parentSales.date || '')}</span>
+        <span>売上</span>
+        <span>${_escHtml(parentSales.subject || '')}</span>
+        <span style="${parentAmountStyle}">¥${_formatYenPlain(parentSales.amount || 0)}</span>
+        <span style="${parentMemoStyle}">${_escHtml(parentSales.memo || '')}</span>
+      </div>
+    </div>
+  ` : `<div class="pc-link-candidates-empty">紐付け先の売上が見つかりません（既に削除されているか、現在の表示範囲外の可能性があります）。続行するとコスト側の紐付け情報のみ解除されます。</div>`;
+  list.innerHTML = parentHtml;
+
+  if (confirmBtn) {
+    confirmBtn.hidden = false;
+    confirmBtn.textContent = '解除する';
+    confirmBtn.disabled = false;
+  }
+
+  _modalState = {
+    direction: 'unlink-cost',
+    mode: 'unlink-cost',
     onConfirm: async () => {
       try {
         const res = await callGAS('linkTransactions', {
@@ -1281,8 +1347,16 @@ async function _onUnlinkCostFromSales(costRow) {
         console.error('[pc-monthly] _onUnlinkCostFromSales', err);
         showLinkCandidatesError(err.message || String(err));
       }
-    }
-  });
+    },
+  };
+
+  const keydownHandler = (e) => {
+    if (e.key === 'Escape') { e.preventDefault(); closeLinkCandidatesModal(); }
+  };
+  document.addEventListener('keydown', keydownHandler);
+  _modalState.keydownHandler = keydownHandler;
+
+  modal.hidden = false;
 }
 
 // 売上→コスト方向：候補をチェックボックスで複数選択 → 確定
@@ -1594,8 +1668,9 @@ async function handleModalConfirm() {
   const onConfirm = _modalState.onConfirm;
   if (!onConfirm) return;
 
-  if (_modalState.mode === 'zero' || _modalState.mode === 'unmark-sales') {
+  if (_modalState.mode === 'zero' || _modalState.mode === 'unmark-sales' || _modalState.mode === 'unlink-cost') {
     // zero：経費0件案件として登録 ／ unmark-sales：チェックボックス状態は onConfirm 内部で取得
+    // unlink-cost（指示書13§1）：単発のコスト→売上 紐付け解除
     await onConfirm();
     return;
   }
@@ -1631,11 +1706,12 @@ function closeLinkCandidatesModal() {
   if (_modalState && _modalState.keydownHandler) {
     document.removeEventListener('keydown', _modalState.keydownHandler);
   }
-  // confirm ボタンの非表示状態を戻す
+  // confirm ボタンの非表示・disabled 状態を戻す（指示書13§2：disabled 残留防止）
   const confirmBtn = document.getElementById('pc-link-candidates-confirm');
   if (confirmBtn) {
     confirmBtn.hidden = false;
     confirmBtn.textContent = '確定';
+    confirmBtn.disabled = false;
   }
   // 対象取引情報ヘッダーをクリア（次回オープン時の混入防止）
   const targetEl = document.getElementById('pc-link-candidates-target');
