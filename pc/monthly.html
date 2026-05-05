@@ -14,10 +14,15 @@
 
       <!-- 月フィルタは廃止（指示書9§1：今月固定・列見出しフィルタで代替） -->
 
-      <!-- 行追加ボタン（テーブル上部・指示書5§2-2 / 戦略思想§4-3） -->
+      <!-- 行追加ボタン＋ページャ（指示書11§3：20件ページング・テーブル上部右） -->
       <section class="pc-add-buttons">
         <button type="button" id="btn-add-sales">+ 売上行を追加</button>
         <button type="button" id="btn-add-cost">+ コスト行を追加</button>
+        <div class="pc-pagination" id="monthly-pagination" hidden>
+          <button type="button" id="page-newer" hidden>← 次の20件</button>
+          <span id="page-info"></span>
+          <button type="button" id="page-older" hidden>前の20件 →</button>
+        </div>
       </section>
 
       <!-- フラットテーブル（code列廃止・指示書5§2-1 / 技術仕様§9-4） -->

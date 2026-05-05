@@ -12,6 +12,9 @@ const _currentMonth = now.getFullYear() + '-' + String(now.getMonth() + 1).padSt
 
 let _monthlyData = [];                 // 統合後の全行配列（並び：date desc, rowIndex asc）
 let _settings = { costMaster: [], serviceList: [] };
+// 指示書11§3：20件ページング
+const PAGE_SIZE = 20;
+let _pageIndex = 0;                    // 0 = 最新20件・1 = 21〜40件目 …
 let _activeFilters = {};               // 列見出しフィルタ { type: Set, subject: Set, taxRate: Set, project: Set }
 let _draftRows = [];                   // 未確定ドラフト行配列（テーブル最上段に表示）
 let _editingRowKey = null;             // 編集中の rowKey（同時編集は1行のみ）
@@ -73,7 +76,20 @@ async function initMonthly() {
   bindModalEvents();
   bindColFilterButtons();
   bindTbodyDelegation();   // 指示書8-5§1：tbody 単位の統一イベントデリゲーション
+  bindPaginationButtons(); // 指示書11§3：ページャ（前の20件 / 次の20件）
   await loadMonthlyData(_currentMonth);
+}
+
+// 指示書11§3：ページャUIの click ハンドラを1度だけ結線
+function bindPaginationButtons() {
+  document.getElementById('page-older')?.addEventListener('click', () => {
+    _pageIndex++;
+    renderTable();
+  });
+  document.getElementById('page-newer')?.addEventListener('click', () => {
+    if (_pageIndex > 0) _pageIndex--;
+    renderTable();
+  });
 }
 
 /* ── データ取得・統合 ────────────────────────────────────── */
@@ -103,6 +119,7 @@ async function loadMonthlyData(month) {
     _editingRowKey = null;
     _editingDraft = {};
     _draftRows = [];
+    _pageIndex = 0;   // 指示書11§3：データ再読込時はページ位置を最新（先頭）にリセット
     renderTable();
   } catch (err) {
     console.error('[pc-monthly] loadMonthlyData failed', err);
@@ -311,11 +328,12 @@ function _openColFilter(col, btnEl) {
       if (allInput) allInput.checked = valInputs.every(i => i.checked);
     });
   });
-  // クリア・適用
+  // クリア・適用（指示書11§3：フィルタ変更時はページを最新にリセット）
   dropdown.addEventListener('click', (e) => {
     const a = e.target && e.target.dataset && e.target.dataset.cfAction;
     if (a === 'clear') {
       delete _activeFilters[col];
+      _pageIndex = 0;
       _closeColFilter();
       renderTable();
     } else if (a === 'apply') {
@@ -325,6 +343,7 @@ function _openColFilter(col, btnEl) {
       } else {
         _activeFilters[col] = new Set(checked);
       }
+      _pageIndex = 0;
       _closeColFilter();
       renderTable();
     }
@@ -387,13 +406,46 @@ function renderTable() {
   // 指示書8-5§3：filteredRows を1変数に確定し、本体描画と集計行に同じ参照を渡す（編集後の集計再計算を保証）
   const hasActiveFilter = Object.keys(_activeFilters).some(c => _hasActiveColFilter(c));
   const filteredRows = hasActiveFilter ? applyFilters(_monthlyData) : _monthlyData;
+
+  // 指示書11§3：編集中の行が表示ページに含まれるよう _pageIndex を自動調整
+  if (_editingRowKey) {
+    const editingIdx = filteredRows.findIndex(r => _rowKey(r) === _editingRowKey);
+    if (editingIdx >= 0) _pageIndex = Math.floor(editingIdx / PAGE_SIZE);
+  }
+  // _pageIndex を有効範囲内にクランプ
+  const maxPage = Math.max(0, Math.ceil(filteredRows.length / PAGE_SIZE) - 1);
+  if (_pageIndex > maxPage) _pageIndex = maxPage;
+  if (_pageIndex < 0) _pageIndex = 0;
+  const pageStart = _pageIndex * PAGE_SIZE;
+  const pagedRows = filteredRows.slice(pageStart, pageStart + PAGE_SIZE);
+
   // ドラフト行を最上段（指示書5§2-2 step3 / §3-5）
   const draftHtml = _draftRows.map(d => renderDraftRow(d)).join('');
-  const rowHtml   = filteredRows.map(r => renderRow(r)).join('');
+  const rowHtml   = pagedRows.map(r => renderRow(r)).join('');
   tbody.innerHTML = (draftHtml + rowHtml) || '<tr><td colspan="8" class="loading">該当する行がありません</td></tr>';
   // bindRowEvents は撤去（指示書8-5§1：tbody-level delegation で1度だけ結線・renderTable の負荷も低減）
   _refreshColFilterButtonStates();
-  _renderFilterSummary(filteredRows);
+  _renderFilterSummary(filteredRows);   // 集計はフィルタ後の全件が対象（ページング前）
+  _renderPagination(filteredRows.length);
+}
+
+// 指示書11§3：ページャUI 更新（21件以上のときのみ表示）
+function _renderPagination(totalCount) {
+  const container = document.getElementById('monthly-pagination');
+  const olderBtn  = document.getElementById('page-older');
+  const newerBtn  = document.getElementById('page-newer');
+  const info      = document.getElementById('page-info');
+  if (!container || !olderBtn || !newerBtn || !info) return;
+  if (totalCount <= PAGE_SIZE) { container.hidden = true; return; }
+  container.hidden = false;
+  const pageStart = _pageIndex * PAGE_SIZE;
+  const start = pageStart + 1;
+  const end   = Math.min(pageStart + PAGE_SIZE, totalCount);
+  info.textContent = `${start}〜${end}件目 / 全${totalCount}件`;
+  // 前の20件（古い方向）：21件目以降が存在するときのみ
+  olderBtn.hidden = end >= totalCount;
+  // 次の20件（最新方向）：2ページ目以降のときのみ
+  newerBtn.hidden = _pageIndex === 0;
 }
 
 function renderRow(row) {
@@ -445,10 +497,10 @@ function renderRow(row) {
       : `<span class="pc-project-cell"></span>`;
   }
 
-  // 指示書10§5：tr 自体を focusable に（tabindex=0）。↑↓ で行間移動が可能になるのは
-  //  tr に直接 focus が当たっているとき（input/select/button 上では browser default を維持）
-  //  ロック行・編集中（input が focus される）・ドラフト行は対象外
-  const rowFocusable = !row.isLocked && !isEditing;
+  // 指示書11§4：tr 自体を focusable に（tabindex=0・ロック行のみ除外）
+  //  編集中の行も focusable にすることで、Tab で input から抜けたあと tr に focus が移り
+  //  data-selected="true" による行選択ハイライトが視認できるようになる
+  const rowFocusable = !row.isLocked;
   const tabindexAttr = rowFocusable ? ' tabindex="0"' : '';
 
   return `
@@ -478,7 +530,13 @@ function renderDraftRow(draft) {
     ? renderCostSubjectSelectFiltered(draft)
     : renderSubjectSelect(draft, 'draft');
   const draftTax = _calcTaxAmount(draft.amount, draft.taxRate);
-  const submitDisabled = _isDraftValid(draft) ? '' : 'disabled';
+  // 指示書11§1：取消↔登録の切り替え方式
+  //   必須項目未入力 → 「取消」ボタンのみ表示・「登録」を hidden
+  //   必須項目すべて入力 → 「登録」ボタンのみ表示・「取消」を hidden
+  //   両ボタンを最初から DOM に持たせ、hidden 属性のトグルだけで切り替えることで focus を保持
+  const valid = _isDraftValid(draft);
+  const discardHidden = valid ? 'hidden' : '';
+  const commitHidden  = valid ? '' : 'hidden';
 
   return `
     <tr class="pc-row--draft" data-row-key="${_escHtml(key)}" data-draft-id="${draft.draftId}">
@@ -490,12 +548,12 @@ function renderDraftRow(draft) {
       <td class="num">${_formatYenPlain(draftTax)}</td>
       <td><input type="text" class="pc-edit-input" data-field="memo" value="${_escHtml(draft.memo)}" placeholder="メモ"></td>
       <td class="pc-project-col">
-        <button type="button" class="pc-action-btn pc-action-btn--save" data-action="commit-draft" ${submitDisabled}>登録</button>
+        <button type="button" class="pc-action-btn" data-action="discard-draft" ${discardHidden}>取消</button>
+        <button type="button" class="pc-action-btn pc-action-btn--save" data-action="commit-draft" ${commitHidden}>登録</button>
       </td>
     </tr>
   `;
 }
-// 指示書8-6§1：ドラフト行の取消ボタンは削除（破棄は Esc キーで実施・戦略思想§4-3 世界標準）
 
 /**
  * コストドラフト行の区分タブ（仕入原価 / 販管費）
@@ -590,14 +648,17 @@ function selectDraftDivision(draftId, divisionCode) {
 }
 
 /**
- * ドラフト行の登録ボタン disabled 状態のみ更新（DOM部分更新・focus保持用）
+ * ドラフト行の取消↔登録ボタン切替（指示書11§1：DOM部分更新・focus 保持用）
  * 入力中（amount/memo/date/taxRate/subjectCode の input イベント）から呼ばれる
+ *  必須項目未入力 → 「取消」表示・「登録」非表示
+ *  必須項目すべて入力 → 「登録」表示・「取消」非表示
  */
 function _updateDraftSubmitState(tr, draft) {
-  const btn = tr.querySelector('button[data-action="commit-draft"]');
-  if (!btn) return;
-  if (_isDraftValid(draft)) btn.removeAttribute('disabled');
-  else btn.setAttribute('disabled', 'disabled');
+  const valid = _isDraftValid(draft);
+  const discardBtn = tr.querySelector('button[data-action="discard-draft"]');
+  const commitBtn  = tr.querySelector('button[data-action="commit-draft"]');
+  if (discardBtn) discardBtn.hidden = valid;
+  if (commitBtn)  commitBtn.hidden  = !valid;
 }
 
 function renderSubjectSelect(row, mode) {
@@ -686,22 +747,51 @@ function bindTbodyDelegation() {
 
     // 2) 編集セルクリック（td[data-field-cell]）→ startEdit またはロック警告
     const td = e.target.closest('td[data-field-cell]');
-    if (!td || !tbody.contains(td)) return;
-    // 既に input/select 上のクリックなら edit 開始しない（既に編集中フォーカス内）
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
-    const tr = td.closest('tr[data-row-key]');
-    if (!tr) return;
-    const rowKey = tr.getAttribute('data-row-key');
-    if (rowKey.startsWith('draft-')) return;   // ドラフト行は click-to-edit 対象外
-    const row = _monthlyData.find(r => _rowKey(r) === rowKey);
-    if (!row) return;
-    if (row.isLocked) {
-      showToast('ロックされています', 'info', 2000);
+    if (td && tbody.contains(td)) {
+      // 既に input/select 上のクリックなら edit 開始しない（既に編集中フォーカス内）
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+      const tr = td.closest('tr[data-row-key]');
+      if (!tr) return;
+      const rowKey = tr.getAttribute('data-row-key');
+      if (rowKey.startsWith('draft-')) return;   // ドラフト行は click-to-edit 対象外
+      const row = _monthlyData.find(r => _rowKey(r) === rowKey);
+      if (!row) return;
+      if (row.isLocked) { showToast('ロックされています', 'info', 2000); return; }
+      const field = td.getAttribute('data-field-cell');
+      if (!isFieldEditable(field, tr.getAttribute('data-source'))) return;
+      startEdit(rowKey, field);
       return;
     }
-    const field = td.getAttribute('data-field-cell');
-    if (!isFieldEditable(field, tr.getAttribute('data-source'))) return;
-    startEdit(rowKey, field);
+
+    // 3) 指示書11§4：アクション/編集セル以外の click → tr.focus() で行選択状態へ
+    //    例：種別セル（売上テキスト/コスト区分タブ外側）・案件列の空セル・行余白など
+    const trAny = e.target.closest('tr[data-row-key]');
+    if (trAny && tbody.contains(trAny) && trAny.hasAttribute('tabindex')) {
+      trAny.focus();
+    }
+  });
+
+  // ─── focusin：行選択状態（data-selected）の切替 ───
+  //  指示書11§4：tr 自身に focus → data-selected="true"（ハイライト）
+  //              input/select/button に focus → 全 tr の data-selected を解除
+  //  これで「input フォーカス枠」と「行ハイライト」の両立を避けつつ視覚的にどちらか必ず示す
+  tbody.addEventListener('focusin', (e) => {
+    tbody.querySelectorAll('tr[data-selected="true"]').forEach(t => t.removeAttribute('data-selected'));
+    const tr = e.target.closest('tr[data-row-key]');
+    if (tr && e.target === tr) {
+      tr.setAttribute('data-selected', 'true');
+    }
+  });
+
+  // ─── focusout：focus が tbody 外へ抜けたら data-selected を解除 ───
+  //  setTimeout(0) で次の focus 確定を待ってから判定
+  tbody.addEventListener('focusout', () => {
+    setTimeout(() => {
+      const active = document.activeElement;
+      if (!tbody.contains(active) || active === document.body) {
+        tbody.querySelectorAll('tr[data-selected="true"]').forEach(t => t.removeAttribute('data-selected'));
+      }
+    }, 0);
   });
 
   // ─── input：ドラフト or 編集中の入力値捕捉 ───
@@ -963,6 +1053,7 @@ function addDraftRow(source) {
   };
   // 最上段に挿入（§2-2 step3）
   _draftRows.unshift(draft);
+  _pageIndex = 0;   // 指示書11§3：ドラフト追加時はページを最新へリセット（ドラフトは先頭に表示される）
   renderTable();
   // 指示書10§2：新規ドラフト作成後、当該行の最初のフォーカス可能要素（日付 input）にフォーカス
   //  → 直後に Esc を押せば tbody keydown ハンドラに確実に届き、ドラフト破棄が動作する

@@ -823,11 +823,20 @@ body.pc-body {
 .pc-monthly-table tbody tr:hover {
   background: rgba(212, 175, 55, 0.04);
 }
-/* 指示書10§5：tr 自身が focus されている「行選択状態」を視覚化（↑↓ で行移動が可能なサイン） */
-.pc-monthly-table tbody tr:focus {
+/* 指示書11§4：data-selected="true" で行選択状態を視覚化（↑↓ で行移動が可能なサイン）
+   input/select/button にフォーカスが当たっている間は data-selected を外し、
+   row highlight と input フォーカス枠の両立を避ける（focusin/focusout で JS が制御） */
+.pc-monthly-table tbody tr[data-selected="true"] {
+  background: var(--uz-amber-bg);
   outline: 2px solid var(--uz-gold);
   outline-offset: -2px;
-  background: rgba(212, 175, 55, 0.08);
+}
+.pc-monthly-table tbody tr[data-selected="true"]:hover {
+  background: var(--uz-amber-bg);
+}
+/* tr の :focus 既定 outline は data-selected と二重表示になるため抑制 */
+.pc-monthly-table tbody tr:focus {
+  outline: none;
 }
 
 /* ── 行スタイル（バッジ・状態） ───────────────────────── */
@@ -1009,13 +1018,14 @@ body.pc-body {
 #monthly-table input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 #monthly-table input[type="number"] { -moz-appearance: textfield; }
 
-/* ── 行追加ボタン ───────────────────────────────────────── */
+/* ── 行追加ボタン＋ページャ ───────────────────────────── */
 .pc-add-buttons {
   display: flex;
+  align-items: center;
   gap: 12px;
   padding: 16px 0;
 }
-.pc-add-buttons button {
+.pc-add-buttons > button {
   padding: 8px 16px;
   background: var(--uz-surface);
   color: var(--uz-gold);
@@ -1026,8 +1036,35 @@ body.pc-body {
   font-size: 13px;
   font-weight: 600;
 }
-.pc-add-buttons button:hover {
+.pc-add-buttons > button:hover {
   background: var(--uz-amber-bg);
+}
+
+/* 指示書11§3：ページャUI（テーブル上部右・20件単位ナビゲーション） */
+.pc-pagination {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--uz-text2);
+}
+.pc-pagination button {
+  padding: 4px 10px;
+  background: var(--uz-surface);
+  color: var(--uz-gold);
+  border: 1px solid var(--uz-border);
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+}
+.pc-pagination button:hover {
+  background: var(--uz-amber-bg);
+  border-color: var(--uz-gold);
+}
+.pc-pagination #page-info {
+  white-space: nowrap;
 }
 
 /* ── ローディング・補助 ─────────────────────────────────── */
