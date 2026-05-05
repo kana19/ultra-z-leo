@@ -1,9 +1,477 @@
-// PC版「案件管理」メニュー
-// 戦略思想メモ§3-9-3 確定の4項目構造・メニュー2
-// 売上＋経費横並びレイアウトは次回指示書で実装
+/**
+ * ウルトラZAIMUくんレオ PC版 — pc-projects.js
+ * 案件管理画面のロジック
+ * 技術仕様§9-5 / §9-6 / §4-3 / 3デバイス統合§8-4 / 戦略思想§3-9-3 準拠
+ *
+ * 責務：月次管理で案件化された案件の粗利分析・追加紐付け・案件解除
+ * GAS変更なし（バージョン14で対応済み）
+ */
+'use strict';
 
-document.addEventListener('DOMContentLoaded', () => {
-  if (typeof pcBootstrap === 'function') {
-    pcBootstrap('projects.html', '案件管理');
+/* ── 状態 ────────────────────────────────────────────────── */
+let _projectData = null;          // getTransactionsHierarchy レスポンス
+let _selectedMonth = '';          // 'YYYY-MM' or '' (全件)
+let _modalState = null;           // 紐付けモーダル状態
+
+/* ── ユーティリティ ──────────────────────────────────────── */
+function _esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c =>
+    ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])
+  );
+}
+
+function _fmtYen(n) {
+  const v = Number(n);
+  if (!isFinite(v)) return '0';
+  return v.toLocaleString('ja-JP');
+}
+
+function _calcTaxAmt(amtIncl, rate) {
+  if (typeof calcTax === 'function') return calcTax(amtIncl, rate).tax;
+  const excl = Math.floor(amtIncl * 100 / (100 + Number(rate)));
+  return amtIncl - excl;
+}
+
+function _classifyCostType(divisionCode, itemCode) {
+  const dv = String(divisionCode || '');
+  const ic = String(itemCode || '');
+  if (dv === '1') return '仕入原価';
+  if (dv === '2' && ic === '21') return '委託・外注';
+  if (dv === '2' && ic === '20') return '人件費';
+  return '販管費';
+}
+
+/* ── 起動 ────────────────────────────────────────────────── */
+document.addEventListener('DOMContentLoaded', initProjects);
+
+async function initProjects() {
+  pcBootstrap('projects.html', '案件管理');
+  initMonthSelect();
+  bindModalEvents();
+  document.getElementById('btn-new-project')?.addEventListener('click', onNewProject);
+  await loadProjects();
+}
+
+/* ── 月選択プルダウン ─────────────────────────────────────── */
+function initMonthSelect() {
+  const sel = document.getElementById('pj-month');
+  if (!sel) return;
+  const now = new Date();
+  const curY = now.getFullYear();
+  const curM = now.getMonth() + 1;
+
+  // 全件 + 過去12ヶ月分
+  const optAll = document.createElement('option');
+  optAll.value = ''; optAll.textContent = '全期間';
+  sel.appendChild(optAll);
+
+  for (let i = 0; i < 12; i++) {
+    let y = curY, m = curM - i;
+    if (m <= 0) { m += 12; y--; }
+    const val = `${y}-${String(m).padStart(2, '0')}`;
+    const opt = document.createElement('option');
+    opt.value = val;
+    opt.textContent = `${y}年${m}月`;
+    if (i === 0) opt.selected = true;
+    sel.appendChild(opt);
   }
-});
+
+  _selectedMonth = `${curY}-${String(curM).padStart(2, '0')}`;
+  sel.addEventListener('change', async () => {
+    _selectedMonth = sel.value;
+    await loadProjects();
+  });
+}
+
+/* ── データ取得 ───────────────────────────────────────────── */
+async function loadProjects() {
+  const listEl = document.getElementById('pj-list');
+  if (listEl) listEl.innerHTML = '<div class="loading">読み込み中…</div>';
+
+  try {
+    const res = await callGAS('getTransactionsHierarchy', { month: _selectedMonth });
+    if (!res || res.status !== 'ok' || !res.data) {
+      throw new Error((res && res.message) || 'データ取得に失敗しました');
+    }
+    _projectData = res.data;
+    renderProjects();
+  } catch (err) {
+    console.error('[pc-projects] loadProjects', err);
+    if (listEl) listEl.innerHTML = `<div class="loading">${_esc(err.message || err)}</div>`;
+  }
+}
+
+/* ── 描画 ─────────────────────────────────────────────────── */
+function renderProjects() {
+  const listEl = document.getElementById('pj-list');
+  const summaryEl = document.getElementById('pj-summary');
+  if (!listEl) return;
+
+  const nodes = Array.isArray(_projectData?.salesNodes) ? _projectData.salesNodes : [];
+
+  // サマリー
+  if (summaryEl) {
+    const count = nodes.length;
+    const salesTotal = nodes.reduce((s, n) => s + (Number(n.salesAmount) || 0), 0);
+    const gpTotal = nodes.reduce((s, n) => s + (Number(n.grossProfit) || 0), 0);
+    summaryEl.innerHTML = `<span>案件 <strong>${count}</strong>件</span>`
+      + `<span>売上合計 <strong>¥${_fmtYen(salesTotal)}</strong></span>`
+      + `<span>粗利合計 <strong class="${gpTotal < 0 ? 'neg' : ''}">¥${_fmtYen(gpTotal)}</strong></span>`;
+  }
+
+  if (nodes.length === 0) {
+    listEl.innerHTML = '<div class="pc-projects-empty">案件データがありません</div>';
+    return;
+  }
+
+  listEl.innerHTML = nodes.map(node => renderProjectCard(node)).join('');
+
+  // イベントデリゲーション
+  listEl.addEventListener('click', onCardClick);
+}
+
+function renderProjectCard(node) {
+  const salesAmt = Number(node.salesAmount) || 0;
+  const salesTax = _calcTaxAmt(salesAmt, Number(node.salesTaxRate) || 10);
+  const linked = Array.isArray(node.linkedCosts) ? node.linkedCosts : [];
+  const costTotal = linked.reduce((s, c) => s + (Number(c.amount) || 0), 0);
+  const gp = Number(node.grossProfit) ?? (salesAmt - costTotal);
+  const gpRate = salesAmt > 0 ? ((gp / salesAmt) * 100).toFixed(1) : '—';
+  const gpCls = gp < 0 ? 'neg' : '';
+
+  // 売上ブロック
+  const salesBlock = `
+    <div class="pj-card__sales">
+      <div class="pj-card__section-label">売上</div>
+      <div class="pj-card__row">
+        <span class="pj-card__date">${_esc(node.salesDate)}</span>
+        <span class="pj-card__subject">${_esc(node.salesItem)}</span>
+        <span class="pj-card__amount">¥${_fmtYen(salesAmt)}</span>
+      </div>
+      ${node.salesMemo ? `<div class="pj-card__memo">${_esc(node.salesMemo)}</div>` : ''}
+    </div>`;
+
+  // 経費ブロック
+  let costsBlock;
+  if (linked.length === 0) {
+    costsBlock = `
+      <div class="pj-card__costs">
+        <div class="pj-card__section-label">経費</div>
+        <div class="pj-card__costs-empty">紐付け経費なし</div>
+      </div>`;
+  } else {
+    const costRows = linked.map(c => {
+      const cType = _classifyCostType(c.divisionCode, c.itemCode);
+      return `
+        <div class="pj-card__row">
+          <span class="pj-card__date">${_esc(c.date)}</span>
+          <span class="pj-card__type">${_esc(cType)}</span>
+          <span class="pj-card__subject">${_esc(c.subject)}</span>
+          <span class="pj-card__amount">¥${_fmtYen(c.amount || 0)}</span>
+          ${c.memo ? `<span class="pj-card__memo-inline">${_esc(c.memo)}</span>` : ''}
+        </div>`;
+    }).join('');
+    costsBlock = `
+      <div class="pj-card__costs">
+        <div class="pj-card__section-label">経費（${linked.length}件・計 ¥${_fmtYen(costTotal)}）</div>
+        ${costRows}
+      </div>`;
+  }
+
+  // 粗利ブロック
+  const profitBlock = `
+    <div class="pj-card__profit">
+      <div class="pj-card__section-label">粗利</div>
+      <div class="pj-card__profit-value ${gpCls}">¥${_fmtYen(gp)}</div>
+      <div class="pj-card__profit-rate">${gpRate}%</div>
+    </div>`;
+
+  // アクションボタン
+  const actions = `
+    <div class="pj-card__actions">
+      <button type="button" class="pc-btn pc-btn--ghost pj-action" data-action="add-cost"
+              data-sales-row-id="${_esc(node.salesRowId)}"
+              data-sales-row-index="${node.salesRowIndex}"
+              data-sales-date="${_esc(node.salesDate)}"
+              data-sales-item="${_esc(node.salesItem)}"
+              data-sales-amount="${salesAmt}">+ 経費を紐付け</button>
+      <button type="button" class="pc-btn pc-btn--ghost pj-action pj-action--warn" data-action="unmark"
+              data-sales-row-index="${node.salesRowIndex}"
+              data-sales-row-id="${_esc(node.salesRowId)}"
+              data-sales-item="${_esc(node.salesItem)}">案件解除</button>
+    </div>`;
+
+  return `
+    <div class="pj-card" data-sales-row-id="${_esc(node.salesRowId)}">
+      <div class="pj-card__body">
+        ${salesBlock}
+        <div class="pj-card__divider"></div>
+        ${costsBlock}
+        ${profitBlock}
+      </div>
+      ${actions}
+    </div>`;
+}
+
+/* ── イベント処理 ─────────────────────────────────────────── */
+function onCardClick(e) {
+  const btn = e.target.closest('.pj-action');
+  if (!btn) return;
+  const action = btn.dataset.action;
+  if (action === 'add-cost') onAddCost(btn);
+  else if (action === 'unmark') onUnmark(btn);
+}
+
+/* ── + 経費を紐付け（追加紐付け） ──────────────────────────── */
+async function onAddCost(btn) {
+  const salesRowId = btn.dataset.salesRowId;
+  const salesRowIndex = Number(btn.dataset.salesRowIndex);
+  const salesDate = btn.dataset.salesDate;
+  const salesItem = btn.dataset.salesItem;
+  const salesAmount = Number(btn.dataset.salesAmount);
+
+  // getLinkCandidates（sales-to-cost方向）
+  let candidates;
+  try {
+    const res = await callGAS('getLinkCandidates', {
+      direction: 'sales-to-cost',
+      salesRowId: salesRowId,
+      salesDate: salesDate,
+    });
+    if (!res || res.status !== 'ok') {
+      showToast(`候補取得失敗：${(res && res.message) || '不明なエラー'}`, 'error', 3500);
+      return;
+    }
+    candidates = (res.data && Array.isArray(res.data.candidates)) ? res.data.candidates : [];
+  } catch (err) {
+    showToast(`候補取得失敗：${err.message || err}`, 'error', 3500);
+    return;
+  }
+
+  if (candidates.length === 0) {
+    showToast('該当範囲に紐付け候補がありません', 'info', 2500);
+    return;
+  }
+
+  openLinkModal({
+    direction: 'sales-to-cost',
+    hint: `「${salesDate} の前月頭〜${salesDate}」の集計対象4区分・未紐付け経費`,
+    target: { kind: 'sales', date: salesDate, subject: salesItem, amount: salesAmount, memo: '' },
+    candidates: candidates,
+    onConfirm: async (selectedCostRowIndexes) => {
+      if (!selectedCostRowIndexes || selectedCostRowIndexes.length === 0) {
+        closeLinkModal();
+        return;
+      }
+      try {
+        const items = selectedCostRowIndexes.map(rIdx => ({
+          rowIndex: rIdx,
+          salesRowId: salesRowId,
+        }));
+        const linkRes = await callGAS('linkTransactions', { items });
+        if (!linkRes || linkRes.status !== 'ok') {
+          throw new Error((linkRes && linkRes.message) || '紐付けに失敗しました');
+        }
+        showToast('経費を紐付けました', 'success', 2000);
+        closeLinkModal();
+        await loadProjects();
+      } catch (err) {
+        showLinkError(err.message || String(err));
+      }
+    }
+  });
+}
+
+/* ── 案件解除 ─────────────────────────────────────────────── */
+async function onUnmark(btn) {
+  const salesRowIndex = Number(btn.dataset.salesRowIndex);
+  const salesItem = btn.dataset.salesItem;
+  const salesRowId = btn.dataset.salesRowId;
+
+  // 紐付け経費がある場合は警告
+  const node = _projectData?.salesNodes?.find(n => n.salesRowId === salesRowId);
+  const linkedCount = node?.linkedCosts?.length || 0;
+
+  let msg = `「${salesItem}」の案件化を解除しますか？\n売上自体は月次管理に残ります。`;
+  if (linkedCount > 0) {
+    msg += `\n\n※ 紐付け済み経費（${linkedCount}件）の紐付けも同時に解除されます。`;
+  }
+
+  if (!confirm(msg)) return;
+
+  try {
+    // 紐付け経費を先に解除
+    if (linkedCount > 0) {
+      const items = node.linkedCosts.map(c => ({
+        rowIndex: c.rowIndex,
+        salesRowId: '',
+      }));
+      const unlinkRes = await callGAS('linkTransactions', { items });
+      if (!unlinkRes || unlinkRes.status !== 'ok') {
+        throw new Error((unlinkRes && unlinkRes.message) || '経費の紐付け解除に失敗しました');
+      }
+    }
+
+    // unmarkAsProject
+    const res = await callGAS('unmarkAsProject', { rowIndex: salesRowIndex });
+    if (!res || res.status !== 'ok') {
+      throw new Error((res && res.message) || '案件解除に失敗しました');
+    }
+    showToast('案件を解除しました', 'success', 2000);
+    await loadProjects();
+  } catch (err) {
+    console.error('[pc-projects] onUnmark', err);
+    showToast(`案件解除失敗：${err.message || err}`, 'error', 3500);
+  }
+}
+
+/* ── + 新規案件（補助フロー） ─────────────────────────────── */
+async function onNewProject() {
+  const date = prompt('売上日（YYYY-MM-DD）', new Date().toISOString().slice(0, 10));
+  if (!date) return;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    showToast('日付形式が不正です（YYYY-MM-DD）', 'error', 2500);
+    return;
+  }
+  const item = prompt('売上品目名（科目）', '');
+  if (item === null) return;
+  if (!item.trim()) {
+    showToast('品目名を入力してください', 'error', 2500);
+    return;
+  }
+  const amountStr = prompt('売上金額（税込）', '');
+  if (amountStr === null) return;
+  const amount = Number(amountStr);
+  if (!isFinite(amount) || amount <= 0) {
+    showToast('金額が不正です', 'error', 2500);
+    return;
+  }
+  const taxRate = 10; // デフォルト10%
+  const memo = prompt('メモ（任意）', '') || '';
+
+  try {
+    const res = await callGAS('addSales', {
+      date: date,
+      service: item.trim(),
+      amount: amount,
+      taxRate: taxRate,
+      memo: memo,
+      isProject: '1',
+    });
+    if (!res || res.status !== 'ok') {
+      throw new Error((res && res.message) || '売上登録に失敗しました');
+    }
+    showToast('新規案件を登録しました', 'success', 2000);
+    await loadProjects();
+  } catch (err) {
+    console.error('[pc-projects] onNewProject', err);
+    showToast(`登録失敗：${err.message || err}`, 'error', 3500);
+  }
+}
+
+/* ── 紐付け候補モーダル（monthly.html と同一DOM・共通ロジック） ──── */
+function bindModalEvents() {
+  const modal = document.getElementById('pc-link-candidates-modal');
+  if (!modal) return;
+  modal.addEventListener('click', (e) => {
+    const action = e.target?.dataset?.action;
+    if (action === 'cancel') closeLinkModal();
+    else if (action === 'confirm') handleModalConfirm();
+  });
+}
+
+function openLinkModal({ direction, hint, target, candidates, onConfirm }) {
+  const modal = document.getElementById('pc-link-candidates-modal');
+  const list = document.getElementById('pc-link-candidates-list');
+  const hintEl = document.getElementById('pc-link-candidates-hint');
+  const errEl = document.getElementById('pc-link-candidates-error');
+  if (!modal || !list || !hintEl) return;
+
+  renderModalTarget(target);
+  hintEl.textContent = hint || '';
+  if (errEl) { errEl.hidden = true; errEl.textContent = ''; }
+
+  const inputType = direction === 'cost-to-sales' ? 'radio' : 'checkbox';
+  const inputName = 'pj-link-cand';
+
+  list.innerHTML = candidates.map(c => {
+    const valueAttr = String(c.rowIndex);
+    return `
+      <label class="pc-link-candidates-row">
+        <input type="${inputType}" name="${inputName}" value="${valueAttr}">
+        <span>${_esc(c.date || '')}</span>
+        <span>${_esc(c.subject || '')}</span>
+        <span class="pc-link-candidates-row__amount">${_fmtYen(c.amount || 0)}</span>
+        <span class="pc-link-candidates-row__memo">${_esc(c.memo || '')}</span>
+      </label>`;
+  }).join('');
+
+  _modalState = { direction, candidates, onConfirm };
+
+  const keydownHandler = (e) => {
+    if (e.key === 'Escape') { e.preventDefault(); closeLinkModal(); }
+  };
+  document.addEventListener('keydown', keydownHandler);
+  _modalState.keydownHandler = keydownHandler;
+
+  modal.hidden = false;
+}
+
+async function handleModalConfirm() {
+  if (!_modalState || !_modalState.onConfirm) return;
+
+  if (_modalState.direction === 'sales-to-cost') {
+    const list = document.getElementById('pc-link-candidates-list');
+    const checked = list ? list.querySelectorAll('input[type="checkbox"]:checked') : [];
+    const selected = Array.from(checked).map(i => Number(i.value)).filter(n => !isNaN(n));
+    await _modalState.onConfirm(selected);
+  }
+}
+
+function closeLinkModal() {
+  const modal = document.getElementById('pc-link-candidates-modal');
+  if (modal) modal.hidden = true;
+  if (_modalState?.keydownHandler) {
+    document.removeEventListener('keydown', _modalState.keydownHandler);
+  }
+  const confirmBtn = document.getElementById('pc-link-candidates-confirm');
+  if (confirmBtn) {
+    confirmBtn.hidden = false;
+    confirmBtn.textContent = '確定';
+    confirmBtn.disabled = false;
+    confirmBtn.style.opacity = '';
+    confirmBtn.style.cursor = '';
+  }
+  const targetEl = document.getElementById('pc-link-candidates-target');
+  if (targetEl) { targetEl.innerHTML = ''; targetEl.hidden = true; }
+  _modalState = null;
+}
+
+function renderModalTarget(target) {
+  const el = document.getElementById('pc-link-candidates-target');
+  if (!el) return;
+  if (!target) { el.innerHTML = ''; el.hidden = true; return; }
+  const label = target.kind === 'sales' ? '対象売上：' : '対象コスト：';
+  const sep = '<span class="pc-link-candidates-target__sep">/</span>';
+  const parts = [
+    `<span class="pc-link-candidates-target__label">${_esc(label)}</span>`,
+    `<span class="pc-link-candidates-target__date">${_esc(target.date || '')}</span>`,
+    sep,
+    `<span class="pc-link-candidates-target__subject">${_esc(target.subject || '')}</span>`,
+    sep,
+    `<span class="pc-link-candidates-target__amount">¥${_fmtYen(target.amount || 0)}</span>`,
+  ];
+  const memo = String(target.memo || '').trim();
+  if (memo) {
+    parts.push(sep);
+    parts.push(`<span class="pc-link-candidates-target__memo">${_esc(memo)}</span>`);
+  }
+  el.innerHTML = parts.join('');
+  el.hidden = false;
+}
+
+function showLinkError(msg) {
+  const errEl = document.getElementById('pc-link-candidates-error');
+  if (errEl) { errEl.textContent = msg; errEl.hidden = false; }
+  else if (typeof showToast === 'function') showToast(msg, 'error', 3500);
+}

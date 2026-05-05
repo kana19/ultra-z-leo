@@ -1357,3 +1357,184 @@ body.pc-body {
   cursor: not-allowed;
   background: var(--uz-surface);
 }
+/* ══════════════════════════════════════════════════════════
+   案件管理画面（pc-projects.js）用スタイル
+   → 既存 pc.css の末尾に追記すること
+   ══════════════════════════════════════════════════════════ */
+
+/* ── ツールバー ──────────────────────────────────────────── */
+.pc-projects-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.pc-projects-month-label {
+  font-size: 13px;
+  color: var(--uz-text2);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.pc-projects-summary {
+  display: flex;
+  gap: 20px;
+  font-size: 13px;
+  color: var(--uz-text2);
+  flex: 1;
+}
+.pc-projects-summary strong {
+  color: var(--uz-text);
+}
+.pc-projects-summary .neg {
+  color: var(--uz-red);
+}
+
+/* ── 案件カードリスト ────────────────────────────────────── */
+.pc-projects-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.pc-projects-empty {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--uz-text2);
+  font-size: 14px;
+}
+
+/* ── 案件カード ──────────────────────────────────────────── */
+.pj-card {
+  background: var(--uz-surface);
+  border: 1px solid var(--uz-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.pj-card__body {
+  display: flex;
+  align-items: stretch;
+  min-height: 80px;
+}
+
+/* 売上ブロック */
+.pj-card__sales {
+  flex: 0 0 260px;
+  padding: 12px 16px;
+}
+
+/* 金色の区切り線 */
+.pj-card__divider {
+  width: 2px;
+  background: var(--uz-border2);
+  flex-shrink: 0;
+}
+
+/* 経費ブロック */
+.pj-card__costs {
+  flex: 1;
+  padding: 12px 16px;
+  min-width: 0;
+}
+.pj-card__costs-empty {
+  font-size: 12px;
+  color: var(--uz-text2);
+  padding: 4px 0;
+}
+
+/* 粗利ブロック */
+.pj-card__profit {
+  flex: 0 0 120px;
+  padding: 12px 16px;
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.pj-card__profit-value {
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--uz-green);
+}
+.pj-card__profit-value.neg {
+  color: var(--uz-red);
+}
+.pj-card__profit-rate {
+  font-size: 12px;
+  color: var(--uz-text2);
+  margin-top: 2px;
+}
+
+/* セクションラベル */
+.pj-card__section-label {
+  font-size: 11px;
+  color: var(--uz-text2);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* 行 */
+.pj-card__row {
+  display: flex;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--uz-text);
+  padding: 2px 0;
+  align-items: baseline;
+}
+.pj-card__date {
+  flex: 0 0 85px;
+  color: var(--uz-text2);
+  font-size: 12px;
+}
+.pj-card__type {
+  flex: 0 0 65px;
+  font-size: 12px;
+  color: var(--uz-text2);
+}
+.pj-card__subject {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pj-card__amount {
+  flex: 0 0 90px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.pj-card__memo {
+  font-size: 12px;
+  color: var(--uz-text2);
+  margin-top: 2px;
+}
+.pj-card__memo-inline {
+  font-size: 11px;
+  color: var(--uz-text2);
+  flex: 0 0 auto;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* アクションボタン */
+.pj-card__actions {
+  display: flex;
+  gap: 8px;
+  padding: 6px 16px 10px;
+  border-top: 1px solid var(--uz-border);
+}
+.pj-action {
+  font-size: 12px;
+  padding: 4px 10px;
+}
+.pj-action--warn {
+  color: var(--uz-red);
+  border-color: var(--uz-red);
+}
+.pj-action--warn:hover {
+  background: var(--uz-red-bg);
+}
