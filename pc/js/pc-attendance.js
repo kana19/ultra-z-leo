@@ -662,13 +662,18 @@
   }
 
   async function _callGAS(action, data) {
-    if (typeof callGAS === 'function') return callGAS(action, data || {});
+    if (typeof callGAS === 'function') {
+      const res = await callGAS(action, data || {});
+      // callGAS が {status, data} ラッパーを返す場合は data を取り出す
+      if (res && res.status === 'ok' && res.data !== undefined) return res.data;
+      return res;
+    }
     // フォールバック（app.js の callGAS が利用不可の場合）
     const gasUrl = window.GAS_URL || '';
     if (!gasUrl) throw new Error('GAS_URL not set');
     const url = gasUrl + '?action=' + action + '&data=' + encodeURIComponent(JSON.stringify(data || {}));
-    const res = await fetch(url);
-    const json = await res.json();
+    const resp = await fetch(url);
+    const json = await resp.json();
     if (json.status !== 'ok') throw new Error(json.message || 'GAS error');
     return json.data || json;
   }
