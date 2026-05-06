@@ -2,27 +2,15 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>出勤管理 | ウルトラZAIMUくんレオ</title>
+<link rel="icon" type="image/png" href="../icons/icon-192.png">
+<link rel="stylesheet" href="../css/base.css">
 <link rel="stylesheet" href="css/pc.css">
 <link rel="stylesheet" href="css/pc-attendance.css">
 </head>
-<body class="pc-body" data-page="attendance">
-
-<!-- ===== ヘッダー ===== -->
-<header class="pc-header">
-  <h1 class="pc-header__title">出勤管理</h1>
-  <div class="pc-header__right">
-    <span class="pc-header__grade">LEO</span>
-    <span class="pc-header__date" id="headerDate"></span>
-  </div>
-</header>
-
-<!-- ===== サイドバー + メイン ===== -->
-<div class="pc-layout">
-  <nav class="pc-sidebar" id="pcSidebar"></nav>
-
-  <main class="pc-main att-main">
+<body class="pc-body">
+<div id="pc-app" class="pc-layout">
+  <main class="pc-main" id="pc-main">
 
     <!-- ===== 3ゾーングリッド ===== -->
     <div class="att-grid" id="attGrid">
@@ -38,9 +26,7 @@
             <option value="contractor">委託・外注</option>
           </select>
         </div>
-        <div class="att-staff-list" id="staffList">
-          <!-- JS で描画 -->
-        </div>
+        <div class="att-staff-list" id="staffList"></div>
       </aside>
 
       <!-- ゾーンB：出勤マトリクス -->
@@ -67,9 +53,7 @@
             <span>← スタッフを選択してください</span>
           </div>
           <div class="att-payroll__content" id="payrollContent" style="display:none;">
-            <!-- ① スタッフ情報ヘッダー -->
             <div class="att-pr-header" id="prHeader"></div>
-            <!-- ② 給与算出方式 -->
             <div class="att-pr-section">
               <label class="att-pr-label">給与算出方式</label>
               <div class="att-pr-radios" id="payTypeRadios">
@@ -78,7 +62,6 @@
                 <label><input type="radio" name="payType" value="monthly"> 月給・歩合</label>
               </div>
             </div>
-            <!-- ③ 自動流し込み値 -->
             <div class="att-pr-section">
               <div class="att-pr-field">
                 <label>単価</label>
@@ -104,7 +87,6 @@
                 <span class="att-pr-auto-badge" id="prGrossBadge">自動</span>
               </div>
             </div>
-            <!-- ④ 源泉徴収 -->
             <div class="att-pr-section">
               <label class="att-pr-label">源泉徴収</label>
               <div class="att-pr-radios" id="whRadios">
@@ -119,7 +101,6 @@
                 <span class="att-pr-auto-badge" id="prWhBadge">自動</span>
               </div>
             </div>
-            <!-- ⑤ 差引支給額 -->
             <div class="att-pr-section att-pr-section--net">
               <div class="att-pr-field att-pr-field--result">
                 <label>差引支給額</label>
@@ -127,25 +108,18 @@
                 <span class="att-pr-unit">円</span>
               </div>
             </div>
-            <!-- ⑥ 対象コスト行選択 -->
             <div class="att-pr-section">
               <label class="att-pr-label">対象コスト行</label>
-              <div class="att-pr-cost-rows" id="prCostRows">
-                <!-- JS で描画 -->
-              </div>
+              <div class="att-pr-cost-rows" id="prCostRows"></div>
               <div class="att-pr-cost-total" id="prCostTotal"></div>
             </div>
-            <!-- ⑦ 経営メモ -->
             <div class="att-pr-section">
               <label class="att-pr-label">経営メモ</label>
               <textarea class="att-pr-memo" id="prMemo" rows="3" placeholder="歩合の設定根拠・給与振込口座・スタッフとの約束など"></textarea>
             </div>
-            <!-- ⑧ 確定ボタン -->
             <button class="att-pr-confirm-btn" id="prConfirmBtn">確定する</button>
           </div>
         </div>
-
-        <!-- 税理士等の報酬セクション -->
         <div class="att-pr-tax-advisor" id="taxAdvisorSection">
           <h3 class="att-pr-sub-title">税理士等の報酬（code 25）</h3>
           <div id="taxAdvisorRows"></div>
@@ -153,12 +127,12 @@
         </div>
       </aside>
 
-    </div><!-- /att-grid -->
+    </div>
 
   </main>
-</div><!-- /pc-layout -->
+</div>
 
-<!-- ===== 日別セル編集ポップオーバー ===== -->
+<!-- 日別セル編集ポップオーバー -->
 <div class="att-popover" id="dayCellPopover" style="display:none;">
   <div class="att-popover__inner">
     <div class="att-popover__header" id="popoverHeader"></div>

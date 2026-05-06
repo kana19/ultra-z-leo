@@ -25,8 +25,8 @@
 
   /* ---------- 初期化 ---------- */
   document.addEventListener('DOMContentLoaded', async () => {
-    // pc-common.js のサイドバー・ヘッダー初期化を待つ
-    if (typeof initPcCommon === 'function') initPcCommon('attendance');
+    // pc-common.js の共通ブート（サイドバー・ヘッダー描画）
+    if (typeof pcBootstrap === 'function') pcBootstrap('attendance.html', '出勤管理');
 
     _bindMonthNav();
     _bindFilter();

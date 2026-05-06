@@ -3,14 +3,10 @@
    ========================================== */
 
 /* --- 3ゾーングリッド --- */
-.att-main {
-  padding: 0 !important;
-  overflow: hidden;
-}
 .att-grid {
   display: grid;
   grid-template-columns: 220px 1fr 340px;
-  height: calc(100vh - 52px); /* ヘッダー分を引く */
+  height: calc(100vh - 100px); /* ヘッダー+余白分 */
 }
 
 /* --- 共通セクションタイトル --- */
