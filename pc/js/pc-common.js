@@ -151,9 +151,10 @@ function openDeleteConfirmModal(options) {
         const cSubject = escHtml(c.subject || '');
         const cAmount = _pcFmtYen(c.amount || 0);
         const cRowIndex = Number(c.rowIndex);
+        // 指示書15-3：経費は初期OFF（会計データの「うっかり削除」を防ぐ世界標準UI準拠）
         return `
           <label class="pc-delete-checkbox-row">
-            <input type="checkbox" checked data-target="cost" data-row-index="${cRowIndex}">
+            <input type="checkbox" data-target="cost" data-row-index="${cRowIndex}">
             <span>経費：${cDate} / ${cSubject} / ¥${cAmount}</span>
           </label>
         `;
@@ -185,10 +186,10 @@ function openDeleteConfirmModal(options) {
   // 警告メッセージ
   if (warnEl) {
     if (useCheckboxMode) {
-      // 指示書15-2：2行構成で「売上は必ず消える」「経費はチェック外しで残せる」を明示
+      // 指示書15-3：経費は初期OFF。「コストも削除する場合はチェックを入れてください」に文言反転
       warnEl.innerHTML = `
         <div>⚠ 売上は月次管理からも削除されます。</div>
-        <div>　 経費を月次管理に残す場合はチェックを外してください（紐付けのみ解除されます）。</div>
+        <div>　 紐付けされたコストも削除する場合はチェックを入れてください（チェックを外したコストは月次管理に残り、紐付けのみ解除されます）。</div>
       `;
       warnEl.hidden = false;
     } else {
