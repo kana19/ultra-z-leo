@@ -109,40 +109,67 @@ function normalizeEmpType(value) {
   return 'employed_full';
 }
 
+/**
+ * costCategory 正規化
+ *   contractor時のコスト科目：'21'（外注工賃）/ '25'（税理士等の報酬）
+ *   未設定・不正値は '21' にフォールバック
+ */
+function normalizeCostCategory(value) {
+  if (value === '21' || value === '25') return value;
+  return '21';
+}
+
 function renderStaff() {
   let staff = settings?.staffList ?? settings?.staff ?? [];
   if (typeof staff === 'string') { try { staff = JSON.parse(staff); } catch { staff = []; } }
   if (!Array.isArray(staff)) staff = [];
   const body = document.getElementById('staff-body');
   if (staff.length === 0) {
-    body.innerHTML = `<tr><td colspan="4" class="text-muted" style="text-align:center;padding:20px;">登録なし</td></tr>`;
+    body.innerHTML = `<tr><td colspan="5" class="text-muted" style="text-align:center;padding:20px;">登録なし</td></tr>`;
     return;
   }
   body.innerHTML = staff.map(s => {
     const empType = normalizeEmpType(s.employmentType);
+    const costCat = normalizeCostCategory(s.costCategory);
     const sid = escHtml(String(s.id || ''));
-    const opts = [
-      ['employed_full', '常勤雇用（社員）'],
+    const empOpts = [
+      ['employed_full', '常勤雇用(社員)'],
       ['employed_temp', '臨時アルバイト'],
       ['contractor',    '委託・外注']
     ].map(([v, label]) =>
       `<option value="${v}"${v === empType ? ' selected' : ''}>${label}</option>`
     ).join('');
+    const costOpts = [
+      ['21', '21:外注工賃'],
+      ['25', '25:税理士等の報酬']
+    ].map(([v, label]) =>
+      `<option value="${v}"${v === costCat ? ' selected' : ''}>${label}</option>`
+    ).join('');
+    const costSelectDisabled = empType !== 'contractor';
     return `<tr>
       <td>${sid}</td>
       <td>${escHtml(s.name||'')}</td>
       <td>
         <select class="pc-select staff-emp-select" data-staff-id="${sid}" style="width:180px;">
-          ${opts}
+          ${empOpts}
+        </select>
+      </td>
+      <td>
+        <select class="pc-select staff-cost-select" data-staff-id="${sid}" style="width:180px;"${costSelectDisabled ? ' disabled' : ''}>
+          ${costOpts}
         </select>
       </td>
       <td>${escHtml(s.note||'')}</td>
     </tr>`;
   }).join('');
 
-  // 雇用形態セレクトに変更ハンドラを束ねる（インライン保存）
+  // 雇用形態セレクトに変更ハンドラを束ねる(インライン保存)
   body.querySelectorAll('.staff-emp-select').forEach(sel => {
     sel.addEventListener('change', () => saveStaffEmpType(sel));
+  });
+  // コスト科目セレクトに変更ハンドラを束ねる(インライン保存)
+  body.querySelectorAll('.staff-cost-select').forEach(sel => {
+    sel.addEventListener('change', () => saveStaffCostCategory(sel));
   });
 }
 
@@ -150,6 +177,7 @@ function renderStaff() {
  * 雇用形態セレクトを変更したらその場でGASに保存する
  *  - 全員分の最新 staffList を再構築して saveStaffList で送信
  *  - 楽観的に settings.staffList を更新
+ *  - 委託・外注以外に変更時はコスト科目セレクトを非活性化
  */
 async function saveStaffEmpType(selectEl) {
   const targetId = selectEl.dataset.staffId;
@@ -178,7 +206,48 @@ async function saveStaffEmpType(selectEl) {
 
   if (res && res.status === 'ok') {
     settings.staffList = updated;
+    // 同じ行のコスト科目セレクトの活性状態を更新
+    const costSel = document.querySelector(`.staff-cost-select[data-staff-id="${targetId}"]`);
+    if (costSel) costSel.disabled = (newType !== 'contractor');
     showToast('雇用形態を保存しました', 'success');
+  } else {
+    showToast('保存失敗：' + (res && res.message || '不明なエラー'), 'error');
+  }
+}
+
+/**
+ * コスト科目セレクトを変更したらその場でGASに保存する
+ *  - contractor のスタッフのみ意味を持つ
+ *  - 21:外注工賃 / 25:税理士等の報酬
+ */
+async function saveStaffCostCategory(selectEl) {
+  const targetId = selectEl.dataset.staffId;
+  const newCat = normalizeCostCategory(selectEl.value);
+  let list = settings?.staffList ?? settings?.staff ?? [];
+  if (typeof list === 'string') { try { list = JSON.parse(list); } catch { list = []; } }
+  if (!Array.isArray(list)) list = [];
+
+  const updated = list.map(s => {
+    if (String(s.id) === String(targetId)) {
+      return { ...s, costCategory: newCat };
+    }
+    return s;
+  });
+
+  selectEl.disabled = true;
+  let res;
+  try {
+    res = await callGAS('saveStaffList', { staffList: updated });
+  } catch (e) {
+    selectEl.disabled = false;
+    showToast('通信エラー：' + (e.message || 'unknown'), 'error');
+    return;
+  }
+  selectEl.disabled = false;
+
+  if (res && res.status === 'ok') {
+    settings.staffList = updated;
+    showToast('コスト科目を保存しました', 'success');
   } else {
     showToast('保存失敗：' + (res && res.message || '不明なエラー'), 'error');
   }

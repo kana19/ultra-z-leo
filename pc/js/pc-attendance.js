@@ -62,17 +62,9 @@
       const res = await _callGAS('getAttendanceByMonth', { month: _currentMonth });
       _attendanceRecords = res.records || [];
       _renderMatrix();
-
-      // コスト行もキャッシュ（給与計算用）
-      const hist = await _callGAS('getHistory', { month: _currentMonth });
-      _costRows = (hist.rows || hist || []);
-      if (Array.isArray(_costRows) && _costRows.length && _costRows[0].rows) {
-        _costRows = _costRows[0].rows; // レスポンス形式のバリエーション対応
-      }
     } catch (e) {
       console.error('loadMonth error:', e);
       _attendanceRecords = [];
-      _costRows = [];
       _renderMatrix();
     }
     _updateMonthLabel();
@@ -242,53 +234,26 @@
     const whRadio = document.querySelector(`input[name="whMode"][value="${whMode}"]`);
     if (whRadio) whRadio.checked = true;
 
-    // ⑥ 対象コスト行
-    _renderCostRows(staffId, et);
+    // ⑥ コスト自動追記プレビュー
+    _updateCostPreview(staff);
 
     // ⑦ 経営メモ
     document.getElementById('prMemo').value = staff.managerMemo || '';
   }
 
-  function _renderCostRows(staffId, employmentType) {
-    const container = document.getElementById('prCostRows');
-    const totalEl = document.getElementById('prCostTotal');
-
-    // 科目コードで絞り込み: contractor → 21(外注工賃), employed → 20(給料賃金)
-    const targetCodes = employmentType === 'contractor' ? ['21'] : ['20'];
-
-    const rows = (_costRows || []).filter(r => {
-      const code = String(r.itemCode || r.subjectCode || '');
-      return targetCodes.includes(code);
-    });
-
-    if (rows.length === 0) {
-      container.innerHTML = '<div style="font-size:11px;color:var(--uz-text-muted);">対象コスト行なし</div>';
-      totalEl.textContent = '';
-      return;
+  function _updateCostPreview(staff) {
+    const previewText = document.getElementById('prCostPreviewText');
+    const et = _normalizeEmploymentType(staff.employmentType);
+    let code, name;
+    if (et === 'contractor') {
+      const cat = (staff.costCategory === '25') ? '25' : '21';
+      code = cat;
+      name = (cat === '25') ? '税理士等の報酬' : '外注工賃';
+    } else {
+      code = '20';
+      name = '給料賃金';
     }
-
-    container.innerHTML = rows.map((r, i) => {
-      const date = (r.date || '').substring(5); // MM-DD
-      const amount = Number(r.taxIncluded || r.amountInTax || 0).toLocaleString();
-      const memo = r.memo || '';
-      const subject = r.subjectName || r.itemName || '';
-      return `<label class="att-pr-cost-row">
-        <input type="checkbox" data-row-index="${r.rowIndex || ''}" data-amount="${r.taxIncluded || r.amountInTax || 0}">
-        <span>${_escHtml(date)}　${_escHtml(subject)}　${amount}円${memo ? '　' + _escHtml(memo) : ''}</span>
-      </label>`;
-    }).join('');
-
-    // チェック変更で選択合計を更新
-    container.querySelectorAll('input[type="checkbox"]').forEach(cb => {
-      cb.addEventListener('change', () => {
-        const checked = container.querySelectorAll('input:checked');
-        let sum = 0;
-        checked.forEach(c => sum += Number(c.dataset.amount || 0));
-        totalEl.textContent = checked.length > 0 ? `選択合計：${sum.toLocaleString()}円（${checked.length}件）` : '';
-      });
-    });
-
-    totalEl.textContent = '';
+    previewText.textContent = `確定時にコストシートへ「${name}（科目${code}）」を自動追記します`;
   }
 
   /* ---------- 給与計算ロジック ---------- */
@@ -357,11 +322,22 @@
     const whMode = document.querySelector('input[name="whMode"]:checked')?.value || 'off';
     const net = gross - wh;
 
-    // チェックされたコスト行を確認
-    const checkedRows = document.querySelectorAll('#prCostRows input:checked');
-    if (checkedRows.length === 0) {
-      alert('対象コスト行を選択してください。');
+    if (gross === 0) {
+      alert('算出金額が0円です。');
       return;
+    }
+
+    const et = _normalizeEmploymentType(staff.employmentType);
+    let costItemCode, costItemName, taxRate;
+    if (et === 'contractor') {
+      const cat = (staff.costCategory === '25') ? '25' : '21';
+      costItemCode = cat;
+      costItemName = (cat === '25') ? '税理士等の報酬' : '外注工賃';
+      taxRate = 10;
+    } else {
+      costItemCode = '20';
+      costItemName = '給料賃金';
+      taxRate = 0;
     }
 
     document.getElementById('confirmBody').innerHTML = `
@@ -369,7 +345,10 @@
       <div>算出金額：${gross.toLocaleString()}円</div>
       <div>源泉徴収額：${wh.toLocaleString()}円（${WH_LABELS[whMode] || whMode}）</div>
       <div>差引支給額：${net.toLocaleString()}円</div>
-      <div style="margin-top:8px;font-size:11px;color:var(--uz-text-muted);">対象コスト行：${checkedRows.length}件</div>
+      <div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.1);font-size:12px;">
+        コストシートに追記：<strong>${costItemName}（科目${costItemCode}）</strong>
+        ${taxRate > 0 ? `　税率${taxRate}%` : '　不課税'}
+      </div>
     `;
     document.getElementById('confirmDialog').style.display = '';
   }
@@ -377,37 +356,60 @@
   async function _executeConfirm() {
     document.getElementById('confirmDialog').style.display = 'none';
 
-    const wh = Number(document.getElementById('prWhAmount').value) || 0;
-    const checkedRows = document.querySelectorAll('#prCostRows input:checked');
-    const targets = [];
-    checkedRows.forEach(cb => {
-      if (cb.dataset.rowIndex) {
-        targets.push({
-          sheetName: 'コスト',
-          rowIndex: Number(cb.dataset.rowIndex),
-          withholdingAmount: wh
-        });
-      }
-    });
+    const staff = _staffList.find(s => s.id === _selectedStaffId);
+    if (!staff) return;
 
-    if (targets.length === 0) return;
+    const gross = Number(document.getElementById('prGrossAmount').value) || 0;
+    const wh = Number(document.getElementById('prWhAmount').value) || 0;
+    const et = _normalizeEmploymentType(staff.employmentType);
+    const isContractor = et === 'contractor';
+
+    // 科目判定：contractor時はcostCategory参照（21:外注工賃 / 25:税理士等の報酬）、それ以外は20:給料賃金
+    let itemCode, itemName;
+    if (isContractor) {
+      const cat = (staff.costCategory === '25') ? '25' : '21';
+      itemCode = cat;
+      itemName = (cat === '25') ? '税理士等の報酬' : '外注工賃';
+    } else {
+      itemCode = '20';
+      itemName = '給料賃金';
+    }
+
+    // コストシート追記用データ
+    const [y, m] = _currentMonth.split('-').map(Number);
+    // 月末日をコスト計上日とする(給与計算の慣行)
+    const lastDay = new Date(y, m, 0).getDate();
+    const costDate = `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+
+    const costData = {
+      date: costDate,
+      divisionCode: '2',           // 販管費
+      divisionName: '販管費',
+      itemCode: itemCode,
+      itemName: itemName,
+      miscItemName: '',
+      taxRate: isContractor ? 10 : 0,  // 委託・外注は課税、給料賃金は不課税
+      taxIncluded: gross,
+      memo: `${staff.name}　${y}年${m}月分`,
+      unpaid: 0,
+      withholdingAmount: wh,
+      clientId: '',
+      projectId: ''
+    };
 
     try {
-      await _callGAS('confirmPayroll', { targets });
+      await _callGAS('addCost', costData);
 
       // 経営メモ保存
-      const staff = _staffList.find(s => s.id === _selectedStaffId);
-      if (staff) {
-        const memo = document.getElementById('prMemo').value;
-        if (memo !== (staff.managerMemo || '')) {
-          staff.managerMemo = memo;
-          await _callGAS('saveStaffList', { staffList: _staffList });
-        }
+      const memo = document.getElementById('prMemo').value;
+      if (memo !== (staff.managerMemo || '')) {
+        staff.managerMemo = memo;
+        await _callGAS('saveStaffList', { staffList: _staffList });
       }
 
       _confirmedStaffIds.add(_selectedStaffId);
       _renderStaffList();
-      alert('確定しました。');
+      alert(`${staff.name}の給与を確定しました。\nコストシートに「${itemName}（科目${itemCode}）」を追記しました。`);
     } catch (e) {
       console.error('confirm error:', e);
       alert('確定処理でエラーが発生しました。');
@@ -578,6 +580,7 @@
       ...s,
       employmentType: _normalizeEmploymentType(s.employmentType),
       withholdingMode: s.withholdingMode || 'off',
+      costCategory: (s.costCategory === '25') ? '25' : '21',
       hourlyWage: Number(s.hourlyWage) || 0,
       dailyWage: Number(s.dailyWage) || 0,
       monthlyWage: Number(s.monthlyWage) || 0,

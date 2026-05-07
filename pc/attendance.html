@@ -109,9 +109,10 @@
               </div>
             </div>
             <div class="att-pr-section">
-              <label class="att-pr-label">対象コスト行</label>
-              <div class="att-pr-cost-rows" id="prCostRows"></div>
-              <div class="att-pr-cost-total" id="prCostTotal"></div>
+              <label class="att-pr-label">コスト自動追記</label>
+              <div class="att-pr-cost-preview" id="prCostPreview">
+                <span class="att-pr-cost-preview__text" id="prCostPreviewText"></span>
+              </div>
             </div>
             <div class="att-pr-section">
               <label class="att-pr-label">経営メモ</label>
@@ -120,7 +121,7 @@
             <button class="att-pr-confirm-btn" id="prConfirmBtn">確定する</button>
           </div>
         </div>
-        <div class="att-pr-tax-advisor" id="taxAdvisorSection">
+        <div class="att-pr-tax-advisor" id="taxAdvisorSection" style="display:none;">
           <h3 class="att-pr-sub-title">税理士等の報酬（code 25）</h3>
           <div id="taxAdvisorRows"></div>
           <button class="att-pr-confirm-btn att-pr-confirm-btn--sub" id="taxAdvisorConfirmBtn">一括確定</button>
