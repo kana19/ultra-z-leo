@@ -11,6 +11,7 @@ const ATTENDANCE_DATA_KEY = 'uz_attendance_data';
 
 /* ── 状態 ────────────────────────────────────────────────── */
 let todayAttendance = []; // { id, name, clockIn, clockOut, isActive, rowIndex }
+let _activeHomeTab = null; // 'pl' | 'attendance'（null=自動判定）
 
 /* ── 時計（リアルタイム） ────────────────────────────────── */
 function updateClock() {
@@ -152,6 +153,7 @@ async function loadAttendance() {
       localStorage.setItem(ATTENDANCE_DATA_KEY, JSON.stringify(todayAttendance));
 
       renderStaffList();
+      _autoSwitchTab(); // 出勤データ取得後に自動タブ判定
 
       // 退店未記録フラグをアラートに反映（他フラグは既描画のまま更新）
       if (hasUnrecordedClockOut) {
@@ -324,6 +326,9 @@ document.addEventListener('DOMContentLoaded', () => {
   renderHeaderDate();
   startClock();
   renderTaxTimer();
+
+  // タブ初期表示（損益）
+  switchHomeTab('pl', true);
 
   // localStorageで即時描画 → GASで上書き
   renderStaffFromLocalStorage();
@@ -644,4 +649,59 @@ async function loadSidebarRecent() {
   } catch {
     container.innerHTML = '';
   }
+}
+
+/* ── ホームタブ切替 ──────────────────────────────────────── */
+
+/**
+ * タブ切替
+ * tab: 'pl' | 'attendance'
+ * auto: true=自動判定（強制上書きしない）
+ */
+function switchHomeTab(tab, auto) {
+  const tabPl   = document.getElementById('tab-pl');
+  const tabAtt  = document.getElementById('tab-attendance');
+  const panelPl = document.getElementById('panel-pl');
+  const panelAt = document.getElementById('panel-attendance');
+  if (!tabPl || !tabAtt || !panelPl || !panelAt) return;
+
+  // 自動判定時はユーザーが既に手動で選択していれば従う
+  if (auto && _activeHomeTab !== null) return;
+
+  _activeHomeTab = tab;
+
+  if (tab === 'pl') {
+    tabPl.classList.add('active');
+    tabAtt.classList.remove('active');
+    panelPl.style.display = '';
+    panelAt.style.display = 'none';
+  } else {
+    tabAtt.classList.add('active');
+    tabPl.classList.remove('active');
+    panelAt.style.display = '';
+    panelPl.style.display = 'none';
+  }
+}
+
+/**
+ * 出勤データ取得後に自動タブ判定
+ * 仕様（02_画面仕様.md §3）：
+ *   1名以上出勤中 → 出勤状況タブをデフォルト表示
+ *   出勤中ゼロ   → 損益タブをデフォルト表示
+ */
+function _autoSwitchTab() {
+  const hasActive = todayAttendance.some(s => s.isActive);
+  switchHomeTab(hasActive ? 'attendance' : 'pl', true);
+}
+
+/**
+ * 出勤バナー通知
+ * msg: 「〇〇さんが出勤しました」等
+ */
+function showAttendanceBanner(msg) {
+  const el = document.getElementById('home-attendance-banner');
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 4000);
 }

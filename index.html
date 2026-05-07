@@ -18,6 +18,70 @@
   <link rel="stylesheet" href="css/sheet-modal.css">
   <link rel="stylesheet" href="css/sales-modal.css">
   <link rel="stylesheet" href="css/cost-modal.css">
+  <style>
+  /* ── ホームタブ切替 ───────────────────────────────────── */
+  .home-tabs {
+    display: flex;
+    gap: 0;
+    border-radius: 12px 12px 0 0;
+    overflow: hidden;
+    border: 1px solid var(--uz-border, rgba(255,255,255,0.1));
+    border-bottom: none;
+    margin-bottom: 0;
+  }
+  .home-tab {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 11px 8px;
+    background: rgba(255,255,255,0.04);
+    border: none;
+    color: var(--uz-muted, rgba(255,255,255,0.5));
+    font-size: 13px;
+    font-family: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+    letter-spacing: 0.02em;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .home-tab:active { opacity: 0.75; }
+  .home-tab.active {
+    background: rgba(255,255,255,0.10);
+    color: var(--uz-text, #E8EDF5);
+    border-bottom: 2px solid var(--uz-accent, #4A90D9);
+  }
+  .home-tab__icon { font-size: 16px; }
+  .home-tab-panel {
+    border: 1px solid var(--uz-border, rgba(255,255,255,0.1));
+    border-radius: 0 0 12px 12px;
+    overflow: hidden;
+  }
+  .home-tab-panel .card {
+    border-radius: 0;
+    border: none;
+  }
+  /* 出勤バナー通知 */
+  #home-attendance-banner {
+    position: fixed;
+    top: -60px;
+    left: 16px; right: 16px;
+    background: var(--uz-card-bg, rgba(30,50,112,0.95));
+    border: 1px solid var(--uz-accent, #4A90D9);
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--uz-text, #E8EDF5);
+    text-align: center;
+    z-index: 200;
+    transition: top 0.4s cubic-bezier(0.34,1.56,0.64,1);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  }
+  #home-attendance-banner.show { top: 12px; }
+  </style>
 </head>
 <body data-page="home">
 
@@ -178,51 +242,67 @@
         </div>
       </section>
 
-      <!-- 今月の損益 -->
-      <section aria-label="今月の損益">
-        <div class="card">
-          <div class="card__header">今月の損益</div>
-          <div class="card__body">
-            <div id="pl-month-label" class="pl-month-label">読み込み中...</div>
+      <!-- ホームタブ切替（損益 ⇔ 出勤状況） -->
+      <section aria-label="ホームタブ">
 
-            <!-- 売上 -->
-            <div class="pl-row">
-              <span class="pl-label">売上</span>
-              <span id="pl-sales" class="pl-value">¥—</span>
+        <!-- タブヘッダー -->
+        <div class="home-tabs" id="home-tabs">
+          <button class="home-tab" id="tab-pl" onclick="switchHomeTab('pl')" type="button">
+            <span class="home-tab__icon">📊</span>
+            <span class="home-tab__label">今月の損益</span>
+          </button>
+          <button class="home-tab" id="tab-attendance" onclick="switchHomeTab('attendance')" type="button">
+            <span class="home-tab__icon">👥</span>
+            <span class="home-tab__label" data-uilabel-key="clockin_record">出勤状況</span>
+          </button>
+        </div>
+
+        <!-- 損益パネル -->
+        <div id="panel-pl" class="home-tab-panel">
+          <div class="card">
+            <div class="card__body">
+              <div id="pl-month-label" class="pl-month-label">読み込み中...</div>
+              <div class="pl-row">
+                <span class="pl-label">売上</span>
+                <span id="pl-sales" class="pl-value">¥—</span>
+              </div>
+              <div class="pl-row">
+                <span class="pl-label">仕入原価</span>
+                <span id="pl-cogs" class="pl-value">¥—</span>
+              </div>
+              <div class="pl-row pl-row--result">
+                <span class="pl-label">粗利</span>
+                <span id="pl-gross" class="pl-value">¥—</span>
+              </div>
+              <div class="pl-row">
+                <span class="pl-label">販管費</span>
+                <span id="pl-sga" class="pl-value">¥—</span>
+              </div>
+              <div class="pl-row pl-row--highlight">
+                <span class="pl-label">経常利益</span>
+                <span id="pl-profit" class="pl-value">¥—</span>
+              </div>
             </div>
-
-            <!-- 仕入原価 -->
-            <div class="pl-row">
-              <span class="pl-label">仕入原価</span>
-              <span id="pl-cogs" class="pl-value">¥—</span>
-            </div>
-
-            <!-- 粗利 -->
-            <div class="pl-row pl-row--result">
-              <span class="pl-label">粗利</span>
-              <span id="pl-gross" class="pl-value">¥—</span>
-            </div>
-
-            <!-- 販管費 -->
-            <div class="pl-row">
-              <span class="pl-label">販管費</span>
-              <span id="pl-sga" class="pl-value">¥—</span>
-            </div>
-
-            <!-- 経常利益 -->
-            <div class="pl-row pl-row--highlight">
-              <span class="pl-label">経常利益</span>
-              <span id="pl-profit" class="pl-value">¥—</span>
-            </div>
-
+          </div>
+          <div style="text-align:right; padding:6px 4px 0;">
+            <a href="pl.html" style="font-size:12px; color:var(--uz-muted); text-decoration:none;">詳細を見る ›</a>
           </div>
         </div>
-        <div style="text-align:right; padding:6px 4px 0;">
-          <a href="pl.html"
-             style="font-size:12px; color:var(--uz-muted); text-decoration:none;">
-            詳細を見る ›
-          </a>
+
+        <!-- 出勤状況パネル -->
+        <div id="panel-attendance" class="home-tab-panel" style="display:none">
+          <div class="card">
+            <div class="card__body" style="padding:0;">
+              <div id="staff-list">
+                <!-- home.js が描画 -->
+              </div>
+            </div>
+          </div>
+          <div style="text-align:right; padding:6px 4px 0;">
+            <a href="clockin.html" style="font-size:12px; color:var(--uz-muted); text-decoration:none;" data-uilabel-key="clockin_record">入店記録へ ›</a>
+          </div>
         </div>
+
       </section>
 
     </div><!-- /ipad-col--left -->
@@ -275,6 +355,9 @@
   </a>
 
 </nav>
+
+<!-- 出勤バナー通知 -->
+<div id="home-attendance-banner"></div>
 
 <!-- ローディングオーバーレイ -->
 <div id="loading-overlay" class="loading-overlay" aria-hidden="true">
