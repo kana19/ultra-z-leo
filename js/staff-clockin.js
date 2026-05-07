@@ -1,6 +1,6 @@
 /**
  * staff-clockin.js v3 — スタッフ専用タイムカードPWA
- * v3: 再出勤対応（退勤済みでも再度出勤可能・完了表示廃止）
+ * v4: ボタンラベル統一（再表示廃止・0〜23時対応・日跨ぎ自動判定）
  */
 
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbwBDHj9-p6ZT6ExXrxF1Q-XwiEkNMPwDc0aAuk7zptivRhWhepvaCDsjaIJd7WHh_h9-A/exec';
@@ -70,10 +70,10 @@ function renderPunchArea() {
   const rec=state.myRecord, area=document.getElementById('punch-area');
   const isActive=rec&&rec.isActive, isDone=rec&&!rec.isActive;
   const badgeClass=isActive?'active':'inactive';
-  const badgeText=isActive?getLabel('active'):isDone?`退勤済み（再${getLabel('in')}可）`:getLabel('inactive');
+  const badgeText=isActive?getLabel('active'):getLabel('inactive');
   const btnClass=isActive?'clockout-btn':'clockin-btn';
   const btnIcon=isActive?'🔴':'🟢';
-  const btnLabel=isActive?getLabel('out'):isDone?`再${getLabel('in')}`:getLabel('in');
+  const btnLabel=isActive?getLabel('out'):getLabel('in');
   const subInfo=isActive
     ?`<div class="ci-info">${getLabel('in')}：<span class="ci-time">${rec.clockIn}</span></div>`
     :isDone?`<div class="prev-record">直前：${rec.clockIn} 〜 ${rec.clockOut||'--:--'}</div>`:'';
@@ -169,7 +169,7 @@ async function executePunch(time) {
       const staff=(settings.staffList||[]).find(s=>s.id===state.staffId)||{};
       const result=await callGAS('clockIn',{staffId:state.staffId,staffName:state.staffName,employmentType:staff.employmentType||'employed_full',date,clockInTime:time});
       state.myRecord={rowIndex:result.rowIndex||0,date,clockIn:time,clockOut:null,isActive:true};
-      showBanner(`${rec?'再'+getLabel('in'):getLabel('in')}しました（${time}）`);
+      showBanner(`${getLabel('in')}しました（${time}）`);
     }
     await loadAttendanceData();
   } catch(e) {
