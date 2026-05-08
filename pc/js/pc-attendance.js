@@ -63,9 +63,12 @@
         _callGAS('getAttendanceByMonth', { month: _currentMonth }),
         _callGAS('getHistory', { month: _currentMonth })
       ]);
-      _attendanceRecords = attRes.records || [];
-      // 当月コスト行をキャッシュ（ゾーンB金額由来表示＋ゾーンC給与計算用）
-      _costRows = (histRes.data || []).filter(r => r.type === 'cost');
+      // _callGAS は {status:'ok', data:X} の X を返す
+      // getAttendanceByMonth → 配列（直接）  ※v3: records プロパティなし
+      // getHistory → 配列（直接）
+      _attendanceRecords = Array.isArray(attRes) ? attRes : (attRes.records || attRes.data || []);
+      const histArr = Array.isArray(histRes) ? histRes : (histRes.data || []);
+      _costRows = histArr.filter(r => r.type === 'cost');
     } catch (e) {
       console.error('loadMonth error:', e);
       _attendanceRecords = [];
