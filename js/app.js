@@ -90,6 +90,11 @@ async function syncSettingsAtStartup() {
       localStorage.removeItem('uz_feature_visibility');
     }
 
+    // staffList 同期（A-2-X-1：コスト入力のスタッフプルダウンで使用）
+    if (Array.isArray(d.staffList)) {
+      localStorage.setItem('uz_staff_list', JSON.stringify(d.staffList));
+    }
+
     // 取得後にUI用語を反映
     applyUILabels();
 
