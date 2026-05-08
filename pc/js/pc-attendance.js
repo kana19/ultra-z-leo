@@ -170,6 +170,8 @@
       { key: 'unitPrice', label: '単価' },
       { key: 'payType', label: '' },
       { key: 'gross', label: '算出金額' },
+      { key: 'adjustment', label: '調整額' },
+      { key: 'adjustedTotal', label: '調整後金額' },
       { key: 'spotDays', label: '臨時案件' },
       { key: 'spotAmount', label: '' },
       { key: 'whMode', label: '源泉徴収' },
@@ -187,7 +189,7 @@
       const st = _payrollState[s.id] || {};
       const code = _getStaffCostCode(s);
       if (catSums[code]) {
-        catSums[code].gross += st.gross || 0;
+        catSums[code].gross += (st.gross || 0) + (st.adjustment || 0);
         catSums[code].wh += st.whAmount || 0;
         catSums[code].net += st.net || 0;
       }
@@ -221,6 +223,14 @@
           case 'gross':
             html += `<td class="att-calc-cell att-calc-cell--gross att-calc-cell--editable" data-staff="${sid}" data-field="gross">${_fmtYen(st.gross)}</td>`;
             break;
+          case 'adjustment':
+            html += `<td class="att-calc-cell att-calc-cell--editable" data-staff="${sid}" data-field="adjustment" style="color:${(st.adjustment || 0) < 0 ? '#f87171' : (st.adjustment || 0) > 0 ? '#4ade80' : 'var(--uz-text-muted)'}">${(st.adjustment || 0) !== 0 ? ((st.adjustment > 0 ? '+' : '') + _fmtYen(st.adjustment)) : '—'}</td>`;
+            break;
+          case 'adjustedTotal': {
+            const adjTotal = (st.gross || 0) + (st.adjustment || 0);
+            html += `<td class="att-calc-cell att-calc-cell--gross">${_fmtYen(adjTotal)}</td>`;
+            break;
+          }
           case 'spotDays': {
             const spotCount = (st.spotCosts || []).length;
             html += `<td class="att-calc-cell att-calc-cell--spot">${spotCount > 0 ? spotCount + '件' : ''}</td>`;
@@ -253,7 +263,7 @@
       catCols.forEach(c => {
         const cs = catSums[c.code];
         switch (row.key) {
-          case 'gross':
+          case 'adjustedTotal':
             html += `<td class="att-calc-cell att-calc-cell--total">${_fmtYen(cs.gross)}</td>`;
             break;
           case 'whAmount':
@@ -315,9 +325,14 @@
           st.gross = _calcGross(st.payType, st.unitPrice, st.hours, st.days);
         }
         if (field === 'whMode') {
-          st.whAmount = _calcWithholdingAmount(st.whMode, st.gross, st.days);
+          const adjTotal = (st.gross || 0) + (st.adjustment || 0);
+          st.whAmount = _calcWithholdingAmount(st.whMode, adjTotal, st.days);
         }
-        st.net = st.gross - st.whAmount;
+        if (field === 'payType') {
+          const adjTotal = (st.gross || 0) + (st.adjustment || 0);
+          st.whAmount = _calcWithholdingAmount(st.whMode, adjTotal, st.days);
+        }
+        st.net = (st.gross || 0) + (st.adjustment || 0) - st.whAmount;
         _renderTable();
       });
     });
@@ -351,14 +366,17 @@
     const finish = () => {
       const val = Number(input.value) || 0;
       st[field] = val;
+      const adjTotal = (st.gross || 0) + (st.adjustment || 0);
       if (['unitPrice', 'hours', 'days'].includes(field)) {
         st.gross = _calcGross(st.payType, st.unitPrice, st.hours, st.days);
-        st.whAmount = _calcWithholdingAmount(st.whMode, st.gross, st.days);
+        const newAdjTotal = st.gross + (st.adjustment || 0);
+        st.whAmount = _calcWithholdingAmount(st.whMode, newAdjTotal, st.days);
       }
-      if (field === 'gross') {
-        st.whAmount = _calcWithholdingAmount(st.whMode, st.gross, st.days);
+      if (field === 'gross' || field === 'adjustment') {
+        const newAdjTotal = (st.gross || 0) + (st.adjustment || 0);
+        st.whAmount = _calcWithholdingAmount(st.whMode, newAdjTotal, st.days);
       }
-      st.net = st.gross - st.whAmount;
+      st.net = (st.gross || 0) + (st.adjustment || 0) - st.whAmount;
       _renderTable();
     };
 
@@ -389,9 +407,11 @@
       const days = prev.days !== undefined ? prev.days : totalDays;
 
       let gross = prev.gross !== undefined ? prev.gross : _calcGross(payType, unitPrice, hours, days);
+      const adjustment = prev.adjustment !== undefined ? prev.adjustment : 0;
+      const adjustedTotal = gross + adjustment;
       const whMode = prev.whMode || (s.withholdingMode || 'off');
-      const whAmount = prev.whAmount !== undefined ? prev.whAmount : _calcWithholdingAmount(whMode, gross, days);
-      const net = gross - whAmount;
+      const whAmount = prev.whAmount !== undefined ? prev.whAmount : _calcWithholdingAmount(whMode, adjustedTotal, days);
+      const net = adjustedTotal - whAmount;
 
       const spotCosts = _findSpotCosts(s.name);
       const spotTotal = spotCosts.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
@@ -401,7 +421,7 @@
       if (hasMonthly) _confirmedStaffIds.add(s.id);
 
       newState[s.id] = {
-        payType, unitPrice, hours, days, gross, whMode, whAmount, net,
+        payType, unitPrice, hours, days, gross, adjustment, whMode, whAmount, net,
         spotTotal, spotCosts, excludedProject, status
       };
     });
@@ -434,9 +454,11 @@
       costItemCode = '20'; costItemName = '給料賃金';
     }
 
+    const adjTotal = (st.gross || 0) + (st.adjustment || 0);
     document.getElementById('confirmTitle').textContent = staff.name + ' 給与確定';
     document.getElementById('confirmBody').innerHTML =
       `<div>算出金額：${st.gross.toLocaleString()}円</div>` +
+      ((st.adjustment || 0) !== 0 ? `<div>調整額：${(st.adjustment > 0 ? '+' : '') + st.adjustment.toLocaleString()}円</div><div>調整後金額：${adjTotal.toLocaleString()}円</div>` : '') +
       `<div>源泉徴収額：${st.whAmount.toLocaleString()}円（${whLabel}）</div>` +
       `<div>差引支給額：${st.net.toLocaleString()}円</div>` +
       `<div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.1);font-size:11px;">コスト追記：<strong>${costItemName}（科目${costItemCode}）</strong></div>`;
@@ -446,15 +468,15 @@
     const choicesSection = document.getElementById('confirmChoices');
 
     if (spotCosts.length > 0) {
-      const diff = st.gross - st.spotTotal;
+      const diff = adjTotal - st.spotTotal;
       document.getElementById('confirmSpotList').innerHTML = spotCosts.map(r => {
         const dateShort = (r.date || '').substring(5);
         return `<div class="att-confirm-spot-row"><span class="att-confirm-spot-row__date">${_escHtml(dateShort)}</span><span class="att-confirm-spot-row__name">${_escHtml(String(r.itemName || r.itemCode || ''))}</span><span class="att-confirm-spot-row__amount">${(Number(r.amount) || 0).toLocaleString()}円</span></div>`;
       }).join('');
       document.getElementById('confirmSpotTotal').textContent = 'スポット合計：' + st.spotTotal.toLocaleString() + '円';
       document.getElementById('confirmDiffDesc').textContent = diff > 0
-        ? '算出' + st.gross.toLocaleString() + '円 − スポット' + st.spotTotal.toLocaleString() + '円 ＝ 不足分 ' + diff.toLocaleString() + '円'
-        : 'スポット合計が算出金額以上のため不足分0円';
+        ? '調整後' + adjTotal.toLocaleString() + '円 − スポット' + st.spotTotal.toLocaleString() + '円 ＝ 不足分 ' + diff.toLocaleString() + '円'
+        : 'スポット合計が調整後金額以上のため不足分0円';
       const dm = diff > 0 ? 'diff' : 'skip';
       const r = document.querySelector(`input[name="confirmMode"][value="${dm}"]`);
       if (r) r.checked = true;
@@ -504,11 +526,11 @@
 
     if (confirmMode === 'skip') { st.status = 'skipped'; return; }
 
-    let confirmAmount = st.gross;
+    let confirmAmount = (st.gross || 0) + (st.adjustment || 0);
     let confirmWh = st.whAmount;
 
     if (confirmMode === 'diff' && hasSpot) {
-      confirmAmount = Math.max(0, st.gross - st.spotTotal);
+      confirmAmount = Math.max(0, confirmAmount - st.spotTotal);
       confirmWh = _calcWithholdingAmount(st.whMode, confirmAmount, st.days);
     }
     if (confirmAmount === 0 && confirmMode === 'diff') { st.status = 'skipped'; return; }
