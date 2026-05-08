@@ -1,5 +1,6 @@
 /* ==========================================
    PC版 出勤管理画面 (attendance.html)
+   A-2-X-5: 案件直接費除外注釈スタイル追加
    ========================================== */
 
 /* --- 3ゾーングリッド --- */
@@ -375,6 +376,24 @@
   font-size: 18px;
   font-weight: 700;
   color: var(--uz-gold, #c9a84c);
+}
+
+/* A-2-X-5：案件直接費除外注釈 */
+.att-pr-project-note {
+  font-size: 11px;
+  color: #5b9bd5;
+  margin: 4px 0 8px;
+  padding: 4px 8px;
+  background: rgba(91, 155, 213, 0.08);
+  border-left: 3px solid #5b9bd5;
+  border-radius: 2px;
+}
+
+/* コスト自動追記プレビュー */
+.att-pr-cost-preview {
+  font-size: 11px;
+  color: var(--uz-text-muted, #888);
+  padding: 4px 0;
 }
 
 /* 対象コスト行チェックボックス */

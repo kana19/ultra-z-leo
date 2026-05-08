@@ -739,8 +739,6 @@ body.pc-body {
 
 /* ═══════════════════════════════════════════════════════════
    月次管理画面（pc/monthly.html）
-   戦略思想§3-9-3 / 3デバイス統合§8-3 / 技術仕様§9-4
-   既存 base.css の CSS変数で組み立てる（金黒基調・派手にしない）
    ═══════════════════════════════════════════════════════════ */
 
 /* ── フィルタバー ───────────────────────────────────────── */
@@ -773,14 +771,6 @@ body.pc-body {
 }
 
 /* ── フラットテーブル ──────────────────────────────────── */
-/* 指示書10§3：overflow-x:auto を撤去
- *   CSS仕様：overflow-x が non-visible だと overflow-y も auto に格上げされ
- *   .pc-table-wrap 自身がスクロールコンテナ化する。max-height 未設定だと
- *   実際には body スクロールしか発生しないため、thead の position:sticky は
- *   .pc-table-wrap 内部でしか効かず viewport 上端に固定されない。
- *   8列テーブルは通常の PC 解像度で十分収まるため、横スクロールが必要な場合は
- *   body 全体で対応する（戦略思想§4-3 世界標準UI）。
- */
 .pc-table-wrap {
   border: 1px solid var(--uz-border);
   border-radius: 6px;
@@ -803,8 +793,6 @@ body.pc-body {
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
-/* 指示書9§3：thead 自体を sticky 化することで、列ヘッダ＋集計行（2行構成）が一体で固定される。
-   個別 th/td の position:sticky と top px 値の組み合わせは行高ズレの原因になるため撤去。 */
 .pc-monthly-table thead {
   position: sticky;
   top: 0;
@@ -823,9 +811,6 @@ body.pc-body {
 .pc-monthly-table tbody tr:hover {
   background: rgba(212, 175, 55, 0.04);
 }
-/* 指示書11§4：data-selected="true" で行選択状態を視覚化（↑↓ で行移動が可能なサイン）
-   input/select/button にフォーカスが当たっている間は data-selected を外し、
-   row highlight と input フォーカス枠の両立を避ける（focusin/focusout で JS が制御） */
 .pc-monthly-table tbody tr[data-selected="true"] {
   background: var(--uz-amber-bg);
   outline: 2px solid var(--uz-gold);
@@ -834,7 +819,6 @@ body.pc-body {
 .pc-monthly-table tbody tr[data-selected="true"]:hover {
   background: var(--uz-amber-bg);
 }
-/* tr の :focus 既定 outline は data-selected と二重表示になるため抑制 */
 .pc-monthly-table tbody tr:focus {
   outline: none;
 }
@@ -851,8 +835,6 @@ body.pc-body {
 .pc-row--unpaid:hover {
   background: rgba(212, 175, 55, 0.18);
 }
-/* ロック行：薄グレーアウトのみ。pointer-events は外し、JS 側 isLocked 分岐で
-   セル編集を抑止しつつ「解除申請」ボタンを押せる状態を保つ（指示書6§3-6） */
 .pc-row--locked {
   background: rgba(160, 144, 112, 0.10);
   color: var(--uz-text3);
@@ -861,18 +843,16 @@ body.pc-body {
   background: rgba(212, 175, 55, 0.08);
   border-left: 3px solid var(--uz-gold);
 }
-/* 編集モード：amber-bg で薄く強調（指示書6§3-5 step3） */
 .pc-row--editing td {
   background: var(--uz-amber-bg);
   outline: 1px solid var(--uz-gold);
   outline-offset: -1px;
 }
-/* 編集可能セル：行クリックで編集モードに入れることを cursor で示唆（§3-5 step1） */
 .pc-monthly-table tbody tr:not(.pc-row--locked):not(.pc-row--draft):not(.pc-row--editing) td[data-field-cell] {
   cursor: pointer;
 }
 
-/* ── 編集インライン入力（テーブルセル内 input/select） ─ */
+/* ── 編集インライン入力 ─ */
 .pc-edit-input {
   width: 100%;
   background: var(--uz-bg);
@@ -904,7 +884,6 @@ body.pc-body {
 .pc-row--actions .pc-action-btn:last-child {
   margin-right: 0;
 }
-/* 既存 .pc-action-btn は再定義しない（pc.css 既出・取引一覧時代の小型ゴールドアウトライン） */
 .pc-action-btn--project {
   background: var(--uz-gold);
   color: var(--uz-bg);
@@ -930,7 +909,6 @@ body.pc-body {
 .pc-action-btn--save:hover {
   background: rgba(76, 175, 128, 0.22);
 }
-/* ☆/★ボタン（指示書8§1：操作列廃止に伴い案件セルへ統合） */
 .btn-star {
   background: none;
   border: none;
@@ -943,7 +921,6 @@ body.pc-body {
 .btn-star:hover { color: var(--uz-gold); }
 .btn-star--active { color: var(--uz-gold); }
 
-/* 列見出しフィルタボタン（指示書8§2：Excelライク絞り込み） */
 .btn-col-filter {
   background: none;
   border: none;
@@ -1001,8 +978,6 @@ body.pc-body {
 }
 .col-filter-empty { color: var(--uz-text3); font-size: 12px; padding: 8px 0; }
 
-/* フィルタ集計行（指示書8-6§2 / 9§3）：thead 自体が sticky のため top 値は不要。
-   背景色とフォント色だけで thead 1行目から視覚的に区別する。 */
 .pc-monthly-table thead tr.monthly-summary-row td {
   background: var(--uz-amber-bg);
   font-size: 12px;
@@ -1012,8 +987,6 @@ body.pc-body {
 }
 .monthly-summary-cell { white-space: nowrap; }
 
-/* 指示書9§4：金額入力欄のブラウザ既定スピナー（▲▼）を非表示
-   id=monthly-table 内のみに限定して他画面の number 入力には影響させない */
 #monthly-table input[type="number"]::-webkit-inner-spin-button,
 #monthly-table input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 #monthly-table input[type="number"] { -moz-appearance: textfield; }
@@ -1040,7 +1013,6 @@ body.pc-body {
   background: var(--uz-amber-bg);
 }
 
-/* 指示書11§3：ページャUI（テーブル上部右・20件単位ナビゲーション） */
 .pc-pagination {
   margin-left: auto;
   display: flex;
@@ -1078,7 +1050,7 @@ body.pc-body {
   font-size: 11px;
 }
 
-/* ── 案件マーカー（種別「案件」列・指示書5§2-1 / §3-1〜§3-2） ── */
+/* ── 案件マーカー ── */
 .pc-project-cell {
   text-align: center;
   font-size: 14px;
@@ -1087,7 +1059,6 @@ body.pc-body {
   color: var(--uz-gold);
 }
 
-/* 案件列セル：☆/★/解除申請/保存・取消ボタンを集約（指示書8§1：操作列廃止） */
 .pc-project-col {
   white-space: nowrap;
   text-align: center;
@@ -1096,9 +1067,7 @@ body.pc-body {
 .pc-project-col .pc-action-btn:last-child { margin-right: 0; }
 
 /* ═══════════════════════════════════════════════════════════
-   紐付け候補モーダル（指示書5§2-4 / §3-1〜§3-3）
-   バックドロップ + 中央パネル + リスト + フッター2ボタン
-   ESC / × / バックドロップクリックで取消
+   紐付け候補モーダル
    ═══════════════════════════════════════════════════════════ */
 .pc-link-candidates-modal[hidden] { display: none; }
 .pc-link-candidates-modal {
@@ -1152,8 +1121,6 @@ body.pc-body {
 .pc-link-candidates-close:hover {
   color: var(--uz-text);
 }
-/* 対象取引情報ヘッダー（指示書6§2 / 技術仕様§9-4-1）
-   list 領域の外に置くことで body スクロール時も追従して常時表示される */
 .pc-link-candidates-target[hidden] { display: none; }
 .pc-link-candidates-target {
   display: flex;
@@ -1288,13 +1255,12 @@ body.pc-body {
   background: rgba(76, 175, 128, 0.22);
 }
 
-/* ── ロック行：グレーアウト + 編集不可（指示書5§2-5） ─── */
+/* ── ロック行 ─── */
 .pc-row--locked {
   background: rgba(160, 144, 112, 0.10);
   color: var(--uz-text3);
 }
 .pc-row--locked td {
-  /* 編集セルクリックを抑止する操作は JS 側 isLocked 分岐で実施 */
   cursor: not-allowed;
 }
 .pc-action-btn--unlock {
@@ -1307,7 +1273,7 @@ body.pc-body {
   color: var(--uz-text);
 }
 
-/* ── ドラフトコスト行の区分タブ（指示書6§1：技術仕様§9-4 / 戦略思想§1-5-2） ── */
+/* ── ドラフトコスト行の区分タブ ── */
 .pc-division-tabs {
   display: inline-flex;
   gap: 2px;
@@ -1342,7 +1308,6 @@ body.pc-body {
   filter: brightness(1.05);
 }
 
-/* ── ドラフト登録ボタン disabled（§1-7：登録活性化条件未達時） ── */
 .pc-action-btn[disabled],
 .pc-action-btn:disabled {
   opacity: 0.45;
@@ -1350,16 +1315,15 @@ body.pc-body {
   pointer-events: none;
 }
 
-/* 科目プルダウン disabled（区分未選択時のプレースホルダー表示） */
 .pc-edit-input[disabled],
 .pc-edit-input:disabled {
   opacity: 0.55;
   cursor: not-allowed;
   background: var(--uz-surface);
 }
+
 /* ══════════════════════════════════════════════════════════
    案件管理画面（pc-projects.js）用スタイル
-   → 既存 pc.css の末尾に追記すること
    ══════════════════════════════════════════════════════════ */
 
 /* ── ツールバー ──────────────────────────────────────────── */
@@ -1416,21 +1380,15 @@ body.pc-body {
   align-items: stretch;
   min-height: 80px;
 }
-
-/* 売上ブロック */
 .pj-card__sales {
   flex: 0 0 260px;
   padding: 12px 16px;
 }
-
-/* 金色の区切り線 */
 .pj-card__divider {
   width: 2px;
   background: var(--uz-border2);
   flex-shrink: 0;
 }
-
-/* 経費ブロック */
 .pj-card__costs {
   flex: 1;
   padding: 12px 16px;
@@ -1441,8 +1399,6 @@ body.pc-body {
   color: var(--uz-text2);
   padding: 4px 0;
 }
-
-/* 粗利ブロック */
 .pj-card__profit {
   flex: 0 0 120px;
   padding: 12px 16px;
@@ -1464,8 +1420,6 @@ body.pc-body {
   color: var(--uz-text2);
   margin-top: 2px;
 }
-
-/* セクションラベル */
 .pj-card__section-label {
   font-size: 11px;
   color: var(--uz-text2);
@@ -1473,8 +1427,6 @@ body.pc-body {
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
-
-/* 行 */
 .pj-card__row {
   display: flex;
   gap: 10px;
@@ -1519,8 +1471,6 @@ body.pc-body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-
-/* アクションボタン */
 .pj-card__actions {
   display: flex;
   gap: 8px;
@@ -1578,9 +1528,7 @@ body.pc-body {
 }
 
 /* ═══════════════════════════════════════════════════════════
-   削除確認モーダル（指示書15・月次管理＋案件管理 共用）
-   既存 .pc-link-candidates-modal レイアウトクラスを流用し
-   本文（対象情報＋警告）と danger ボタン色のみ新規定義
+   削除確認モーダル
    ═══════════════════════════════════════════════════════════ */
 .pc-delete-confirm-body {
   padding: 14px 16px;
@@ -1627,7 +1575,6 @@ body.pc-body {
   background: var(--uz-red);
   color: #fff;
 }
-/* 月次管理 案件列の削除ボタン（pc-action-btn と同サイズに揃える・赤系） */
 .pc-action-btn--delete {
   background: var(--uz-red-bg);
   color: var(--uz-red);
@@ -1637,7 +1584,6 @@ body.pc-body {
   background: var(--uz-red);
   color: #fff;
 }
-/* 案件管理 案件カード操作エリアの削除ボタン */
 .pj-action--delete {
   border-color: var(--uz-red) !important;
   color: var(--uz-red) !important;
@@ -1647,8 +1593,6 @@ body.pc-body {
   color: #fff !important;
 }
 
-/* 指示書15-2：金額入力欄のスピナー（▲▼）を非表示
-   PC版全体に共通適用。誤入力防止と視覚的シンプルさの両立 */
 input[type="number"]::-webkit-inner-spin-button,
 input[type="number"]::-webkit-outer-spin-button {
   -webkit-appearance: none;
@@ -1658,8 +1602,6 @@ input[type="number"] {
   -moz-appearance: textfield;
 }
 
-/* 指示書15-2：削除確認モーダルのチェックボックスエリア
-   売上削除時に紐付け経費を個別選択できるUI（売上行は disabled でON固定） */
 .pc-delete-checkboxes {
   margin: 12px 0;
   padding: 8px 12px;
