@@ -12,63 +12,40 @@
 <div id="pc-app" class="pc-layout">
   <main class="pc-main" id="pc-main">
 
-    <!-- ===== 上段：ゾーンA + ゾーンB ===== -->
-    <div class="att-upper" id="attUpper">
-
-      <!-- ゾーンA：スタッフ一覧 -->
-      <aside class="att-zone-a" id="zoneA">
-        <div class="att-zone-a__header">
-          <h2 class="att-section-title">スタッフ</h2>
-          <select class="att-filter" id="staffFilter">
-            <option value="all">全て</option>
-            <option value="employed_full">常勤雇用</option>
-            <option value="employed_part">臨時バイト</option>
-            <option value="contractor">委託・外注</option>
-          </select>
-        </div>
-        <div class="att-staff-list" id="staffList"></div>
-      </aside>
-
-      <!-- ゾーンB：出勤マトリクス -->
-      <section class="att-zone-b" id="zoneB">
-        <div class="att-zone-b__header">
-          <button class="att-month-nav" id="prevMonth">&lt;</button>
-          <span class="att-month-label" id="monthLabel">2026年5月</span>
-          <button class="att-month-nav" id="nextMonth">&gt;</button>
-        </div>
-        <div class="att-matrix-wrap" id="matrixWrap">
-          <table class="att-matrix" id="matrixTable">
-            <thead id="matrixHead"></thead>
-            <tbody id="matrixBody"></tbody>
-            <tfoot id="matrixFoot"></tfoot>
-          </table>
-        </div>
-      </section>
-
+    <!-- ヘッダー：月ナビ + フィルター + 一括確定 -->
+    <div class="att-header">
+      <div class="att-header__left">
+        <select class="att-filter" id="staffFilter">
+          <option value="all">全て</option>
+          <option value="employed_full">常勤雇用</option>
+          <option value="employed_part">臨時バイト</option>
+          <option value="contractor">委託・外注</option>
+        </select>
+      </div>
+      <div class="att-header__center">
+        <button class="att-month-nav" id="prevMonth">&lt;</button>
+        <span class="att-month-label" id="monthLabel">2026年5月</span>
+        <button class="att-month-nav" id="nextMonth">&gt;</button>
+      </div>
+      <div class="att-header__right">
+        <button class="att-bulk-confirm-btn" id="bulkConfirmBtn">一括確定</button>
+      </div>
     </div>
 
-    <!-- ===== 下段：ゾーンC 給与テーブル ===== -->
-    <section class="att-zone-c" id="zoneC">
-      <div class="att-zone-c__header">
-        <h2 class="att-section-title">給与計算</h2>
-        <div class="att-zone-c__actions">
-          <button class="att-bulk-confirm-btn" id="bulkConfirmBtn">一括確定</button>
-        </div>
-      </div>
-      <div class="att-payroll-table-wrap" id="payrollTableWrap">
-        <table class="att-payroll-table" id="payrollTable">
-          <thead id="payrollHead"></thead>
-          <tbody id="payrollBody"></tbody>
-          <tfoot id="payrollFoot"></tfoot>
-        </table>
-      </div>
-      <!-- 経営メモ（スタッフ列クリック時に表示） -->
-      <div class="att-memo-bar" id="memoBar" style="display:none;">
-        <label class="att-memo-bar__label" id="memoLabel">経営メモ</label>
-        <textarea class="att-memo-bar__input" id="memoInput" rows="2" placeholder="歩合の設定根拠・給与振込口座・スタッフとの約束など"></textarea>
-        <button class="att-memo-bar__save" id="memoSave">メモ保存</button>
-      </div>
-    </section>
+    <!-- メインテーブル（キングExcel準拠：1テーブル統合） -->
+    <div class="att-table-wrap" id="tableWrap">
+      <table class="att-table" id="mainTable">
+        <thead id="tableHead"></thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+
+    <!-- 経営メモバー -->
+    <div class="att-memo-bar" id="memoBar" style="display:none;">
+      <label class="att-memo-bar__label" id="memoLabel">経営メモ</label>
+      <textarea class="att-memo-bar__input" id="memoInput" rows="2" placeholder="歩合の設定根拠・給与振込口座・スタッフとの約束など"></textarea>
+      <button class="att-memo-bar__save" id="memoSave">メモ保存</button>
+    </div>
 
   </main>
 </div>
