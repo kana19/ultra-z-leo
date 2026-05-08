@@ -224,6 +224,22 @@
   color: #f59e0b;
 }
 
+/* A-2-X-4：金額由来セル（打刻なし・コスト入力由来） */
+.att-money-line {
+  color: #a78bfa;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: -0.3px;
+}
+.att-day-cell--money-only {
+  background: rgba(167,139,250,0.08);
+}
+
+/* A-2-X-4：案件紐付け済セル（projectIdあり） */
+.att-day-cell--project {
+  box-shadow: inset 0 0 0 2px #3b82f6;
+}
+
 /* 集計行 */
 .att-matrix tfoot td {
   background: var(--uz-bg-secondary, #1e1e2f);

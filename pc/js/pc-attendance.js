@@ -59,14 +59,19 @@
 
   async function _loadMonth() {
     try {
-      const res = await _callGAS('getAttendanceByMonth', { month: _currentMonth });
-      _attendanceRecords = res.records || [];
-      _renderMatrix();
+      const [attRes, histRes] = await Promise.all([
+        _callGAS('getAttendanceByMonth', { month: _currentMonth }),
+        _callGAS('getHistory', { month: _currentMonth })
+      ]);
+      _attendanceRecords = attRes.records || [];
+      // 当月コスト行をキャッシュ（ゾーンB金額由来表示＋ゾーンC給与計算用）
+      _costRows = (histRes.data || []).filter(r => r.type === 'cost');
     } catch (e) {
       console.error('loadMonth error:', e);
       _attendanceRecords = [];
-      _renderMatrix();
+      _costRows = [];
     }
+    _renderMatrix();
     _updateMonthLabel();
   }
 
@@ -116,6 +121,30 @@
   }
 
   /* ---------- ゾーンB：出勤マトリクス ---------- */
+
+  /** 給与系コスト行から日付×スタッフ名→金額のマップを構築（金額由来セル表示用） */
+  function _buildCostAmountMap() {
+    const PAYROLL_CODES = ['20', '21', '25'];
+    const map = {}; // key: 'YYYY-MM-DD|スタッフ名' → amount
+    (_costRows || []).forEach(r => {
+      if (!PAYROLL_CODES.includes(String(r.itemCode || ''))) return;
+      const misc = String(r.miscItemName || '');
+      // H列からスタッフ名を抽出（[スポット]・[月次]プレフィックスを除去）
+      const staffName = misc.replace(/^\[スポット\]/, '').replace(/^\[月次\]/, '').trim();
+      if (!staffName) return;
+      const key = r.date + '|' + staffName;
+      map[key] = (map[key] || 0) + (Number(r.amount) || 0);
+    });
+    return map;
+  }
+
+  /** 金額を簡潔表示（万単位 or 千単位 or そのまま） */
+  function _fmtAmountShort(amount) {
+    if (amount >= 10000) return '¥' + (amount / 10000).toFixed(amount % 10000 === 0 ? 0 : 1) + '万';
+    if (amount >= 1000) return '¥' + (amount / 1000).toFixed(amount % 1000 === 0 ? 0 : 1) + '千';
+    return '¥' + amount.toLocaleString();
+  }
+
   function _renderMatrix() {
     const filter = document.getElementById('staffFilter').value;
     const staffFiltered = filter === 'all'
@@ -126,6 +155,7 @@
     const thead = document.getElementById('matrixHead');
     const tbody = document.getElementById('matrixBody');
     const tfoot = document.getElementById('matrixFoot');
+    const costAmountMap = _buildCostAmountMap();
 
     // ヘッダー
     let headHtml = '<tr><th class="att-th-name">スタッフ</th>';
@@ -147,20 +177,44 @@
         if (dayRecs.length === 0) {
           dayCells.push(`<td class="att-day-cell" data-staff="${_escHtml(s.id)}" data-date="${dateStr}"></td>`);
         } else {
-          const cellContent = dayRecs.map(r => {
+          // 打刻由来と金額由来を分離
+          const clockRecs = dayRecs.filter(r => r.clockIn);    // 時刻あり＝打刻由来
+          const moneyRecs = dayRecs.filter(r => !r.clockIn);   // 時刻なし＝金額由来
+
+          let cellParts = [];
+          let hasProject = false;
+
+          // 打刻由来行の表示
+          clockRecs.forEach(r => {
             const isPending = !r.clockOut;
             const timeStr = r.clockIn + '〜' + (r.clockOut || '');
             const hours = _calcHours(r.clockIn, r.clockOut, r.date, r.clockOutDate);
-            if (!isPending && hours > 0) {
-              staffHours += hours;
-            }
-            return `<div class="${isPending ? 'att-pending-line' : ''}">${_escHtml(timeStr)}</div>`;
-          }).join('');
+            if (!isPending && hours > 0) staffHours += hours;
+            if (r.projectId) hasProject = true;
+            cellParts.push(`<div class="${isPending ? 'att-pending-line' : ''}">${_escHtml(timeStr)}</div>`);
+          });
 
-          staffDays++;
-          const hasPending = dayRecs.some(r => !r.clockOut);
-          dayCells.push(`<td class="att-day-cell att-day-cell--active${hasPending ? ' att-day-cell--pending' : ''}"
-                             data-staff="${_escHtml(s.id)}" data-date="${dateStr}">${cellContent}</td>`);
+          // 金額由来行の表示（★ ¥金額）
+          moneyRecs.forEach(r => {
+            if (r.projectId) hasProject = true;
+            const costKey = dateStr + '|' + (r.staffName || s.name);
+            const amount = costAmountMap[costKey] || 0;
+            const display = amount > 0 ? '★ ' + _fmtAmountShort(amount) : '★';
+            cellParts.push(`<div class="att-money-line">${display}</div>`);
+          });
+
+          // 日数カウント：打刻由来がある日のみカウント（金額由来のみの日は除外）
+          if (clockRecs.length > 0) staffDays++;
+
+          const hasPending = clockRecs.some(r => !r.clockOut);
+          const hasMoneyOnly = clockRecs.length === 0 && moneyRecs.length > 0;
+          let cellClass = 'att-day-cell';
+          if (dayRecs.length > 0) cellClass += ' att-day-cell--active';
+          if (hasPending) cellClass += ' att-day-cell--pending';
+          if (hasMoneyOnly) cellClass += ' att-day-cell--money-only';
+          if (hasProject) cellClass += ' att-day-cell--project';
+
+          dayCells.push(`<td class="${cellClass}" data-staff="${_escHtml(s.id)}" data-date="${dateStr}">${cellParts.join('')}</td>`);
         }
       }
 
