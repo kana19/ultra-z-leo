@@ -171,6 +171,7 @@
       { key: 'payType', label: '' },
       { key: 'gross', label: '算出金額' },
       { key: 'adjustment', label: '調整額' },
+      { key: 'adjustmentMemo', label: '' },
       { key: 'adjustedTotal', label: '調整後金額' },
       { key: 'spotDays', label: '臨時案件' },
       { key: 'spotAmount', label: '' },
@@ -225,6 +226,9 @@
             break;
           case 'adjustment':
             html += `<td class="att-calc-cell att-calc-cell--editable" data-staff="${sid}" data-field="adjustment" style="color:${(st.adjustment || 0) < 0 ? '#f87171' : (st.adjustment || 0) > 0 ? '#4ade80' : 'var(--uz-text-muted)'}">${(st.adjustment || 0) !== 0 ? ((st.adjustment > 0 ? '+' : '') + _fmtYen(st.adjustment)) : '—'}</td>`;
+            break;
+          case 'adjustmentMemo':
+            html += `<td class="att-calc-cell"><input class="att-adj-memo" data-staff="${sid}" type="text" value="${_escHtml(st.adjustmentMemo || '')}" placeholder="適用"></td>`;
             break;
           case 'adjustedTotal': {
             const adjTotal = (st.gross || 0) + (st.adjustment || 0);
@@ -339,6 +343,13 @@
     document.querySelectorAll('.att-calc-cell--editable').forEach(td => {
       td.addEventListener('click', () => _startInlineEdit(td));
     });
+    document.querySelectorAll('.att-adj-memo').forEach(inp => {
+      inp.addEventListener('change', e => {
+        const sid = e.target.dataset.staff;
+        const st = _payrollState[sid];
+        if (st) st.adjustmentMemo = e.target.value;
+      });
+    });
     document.querySelectorAll('.att-confirm-btn').forEach(btn => {
       btn.addEventListener('click', () => _onConfirmSingle(btn.dataset.staff));
     });
@@ -421,7 +432,9 @@
       if (hasMonthly) _confirmedStaffIds.add(s.id);
 
       newState[s.id] = {
-        payType, unitPrice, hours, days, gross, adjustment, whMode, whAmount, net,
+        payType, unitPrice, hours, days, gross, adjustment,
+        adjustmentMemo: prev.adjustmentMemo || '',
+        whMode, whAmount, net,
         spotTotal, spotCosts, excludedProject, status
       };
     });
@@ -544,7 +557,7 @@
         date: costDate, divisionCode: '2', divisionName: '販管費',
         itemCode, itemName, miscItemName: '',
         taxRate: isContractor ? 10 : 0, taxIncluded: confirmAmount,
-        memo: `${staff.name}　${y}年${m}月分`,
+        memo: `${staff.name}　${y}年${m}月分${(st.adjustment || 0) !== 0 && st.adjustmentMemo ? '（調整：' + st.adjustmentMemo + '）' : ''}`,
         unpaid: 0, withholdingAmount: confirmWh,
         clientId: '', projectId: '',
         staffId: staff.id, staffName: staff.name, subType: '20a'
