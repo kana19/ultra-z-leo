@@ -12,8 +12,8 @@
 <div id="pc-app" class="pc-layout">
   <main class="pc-main" id="pc-main">
 
-    <!-- ===== 3ゾーングリッド ===== -->
-    <div class="att-grid" id="attGrid">
+    <!-- ===== 上段：ゾーンA + ゾーンB ===== -->
+    <div class="att-upper" id="attUpper">
 
       <!-- ゾーンA：スタッフ一覧 -->
       <aside class="att-zone-a" id="zoneA">
@@ -45,92 +45,30 @@
         </div>
       </section>
 
-      <!-- ゾーンC：給与計算セクション -->
-      <aside class="att-zone-c" id="zoneC">
-        <h2 class="att-section-title">給与計算</h2>
-        <div class="att-payroll" id="payrollPanel">
-          <div class="att-payroll__empty" id="payrollEmpty">
-            <span>← スタッフを選択してください</span>
-          </div>
-          <div class="att-payroll__content" id="payrollContent" style="display:none;">
-            <div class="att-pr-header" id="prHeader"></div>
-            <div class="att-pr-section">
-              <label class="att-pr-label">給与算出方式</label>
-              <div class="att-pr-radios" id="payTypeRadios">
-                <label><input type="radio" name="payType" value="hourly" checked> 時給</label>
-                <label><input type="radio" name="payType" value="daily"> 日給</label>
-                <label><input type="radio" name="payType" value="monthly"> 月給・歩合</label>
-              </div>
-            </div>
-            <div class="att-pr-section">
-              <div class="att-pr-field">
-                <label>単価</label>
-                <input type="number" id="prUnitPrice" class="att-pr-input" placeholder="0">
-                <span class="att-pr-unit">円</span>
-              </div>
-              <div class="att-pr-field">
-                <label>実労働時間</label>
-                <input type="number" id="prWorkHours" class="att-pr-input" step="0.5" placeholder="0">
-                <span class="att-pr-unit">H</span>
-                <span class="att-pr-auto-badge" id="prHoursBadge">自動</span>
-              </div>
-              <div class="att-pr-field">
-                <label>出勤日数</label>
-                <input type="number" id="prWorkDays" class="att-pr-input" placeholder="0">
-                <span class="att-pr-unit">日</span>
-                <span class="att-pr-auto-badge" id="prDaysBadge">自動</span>
-              </div>
-              <!-- A-2-X-5：案件直接費除外注釈 -->
-              <div id="prProjectExcludeNote" class="att-pr-project-note" style="display:none;"></div>
-              <div class="att-pr-field att-pr-field--result">
-                <label>算出金額</label>
-                <input type="number" id="prGrossAmount" class="att-pr-input att-pr-input--large" placeholder="0">
-                <span class="att-pr-unit">円</span>
-                <span class="att-pr-auto-badge" id="prGrossBadge">自動</span>
-              </div>
-            </div>
-            <div class="att-pr-section">
-              <label class="att-pr-label">源泉徴収</label>
-              <div class="att-pr-radios" id="whRadios">
-                <label><input type="radio" name="whMode" value="off"> 対象外</label>
-                <label><input type="radio" name="whMode" value="standard"> 一般報酬</label>
-                <label><input type="radio" name="whMode" value="hostess"> ホステス特例</label>
-              </div>
-              <div class="att-pr-field">
-                <label>源泉徴収額</label>
-                <input type="number" id="prWhAmount" class="att-pr-input" placeholder="0">
-                <span class="att-pr-unit">円</span>
-                <span class="att-pr-auto-badge" id="prWhBadge">自動</span>
-              </div>
-            </div>
-            <div class="att-pr-section att-pr-section--net">
-              <div class="att-pr-field att-pr-field--result">
-                <label>差引支給額</label>
-                <span class="att-pr-net-amount" id="prNetAmount">0</span>
-                <span class="att-pr-unit">円</span>
-              </div>
-            </div>
-            <div class="att-pr-section">
-              <label class="att-pr-label">コスト自動追記</label>
-              <div class="att-pr-cost-preview" id="prCostPreview">
-                <span class="att-pr-cost-preview__text" id="prCostPreviewText"></span>
-              </div>
-            </div>
-            <div class="att-pr-section">
-              <label class="att-pr-label">経営メモ</label>
-              <textarea class="att-pr-memo" id="prMemo" rows="3" placeholder="歩合の設定根拠・給与振込口座・スタッフとの約束など"></textarea>
-            </div>
-            <button class="att-pr-confirm-btn" id="prConfirmBtn">確定する</button>
-          </div>
-        </div>
-        <div class="att-pr-tax-advisor" id="taxAdvisorSection" style="display:none;">
-          <h3 class="att-pr-sub-title">税理士等の報酬（code 25）</h3>
-          <div id="taxAdvisorRows"></div>
-          <button class="att-pr-confirm-btn att-pr-confirm-btn--sub" id="taxAdvisorConfirmBtn">一括確定</button>
-        </div>
-      </aside>
-
     </div>
+
+    <!-- ===== 下段：ゾーンC 給与テーブル ===== -->
+    <section class="att-zone-c" id="zoneC">
+      <div class="att-zone-c__header">
+        <h2 class="att-section-title">給与計算</h2>
+        <div class="att-zone-c__actions">
+          <button class="att-bulk-confirm-btn" id="bulkConfirmBtn">一括確定</button>
+        </div>
+      </div>
+      <div class="att-payroll-table-wrap" id="payrollTableWrap">
+        <table class="att-payroll-table" id="payrollTable">
+          <thead id="payrollHead"></thead>
+          <tbody id="payrollBody"></tbody>
+          <tfoot id="payrollFoot"></tfoot>
+        </table>
+      </div>
+      <!-- 経営メモ（スタッフ列クリック時に表示） -->
+      <div class="att-memo-bar" id="memoBar" style="display:none;">
+        <label class="att-memo-bar__label" id="memoLabel">経営メモ</label>
+        <textarea class="att-memo-bar__input" id="memoInput" rows="2" placeholder="歩合の設定根拠・給与振込口座・スタッフとの約束など"></textarea>
+        <button class="att-memo-bar__save" id="memoSave">メモ保存</button>
+      </div>
+    </section>
 
   </main>
 </div>
@@ -158,18 +96,16 @@
   </div>
 </div>
 
-<!-- A-2-X-6：確定ダイアログ（スポットコスト突合・3択UI） -->
+<!-- 確定ダイアログ（個別・一括共用） -->
 <div class="att-confirm-dialog" id="confirmDialog" style="display:none;">
   <div class="att-confirm-dialog__inner att-confirm-dialog__inner--wide">
-    <h3>給与確定</h3>
+    <h3 id="confirmTitle">給与確定</h3>
     <div class="att-confirm-dialog__body" id="confirmBody"></div>
-    <!-- スポットコスト突合セクション -->
     <div id="confirmSpotSection" style="display:none;">
       <div class="att-confirm-spot-header">同月のスポットコスト（案件未紐付け）</div>
       <div class="att-confirm-spot-list" id="confirmSpotList"></div>
       <div class="att-confirm-spot-total" id="confirmSpotTotal"></div>
     </div>
-    <!-- 3択ラジオ -->
     <div class="att-confirm-choices" id="confirmChoices" style="display:none;">
       <label class="att-confirm-choice">
         <input type="radio" name="confirmMode" value="diff" checked>

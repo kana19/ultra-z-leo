@@ -1,14 +1,14 @@
 /* ==========================================
    PC版 出勤管理画面 (pc-attendance.js)
-   指示書16 準拠
-   A-2-X-5: projectId付き稼働を給与計算から除外＋注釈表示
+   A-2-Y: ゾーンC給与テーブル横並び再構築
+   A-2-X-5: projectId付き稼働を給与計算から除外
    A-2-X-6: 給与確定時スポットコスト突合・3択UI
    ========================================== */
 'use strict';
 
 (function () {
 
-  /* ---------- 定数・状態 ---------- */
+  /* ---------- 定数・ラベル ---------- */
   const EMPLOYMENT_LABELS = {
     employed_full: '常勤雇用',
     employed_part: '臨時バイト',
@@ -16,8 +16,19 @@
     contractor: '委託・外注'
   };
   const WH_LABELS = { off: '対象外', standard: '一般報酬', hostess: 'ホステス特例' };
-  const PAY_TYPE_LABELS = { hourly: '時給', daily: '日給', monthly: '月給・歩合' };
+  const PAY_TYPE_OPTIONS = [
+    { value: 'hourly', label: '時給' },
+    { value: 'daily', label: '日給' },
+    { value: 'monthly', label: '月給' }
+  ];
+  const WH_OPTIONS = [
+    { value: 'off', label: '対象外' },
+    { value: 'standard', label: '一般' },
+    { value: 'hostess', label: 'ホステス' }
+  ];
+  const PAYROLL_CODES = ['20', '21', '25'];
 
+  /* ---------- 状態 ---------- */
   let _staffList = [];
   let _attendanceRecords = [];
   let _costRows = [];
@@ -25,14 +36,19 @@
   let _selectedStaffId = null;
   let _confirmedStaffIds = new Set();
 
+  // 給与テーブル：スタッフごとの計算状態を保持
+  // { staffId: { payType, unitPrice, hours, days, gross, whMode, whAmount, net, spotTotal, excludedProject, status } }
+  let _payrollState = {};
+  let _confirmTarget = null; // 確定ダイアログ対象 { staffId } or { bulk: true, staffIds: [] }
+
   /* ---------- 初期化 ---------- */
   document.addEventListener('DOMContentLoaded', async () => {
     if (typeof pcBootstrap === 'function') pcBootstrap('attendance.html', '出勤管理');
     _bindMonthNav();
     _bindFilter();
-    _bindPayTypeChange();
-    _bindPayrollInputs();
-    _bindConfirmBtn();
+    _bindConfirmDialog();
+    _bindBulkConfirm();
+    _bindMemoSave();
     await _loadAll();
   });
 
@@ -44,7 +60,8 @@
       const tmplId = settings.templateId || 'general-shop';
       const showPayroll = _resolveFeature(fv, tmplId, 'payroll_section');
       if (!showPayroll) {
-        document.getElementById('attGrid').classList.add('att-grid--no-payroll');
+        document.getElementById('zoneC').classList.add('att-zone-c--hidden');
+        document.getElementById('attUpper').classList.add('att-upper--full');
       }
       _renderStaffList();
       await _loadMonth();
@@ -68,16 +85,18 @@
       _costRows = [];
     }
     _renderMatrix();
+    _buildPayrollState();
+    _renderPayrollTable();
     _updateMonthLabel();
   }
 
-  /* ---------- ゾーンA：スタッフ一覧 ---------- */
+  /* ==========================================
+     ゾーンA：スタッフ一覧
+     ========================================== */
   function _renderStaffList() {
     const container = document.getElementById('staffList');
     const filter = document.getElementById('staffFilter').value;
-    const filtered = filter === 'all'
-      ? _staffList
-      : _staffList.filter(s => _normalizeEmploymentType(s.employmentType) === filter);
+    const filtered = _getFilteredStaff(filter);
 
     container.innerHTML = filtered.map(s => {
       const et = _normalizeEmploymentType(s.employmentType);
@@ -113,12 +132,37 @@
     _selectedStaffId = staffId;
     _renderStaffList();
     _renderMatrix();
-    _loadPayroll(staffId);
+    _showMemoBar(staffId);
   }
 
-  /* ---------- ゾーンB：出勤マトリクス ---------- */
+  function _showMemoBar(staffId) {
+    const bar = document.getElementById('memoBar');
+    const staff = _staffList.find(s => s.id === staffId);
+    if (!staff) { bar.style.display = 'none'; return; }
+    document.getElementById('memoLabel').textContent = staff.name + ' 経営メモ';
+    document.getElementById('memoInput').value = staff.managerMemo || '';
+    bar.style.display = '';
+  }
+
+  function _bindMemoSave() {
+    document.getElementById('memoSave').addEventListener('click', async () => {
+      const staff = _staffList.find(s => s.id === _selectedStaffId);
+      if (!staff) return;
+      const memo = document.getElementById('memoInput').value;
+      staff.managerMemo = memo;
+      try {
+        await _callGAS('saveStaffList', { staffList: _staffList });
+        alert(staff.name + ' のメモを保存しました。');
+      } catch (e) {
+        alert('保存に失敗しました。');
+      }
+    });
+  }
+
+  /* ==========================================
+     ゾーンB：出勤マトリクス（既存ロジック維持）
+     ========================================== */
   function _buildCostAmountMap() {
-    const PAYROLL_CODES = ['20', '21', '25'];
     const map = {};
     (_costRows || []).forEach(r => {
       if (!PAYROLL_CODES.includes(String(r.itemCode || ''))) return;
@@ -139,10 +183,7 @@
 
   function _renderMatrix() {
     const filter = document.getElementById('staffFilter').value;
-    const staffFiltered = filter === 'all'
-      ? _staffList
-      : _staffList.filter(s => _normalizeEmploymentType(s.employmentType) === filter);
-
+    const staffFiltered = _getFilteredStaff(filter);
     const daysInMonth = _getDaysInMonth(_currentMonth);
     const thead = document.getElementById('matrixHead');
     const tbody = document.getElementById('matrixBody');
@@ -227,198 +268,329 @@
     });
   }
 
-  /* ---------- ゾーンC：給与計算セクション ---------- */
-  function _loadPayroll(staffId) {
+  /* ==========================================
+     ゾーンC：給与テーブル（A-2-Y 新規）
+     ========================================== */
+
+  /** 全スタッフの給与計算状態を構築 */
+  function _buildPayrollState() {
+    const filter = document.getElementById('staffFilter').value;
+    const staffFiltered = _getFilteredStaff(filter);
+    const newState = {};
+
+    staffFiltered.forEach(s => {
+      const prev = _payrollState[s.id] || {};
+      const staffAtt = _attendanceRecords.filter(r => r.staffId === s.id);
+      const { totalHours, totalDays, excludedProject } = _calcStaffTotals(staffAtt);
+
+      // デフォルト算出方式
+      let payType = prev.payType || (s.hourlyWage ? 'hourly' : s.dailyWage ? 'daily' : s.monthlyWage ? 'monthly' : 'hourly');
+      const unitPrice = prev.unitPrice !== undefined ? prev.unitPrice :
+        (payType === 'hourly' ? (s.hourlyWage || 0) : payType === 'daily' ? (s.dailyWage || 0) : (s.monthlyWage || 0));
+      const hours = prev.hours !== undefined ? prev.hours : totalHours;
+      const days = prev.days !== undefined ? prev.days : totalDays;
+
+      // 算出金額
+      let gross;
+      if (prev.gross !== undefined) {
+        gross = prev.gross;
+      } else {
+        gross = _calcGross(payType, unitPrice, hours, days);
+      }
+
+      // 源泉徴収
+      const whMode = prev.whMode || (s.withholdingMode || 'off');
+      const whAmount = prev.whAmount !== undefined ? prev.whAmount : _calcWithholdingAmount(whMode, gross, days);
+      const net = gross - whAmount;
+
+      // スポットコスト検出
+      const spotCosts = _findSpotCosts(s.name);
+      const spotTotal = spotCosts.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+
+      // 確定状態（月次一括が既に存在するか）
+      const hasMonthly = _hasMonthlyConfirmed(s.name);
+      const status = prev.status || (hasMonthly ? 'confirmed' : 'pending');
+
+      newState[s.id] = {
+        payType, unitPrice, hours, days, gross, whMode, whAmount, net,
+        spotTotal, spotCosts, excludedProject, status,
+        autoHours: totalHours, autoDays: totalDays
+      };
+    });
+
+    _payrollState = newState;
+  }
+
+  /** 給与テーブルをレンダリング */
+  function _renderPayrollTable() {
+    const filter = document.getElementById('staffFilter').value;
+    const staffFiltered = _getFilteredStaff(filter);
+    const thead = document.getElementById('payrollHead');
+    const tbody = document.getElementById('payrollBody');
+    const tfoot = document.getElementById('payrollFoot');
+
+    if (staffFiltered.length === 0) {
+      thead.innerHTML = '';
+      tbody.innerHTML = '<tr><td style="padding:20px;color:var(--uz-text-muted);">スタッフなし</td></tr>';
+      tfoot.innerHTML = '';
+      return;
+    }
+
+    // ヘッダー：項目ラベル列 + スタッフ列
+    thead.innerHTML = '<tr><th class="att-pt-label"></th>' +
+      staffFiltered.map(s => {
+        const et = _normalizeEmploymentType(s.employmentType);
+        const etLabel = EMPLOYMENT_LABELS[et] || et;
+        return `<th>${_escHtml(s.name)}<br><span style="font-weight:400;font-size:10px;color:var(--uz-text-muted)">${etLabel}</span></th>`;
+      }).join('') +
+      '<th style="min-width:80px;">合計</th></tr>';
+
+    // 行の定義
+    const rows = [
+      { key: 'payType', label: '算出方式' },
+      { key: 'unitPrice', label: '単価' },
+      { key: 'hours', label: '実労働時間' },
+      { key: 'days', label: '出勤日数' },
+      { key: 'excludeNote', label: '' },
+      { key: 'gross', label: '算出金額' },
+      { key: 'spotTotal', label: 'スポット既計上' },
+      { key: 'whMode', label: '源泉区分' },
+      { key: 'whAmount', label: '源泉徴収額' },
+      { key: 'net', label: '差引支給額' },
+      { key: 'costTarget', label: '科目' },
+      { key: 'status', label: 'ステータス' },
+      { key: 'action', label: '' }
+    ];
+
+    let bodyHtml = '';
+    let sumGross = 0, sumSpot = 0, sumWh = 0, sumNet = 0;
+
+    rows.forEach(row => {
+      bodyHtml += '<tr>';
+      bodyHtml += `<td class="att-pt-label">${row.label}</td>`;
+
+      staffFiltered.forEach(s => {
+        const st = _payrollState[s.id] || {};
+        const sid = _escHtml(s.id);
+
+        switch (row.key) {
+          case 'payType':
+            bodyHtml += `<td class="att-pt-val">
+              <select class="att-pt-select" data-staff="${sid}" data-field="payType">
+                ${PAY_TYPE_OPTIONS.map(o => `<option value="${o.value}"${st.payType === o.value ? ' selected' : ''}>${o.label}</option>`).join('')}
+              </select></td>`;
+            break;
+          case 'unitPrice':
+            bodyHtml += `<td class="att-pt-val att-pt-val--editable" data-staff="${sid}" data-field="unitPrice">${_fmtNum(st.unitPrice)}</td>`;
+            break;
+          case 'hours':
+            bodyHtml += `<td class="att-pt-val att-pt-val--editable" data-staff="${sid}" data-field="hours">${(st.hours || 0).toFixed(1)}</td>`;
+            break;
+          case 'days':
+            bodyHtml += `<td class="att-pt-val att-pt-val--editable" data-staff="${sid}" data-field="days">${st.days || 0}</td>`;
+            break;
+          case 'excludeNote':
+            bodyHtml += `<td class="att-pt-val">${st.excludedProject > 0 ? `<span class="att-pt-exclude-note">※${st.excludedProject}件 案件除外</span>` : ''}</td>`;
+            break;
+          case 'gross':
+            bodyHtml += `<td class="att-pt-val att-pt-val--gross att-pt-val--editable" data-staff="${sid}" data-field="gross">${_fmtYen(st.gross)}</td>`;
+            break;
+          case 'spotTotal':
+            bodyHtml += `<td class="att-pt-val att-pt-val--spot">${st.spotTotal > 0 ? _fmtYen(st.spotTotal) : '—'}</td>`;
+            break;
+          case 'whMode':
+            bodyHtml += `<td class="att-pt-val">
+              <select class="att-pt-wh-select" data-staff="${sid}" data-field="whMode">
+                ${WH_OPTIONS.map(o => `<option value="${o.value}"${st.whMode === o.value ? ' selected' : ''}>${o.label}</option>`).join('')}
+              </select></td>`;
+            break;
+          case 'whAmount':
+            bodyHtml += `<td class="att-pt-val att-pt-val--editable" data-staff="${sid}" data-field="whAmount">${_fmtYen(st.whAmount)}</td>`;
+            break;
+          case 'net':
+            bodyHtml += `<td class="att-pt-val att-pt-val--net">${_fmtYen(st.net)}</td>`;
+            break;
+          case 'costTarget': {
+            const et = _normalizeEmploymentType(s.employmentType);
+            let label;
+            if (et === 'contractor') {
+              label = (s.costCategory === '25') ? '税理士等の報酬(25)' : '外注工賃(21)';
+            } else {
+              label = '給料賃金(20)';
+            }
+            bodyHtml += `<td class="att-pt-val" style="font-size:10px;color:var(--uz-text-muted)">${label}</td>`;
+            break;
+          }
+          case 'status':
+            bodyHtml += `<td class="att-pt-status">${_renderStatusBadge(st.status)}</td>`;
+            break;
+          case 'action':
+            bodyHtml += `<td class="att-pt-confirm-cell">
+              <button class="att-pt-confirm-btn" data-staff="${sid}"${st.status === 'confirmed' ? ' disabled' : ''}>
+                ${st.status === 'confirmed' ? '確定済' : '確定'}
+              </button></td>`;
+            break;
+        }
+      });
+
+      // 合計列
+      if (row.key === 'gross') {
+        staffFiltered.forEach(s => { sumGross += (_payrollState[s.id] || {}).gross || 0; });
+        bodyHtml += `<td class="att-pt-val att-pt-val--gross">${_fmtYen(sumGross)}</td>`;
+      } else if (row.key === 'spotTotal') {
+        staffFiltered.forEach(s => { sumSpot += (_payrollState[s.id] || {}).spotTotal || 0; });
+        bodyHtml += `<td class="att-pt-val att-pt-val--spot">${sumSpot > 0 ? _fmtYen(sumSpot) : '—'}</td>`;
+      } else if (row.key === 'whAmount') {
+        staffFiltered.forEach(s => { sumWh += (_payrollState[s.id] || {}).whAmount || 0; });
+        bodyHtml += `<td class="att-pt-val">${_fmtYen(sumWh)}</td>`;
+      } else if (row.key === 'net') {
+        staffFiltered.forEach(s => { sumNet += (_payrollState[s.id] || {}).net || 0; });
+        bodyHtml += `<td class="att-pt-val att-pt-val--net">${_fmtYen(sumNet)}</td>`;
+      } else {
+        bodyHtml += '<td></td>';
+      }
+
+      bodyHtml += '</tr>';
+    });
+
+    tbody.innerHTML = bodyHtml;
+    tfoot.innerHTML = '';
+
+    // イベントバインド
+    _bindPayrollTableEvents();
+  }
+
+  function _bindPayrollTableEvents() {
+    // セレクト変更
+    document.querySelectorAll('.att-pt-select, .att-pt-wh-select').forEach(sel => {
+      sel.addEventListener('change', e => {
+        const sid = e.target.dataset.staff;
+        const field = e.target.dataset.field;
+        const st = _payrollState[sid];
+        if (!st) return;
+        st[field] = e.target.value;
+        if (field === 'payType') {
+          const staff = _staffList.find(s => s.id === sid);
+          if (staff) {
+            st.unitPrice = e.target.value === 'hourly' ? (staff.hourlyWage || 0)
+              : e.target.value === 'daily' ? (staff.dailyWage || 0)
+              : (staff.monthlyWage || 0);
+          }
+          st.gross = _calcGross(st.payType, st.unitPrice, st.hours, st.days);
+        }
+        if (field === 'whMode') {
+          st.whAmount = _calcWithholdingAmount(st.whMode, st.gross, st.days);
+        }
+        st.net = st.gross - st.whAmount;
+        _renderPayrollTable();
+      });
+    });
+
+    // 編集可能セルクリック→インライン入力
+    document.querySelectorAll('.att-pt-val--editable').forEach(td => {
+      td.addEventListener('click', e => _startInlineEdit(td));
+    });
+
+    // 個別確定ボタン
+    document.querySelectorAll('.att-pt-confirm-btn').forEach(btn => {
+      btn.addEventListener('click', () => _onConfirmSingle(btn.dataset.staff));
+    });
+  }
+
+  /** インライン編集 */
+  function _startInlineEdit(td) {
+    if (td.querySelector('.att-pt-input')) return;
+    const sid = td.dataset.staff;
+    const field = td.dataset.field;
+    const st = _payrollState[sid];
+    if (!st) return;
+
+    const currentVal = st[field] || 0;
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.className = 'att-pt-input';
+    input.value = field === 'hours' ? currentVal.toFixed(1) : currentVal;
+    if (field === 'hours') input.step = '0.5';
+
+    td.textContent = '';
+    td.appendChild(input);
+    input.focus();
+    input.select();
+
+    const finish = () => {
+      const val = Number(input.value) || 0;
+      st[field] = val;
+      // 依存再計算
+      if (['unitPrice', 'hours', 'days'].includes(field)) {
+        st.gross = _calcGross(st.payType, st.unitPrice, st.hours, st.days);
+        st.whAmount = _calcWithholdingAmount(st.whMode, st.gross, st.days);
+      }
+      if (field === 'gross') {
+        st.whAmount = _calcWithholdingAmount(st.whMode, st.gross, st.days);
+      }
+      if (field === 'whAmount') {
+        // 手動上書き — そのまま
+      }
+      st.net = st.gross - st.whAmount;
+      _renderPayrollTable();
+    };
+
+    input.addEventListener('blur', finish);
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { input.blur(); }
+      if (e.key === 'Escape') {
+        st[field] = currentVal;
+        _renderPayrollTable();
+      }
+    });
+  }
+
+  /* ---------- 確定処理 ---------- */
+  function _onConfirmSingle(staffId) {
     const staff = _staffList.find(s => s.id === staffId);
-    if (!staff) return;
+    const st = _payrollState[staffId];
+    if (!staff || !st) return;
 
-    document.getElementById('payrollEmpty').style.display = 'none';
-    document.getElementById('payrollContent').style.display = '';
-
-    const et = _normalizeEmploymentType(staff.employmentType);
-    const whLabel = WH_LABELS[staff.withholdingMode || 'off'] || '対象外';
-    document.getElementById('prHeader').innerHTML = `
-      <div class="att-pr-header__name">${_escHtml(staff.name)}</div>
-      <div class="att-pr-header__meta">${EMPLOYMENT_LABELS[et] || et}　/　${whLabel}</div>
-    `;
-
-    let defaultPayType = 'hourly';
-    if (staff.hourlyWage) defaultPayType = 'hourly';
-    else if (staff.dailyWage) defaultPayType = 'daily';
-    else if (staff.monthlyWage) defaultPayType = 'monthly';
-    document.querySelector(`input[name="payType"][value="${defaultPayType}"]`).checked = true;
-
-    const staffAttendance = _attendanceRecords.filter(r => r.staffId === staffId);
-    const { totalHours, totalDays, excludedProject } = _calcStaffTotals(staffAttendance);
-
-    const unitPrice = defaultPayType === 'hourly' ? (staff.hourlyWage || 0)
-                    : defaultPayType === 'daily' ? (staff.dailyWage || 0)
-                    : (staff.monthlyWage || 0);
-
-    document.getElementById('prUnitPrice').value = unitPrice || '';
-    document.getElementById('prWorkHours').value = totalHours.toFixed(1);
-    document.getElementById('prWorkDays').value = totalDays;
-    _resetBadge('prHoursBadge');
-    _resetBadge('prDaysBadge');
-
-    const noteEl = document.getElementById('prProjectExcludeNote');
-    if (noteEl) {
-      if (excludedProject > 0) {
-        noteEl.textContent = '\u203B 案件直接費として計上済みの ' + excludedProject + ' 件を集計から除外しています';
-        noteEl.style.display = '';
-      } else {
-        noteEl.textContent = '';
-        noteEl.style.display = 'none';
-      }
-    }
-
-    _recalcGross();
-
-    const whMode = staff.withholdingMode || 'off';
-    const whRadio = document.querySelector(`input[name="whMode"][value="${whMode}"]`);
-    if (whRadio) whRadio.checked = true;
-
-    _updateCostPreview(staff);
-    document.getElementById('prMemo').value = staff.managerMemo || '';
-  }
-
-  function _updateCostPreview(staff) {
-    const previewText = document.getElementById('prCostPreviewText');
-    const et = _normalizeEmploymentType(staff.employmentType);
-    let code, name;
-    if (et === 'contractor') {
-      const cat = (staff.costCategory === '25') ? '25' : '21';
-      code = cat;
-      name = (cat === '25') ? '税理士等の報酬' : '外注工賃';
-    } else {
-      code = '20';
-      name = '給料賃金';
-    }
-    previewText.textContent = `確定時にコストシートへ「${name}（科目${code}）」を自動追記します`;
-  }
-
-  /* ---------- 給与計算ロジック ---------- */
-  function _recalcGross() {
-    const payType = document.querySelector('input[name="payType"]:checked')?.value || 'hourly';
-    const unitPrice = Number(document.getElementById('prUnitPrice').value) || 0;
-    const hours = Number(document.getElementById('prWorkHours').value) || 0;
-    const days = Number(document.getElementById('prWorkDays').value) || 0;
-
-    let gross = 0;
-    if (payType === 'hourly') gross = Math.floor(unitPrice * hours);
-    else if (payType === 'daily') gross = Math.floor(unitPrice * days);
-    else gross = unitPrice;
-
-    document.getElementById('prGrossAmount').value = gross || '';
-    _resetBadge('prGrossBadge');
-    _recalcWithholding();
-  }
-
-  function _recalcWithholding() {
-    const whMode = document.querySelector('input[name="whMode"]:checked')?.value || 'off';
-    const gross = Number(document.getElementById('prGrossAmount').value) || 0;
-    const days = Number(document.getElementById('prWorkDays').value) || 0;
-
-    let whAmount = 0;
-    if (whMode === 'hostess') {
-      const base = gross - 5000 * days;
-      whAmount = base > 0 ? Math.floor(base * 0.1021) : 0;
-    } else if (whMode === 'standard') {
-      if (gross <= 1000000) {
-        whAmount = Math.floor(gross * 0.1021);
-      } else {
-        whAmount = Math.floor(1000000 * 0.1021 + (gross - 1000000) * 0.2042);
-      }
-    }
-
-    document.getElementById('prWhAmount').value = whAmount || '';
-    _resetBadge('prWhBadge');
-    _recalcNet();
-  }
-
-  function _recalcNet() {
-    const gross = Number(document.getElementById('prGrossAmount').value) || 0;
-    const wh = Number(document.getElementById('prWhAmount').value) || 0;
-    document.getElementById('prNetAmount').textContent = (gross - wh).toLocaleString();
-  }
-
-  /* ---------- A-2-X-6：スポットコスト検出 ---------- */
-  function _findSpotCosts(staffName) {
-    const PAYROLL_CODES = ['20', '21', '25'];
-    return (_costRows || []).filter(r => {
-      if (!PAYROLL_CODES.includes(String(r.itemCode || ''))) return false;
-      const misc = String(r.miscItemName || '');
-      if (!misc.startsWith('[スポット]')) return false;
-      const name = misc.replace(/^\[スポット\]/, '').trim();
-      if (name !== staffName) return false;
-      // V列（projectId/linkedSalesRowId）が空 = 案件未紐付け
-      const linked = String(r.projectId || r.linkedSalesRowId || '');
-      if (linked) return false;
-      return true;
-    });
-  }
-
-  /* ---------- 確定処理（A-2-X-6改修） ---------- */
-  function _bindConfirmBtn() {
-    document.getElementById('prConfirmBtn').addEventListener('click', _onConfirm);
-    document.getElementById('confirmCancel').addEventListener('click', () => {
-      document.getElementById('confirmDialog').style.display = 'none';
-    });
-    document.getElementById('confirmOk').addEventListener('click', _executeConfirm);
-
-    document.getElementById('taxAdvisorConfirmBtn')?.addEventListener('click', _onTaxAdvisorConfirm);
-  }
-
-  function _onConfirm() {
-    const staff = _staffList.find(s => s.id === _selectedStaffId);
-    if (!staff) return;
-
-    const gross = Number(document.getElementById('prGrossAmount').value) || 0;
-    const wh = Number(document.getElementById('prWhAmount').value) || 0;
-    const whMode = document.querySelector('input[name="whMode"]:checked')?.value || 'off';
-    const net = gross - wh;
-
-    if (gross === 0) {
+    if (st.gross === 0) {
       alert('算出金額が0円です。');
       return;
     }
 
+    _confirmTarget = { staffId };
+    _showConfirmDialog(staff, st);
+  }
+
+  function _showConfirmDialog(staff, st) {
     const et = _normalizeEmploymentType(staff.employmentType);
-    let costItemCode, costItemName, taxRate;
+    const whLabel = WH_LABELS[st.whMode] || '対象外';
+    let costItemCode, costItemName;
     if (et === 'contractor') {
       const cat = (staff.costCategory === '25') ? '25' : '21';
       costItemCode = cat;
       costItemName = (cat === '25') ? '税理士等の報酬' : '外注工賃';
-      taxRate = 10;
     } else {
       costItemCode = '20';
       costItemName = '給料賃金';
-      taxRate = 0;
     }
 
-    // 基本情報を表示
+    document.getElementById('confirmTitle').textContent = staff.name + ' 給与確定';
     document.getElementById('confirmBody').innerHTML = `
-      <div>スタッフ：${_escHtml(staff.name)}</div>
-      <div>算出金額：${gross.toLocaleString()}円</div>
-      <div>源泉徴収額：${wh.toLocaleString()}円（${WH_LABELS[whMode] || whMode}）</div>
-      <div>差引支給額：${net.toLocaleString()}円</div>
-      <div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.1);font-size:12px;">
-        コストシートに追記：<strong>${costItemName}（科目${costItemCode}）</strong>
-        ${taxRate > 0 ? `　税率${taxRate}%` : '　不課税'}
-      </div>
-    `;
+      <div>算出金額：${st.gross.toLocaleString()}円</div>
+      <div>源泉徴収額：${st.whAmount.toLocaleString()}円（${whLabel}）</div>
+      <div>差引支給額：${st.net.toLocaleString()}円</div>
+      <div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.1);font-size:11px;">
+        コスト追記：<strong>${costItemName}（科目${costItemCode}）</strong>
+      </div>`;
 
-    // A-2-X-6：スポットコスト検出・3択UI
-    const spotCosts = _findSpotCosts(staff.name);
+    // スポットコスト突合
+    const spotCosts = st.spotCosts || [];
     const spotSection = document.getElementById('confirmSpotSection');
     const choicesSection = document.getElementById('confirmChoices');
-    const confirmOkBtn = document.getElementById('confirmOk');
 
     if (spotCosts.length > 0) {
-      const spotTotal = spotCosts.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
-      const diff = gross - spotTotal;
+      const spotTotal = st.spotTotal;
+      const diff = st.gross - spotTotal;
 
-      // スポットコスト一覧
       document.getElementById('confirmSpotList').innerHTML = spotCosts.map(r => {
         const dateShort = (r.date || '').substring(5);
         const itemLabel = String(r.itemName || r.itemCode || '');
@@ -428,31 +600,25 @@
           <span class="att-confirm-spot-row__amount">${(Number(r.amount) || 0).toLocaleString()}円</span>
         </div>`;
       }).join('');
-      document.getElementById('confirmSpotTotal').textContent =
-        'スポット合計：' + spotTotal.toLocaleString() + '円';
+      document.getElementById('confirmSpotTotal').textContent = 'スポット合計：' + spotTotal.toLocaleString() + '円';
 
-      // 不足分の説明
       if (diff > 0) {
         document.getElementById('confirmDiffDesc').textContent =
-          '算出' + gross.toLocaleString() + '円 − スポット' + spotTotal.toLocaleString() + '円 ＝ 不足分 ' + diff.toLocaleString() + '円を月次一括として確定';
+          '算出' + st.gross.toLocaleString() + '円 − スポット' + spotTotal.toLocaleString() + '円 ＝ 不足分 ' + diff.toLocaleString() + '円を月次一括として確定';
       } else {
         document.getElementById('confirmDiffDesc').textContent =
           'スポット合計が算出金額以上のため、不足分は0円（確定金額0円）';
       }
 
-      // デフォルト選択：不足分がある→diff、ない→skip を推奨
       const defaultMode = diff > 0 ? 'diff' : 'skip';
       const radio = document.querySelector(`input[name="confirmMode"][value="${defaultMode}"]`);
       if (radio) radio.checked = true;
 
       spotSection.style.display = '';
       choicesSection.style.display = '';
-      confirmOkBtn.textContent = '確定';
     } else {
-      // スポットなし → 3択不要、全額確定
       spotSection.style.display = 'none';
       choicesSection.style.display = 'none';
-      confirmOkBtn.textContent = '確定';
     }
 
     document.getElementById('confirmDialog').style.display = '';
@@ -461,14 +627,24 @@
   async function _executeConfirm() {
     document.getElementById('confirmDialog').style.display = 'none';
 
-    const staff = _staffList.find(s => s.id === _selectedStaffId);
-    if (!staff) return;
+    if (_confirmTarget && _confirmTarget.staffId) {
+      await _executeSingleConfirm(_confirmTarget.staffId);
+    } else if (_confirmTarget && _confirmTarget.bulk) {
+      for (const sid of _confirmTarget.staffIds) {
+        await _executeSingleConfirm(sid);
+      }
+    }
+    _confirmTarget = null;
+    await _loadMonth();
+  }
 
-    const gross = Number(document.getElementById('prGrossAmount').value) || 0;
-    const wh = Number(document.getElementById('prWhAmount').value) || 0;
+  async function _executeSingleConfirm(staffId) {
+    const staff = _staffList.find(s => s.id === staffId);
+    const st = _payrollState[staffId];
+    if (!staff || !st) return;
+
     const et = _normalizeEmploymentType(staff.employmentType);
     const isContractor = et === 'contractor';
-
     let itemCode, itemName;
     if (isContractor) {
       const cat = (staff.costCategory === '25') ? '25' : '21';
@@ -479,33 +655,28 @@
       itemName = '給料賃金';
     }
 
-    // A-2-X-6：確定モード判定
-    const spotCosts = _findSpotCosts(staff.name);
+    // 確定モード判定
+    const spotCosts = st.spotCosts || [];
     const hasSpot = spotCosts.length > 0;
     const confirmMode = hasSpot
       ? (document.querySelector('input[name="confirmMode"]:checked')?.value || 'full')
-      : 'full'; // スポットなし→全額確定
+      : 'full';
 
     if (confirmMode === 'skip') {
-      // 「この月は確定しない」
-      alert(`${staff.name}の${_currentMonth}月分は確定をスキップしました。`);
+      st.status = 'skipped';
       return;
     }
 
-    let confirmAmount = gross;
-    let confirmWh = wh;
+    let confirmAmount = st.gross;
+    let confirmWh = st.whAmount;
 
     if (confirmMode === 'diff' && hasSpot) {
-      const spotTotal = spotCosts.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
-      confirmAmount = Math.max(0, gross - spotTotal);
-      // 源泉徴収は確定金額ベースで再計算
-      const whMode = document.querySelector('input[name="whMode"]:checked')?.value || 'off';
-      const days = Number(document.getElementById('prWorkDays').value) || 0;
-      confirmWh = _calcWithholdingAmount(whMode, confirmAmount, days);
+      confirmAmount = Math.max(0, st.gross - st.spotTotal);
+      confirmWh = _calcWithholdingAmount(st.whMode, confirmAmount, st.days);
     }
 
     if (confirmAmount === 0 && confirmMode === 'diff') {
-      alert(`${staff.name}：スポット合計が算出金額以上のため、月次一括の追記は不要です。`);
+      st.status = 'skipped';
       return;
     }
 
@@ -529,92 +700,105 @@
       projectId: '',
       staffId: staff.id,
       staffName: staff.name,
-      subType: '20a'  // A-2-X-6：月次一括としてH列に[月次]プレフィックス
+      subType: '20a'
     };
 
     try {
       await _callGAS('addCost', costData);
 
-      const memo = document.getElementById('prMemo').value;
-      if (memo !== (staff.managerMemo || '')) {
-        staff.managerMemo = memo;
+      // メモ保存
+      const memo = document.getElementById('memoInput');
+      if (_selectedStaffId === staffId && memo && memo.value !== (staff.managerMemo || '')) {
+        staff.managerMemo = memo.value;
         await _callGAS('saveStaffList', { staffList: _staffList });
       }
 
-      _confirmedStaffIds.add(_selectedStaffId);
+      st.status = 'confirmed';
+      _confirmedStaffIds.add(staffId);
       _renderStaffList();
-
-      const modeLabel = confirmMode === 'diff' ? '（不足分）' : '';
-      alert(`${staff.name}の給与を確定しました${modeLabel}。\n確定金額：${confirmAmount.toLocaleString()}円\nコストシートに「${itemName}（科目${itemCode}）」を追記しました。`);
-
-      // 月次データ再読込（コスト追記が反映されるように）
-      await _loadMonth();
     } catch (e) {
       console.error('confirm error:', e);
-      alert('確定処理でエラーが発生しました。');
+      alert(staff.name + ' の確定処理でエラーが発生しました。');
     }
   }
 
-  /** 源泉徴収額の再計算（確定金額ベース） */
-  function _calcWithholdingAmount(whMode, amount, days) {
-    if (whMode === 'hostess') {
-      const base = amount - 5000 * days;
-      return base > 0 ? Math.floor(base * 0.1021) : 0;
-    } else if (whMode === 'standard') {
-      if (amount <= 1000000) {
-        return Math.floor(amount * 0.1021);
-      } else {
-        return Math.floor(1000000 * 0.1021 + (amount - 1000000) * 0.2042);
-      }
-    }
-    return 0;
+  /* ---------- 一括確定 ---------- */
+  function _bindBulkConfirm() {
+    document.getElementById('bulkConfirmBtn').addEventListener('click', _onBulkConfirm);
   }
 
-  /* ---------- 税理士等の報酬 ---------- */
-  function _renderTaxAdvisorSection() {
-    const container = document.getElementById('taxAdvisorRows');
-    const rows = (_costRows || []).filter(r => String(r.itemCode || r.subjectCode || '') === '25');
+  function _onBulkConfirm() {
+    const pending = [];
+    Object.entries(_payrollState).forEach(([sid, st]) => {
+      if (st.status === 'pending' && st.gross > 0) pending.push(sid);
+    });
 
-    if (rows.length === 0) {
-      container.innerHTML = '<div style="font-size:11px;color:var(--uz-text-muted);">対象行なし</div>';
+    if (pending.length === 0) {
+      alert('確定可能なスタッフがいません。');
       return;
     }
 
-    container.innerHTML = rows.map(r => {
-      const amount = Number(r.taxIncluded || r.amountInTax || 0);
-      const wh = amount <= 1000000
-        ? Math.floor(amount * 0.1021)
-        : Math.floor(1000000 * 0.1021 + (amount - 1000000) * 0.2042);
-      return `<div class="att-pr-cost-row" style="justify-content:space-between;">
-        <span>${_escHtml((r.date || '').substring(5))}　${amount.toLocaleString()}円</span>
-        <span>源泉 ${wh.toLocaleString()}円</span>
-        <input type="hidden" data-row-index="${r.rowIndex || ''}" data-wh="${wh}">
-      </div>`;
-    }).join('');
-  }
-
-  async function _onTaxAdvisorConfirm() {
-    const inputs = document.querySelectorAll('#taxAdvisorRows input[type="hidden"]');
-    const targets = [];
-    inputs.forEach(inp => {
-      if (inp.dataset.rowIndex) {
-        targets.push({
-          sheetName: 'コスト',
-          rowIndex: Number(inp.dataset.rowIndex),
-          withholdingAmount: Number(inp.dataset.wh || 0)
-        });
-      }
+    const names = pending.map(sid => {
+      const s = _staffList.find(x => x.id === sid);
+      return s ? s.name : sid;
     });
-    if (targets.length === 0) return;
-    try {
-      await _callGAS('confirmPayroll', { targets });
-      alert('税理士等の報酬：確定しました。');
-    } catch (e) {
-      alert('確定処理でエラーが発生しました。');
-    }
+
+    // 一括時はスポットありスタッフは diff 推奨をデフォルトとする
+    _confirmTarget = { bulk: true, staffIds: pending };
+
+    document.getElementById('confirmTitle').textContent = '一括給与確定';
+    document.getElementById('confirmBody').innerHTML = `
+      <div>対象スタッフ：${names.join('、')}</div>
+      <div style="margin-top:8px;">各スタッフの算出金額で一括確定します。</div>
+      <div style="margin-top:4px;font-size:11px;color:var(--uz-text-muted);">
+        スポット既計上ありのスタッフは「不足分のみ確定」が適用されます。
+      </div>`;
+
+    document.getElementById('confirmSpotSection').style.display = 'none';
+    document.getElementById('confirmChoices').style.display = 'none';
+
+    // 一括時は「diff」をデフォルトにセット
+    const radio = document.querySelector('input[name="confirmMode"][value="diff"]');
+    if (radio) radio.checked = true;
+
+    document.getElementById('confirmDialog').style.display = '';
   }
 
-  /* ---------- ポップオーバー ---------- */
+  /* ---------- ダイアログバインド ---------- */
+  function _bindConfirmDialog() {
+    document.getElementById('confirmCancel').addEventListener('click', () => {
+      document.getElementById('confirmDialog').style.display = 'none';
+      _confirmTarget = null;
+    });
+    document.getElementById('confirmOk').addEventListener('click', _executeConfirm);
+  }
+
+  /* ---------- スポットコスト検出 ---------- */
+  function _findSpotCosts(staffName) {
+    return (_costRows || []).filter(r => {
+      if (!PAYROLL_CODES.includes(String(r.itemCode || ''))) return false;
+      const misc = String(r.miscItemName || '');
+      if (!misc.startsWith('[スポット]')) return false;
+      const name = misc.replace(/^\[スポット\]/, '').trim();
+      if (name !== staffName) return false;
+      const linked = String(r.projectId || r.linkedSalesRowId || '');
+      if (linked) return false;
+      return true;
+    });
+  }
+
+  /** 月次一括が既に確定済みかチェック */
+  function _hasMonthlyConfirmed(staffName) {
+    return (_costRows || []).some(r => {
+      if (!PAYROLL_CODES.includes(String(r.itemCode || ''))) return false;
+      const misc = String(r.miscItemName || '');
+      return misc.startsWith('[月次]') && misc.replace(/^\[月次\]/, '').trim() === staffName;
+    });
+  }
+
+  /* ==========================================
+     ポップオーバー（日別セル編集）
+     ========================================== */
   let _popoverTarget = null;
 
   function _openDayCellPopover(event, staffId, date) {
@@ -652,9 +836,7 @@
         rowIndex: _popoverTarget.rowIndex,
         staffId: _popoverTarget.staffId,
         date: _popoverTarget.date,
-        clockIn,
-        clockOut,
-        memo
+        clockIn, clockOut, memo
       });
       pop.style.display = 'none';
       await _loadMonth();
@@ -671,14 +853,20 @@
     }
   });
 
-  /* ---------- イベントバインド ---------- */
+  /* ==========================================
+     イベントバインド
+     ========================================== */
   function _bindMonthNav() {
     document.getElementById('prevMonth').addEventListener('click', () => {
       _currentMonth = _shiftMonth(_currentMonth, -1);
+      _payrollState = {};
+      _confirmedStaffIds.clear();
       _loadMonth();
     });
     document.getElementById('nextMonth').addEventListener('click', () => {
       _currentMonth = _shiftMonth(_currentMonth, 1);
+      _payrollState = {};
+      _confirmedStaffIds.clear();
       _loadMonth();
     });
   }
@@ -687,46 +875,20 @@
     document.getElementById('staffFilter').addEventListener('change', () => {
       _renderStaffList();
       _renderMatrix();
+      _buildPayrollState();
+      _renderPayrollTable();
     });
   }
 
-  function _bindPayTypeChange() {
-    document.querySelectorAll('input[name="payType"]').forEach(r => {
-      r.addEventListener('change', () => {
-        const staff = _staffList.find(s => s.id === _selectedStaffId);
-        if (!staff) return;
-        const payType = r.value;
-        const unitPrice = payType === 'hourly' ? (staff.hourlyWage || 0)
-                        : payType === 'daily' ? (staff.dailyWage || 0)
-                        : (staff.monthlyWage || 0);
-        document.getElementById('prUnitPrice').value = unitPrice || '';
-        _recalcGross();
-      });
-    });
-    document.querySelectorAll('input[name="whMode"]').forEach(r => {
-      r.addEventListener('change', _recalcWithholding);
-    });
+  /* ==========================================
+     ユーティリティ
+     ========================================== */
+  function _getFilteredStaff(filter) {
+    return filter === 'all'
+      ? _staffList
+      : _staffList.filter(s => _normalizeEmploymentType(s.employmentType) === filter);
   }
 
-  function _bindPayrollInputs() {
-    ['prUnitPrice', 'prWorkHours', 'prWorkDays'].forEach(id => {
-      const el = document.getElementById(id);
-      el.addEventListener('input', () => {
-        _markManual(id === 'prWorkHours' ? 'prHoursBadge' : id === 'prWorkDays' ? 'prDaysBadge' : null);
-        _recalcGross();
-      });
-    });
-    document.getElementById('prGrossAmount').addEventListener('input', () => {
-      _markManual('prGrossBadge');
-      _recalcWithholding();
-    });
-    document.getElementById('prWhAmount').addEventListener('input', () => {
-      _markManual('prWhBadge');
-      _recalcNet();
-    });
-  }
-
-  /* ---------- ユーティリティ ---------- */
   function _normalizeStaff(s) {
     return {
       ...s,
@@ -774,6 +936,32 @@
     };
   }
 
+  function _calcGross(payType, unitPrice, hours, days) {
+    if (payType === 'hourly') return Math.floor(unitPrice * hours);
+    if (payType === 'daily') return Math.floor(unitPrice * days);
+    return unitPrice; // monthly
+  }
+
+  function _calcWithholdingAmount(whMode, amount, days) {
+    if (whMode === 'hostess') {
+      const base = amount - 5000 * days;
+      return base > 0 ? Math.floor(base * 0.1021) : 0;
+    } else if (whMode === 'standard') {
+      if (amount <= 1000000) return Math.floor(amount * 0.1021);
+      return Math.floor(1000000 * 0.1021 + (amount - 1000000) * 0.2042);
+    }
+    return 0;
+  }
+
+  function _renderStatusBadge(status) {
+    if (status === 'confirmed') return '<span class="att-pt-status-badge att-pt-status-badge--confirmed">確定済</span>';
+    if (status === 'skipped') return '<span class="att-pt-status-badge att-pt-status-badge--skipped">スキップ</span>';
+    return '<span class="att-pt-status-badge att-pt-status-badge--pending">未確定</span>';
+  }
+
+  function _fmtNum(n) { return (n || 0).toLocaleString(); }
+  function _fmtYen(n) { return (n || 0).toLocaleString() + '円'; }
+
   function _getDaysInMonth(monthStr) {
     const [y, m] = monthStr.split('-').map(Number);
     return new Date(y, m, 0).getDate();
@@ -797,22 +985,8 @@
 
   function _resolveFeature(fv, tmplId, key) {
     if (fv && fv[key] !== undefined) return fv[key];
-    if (key === 'payroll_section' || key === 'attendance_menu') {
-      return tmplId !== 'non-shop';
-    }
+    if (key === 'payroll_section' || key === 'attendance_menu') return tmplId !== 'non-shop';
     return true;
-  }
-
-  function _resetBadge(badgeId) {
-    if (!badgeId) return;
-    const el = document.getElementById(badgeId);
-    if (el) { el.textContent = '自動'; el.className = 'att-pr-auto-badge'; }
-  }
-
-  function _markManual(badgeId) {
-    if (!badgeId) return;
-    const el = document.getElementById(badgeId);
-    if (el) { el.textContent = '手動'; el.className = 'att-pr-auto-badge att-pr-auto-badge--manual'; }
   }
 
   function _escHtml(str) {
