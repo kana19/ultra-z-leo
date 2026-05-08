@@ -102,6 +102,10 @@ document.addEventListener('DOMContentLoaded', () => {
   bindEditPanel();
   bindListClicks(); // 委譲リスナーは1回だけ登録
   document.getElementById('ci-open-btn')?.addEventListener('click', openCIModal);
+  // URLハッシュで入店履歴タブ直行対応（§8統合：clockin.html廃止→history.html#attendance）
+  if (location.hash === '#attendance') {
+    switchTab('attendance');
+  }
   loadAll();
   updateIpadApprovalBanner();
 });
