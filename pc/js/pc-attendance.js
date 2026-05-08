@@ -636,14 +636,15 @@
     const pop = document.getElementById('dayCellPopover');
     const staff = _staffList.find(s => s.id === staffId);
     const records = _attendanceRecords.filter(r => r.staffId === staffId && r.date === date);
+    const isNew = records.length === 0;
 
     document.getElementById('popoverHeader').textContent =
-      `${staff ? staff.name : staffId}　${date.substring(5).replace('-', '/')}`;
+      `${staff ? staff.name : staffId}　${date.substring(5).replace('-', '/')}${isNew ? '（新規）' : ''}`;
     const rec = records[0] || {};
     document.getElementById('popClockIn').value = rec.clockIn || '';
     document.getElementById('popClockOut').value = rec.clockOut || '';
     document.getElementById('popMemo').value = rec.memo || '';
-    _popoverTarget = { staffId, date, rowIndex: rec.rowIndex };
+    _popoverTarget = { staffId, date, rowIndex: rec.rowIndex, isNew };
 
     const rect = event.currentTarget.getBoundingClientRect();
     pop.style.top = Math.min(rect.bottom + 4, window.innerHeight - 300) + 'px';
@@ -656,15 +657,31 @@
 
   async function _saveDayCell(pop) {
     if (!_popoverTarget) return;
+    const clockIn = document.getElementById('popClockIn').value;
+    const clockOut = document.getElementById('popClockOut').value;
+    const memo = document.getElementById('popMemo').value;
+
+    if (!clockIn) { alert('入店時刻を入力してください。'); return; }
+
     try {
-      await _callGAS('updateAttendance', {
-        rowIndex: _popoverTarget.rowIndex,
-        staffId: _popoverTarget.staffId,
-        date: _popoverTarget.date,
-        clockIn: document.getElementById('popClockIn').value,
-        clockOut: document.getElementById('popClockOut').value,
-        memo: document.getElementById('popMemo').value
-      });
+      if (_popoverTarget.isNew) {
+        // 新規打刻追加
+        await _callGAS('clockIn', {
+          staffId: _popoverTarget.staffId,
+          date: _popoverTarget.date,
+          clockIn: clockIn,
+          clockOut: clockOut || undefined,
+          memo: memo || undefined
+        });
+      } else {
+        // 既存レコード修正
+        await _callGAS('updateAttendance', {
+          rowIndex: _popoverTarget.rowIndex,
+          staffId: _popoverTarget.staffId,
+          date: _popoverTarget.date,
+          clockIn, clockOut, memo
+        });
+      }
       pop.style.display = 'none';
       await _loadMonth();
     } catch (e) {
