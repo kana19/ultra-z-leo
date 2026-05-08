@@ -1,6 +1,7 @@
 /* ==========================================
    PC版 出勤管理画面 (pc-attendance.js)
    指示書16 準拠
+   A-2-X-5: projectId付き稼働を給与計算から除外＋注釈表示
    ========================================== */
 'use strict';
 
@@ -63,9 +64,6 @@
         _callGAS('getAttendanceByMonth', { month: _currentMonth }),
         _callGAS('getHistory', { month: _currentMonth })
       ]);
-      // _callGAS は {status:'ok', data:X} の X を返す
-      // getAttendanceByMonth → 配列（直接）  ※v3: records プロパティなし
-      // getHistory → 配列（直接）
       _attendanceRecords = Array.isArray(attRes) ? attRes : (attRes.records || attRes.data || []);
       const histArr = Array.isArray(histRes) ? histRes : (histRes.data || []);
       _costRows = histArr.filter(r => r.type === 'cost');
@@ -118,21 +116,19 @@
 
   function _onStaffSelect(staffId) {
     _selectedStaffId = staffId;
-    _renderStaffList(); // アクティブ更新
-    _renderMatrix();    // マトリクスもハイライト更新
+    _renderStaffList();
+    _renderMatrix();
     _loadPayroll(staffId);
   }
 
   /* ---------- ゾーンB：出勤マトリクス ---------- */
 
-  /** 給与系コスト行から日付×スタッフ名→金額のマップを構築（金額由来セル表示用） */
   function _buildCostAmountMap() {
     const PAYROLL_CODES = ['20', '21', '25'];
-    const map = {}; // key: 'YYYY-MM-DD|スタッフ名' → amount
+    const map = {};
     (_costRows || []).forEach(r => {
       if (!PAYROLL_CODES.includes(String(r.itemCode || ''))) return;
       const misc = String(r.miscItemName || '');
-      // H列からスタッフ名を抽出（[スポット]・[月次]プレフィックスを除去）
       const staffName = misc.replace(/^\[スポット\]/, '').replace(/^\[月次\]/, '').trim();
       if (!staffName) return;
       const key = r.date + '|' + staffName;
@@ -141,7 +137,6 @@
     return map;
   }
 
-  /** 金額を簡潔表示（万単位 or 千単位 or そのまま） */
   function _fmtAmountShort(amount) {
     if (amount >= 10000) return '¥' + (amount / 10000).toFixed(amount % 10000 === 0 ? 0 : 1) + '万';
     if (amount >= 1000) return '¥' + (amount / 1000).toFixed(amount % 1000 === 0 ? 0 : 1) + '千';
@@ -160,13 +155,11 @@
     const tfoot = document.getElementById('matrixFoot');
     const costAmountMap = _buildCostAmountMap();
 
-    // ヘッダー
     let headHtml = '<tr><th class="att-th-name">スタッフ</th>';
     for (let d = 1; d <= daysInMonth; d++) headHtml += `<th>${d}</th>`;
     headHtml += '<th class="att-th-total">合計H</th><th class="att-th-total">日数</th></tr>';
     thead.innerHTML = headHtml;
 
-    // ボディ
     let totalHours = 0, totalDays = 0;
     tbody.innerHTML = staffFiltered.map(s => {
       const staffRecords = _attendanceRecords.filter(r => r.staffId === s.id);
@@ -180,14 +173,12 @@
         if (dayRecs.length === 0) {
           dayCells.push(`<td class="att-day-cell" data-staff="${_escHtml(s.id)}" data-date="${dateStr}"></td>`);
         } else {
-          // 打刻由来と金額由来を分離
-          const clockRecs = dayRecs.filter(r => r.clockIn);    // 時刻あり＝打刻由来
-          const moneyRecs = dayRecs.filter(r => !r.clockIn);   // 時刻なし＝金額由来
+          const clockRecs = dayRecs.filter(r => r.clockIn);
+          const moneyRecs = dayRecs.filter(r => !r.clockIn);
 
           let cellParts = [];
           let hasProject = false;
 
-          // 打刻由来行の表示
           clockRecs.forEach(r => {
             const isPending = !r.clockOut;
             const timeStr = r.clockIn + '〜' + (r.clockOut || '');
@@ -197,7 +188,6 @@
             cellParts.push(`<div class="${isPending ? 'att-pending-line' : ''}">${_escHtml(timeStr)}</div>`);
           });
 
-          // 金額由来行の表示（★ ¥金額）
           moneyRecs.forEach(r => {
             if (r.projectId) hasProject = true;
             const costKey = dateStr + '|' + (r.staffName || s.name);
@@ -206,7 +196,6 @@
             cellParts.push(`<div class="att-money-line">${display}</div>`);
           });
 
-          // 日数カウント：打刻由来がある日のみカウント（金額由来のみの日は除外）
           if (clockRecs.length > 0) staffDays++;
 
           const hasPending = clockRecs.some(r => !r.clockOut);
@@ -233,7 +222,6 @@
       </tr>`;
     }).join('');
 
-    // フッター（集計行）
     tfoot.innerHTML = `<tr>
       <td>合計</td>
       ${Array(daysInMonth).fill('<td></td>').join('')}
@@ -241,7 +229,6 @@
       <td>${totalDays}</td>
     </tr>`;
 
-    // 日別セルのクリックイベント
     tbody.querySelectorAll('.att-day-cell').forEach(td => {
       td.addEventListener('click', e => _openDayCellPopover(e, td.dataset.staff, td.dataset.date));
     });
@@ -255,7 +242,6 @@
     document.getElementById('payrollEmpty').style.display = 'none';
     document.getElementById('payrollContent').style.display = '';
 
-    // ① ヘッダー
     const et = _normalizeEmploymentType(staff.employmentType);
     const whLabel = WH_LABELS[staff.withholdingMode || 'off'] || '対象外';
     document.getElementById('prHeader').innerHTML = `
@@ -263,16 +249,15 @@
       <div class="att-pr-header__meta">${EMPLOYMENT_LABELS[et] || et}　/　${whLabel}</div>
     `;
 
-    // ② 給与算出方式
     let defaultPayType = 'hourly';
     if (staff.hourlyWage) defaultPayType = 'hourly';
     else if (staff.dailyWage) defaultPayType = 'daily';
     else if (staff.monthlyWage) defaultPayType = 'monthly';
     document.querySelector(`input[name="payType"][value="${defaultPayType}"]`).checked = true;
 
-    // ③ 自動流し込み
+    // A-2-X-5：projectId付き稼働を除外して集計
     const staffAttendance = _attendanceRecords.filter(r => r.staffId === staffId);
-    const { totalHours, totalDays } = _calcStaffTotals(staffAttendance);
+    const { totalHours, totalDays, excludedProject } = _calcStaffTotals(staffAttendance);
 
     const unitPrice = defaultPayType === 'hourly' ? (staff.hourlyWage || 0)
                     : defaultPayType === 'daily' ? (staff.dailyWage || 0)
@@ -284,17 +269,26 @@
     _resetBadge('prHoursBadge');
     _resetBadge('prDaysBadge');
 
+    // A-2-X-5：案件直接費除外の注釈表示
+    const noteEl = document.getElementById('prProjectExcludeNote');
+    if (noteEl) {
+      if (excludedProject > 0) {
+        noteEl.textContent = '\u203B 案件直接費として計上済みの ' + excludedProject + ' 件を集計から除外しています';
+        noteEl.style.display = '';
+      } else {
+        noteEl.textContent = '';
+        noteEl.style.display = 'none';
+      }
+    }
+
     _recalcGross();
 
-    // ④ 源泉徴収区分
     const whMode = staff.withholdingMode || 'off';
     const whRadio = document.querySelector(`input[name="whMode"][value="${whMode}"]`);
     if (whRadio) whRadio.checked = true;
 
-    // ⑥ コスト自動追記プレビュー
     _updateCostPreview(staff);
 
-    // ⑦ 経営メモ
     document.getElementById('prMemo').value = staff.managerMemo || '';
   }
 
@@ -323,7 +317,7 @@
     let gross = 0;
     if (payType === 'hourly') gross = Math.floor(unitPrice * hours);
     else if (payType === 'daily') gross = Math.floor(unitPrice * days);
-    else gross = unitPrice; // 月給・歩合は単価=金額
+    else gross = unitPrice;
 
     document.getElementById('prGrossAmount').value = gross || '';
     _resetBadge('prGrossBadge');
@@ -366,7 +360,6 @@
     });
     document.getElementById('confirmOk').addEventListener('click', _executeConfirm);
 
-    // 税理士一括確定
     document.getElementById('taxAdvisorConfirmBtn')?.addEventListener('click', _onTaxAdvisorConfirm);
   }
 
@@ -421,7 +414,6 @@
     const et = _normalizeEmploymentType(staff.employmentType);
     const isContractor = et === 'contractor';
 
-    // 科目判定：contractor時はcostCategory参照（21:外注工賃 / 25:税理士等の報酬）、それ以外は20:給料賃金
     let itemCode, itemName;
     if (isContractor) {
       const cat = (staff.costCategory === '25') ? '25' : '21';
@@ -432,20 +424,18 @@
       itemName = '給料賃金';
     }
 
-    // コストシート追記用データ
     const [y, m] = _currentMonth.split('-').map(Number);
-    // 月末日をコスト計上日とする(給与計算の慣行)
     const lastDay = new Date(y, m, 0).getDate();
     const costDate = `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
 
     const costData = {
       date: costDate,
-      divisionCode: '2',           // 販管費
+      divisionCode: '2',
       divisionName: '販管費',
       itemCode: itemCode,
       itemName: itemName,
       miscItemName: '',
-      taxRate: isContractor ? 10 : 0,  // 委託・外注は課税、給料賃金は不課税
+      taxRate: isContractor ? 10 : 0,
       taxIncluded: gross,
       memo: `${staff.name}　${y}年${m}月分`,
       unpaid: 0,
@@ -457,7 +447,6 @@
     try {
       await _callGAS('addCost', costData);
 
-      // 経営メモ保存
       const memo = document.getElementById('prMemo').value;
       if (memo !== (staff.managerMemo || '')) {
         staff.managerMemo = memo;
@@ -535,7 +524,6 @@
 
     _popoverTarget = { staffId, date, rowIndex: rec.rowIndex };
 
-    // ポジション
     const rect = event.currentTarget.getBoundingClientRect();
     pop.style.top = Math.min(rect.bottom + 4, window.innerHeight - 300) + 'px';
     pop.style.left = Math.min(rect.left, window.innerWidth - 260) + 'px';
@@ -561,14 +549,13 @@
         memo
       });
       pop.style.display = 'none';
-      await _loadMonth(); // 再描画
+      await _loadMonth();
     } catch (e) {
       console.error('save day cell error:', e);
       alert('保存に失敗しました。');
     }
   }
 
-  // ポップオーバー外クリックで閉じる
   document.addEventListener('click', e => {
     const pop = document.getElementById('dayCellPopover');
     if (pop.style.display !== 'none' && !pop.contains(e.target) && !e.target.closest('.att-day-cell')) {
@@ -655,22 +642,32 @@
     const [h1, m1] = clockIn.split(':').map(Number);
     const [h2, m2] = clockOut.split(':').map(Number);
     let mins = (h2 * 60 + m2) - (h1 * 60 + m1);
-    // 日跨ぎ
     if (dateOut && dateOut !== dateIn) mins += 24 * 60;
     else if (mins < 0) mins += 24 * 60;
     return Math.max(0, mins / 60);
   }
 
+  /** A-2-X-5：projectId付き稼働を集計から除外 */
   function _calcStaffTotals(records) {
     let totalHours = 0;
     const uniqueDates = new Set();
+    let excludedProject = 0;
+
     records.forEach(r => {
-      if (r.clockOut) {
+      // projectId付き＝案件直接費として既計上 → 集計除外
+      if (r.projectId) { excludedProject++; return; }
+
+      if (r.clockIn && r.clockOut) {
         totalHours += _calcHours(r.clockIn, r.clockOut, r.date, r.clockOutDate);
       }
-      uniqueDates.add(r.date);
+      // 打刻由来のみ日数カウント（金額由来行は除外）
+      if (r.clockIn) uniqueDates.add(r.date);
     });
-    return { totalHours: Math.round(totalHours * 10) / 10, totalDays: uniqueDates.size };
+    return {
+      totalHours: Math.round(totalHours * 10) / 10,
+      totalDays: uniqueDates.size,
+      excludedProject
+    };
   }
 
   function _getDaysInMonth(monthStr) {
@@ -696,7 +693,6 @@
 
   function _resolveFeature(fv, tmplId, key) {
     if (fv && fv[key] !== undefined) return fv[key];
-    // プリセット既定値
     if (key === 'payroll_section' || key === 'attendance_menu') {
       return tmplId !== 'non-shop';
     }
@@ -724,11 +720,9 @@
   async function _callGAS(action, data) {
     if (typeof callGAS === 'function') {
       const res = await callGAS(action, data || {});
-      // callGAS が {status, data} ラッパーを返す場合は data を取り出す
       if (res && res.status === 'ok' && res.data !== undefined) return res.data;
       return res;
     }
-    // フォールバック（app.js の callGAS が利用不可の場合）
     const gasUrl = window.GAS_URL || '';
     if (!gasUrl) throw new Error('GAS_URL not set');
     const url = gasUrl + '?action=' + action + '&data=' + encodeURIComponent(JSON.stringify(data || {}));
