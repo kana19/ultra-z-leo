@@ -164,6 +164,17 @@
           </div>
         </div>
 
+        <!-- 月次損益グラフ -->
+        <div class="ipad-dash-section">
+          <div class="ipad-dash-header">
+            <span class="ipad-dash-header__title">月次推移</span>
+          </div>
+          <div class="ipad-chart-wrap">
+            <div class="ipad-chart-loading" id="ipad-chart-loading">読み込み中...</div>
+            <canvas id="ipad-pl-chart"></canvas>
+          </div>
+        </div>
+
         <!-- 出勤状況 -->
         <div class="ipad-dash-section">
           <div class="ipad-dash-header">
@@ -374,6 +385,7 @@
 <div id="csv-import-area"      style="display:none"></div>
 <div id="ai-suggestion-area"   style="display:none"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="js/app.js"></script>
 <script src="js/sheet-modal.js"></script>
 <script src="js/sales.js"></script>

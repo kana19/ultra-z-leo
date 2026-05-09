@@ -376,6 +376,9 @@ async function initIpadHome() {
   // 直近入力を右カラムに表示
   _renderIpadRecentEntries(currentMonth);
 
+  // 月次損益グラフ
+  _renderIpadMonthlyChart(now.getFullYear());
+
   // iPad出勤状況を左カラムに表示
   _renderIpadAttendance();
 }
@@ -520,6 +523,86 @@ async function _renderIpadAttendance() {
       ${status}
     </div>`;
   }).join('');
+}
+
+/* ── iPad 月次損益グラフ ────────────────────────────── */
+let _ipadChart = null;
+
+async function _renderIpadMonthlyChart(year) {
+  const canvas  = document.getElementById('ipad-pl-chart');
+  const loading = document.getElementById('ipad-chart-loading');
+  if (!canvas || typeof Chart === 'undefined') return;
+
+  const results = await Promise.all(
+    Array.from({ length: 12 }, (_, i) => {
+      const m = String(i + 1).padStart(2, '0');
+      return callGAS('getSummary', { month: `${year}-${m}` }).catch(() => null);
+    })
+  );
+
+  if (loading) loading.style.display = 'none';
+
+  const labels     = results.map((_, i) => `${i + 1}月`);
+  const salesData  = results.map(r =>
+    (r && r.status === 'ok' && r.data) ? (r.data.sales ?? 0) : 0
+  );
+  const profitData = results.map(r => {
+    if (!r || r.status !== 'ok' || !r.data) return 0;
+    const d = r.data;
+    return d.operatingProfit ?? ((d.sales ?? 0) - (d.cogs ?? 0) - (d.sga ?? 0));
+  });
+
+  if (_ipadChart) { _ipadChart.destroy(); _ipadChart = null; }
+
+  _ipadChart = new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: '売上',
+          data: salesData,
+          backgroundColor: 'rgba(212,175,55,0.7)',
+          borderColor: '#D4AF37',
+          borderWidth: 1,
+          borderRadius: 3,
+        },
+        {
+          label: '経常利益',
+          data: profitData,
+          backgroundColor: 'rgba(76,175,128,0.7)',
+          borderColor: '#4CAF80',
+          borderWidth: 1,
+          borderRadius: 3,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { color: '#A09070', font: { size: 11 } } },
+      },
+      scales: {
+        x: {
+          ticks: { color: '#A09070', font: { size: 10 } },
+          grid:  { color: 'rgba(212,175,55,0.06)' },
+        },
+        y: {
+          ticks: {
+            color: '#A09070',
+            font:  { size: 10 },
+            callback: v => {
+              const abs = Math.abs(v);
+              if (abs >= 10000) return (v < 0 ? '-' : '') + Math.round(abs / 10000) + '万';
+              return v;
+            },
+          },
+          grid: { color: 'rgba(212,175,55,0.06)' },
+        },
+      },
+    },
+  });
 }
 
 function _ipadToggleTaxDLPanel() {

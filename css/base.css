@@ -1057,6 +1057,24 @@ body.is-ipad .ipad-dash-staff {
   padding: 0;
 }
 
+/* 月次グラフ */
+body.is-ipad .ipad-chart-wrap {
+  padding: 12px 14px;
+  height: 200px;
+  position: relative;
+}
+
+body.is-ipad .ipad-chart-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  color: var(--uz-text2);
+  pointer-events: none;
+}
+
 body.is-ipad #ipad-tax-timer-right {
   margin-top: 0;
 }
