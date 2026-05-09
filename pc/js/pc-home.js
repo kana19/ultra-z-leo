@@ -13,6 +13,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   initYearSelect();
   initTaxDL();
   await loadAndRender();
+  loadRecentEntries();
 });
 
 function initTaxDL() {
@@ -237,4 +238,67 @@ function renderChart(monthly) {
       },
     },
   });
+}
+
+/* ── 直近入力テーブル ──────────────────────────── */
+async function loadRecentEntries() {
+  const tbody = document.getElementById('pc-recent-body');
+  const empty = document.getElementById('pc-recent-empty');
+  if (!tbody) return;
+
+  const n   = new Date();
+  const month = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`;
+
+  try {
+    const [salesRes, costRes] = await Promise.all([
+      callGAS('getHistory', { type: 'sales', month }).catch(() => null),
+      callGAS('getHistory', { type: 'cost',  month }).catch(() => null),
+    ]);
+
+    const items = [];
+    if (salesRes && salesRes.status === 'ok' && Array.isArray(salesRes.data)) {
+      salesRes.data.forEach(r => items.push({
+        name:   r.service || r.serviceName || '売上',
+        amount: r.taxIncluded ?? r.amount ?? 0,
+        type:   'sales',
+        date:   String(r.date || ''),
+      }));
+    }
+    if (costRes && costRes.status === 'ok' && Array.isArray(costRes.data)) {
+      costRes.data.forEach(r => items.push({
+        name:   r.itemName || r.item || 'コスト',
+        amount: r.taxIncluded ?? r.amount ?? 0,
+        type:   'cost',
+        date:   String(r.date || ''),
+      }));
+    }
+
+    items.sort((a, b) => b.date.localeCompare(a.date));
+    const top = items.slice(0, 15);
+
+    if (top.length === 0) {
+      tbody.innerHTML = '';
+      if (empty) empty.hidden = false;
+      return;
+    }
+    if (empty) empty.hidden = true;
+
+    tbody.innerHTML = top.map(it => {
+      const md    = it.date.replace(/(\d{4})-(\d{2})-(\d{2})/, '$2/$3');
+      const nm    = escHtml(it.name).substring(0, 20);
+      const badge = it.type === 'sales'
+        ? '<span style="color:#D4AF37;">売上</span>'
+        : '<span style="color:#E05050;">コスト</span>';
+      const color = it.type === 'sales' ? '#D4AF37' : '#E05050';
+      return `<tr>
+        <td style="white-space:nowrap;">${md}</td>
+        <td>${badge}</td>
+        <td>${nm}</td>
+        <td class="num" style="color:${color};">${formatYen(it.amount)}</td>
+      </tr>`;
+    }).join('');
+  } catch {
+    tbody.innerHTML = '';
+    if (empty) empty.hidden = false;
+  }
 }

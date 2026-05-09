@@ -39,6 +39,26 @@
       <div class="pl-chart-wrap">
         <canvas id="pl-chart"></canvas>
       </div>
+      <!-- 直近入力 -->
+      <div class="pc-card" id="pc-recent-card">
+        <div class="pc-filter-row">
+          <span style="font-weight:600;">直近の入力</span>
+        </div>
+        <div style="overflow-x:auto;">
+          <table class="pl-table" id="pc-recent-table">
+            <thead>
+              <tr>
+                <th>日付</th>
+                <th>種別</th>
+                <th>内容</th>
+                <th class="num">金額</th>
+              </tr>
+            </thead>
+            <tbody id="pc-recent-body"></tbody>
+          </table>
+        </div>
+        <div id="pc-recent-empty" hidden style="padding:16px;text-align:center;color:var(--uz-text2);font-size:13px;">今月の記録はありません</div>
+      </div>
     </div>
   </main>
 </div>
