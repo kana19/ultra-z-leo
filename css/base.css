@@ -747,6 +747,11 @@ body.is-ipad {
   .ipad-hist-right {
     display: block;
     padding: 16px;
+    position: sticky;
+    top: 0;
+    align-self: start;
+    max-height: 100vh;
+    overflow-y: auto;
   }
 
   /* ── 右パネル共通 ─────────────────────────────────────── */
@@ -883,6 +888,70 @@ body.is-ipad .ipad-hist-empty {
 /* ── sales/cost：フォームは右カラム（border-right 解除） ── */
 body.is-ipad .ipad-form-wrap > .form-body {
   border-right: none;
+}
+
+/* ── iPad 履歴フラットテーブル ────────────────────────────── */
+body.is-ipad .ipad-hist-flat-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+body.is-ipad .ipad-hist-flat-table th {
+  padding: 8px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--uz-text2);
+  border-bottom: 1px solid var(--uz-border);
+  text-align: left;
+  background: var(--uz-surface2);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+body.is-ipad .ipad-hist-flat-table td {
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--uz-border);
+  color: var(--uz-text);
+  font-size: 13px;
+}
+
+body.is-ipad .ipad-hist-flat-table tr:last-child td { border-bottom: none; }
+
+body.is-ipad .ipad-hist-row {
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+body.is-ipad .ipad-hist-row:hover {
+  background: rgba(212,175,55,0.06);
+}
+
+body.is-ipad .ipad-hist-row--selected {
+  background: rgba(212,175,55,0.12) !important;
+}
+
+/* ── iPad 右パネル内修正フォーム ──────────────────────────── */
+body.is-ipad .ipad-right-form-body {
+  padding: 14px 16px;
+}
+
+body.is-ipad .ipad-right-form-body .edit-field {
+  margin-bottom: 12px;
+}
+
+body.is-ipad .ipad-right-form-body .edit-label {
+  font-size: 11px;
+}
+
+body.is-ipad .ipad-right-form-body .edit-input {
+  padding: 8px 10px;
+  font-size: 14px;
+}
+
+body.is-ipad .ipad-right-form-body .edit-save-btn {
+  width: 100%;
+  padding: 12px;
 }
 
 /* ── 未収・買掛け画面：iPad 2カラム ─────────────────────── */

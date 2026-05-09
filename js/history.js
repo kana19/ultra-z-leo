@@ -259,19 +259,44 @@ function buildLockWidget(ls, idx, scope) {
 /* ── リストのクリック委譲（1回だけ登録） ────────────────── */
 function bindListClicks() {
   document.getElementById('history-list')?.addEventListener('click', e => {
+    // iPad：テーブル行クリック
+    const row = e.target.closest('.ipad-hist-row[data-scope="sc"]');
+    if (row) {
+      const idx = parseInt(row.dataset.idx, 10);
+      if (!isNaN(idx) && editableItems[idx]) {
+        document.querySelectorAll('.ipad-hist-row--selected').forEach(r => r.classList.remove('ipad-hist-row--selected'));
+        row.classList.add('ipad-hist-row--selected');
+        renderIpadRightPanel(editableItems[idx]);
+      }
+      return;
+    }
+
+    // スマホ：修正ボタンクリック
     const btn = e.target.closest('.hist-edit-btn[data-scope="sc"]');
     if (!btn) return;
-    const idx = parseInt(btn.dataset.idx, 10);
-    if (!isNaN(idx) && editableItems[idx]) {
+    const idx2 = parseInt(btn.dataset.idx, 10);
+    if (!isNaN(idx2) && editableItems[idx2]) {
       if (document.body.classList.contains('is-ipad')) {
-        renderIpadRightPanel(editableItems[idx]);
+        renderIpadRightPanel(editableItems[idx2]);
       } else {
-        openEditForm(editableItems[idx]);
+        openEditForm(editableItems[idx2]);
       }
     }
   });
 
   document.getElementById('attendance-list')?.addEventListener('click', e => {
+    // iPad：テーブル行クリック
+    const row = e.target.closest('.ipad-hist-row[data-scope="at"]');
+    if (row) {
+      const idx = parseInt(row.dataset.idx, 10);
+      if (!isNaN(idx) && attendItems[idx]) {
+        document.querySelectorAll('.ipad-hist-row--selected').forEach(r => r.classList.remove('ipad-hist-row--selected'));
+        row.classList.add('ipad-hist-row--selected');
+        renderIpadRightPanel(attendItems[idx]);
+      }
+      return;
+    }
+
     const editBtn = e.target.closest('.hist-edit-btn[data-scope="at"]');
     if (editBtn) {
       const idx = parseInt(editBtn.dataset.idx, 10);
@@ -314,6 +339,45 @@ function renderSalesCost(items) {
   }
 
   const sorted = [...items].sort((a, b) => b.date.localeCompare(a.date));
+
+  // iPad：フラットテーブル表示
+  if (document.body.classList.contains('is-ipad')) {
+    let html = `<table class="ipad-hist-flat-table">
+      <thead><tr>
+        <th>日付</th><th>種別</th><th>内容</th><th>メモ</th><th class="ipad-td-r">金額</th><th>状態</th>
+      </tr></thead><tbody>`;
+
+    sorted.forEach(item => {
+      const idx = editableItems.push(item) - 1;
+      const isSales = item.type === 'sales';
+      const badge = isSales
+        ? '<span style="color:var(--uz-gold);font-size:12px;">売上</span>'
+        : '<span style="color:var(--uz-red);font-size:12px;">コスト</span>';
+      const color = isSales ? 'var(--uz-gold)' : 'var(--uz-red)';
+      const md = (item.date || '').replace(/(\d{4})-(\d{2})-(\d{2})/, '$2/$3');
+      const ls = getLockStatus(item.date);
+      const status = ls.locked
+        ? '<span style="font-size:11px;color:var(--uz-muted);">🔒</span>'
+        : ls.grace
+          ? `<span style="font-size:11px;color:var(--uz-red);">残${ls.daysLeft}日</span>`
+          : '<span style="font-size:11px;color:var(--uz-green);">✓</span>';
+
+      html += `<tr class="ipad-hist-row" data-idx="${idx}" data-scope="sc">
+        <td style="white-space:nowrap;">${md}</td>
+        <td>${badge}</td>
+        <td>${escHtml((item.itemName || '').substring(0, 16))}</td>
+        <td style="font-size:12px;color:var(--uz-muted);">${escHtml((item.memo || '').substring(0, 12))}</td>
+        <td class="ipad-td-r" style="color:${color};font-weight:600;">${formatYen(item.amount)}</td>
+        <td style="text-align:center;">${status}</td>
+      </tr>`;
+    });
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
+    return;
+  }
+
+  // スマホ：従来のカード表示
   const groups = {};
   sorted.forEach(item => {
     if (!groups[item.date]) groups[item.date] = [];
@@ -382,7 +446,52 @@ function renderAttendance(items) {
     return;
   }
 
-  // スタッフ名でグループ化
+  // iPad：フラットテーブル表示
+  if (document.body.classList.contains('is-ipad')) {
+    const allRecs = [...items].sort((a, b) => b.date.localeCompare(a.date));
+
+    let html = `<table class="ipad-hist-flat-table">
+      <thead><tr>
+        <th>日付</th><th>スタッフ</th><th>${escHtml(labels.clockin_time)}</th><th>${escHtml(labels.clockout_time)}</th><th>勤務時間</th><th>状態</th>
+      </tr></thead><tbody>`;
+
+    allRecs.forEach(r => {
+      const enriched = { ...r, type: 'attendance' };
+      const atIdx = attendItems.push(enriched) - 1;
+
+      const md = (r.date || '').replace(/(\d{4})-(\d{2})-(\d{2})/, '$2/$3');
+      const clockIn  = parseTimeStr(r.clockIn)  || '—';
+      const clockOut = parseTimeStr(r.clockOut) || '';
+      const dur = clockOut ? calcWorkDuration(clockIn, clockOut) : null;
+      const wMin = r.workMinutes || dur?.minutes;
+      let durLabel = '—';
+      if (wMin && !dur?.isAbnormal) {
+        const wh = Math.floor(wMin / 60);
+        const wm = wMin % 60;
+        durLabel = wm > 0 ? `${wh}h${wm}m` : `${wh}h`;
+      }
+
+      const isActive = !clockOut;
+      const statusBadge = isActive
+        ? `<span style="color:var(--uz-green);font-size:12px;">${escHtml(labels.clockin_active)}</span>`
+        : `<span style="font-size:12px;color:var(--uz-muted);">${escHtml(labels.clockout_done)}</span>`;
+
+      html += `<tr class="ipad-hist-row" data-idx="${atIdx}" data-scope="at">
+        <td style="white-space:nowrap;">${md}</td>
+        <td>${escHtml((r.staffName || '不明').substring(0, 8))}</td>
+        <td>${escHtml(clockIn)}</td>
+        <td>${clockOut ? escHtml(clockOut) : '—'}</td>
+        <td style="font-size:12px;color:var(--uz-muted);">${durLabel}</td>
+        <td>${statusBadge}</td>
+      </tr>`;
+    });
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
+    return;
+  }
+
+  // スマホ：従来のスタッフカード表示
   const staffMap = {};
   items.forEach(item => {
     const name = item.staffName || '不明';
@@ -409,7 +518,6 @@ function renderAttendance(items) {
         </div>`;
 
     recs.forEach(r => {
-      // type: 'attendance' を付与してキャッシュに積む
       const enriched = { ...r, type: 'attendance' };
       const atIdx    = attendItems.push(enriched) - 1;
 
@@ -419,7 +527,6 @@ function renderAttendance(items) {
       const clockIn    = parseTimeStr(r.clockIn);
       const clockOut   = parseTimeStr(r.clockOut);
 
-      // 労働時間計算（GAS の is_overnight / workMinutes を優先、なければローカル計算）
       const isOvernightFlag = r.is_overnight === true ||
         (clockOut ? calcWorkDuration(clockIn, clockOut)?.isOvernight : false);
       const dur = clockOut ? calcWorkDuration(clockIn, clockOut) : null;
@@ -427,16 +534,12 @@ function renderAttendance(items) {
       let timeStr;
       if (clockOut) {
         if (dur?.isAbnormal) {
-          // 異常値：全体を赤文字で警告表示
           timeStr = `<span class="attend-time-abnormal">${escHtml(clockIn)} → ${escHtml(dur.clockOutDisplay)}</span>`;
         } else if (isOvernightFlag) {
-          // 正常な日またぎ：「翌」を強調
           timeStr = `${escHtml(clockIn)} → <span class="attend-time-overnight">翌</span>${escHtml(clockOut)}`;
         } else {
-          // 同日退店：通常表示
           timeStr = `${escHtml(clockIn)} → ${escHtml(clockOut)}`;
         }
-        // 勤務時間を追記（GAS提供値を優先）
         const wMin = r.workMinutes || dur?.minutes;
         if (wMin && !dur?.isAbnormal) {
           const wh = Math.floor(wMin / 60);
@@ -1301,62 +1404,92 @@ function renderIpadRightPanel(record) {
   if (!panel) return;
 
   _ipadSelectedRecord = record;
+  currentEditItem = record;
 
   const state = getLockState(record);
   const ls    = getLockStatus(record.date);
-  const detail = _buildIpadRecordDetail(record);
 
-  let actionHTML = '';
-  if (state === 'editable') {
-    actionHTML = `
-      <button class="ipad-right-action-btn ipad-right-action-btn--edit"
-              type="button" id="ipad-right-edit-btn">修正する</button>`;
-  } else if (state === 'grace') {
-    actionHTML = `
-      <p class="form-hint" style="margin-bottom:12px;">猶予期間中（期限まであと${ls.daysLeft}日）</p>
-      <button class="ipad-right-action-btn ipad-right-action-btn--edit"
-              type="button" id="ipad-right-edit-btn">修正する</button>`;
-  } else if (state === 'locked') {
-    actionHTML = `
-      <div class="ipad-locked-note">🔒 このレコードはロック済みです</div>
-      <button class="ipad-right-action-btn ipad-right-action-btn--unlock"
-              type="button" id="ipad-right-unlock-btn">ロック解除を申請</button>`;
+  // ロック済み・申請中：詳細表示＋ロック操作ボタン
+  if (state === 'locked' || state === 'pending') {
+    const detail = _buildIpadRecordDetail(record);
+    let actionHTML = '';
+    if (state === 'locked') {
+      actionHTML = `
+        <div class="ipad-locked-note">🔒 このレコードはロック済みです</div>
+        <button class="ipad-right-action-btn ipad-right-action-btn--unlock"
+                type="button" id="ipad-right-unlock-btn">ロック解除を申請</button>`;
+    } else {
+      actionHTML = `
+        <span class="ipad-pending-badge">申請中</span>
+        <p class="form-hint" style="margin-bottom:12px;margin-top:8px;">
+          解除申請が送信されています。承認後に修正できます。
+        </p>
+        <div class="ipad-approve-btns">
+          <button class="ipad-right-action-btn ipad-right-action-btn--approve"
+                  type="button" id="ipad-right-approve-btn">承認する</button>
+          <button class="ipad-right-action-btn ipad-right-action-btn--reject"
+                  type="button" id="ipad-right-reject-btn">却下</button>
+        </div>`;
+    }
+
+    panel.innerHTML = `
+      <div class="ipad-right-panel__header">操作パネル</div>
+      ${detail}
+      ${actionHTML}
+    `;
+
+    document.getElementById('ipad-right-unlock-btn')?.addEventListener('click', () => {
+      requestUnlock(_ipadSelectedRecord.type, _ipadSelectedRecord.rowIndex);
+      renderIpadRightPanel(_ipadSelectedRecord);
+    });
+    document.getElementById('ipad-right-approve-btn')?.addEventListener('click', () => {
+      approveUnlock(_ipadSelectedRecord.type, _ipadSelectedRecord.rowIndex);
+      renderIpadRightPanel(_ipadSelectedRecord);
+    });
+    document.getElementById('ipad-right-reject-btn')?.addEventListener('click', () => {
+      rejectUnlock(_ipadSelectedRecord.type, _ipadSelectedRecord.rowIndex);
+      renderIpadRightPanel(_ipadSelectedRecord);
+    });
+    return;
+  }
+
+  // 編集可能（editable / grace）：修正フォームを右パネルに直接表示
+  const graceNote = state === 'grace'
+    ? `<p class="form-hint" style="margin:0 0 8px;color:var(--uz-red);">猶予期間中（期限まであと${ls.daysLeft}日）</p>`
+    : '';
+
+  let formHTML = '';
+  if (record.type === 'sales') {
+    formHTML = buildSalesFormHTML(record);
+  } else if (record.type === 'cost') {
+    formHTML = buildCostFormHTML(record);
   } else {
-    // pending
-    actionHTML = `
-      <span class="ipad-pending-badge">申請中</span>
-      <p class="form-hint" style="margin-bottom:12px;margin-top:8px;">
-        解除申請が送信されています。承認後に修正できます。
-      </p>
-      <div class="ipad-approve-btns">
-        <button class="ipad-right-action-btn ipad-right-action-btn--approve"
-                type="button" id="ipad-right-approve-btn">承認する</button>
-        <button class="ipad-right-action-btn ipad-right-action-btn--reject"
-                type="button" id="ipad-right-reject-btn">却下</button>
-      </div>`;
+    formHTML = buildAttendanceFormHTML(record);
   }
 
   panel.innerHTML = `
-    <div class="ipad-right-panel__header">操作パネル</div>
-    ${detail}
-    ${actionHTML}
+    <div class="ipad-right-panel__header">修正</div>
+    <div class="ipad-right-form-body">
+      ${graceNote}
+      ${formHTML}
+      <button id="ipad-right-save-btn" type="button" class="edit-save-btn" style="margin-top:12px;">保存する</button>
+    </div>
   `;
 
-  // ボタンイベント
-  document.getElementById('ipad-right-edit-btn')?.addEventListener('click', () => {
-    openEditForm(_ipadSelectedRecord);
-  });
-  document.getElementById('ipad-right-unlock-btn')?.addEventListener('click', () => {
-    requestUnlock(_ipadSelectedRecord.type, _ipadSelectedRecord.rowIndex);
-    renderIpadRightPanel(_ipadSelectedRecord);
-  });
-  document.getElementById('ipad-right-approve-btn')?.addEventListener('click', () => {
-    approveUnlock(_ipadSelectedRecord.type, _ipadSelectedRecord.rowIndex);
-    renderIpadRightPanel(_ipadSelectedRecord);
-  });
-  document.getElementById('ipad-right-reject-btn')?.addEventListener('click', () => {
-    rejectUnlock(_ipadSelectedRecord.type, _ipadSelectedRecord.rowIndex);
-    renderIpadRightPanel(_ipadSelectedRecord);
+  // 税率トグル・税額表示
+  bindTaxCalc();
+
+  // 入店履歴の退店時刻セレクト制御
+  if (record.type === 'attendance') {
+    _refreshClockOutHourSelect('ef-clockin-h', 'ef-clockout-h');
+    document.getElementById('ef-clockin-h')?.addEventListener('change', () => {
+      _refreshClockOutHourSelect('ef-clockin-h', 'ef-clockout-h');
+    });
+  }
+
+  // 保存ボタン
+  document.getElementById('ipad-right-save-btn')?.addEventListener('click', () => {
+    saveEdit();
   });
 }
 
