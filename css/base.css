@@ -907,8 +907,8 @@ body.is-ipad[data-page="home"] .ipad-col--right { display: none; }
 .ipad-home-dashboard { display: none; }
 
 body.is-ipad .ipad-home-dashboard {
+  display: grid !important;
   grid-column: 1 / -1;
-  display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 20px;
   padding: 20px 24px 32px;

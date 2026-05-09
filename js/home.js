@@ -346,7 +346,6 @@ async function initIpadHome() {
   if (!document.body.classList.contains('is-ipad')) return;
   const dashboard = document.getElementById('ipad-home-dashboard');
   if (!dashboard) return;
-  dashboard.hidden = false;
 
   const now          = new Date();
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
