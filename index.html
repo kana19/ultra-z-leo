@@ -294,11 +294,11 @@
               <!-- 売上行（アコーディオン） -->
               <div class="pl-row pl-row--accordion" id="pl-row-sales">
                 <button class="pl-accordion-btn" type="button" onclick="togglePlAccordion('sales')" aria-expanded="false" aria-controls="pl-detail-sales">
-                  <span class="pl-label">売上</span>
-                  <span style="display:flex;align-items:center;gap:8px;">
-                    <span id="pl-sales" class="pl-value">¥—</span>
+                  <span class="pl-label-wrap">
+                    <span class="pl-label">売上</span>
                     <i class="ti ti-chevron-down pl-chevron" id="pl-chev-sales" aria-hidden="true"></i>
                   </span>
+                  <span id="pl-sales" class="pl-value">¥—</span>
                 </button>
                 <div class="pl-accordion-detail" id="pl-detail-sales" hidden></div>
               </div>
@@ -306,39 +306,41 @@
               <!-- 仕入原価行（アコーディオン） -->
               <div class="pl-row pl-row--accordion pl-row--surface" id="pl-row-cogs">
                 <button class="pl-accordion-btn" type="button" onclick="togglePlAccordion('cogs')" aria-expanded="false" aria-controls="pl-detail-cogs">
-                  <span class="pl-label">仕入原価</span>
-                  <span style="display:flex;align-items:center;gap:8px;">
-                    <span id="pl-cogs" class="pl-value">¥—</span>
+                  <span class="pl-label-wrap">
+                    <span class="pl-label">仕入原価</span>
                     <i class="ti ti-chevron-down pl-chevron" id="pl-chev-cogs" aria-hidden="true"></i>
                   </span>
+                  <span id="pl-cogs" class="pl-value">¥—</span>
                 </button>
                 <div class="pl-accordion-detail" id="pl-detail-cogs" hidden></div>
               </div>
 
-              <!-- 粗利行（結果行・アコーディオンなし） -->
+              <!-- 粗利行（アコーディオンなし） -->
               <div class="pl-row pl-row--result">
-                <span class="pl-label">粗利</span>
+                <span class="pl-label-wrap">
+                  <span class="pl-label">粗利</span>
+                </span>
                 <span id="pl-gross" class="pl-value">¥—</span>
-                <span></span>
               </div>
 
               <!-- 販管費行（アコーディオン） -->
               <div class="pl-row pl-row--accordion pl-row--surface" id="pl-row-sga">
                 <button class="pl-accordion-btn" type="button" onclick="togglePlAccordion('sga')" aria-expanded="false" aria-controls="pl-detail-sga">
-                  <span class="pl-label">販管費</span>
-                  <span style="display:flex;align-items:center;gap:8px;">
-                    <span id="pl-sga" class="pl-value">¥—</span>
+                  <span class="pl-label-wrap">
+                    <span class="pl-label">販管費</span>
                     <i class="ti ti-chevron-down pl-chevron" id="pl-chev-sga" aria-hidden="true"></i>
                   </span>
+                  <span id="pl-sga" class="pl-value">¥—</span>
                 </button>
                 <div class="pl-accordion-detail" id="pl-detail-sga" hidden></div>
               </div>
 
-              <!-- 経常利益行（ハイライト） -->
+              <!-- 経常利益行 -->
               <div class="pl-row pl-row--highlight">
-                <span class="pl-label">経常利益</span>
+                <span class="pl-label-wrap">
+                  <span class="pl-label">経常利益</span>
+                </span>
                 <span id="pl-profit" class="pl-value">¥—</span>
-                <span></span>
               </div>
             </div>
           </div>
