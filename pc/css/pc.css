@@ -145,7 +145,7 @@ body.pc-body {
   color: var(--uz-text);
   border: 1px solid var(--uz-border);
 }
-.pc-btn--danger { background: var(--uz-red); color: #fff; }
+.pc-btn--danger { background: var(--uz-red); color: var(--uz-on-accent); }
 .pc-btn--sm { padding: 3px 8px; font-size: 11px; }
 
 .pc-input, .pc-select {
@@ -1573,7 +1573,7 @@ body.pc-body {
 }
 .pc-btn-danger:hover {
   background: var(--uz-red);
-  color: #fff;
+  color: var(--uz-on-accent);
 }
 .pc-action-btn--delete {
   background: var(--uz-red-bg);
@@ -1582,7 +1582,7 @@ body.pc-body {
 }
 .pc-action-btn--delete:hover {
   background: var(--uz-red);
-  color: #fff;
+  color: var(--uz-on-accent);
 }
 .pj-action--delete {
   border-color: var(--uz-red) !important;
@@ -1590,7 +1590,7 @@ body.pc-body {
 }
 .pj-action--delete:hover {
   background: var(--uz-red) !important;
-  color: #fff !important;
+  color: var(--uz-on-accent) !important;
 }
 
 input[type="number"]::-webkit-inner-spin-button,

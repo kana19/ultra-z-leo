@@ -218,23 +218,30 @@ function renderChart(monthly) {
   const sga   = monthly.map(d => d ? (Number(d.sga)  ||0) : 0);
 
   if (chartInstance) chartInstance.destroy();
+  const _cs2 = getComputedStyle(document.documentElement);
+  const _cS  = _cs2.getPropertyValue('--uz-sales').trim()  || '#333333';
+  const _cC  = _cs2.getPropertyValue('--uz-cost').trim()   || '#C0392B';
+  const _cI  = _cs2.getPropertyValue('--uz-info').trim()   || '#2980B9';
+  const _cT  = _cs2.getPropertyValue('--uz-text').trim()   || '#1A1A1A';
+  const _cM  = _cs2.getPropertyValue('--uz-text2').trim()  || '#666666';
+  const _cG  = _cs2.getPropertyValue('--uz-border').trim() || 'rgba(0,0,0,0.10)';
   chartInstance = new Chart(ctx, {
     type: 'line',
     data: {
       labels,
       datasets: [
-        { label: '売上',     data: sales, borderColor: '#D4AF37', backgroundColor: 'rgba(212,175,55,0.2)', tension: 0.3 },
-        { label: '仕入原価', data: cogs,  borderColor: '#E05050', backgroundColor: 'rgba(224,80,80,0.2)', tension: 0.3 },
-        { label: '販管費',   data: sga,   borderColor: '#6A9FD4', backgroundColor: 'rgba(106,159,212,0.2)', tension: 0.3 },
+        { label: '売上',     data: sales, borderColor: _cS, backgroundColor: _cS + '33', tension: 0.3 },
+        { label: '仕入原価', data: cogs,  borderColor: _cC, backgroundColor: _cC + '33', tension: 0.3 },
+        { label: '販管費',   data: sga,   borderColor: _cI, backgroundColor: _cI + '33', tension: 0.3 },
       ],
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      plugins: { legend: { labels: { color: '#E8E0CC' } } },
+      plugins: { legend: { labels: { color: _cT } } },
       scales: {
-        x: { ticks: { color: '#A09070' }, grid: { color: 'rgba(212,175,55,0.1)' } },
-        y: { ticks: { color: '#A09070' }, grid: { color: 'rgba(212,175,55,0.1)' } },
+        x: { ticks: { color: _cM }, grid: { color: _cG } },
+        y: { ticks: { color: _cM }, grid: { color: _cG } },
       },
     },
   });
@@ -286,10 +293,13 @@ async function loadRecentEntries() {
     tbody.innerHTML = top.map(it => {
       const md    = it.date.replace(/(\d{4})-(\d{2})-(\d{2})/, '$2/$3');
       const nm    = escHtml(it.name).substring(0, 20);
+      const _csR  = getComputedStyle(document.documentElement);
+      const _colS = _csR.getPropertyValue('--uz-sales').trim() || '#333333';
+      const _colC = _csR.getPropertyValue('--uz-cost').trim()  || '#C0392B';
       const badge = it.type === 'sales'
-        ? '<span style="color:#D4AF37;">売上</span>'
-        : '<span style="color:#E05050;">コスト</span>';
-      const color = it.type === 'sales' ? '#D4AF37' : '#E05050';
+        ? `<span style="color:${_colS};">売上</span>`
+        : `<span style="color:${_colC};">コスト</span>`;
+      const color = it.type === 'sales' ? _colS : _colC;
       return `<tr>
         <td style="white-space:nowrap;">${md}</td>
         <td>${badge}</td>

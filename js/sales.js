@@ -407,7 +407,7 @@ function setSubmitLoading(loading) {
   if (!btn) return;
   btn.disabled = loading;
   btn.innerHTML = loading
-    ? '<span class="spinner" style="width:20px;height:20px;border-top-color:#fff;"></span>'
+    ? '<span class="spinner" style="width:20px;height:20px;border-top-color:var(--uz-on-accent);"></span>'
     : buildSubmitBtnText();
 }
 

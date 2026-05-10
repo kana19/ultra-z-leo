@@ -225,7 +225,7 @@
             html += `<td class="att-calc-cell att-calc-cell--gross att-calc-cell--editable" data-staff="${sid}" data-field="gross">${_fmtYen(st.gross)}</td>`;
             break;
           case 'adjustment':
-            html += `<td class="att-calc-cell att-calc-cell--editable" data-staff="${sid}" data-field="adjustment" style="color:${(st.adjustment || 0) < 0 ? '#f87171' : (st.adjustment || 0) > 0 ? '#4ade80' : 'var(--uz-text-muted)'}">${(st.adjustment || 0) !== 0 ? ((st.adjustment > 0 ? '+' : '') + _fmtYen(st.adjustment)) : '—'}</td>`;
+            html += `<td class="att-calc-cell att-calc-cell--editable" data-staff="${sid}" data-field="adjustment" style="color:${(st.adjustment || 0) < 0 ? 'var(--uz-danger)' : (st.adjustment || 0) > 0 ? 'var(--uz-success)' : 'var(--uz-text-muted)'}">${(st.adjustment || 0) !== 0 ? ((st.adjustment > 0 ? '+' : '') + _fmtYen(st.adjustment)) : '—'}</td>`;
             break;
           case 'adjustmentMemo':
             html += `<td class="att-calc-cell"><input class="att-adj-memo" data-staff="${sid}" type="text" value="${_escHtml(st.adjustmentMemo || '')}" placeholder="適用"></td>`;

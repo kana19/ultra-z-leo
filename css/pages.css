@@ -377,7 +377,7 @@
 
 .uc-reconcile-confirm-btn--payable {
   background: var(--uz-red);
-  color: #fff;
+  color: var(--uz-on-accent);
 }
 
 .uc-reconcile-confirm-btn:active { filter: brightness(0.85); }

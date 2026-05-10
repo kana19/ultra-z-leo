@@ -58,7 +58,7 @@
   border: none;
   border-radius: 5px;
   background: var(--uz-gold, #c9a84c);
-  color: #000;
+  color: var(--uz-text);
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
@@ -142,16 +142,16 @@
 }
 .att-day-cell--pending {
   background: var(--uz-amber-bg, rgba(245,158,11,0.1));
-  color: #f59e0b;
+  color: var(--uz-amber);
 }
 .att-money-line {
-  color: #a78bfa;
+  color: var(--uz-info);
   font-size: 9px;
   font-weight: 600;
   letter-spacing: -0.3px;
 }
 .att-day-cell--money-only { background: rgba(167,139,250,0.08); }
-.att-day-cell--project { box-shadow: inset 0 0 0 2px #3b82f6; }
+.att-day-cell--project { box-shadow: inset 0 0 0 2px var(--uz-info); }
 
 /* --- 区切り行 --- */
 .att-sep-row td {
@@ -181,7 +181,7 @@
   font-size: 13px;
   color: var(--uz-gold, #c9a84c);
 }
-.att-calc-cell--spot { color: #a78bfa; }
+.att-calc-cell--spot { color: var(--uz-info); }
 .att-calc-cell--muted {
   color: var(--uz-text-muted, #888);
   font-size: 10px;
@@ -224,9 +224,9 @@
   font-size: 10px;
   font-weight: 600;
 }
-.att-status-badge--pending { background: rgba(245,158,11,0.15); color: #f59e0b; }
-.att-status-badge--confirmed { background: rgba(74,222,128,0.15); color: #4ade80; }
-.att-status-badge--skipped { background: rgba(136,136,170,0.15); color: #888; }
+.att-status-badge--pending { background: var(--uz-amber-bg); color: var(--uz-amber); }
+.att-status-badge--confirmed { background: var(--uz-green-bg); color: var(--uz-success); }
+.att-status-badge--skipped { background: var(--uz-surface2); color: var(--uz-text3); }
 
 /* 確定ボタン */
 .att-confirm-btn {
@@ -246,7 +246,7 @@
 /* 案件除外注釈 */
 .att-exclude-note {
   font-size: 9px;
-  color: #5b9bd5;
+  color: var(--uz-info);
 }
 
 /* 調整適用メモ入力 */
@@ -351,7 +351,7 @@
   cursor: pointer; border: none;
 }
 .att-popover__cancel { background: transparent; color: var(--uz-text-muted, #888); }
-.att-popover__save { background: var(--uz-gold, #c9a84c); color: #000; font-weight: 600; }
+.att-popover__save { background: var(--uz-gold, #c9a84c); color: var(--uz-text); font-weight: 600; }
 
 /* --- 確定ダイアログ --- */
 .att-confirm-dialog {
@@ -384,7 +384,7 @@
 }
 .att-confirm-dialog__ok {
   padding: 8px 24px; border: none; border-radius: 6px;
-  background: var(--uz-gold, #c9a84c); color: #000;
+  background: var(--uz-gold, #c9a84c); color: var(--uz-text);
   font-size: 12px; font-weight: 700; cursor: pointer;
 }
 .att-confirm-spot-header {
@@ -401,7 +401,7 @@
 .att-confirm-spot-row__date { color: var(--uz-text-muted, #888); min-width: 50px; }
 .att-confirm-spot-row__name { flex: 1; margin: 0 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .att-confirm-spot-row__amount { font-variant-numeric: tabular-nums; text-align: right; min-width: 70px; }
-.att-confirm-spot-total { font-size: 12px; font-weight: 600; color: #a78bfa; text-align: right; padding: 4px 0 8px; }
+.att-confirm-spot-total { font-size: 12px; font-weight: 600; color: var(--uz-info); text-align: right; padding: 4px 0 8px; }
 .att-confirm-choices { margin: 12px 0; display: flex; flex-direction: column; gap: 6px; }
 .att-confirm-choice {
   display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px;

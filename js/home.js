@@ -554,6 +554,12 @@ async function _renderIpadMonthlyChart(year) {
 
   if (_ipadChart) { _ipadChart.destroy(); _ipadChart = null; }
 
+  const _cs = getComputedStyle(document.documentElement);
+  const _cSales   = _cs.getPropertyValue('--uz-sales').trim()   || '#333333';
+  const _cProfit  = _cs.getPropertyValue('--uz-profit').trim()  || '#27AE60';
+  const _cMuted   = _cs.getPropertyValue('--uz-text2').trim()   || '#666666';
+  const _cGrid    = _cs.getPropertyValue('--uz-border').trim()  || 'rgba(0,0,0,0.10)';
+
   _ipadChart = new Chart(canvas, {
     type: 'bar',
     data: {
@@ -562,16 +568,16 @@ async function _renderIpadMonthlyChart(year) {
         {
           label: '売上',
           data: salesData,
-          backgroundColor: 'rgba(212,175,55,0.7)',
-          borderColor: '#D4AF37',
+          backgroundColor: _cSales + 'B3',
+          borderColor: _cSales,
           borderWidth: 1,
           borderRadius: 3,
         },
         {
           label: '経常利益',
           data: profitData,
-          backgroundColor: 'rgba(76,175,128,0.7)',
-          borderColor: '#4CAF80',
+          backgroundColor: _cProfit + 'B3',
+          borderColor: _cProfit,
           borderWidth: 1,
           borderRadius: 3,
         },
@@ -581,16 +587,16 @@ async function _renderIpadMonthlyChart(year) {
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
-        legend: { labels: { color: '#A09070', font: { size: 11 } } },
+        legend: { labels: { color: _cMuted, font: { size: 11 } } },
       },
       scales: {
         x: {
-          ticks: { color: '#A09070', font: { size: 10 } },
-          grid:  { color: 'rgba(212,175,55,0.06)' },
+          ticks: { color: _cMuted, font: { size: 10 } },
+          grid:  { color: _cGrid },
         },
         y: {
           ticks: {
-            color: '#A09070',
+            color: _cMuted,
             font:  { size: 10 },
             callback: v => {
               const abs = Math.abs(v);
@@ -598,7 +604,7 @@ async function _renderIpadMonthlyChart(year) {
               return v;
             },
           },
-          grid: { color: 'rgba(212,175,55,0.06)' },
+          grid: { color: _cGrid },
         },
       },
     },
