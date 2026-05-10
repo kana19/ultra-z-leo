@@ -439,7 +439,112 @@ body {
   text-align: right;
 }
 
-/* ── セクションタイトル ──────────────────────────────────── */
+/* ── 横並び入力ボタン（スマホホーム） ───────────────────── */
+.action-btn--half {
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  height: 80px;
+  padding: 12px 16px;
+  gap: 4px;
+}
+
+.action-btn__main-label {
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--uz-on-accent);
+}
+
+.action-btn__sub {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--uz-on-accent);
+  opacity: 0.75;
+}
+
+.action-btn__sub .ti {
+  font-size: 14px;
+}
+
+/* ── 損益アコーディオン ──────────────────────────────────── */
+.pl-row--accordion {
+  flex-direction: column;
+  padding: 0;
+  border-bottom: none;
+}
+
+.pl-row--surface {
+  background: var(--uz-surface);
+}
+
+.pl-accordion-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 10px 0;
+  border: none;
+  background: transparent;
+  font-family: var(--font-main);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.pl-row--surface .pl-accordion-btn {
+  padding: 10px 10px;
+}
+
+.pl-chevron {
+  font-size: 14px;
+  color: var(--uz-text3);
+  transition: transform 0.2s;
+  flex-shrink: 0;
+}
+
+.pl-chevron--open {
+  transform: rotate(180deg);
+}
+
+.pl-accordion-detail {
+  width: 100%;
+  border-top: 1px solid var(--uz-border);
+  padding: 6px 0 8px;
+}
+
+.pl-row--surface .pl-accordion-detail {
+  padding: 6px 10px 8px;
+}
+
+.pl-detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 4px 0;
+  font-size: 12px;
+  color: var(--uz-text2);
+}
+
+.pl-detail-row__name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding-right: 8px;
+}
+
+.pl-detail-row__val {
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+/* ボトムナビアイコンをTabler対応に */
+.nav-item__icon.ti {
+  font-size: 24px;
+  line-height: 1;
+}
 .section-title {
   font-size: 12px;
   font-weight: 700;

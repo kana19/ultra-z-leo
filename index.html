@@ -13,6 +13,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.9.0/dist/tabler-icons.min.css">
   <link rel="stylesheet" href="css/base.css">
   <link rel="stylesheet" href="css/forms.css">
   <link rel="stylesheet" href="css/sheet-modal.css">
@@ -227,13 +228,16 @@
 
       <!-- 入力セクション -->
       <section aria-label="入力ボタン">
-        <div style="display:flex; flex-direction:column; gap:10px;">
+        <div style="display:flex; gap:10px;">
 
           <!-- 売上入力ボタン -->
-          <div style="position:relative;">
-            <button type="button" class="action-btn action-btn--sales" onclick="openSalesModal()">
-              <span class="action-btn__icon" aria-hidden="true">💰</span>
-              <span class="action-btn__label">売上を入れる</span>
+          <div style="position:relative; flex:1;">
+            <button type="button" class="action-btn action-btn--sales action-btn--half" onclick="openSalesModal()">
+              <span class="action-btn__main-label">売上</span>
+              <span class="action-btn__sub">
+                <span>service</span>
+                <i class="ti ti-pencil" aria-hidden="true"></i>
+              </span>
             </button>
             <span id="dot-uncollected"
                   class="action-btn__dot"
@@ -242,11 +246,14 @@
             </span>
           </div>
 
-          <!-- コスト入力ボタン -->
-          <div style="position:relative;">
-            <button type="button" class="action-btn action-btn--cost" onclick="openCostModal()">
-              <span class="action-btn__icon" aria-hidden="true">💸</span>
-              <span class="action-btn__label">コストを入れる</span>
+          <!-- 経費入力ボタン -->
+          <div style="position:relative; flex:1;">
+            <button type="button" class="action-btn action-btn--cost action-btn--half" onclick="openCostModal()">
+              <span class="action-btn__main-label">経費</span>
+              <span class="action-btn__sub">
+                <span>cost</span>
+                <i class="ti ti-pencil" aria-hidden="true"></i>
+              </span>
             </button>
             <span id="dot-payable"
                   class="action-btn__dot"
@@ -264,12 +271,12 @@
         <!-- タブヘッダー -->
         <div class="home-tabs" id="home-tabs">
           <button class="home-tab" id="tab-pl" onclick="switchHomeTab('pl')" type="button">
-            <span class="home-tab__icon">📊</span>
+            <i class="ti ti-chart-bar home-tab__icon" aria-hidden="true"></i>
             <span class="home-tab__label">今月の損益</span>
           </button>
           <button class="home-tab" id="tab-attendance" onclick="switchHomeTab('attendance')" type="button">
-            <span class="home-tab__icon">👥</span>
-            <span class="home-tab__label" data-uilabel-key="clockin_record">出勤状況</span>
+            <i class="ti ti-users home-tab__icon" aria-hidden="true"></i>
+            <span class="home-tab__label" data-uilabel-key="attendance_status">出勤状況</span>
           </button>
         </div>
 
@@ -278,22 +285,50 @@
           <div class="card">
             <div class="card__body">
               <div id="pl-month-label" class="pl-month-label">読み込み中...</div>
-              <div class="pl-row">
-                <span class="pl-label">売上</span>
-                <span id="pl-sales" class="pl-value">¥—</span>
+
+              <!-- 売上行（アコーディオン） -->
+              <div class="pl-row pl-row--accordion" id="pl-row-sales">
+                <button class="pl-accordion-btn" type="button" onclick="togglePlAccordion('sales')" aria-expanded="false" aria-controls="pl-detail-sales">
+                  <span class="pl-label">売上</span>
+                  <span style="display:flex;align-items:center;gap:8px;">
+                    <span id="pl-sales" class="pl-value">¥—</span>
+                    <i class="ti ti-chevron-down pl-chevron" id="pl-chev-sales" aria-hidden="true"></i>
+                  </span>
+                </button>
+                <div class="pl-accordion-detail" id="pl-detail-sales" hidden></div>
               </div>
-              <div class="pl-row">
-                <span class="pl-label">仕入原価</span>
-                <span id="pl-cogs" class="pl-value">¥—</span>
+
+              <!-- 仕入原価行（アコーディオン） -->
+              <div class="pl-row pl-row--accordion pl-row--surface" id="pl-row-cogs">
+                <button class="pl-accordion-btn" type="button" onclick="togglePlAccordion('cogs')" aria-expanded="false" aria-controls="pl-detail-cogs">
+                  <span class="pl-label">仕入原価</span>
+                  <span style="display:flex;align-items:center;gap:8px;">
+                    <span id="pl-cogs" class="pl-value">¥—</span>
+                    <i class="ti ti-chevron-down pl-chevron" id="pl-chev-cogs" aria-hidden="true"></i>
+                  </span>
+                </button>
+                <div class="pl-accordion-detail" id="pl-detail-cogs" hidden></div>
               </div>
+
+              <!-- 粗利行（結果行・アコーディオンなし） -->
               <div class="pl-row pl-row--result">
                 <span class="pl-label">粗利</span>
                 <span id="pl-gross" class="pl-value">¥—</span>
               </div>
-              <div class="pl-row">
-                <span class="pl-label">販管費</span>
-                <span id="pl-sga" class="pl-value">¥—</span>
+
+              <!-- 販管費行（アコーディオン） -->
+              <div class="pl-row pl-row--accordion pl-row--surface" id="pl-row-sga">
+                <button class="pl-accordion-btn" type="button" onclick="togglePlAccordion('sga')" aria-expanded="false" aria-controls="pl-detail-sga">
+                  <span class="pl-label">販管費</span>
+                  <span style="display:flex;align-items:center;gap:8px;">
+                    <span id="pl-sga" class="pl-value">¥—</span>
+                    <i class="ti ti-chevron-down pl-chevron" id="pl-chev-sga" aria-hidden="true"></i>
+                  </span>
+                </button>
+                <div class="pl-accordion-detail" id="pl-detail-sga" hidden></div>
               </div>
+
+              <!-- 経常利益行（ハイライト） -->
               <div class="pl-row pl-row--highlight">
                 <span class="pl-label">経常利益</span>
                 <span id="pl-profit" class="pl-value">¥—</span>
@@ -351,22 +386,22 @@
 <nav class="bottom-nav" aria-label="メインナビゲーション">
 
   <a href="index.html" class="nav-item nav-item--active" aria-current="page">
-    <span class="nav-item__icon" aria-hidden="true">🏠</span>
+    <i class="ti ti-home nav-item__icon" aria-hidden="true"></i>
     <span class="nav-item__label">ホーム</span>
   </a>
 
   <a href="pl.html" class="nav-item">
-    <span class="nav-item__icon" aria-hidden="true">📊</span>
+    <i class="ti ti-chart-bar nav-item__icon" aria-hidden="true"></i>
     <span class="nav-item__label">損益</span>
   </a>
 
   <a href="history.html" class="nav-item">
-    <span class="nav-item__icon" aria-hidden="true">📝</span>
+    <i class="ti ti-history nav-item__icon" aria-hidden="true"></i>
     <span class="nav-item__label">履歴・修正</span>
   </a>
 
   <a href="settings.html" class="nav-item">
-    <span class="nav-item__icon" aria-hidden="true">⚙️</span>
+    <i class="ti ti-settings nav-item__icon" aria-hidden="true"></i>
     <span class="nav-item__label">設定</span>
   </a>
 

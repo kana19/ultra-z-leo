@@ -201,6 +201,10 @@ async function loadAlerts() {
 }
 
 /* ── 損益サマリー描画 ────────────────────────────────────── */
+
+/* 科目別内訳キャッシュ */
+let _plBreakdown = { sales: [], cogs: [], sga: [] };
+
 function _renderPLValues(pl) {
   const now = new Date();
   const monthRaw = pl.month ?? `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -237,13 +241,90 @@ function _renderPLError() {
   });
 }
 
+/* 科目別内訳を getHistory から集計してキャッシュ */
+async function _loadBreakdown(month) {
+  try {
+    const [salesRes, costRes] = await Promise.all([
+      callGAS('getHistory', { type: 'sales', month }).catch(() => null),
+      callGAS('getHistory', { type: 'cost',  month }).catch(() => null),
+    ]);
+
+    /* 売上：サービス名別集計 */
+    const salesMap = {};
+    if (salesRes?.status === 'ok' && Array.isArray(salesRes.data)) {
+      salesRes.data.forEach(r => {
+        const name = r.service || r.serviceName || '売上';
+        salesMap[name] = (salesMap[name] || 0) + (Number(r.taxIncluded ?? r.amount) || 0);
+      });
+    }
+
+    /* コスト：科目名別・経費区分別に分離 */
+    const cogsMap = {}, sgaMap = {};
+    if (costRes?.status === 'ok' && Array.isArray(costRes.data)) {
+      costRes.data.forEach(r => {
+        const name = r.itemName || r.item || '経費';
+        const amt  = Number(r.taxIncluded ?? r.amount) || 0;
+        if (String(r.divisionCode ?? r.division ?? '') === '1') {
+          cogsMap[name] = (cogsMap[name] || 0) + amt;
+        } else {
+          sgaMap[name] = (sgaMap[name] || 0) + amt;
+        }
+      });
+    }
+
+    const toArr = map => Object.entries(map)
+      .map(([name, amt]) => ({ name, amt }))
+      .sort((a, b) => b.amt - a.amt);
+
+    _plBreakdown = { sales: toArr(salesMap), cogs: toArr(cogsMap), sga: toArr(sgaMap) };
+  } catch {
+    _plBreakdown = { sales: [], cogs: [], sga: [] };
+  }
+}
+
+/* アコーディオン開閉 */
+function togglePlAccordion(key) {
+  const detail = document.getElementById(`pl-detail-${key}`);
+  const chev   = document.getElementById(`pl-chev-${key}`);
+  const btn    = detail?.previousElementSibling;
+  if (!detail) return;
+
+  const isOpen = !detail.hidden;
+
+  if (isOpen) {
+    detail.hidden = true;
+    chev?.classList.remove('pl-chevron--open');
+    btn?.setAttribute('aria-expanded', 'false');
+  } else {
+    /* 内訳を描画してから展開 */
+    const items = _plBreakdown[key] || [];
+    if (items.length === 0) {
+      detail.innerHTML = '<div class="pl-detail-row" style="color:var(--uz-text3);font-size:12px;padding:4px 0;">内訳データなし</div>';
+    } else {
+      detail.innerHTML = items.map(it =>
+        `<div class="pl-detail-row">
+          <span class="pl-detail-row__name">${escapeHtml(it.name)}</span>
+          <span class="pl-detail-row__val">${formatYen(it.amt)}</span>
+        </div>`
+      ).join('');
+    }
+    detail.hidden = false;
+    chev?.classList.add('pl-chevron--open');
+    btn?.setAttribute('aria-expanded', 'true');
+  }
+}
+
 async function loadPL() {
   const now   = new Date();
   const year  = now.getFullYear();
   const month = String(now.getMonth() + 1).padStart(2, '0');
+  const monthStr = `${year}-${month}`;
 
   try {
-    const res = await callGAS('getSummary', { month: `${year}-${month}` });
+    const [res] = await Promise.all([
+      callGAS('getSummary', { month: monthStr }),
+      _loadBreakdown(monthStr),   /* 内訳を並行取得 */
+    ]);
     if (res && res.status === 'ok' && res.data) {
       _renderPLValues(res.data);
     } else {
