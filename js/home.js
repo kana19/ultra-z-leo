@@ -244,33 +244,29 @@ function _renderPLError() {
 /* 科目別内訳を getHistory から集計してキャッシュ */
 async function _loadBreakdown(month) {
   try {
-    const [salesRes, costRes] = await Promise.all([
-      callGAS('getHistory', { type: 'sales', month }).catch(() => null),
-      callGAS('getHistory', { type: 'cost',  month }).catch(() => null),
-    ]);
+    /* getHistoryは売上・コスト混在で返す。typeフィールドで分離する */
+    const res = await callGAS('getHistory', { month }).catch(() => null);
+    const data = (res?.status === 'ok' && Array.isArray(res.data)) ? res.data : [];
 
-    /* 売上：サービス名別集計 */
-    const salesMap = {};
-    if (salesRes?.status === 'ok' && Array.isArray(salesRes.data)) {
-      salesRes.data.forEach(r => {
-        const name = r.service || r.serviceName || '売上';
-        salesMap[name] = (salesMap[name] || 0) + (Number(r.taxIncluded ?? r.amount) || 0);
-      });
-    }
+    const salesMap = {}, cogsMap = {}, sgaMap = {};
 
-    /* コスト：科目名別・経費区分別に分離 */
-    const cogsMap = {}, sgaMap = {};
-    if (costRes?.status === 'ok' && Array.isArray(costRes.data)) {
-      costRes.data.forEach(r => {
-        const name = r.itemName || r.item || '経費';
-        const amt  = Number(r.taxIncluded ?? r.amount) || 0;
-        if (String(r.divisionCode ?? r.division ?? '') === '1') {
+    data.forEach(r => {
+      if (r.type === 'sales') {
+        /* 売上：itemName（GASフィールド名）でサービス別集計 */
+        const name = r.itemName || '売上';
+        salesMap[name] = (salesMap[name] || 0) + (Number(r.amount) || 0);
+
+      } else if (r.type === 'cost') {
+        /* コスト：divisionCode '1'=仕入原価 / それ以外=販管費 */
+        const name = r.itemName || '経費';
+        const amt  = Number(r.amount) || 0;
+        if (String(r.divisionCode) === '1') {
           cogsMap[name] = (cogsMap[name] || 0) + amt;
         } else {
           sgaMap[name] = (sgaMap[name] || 0) + amt;
         }
-      });
-    }
+      }
+    });
 
     const toArr = map => Object.entries(map)
       .map(([name, amt]) => ({ name, amt }))

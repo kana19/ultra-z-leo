@@ -50,19 +50,23 @@
   }
   .home-tab:active { opacity: 0.75; }
   .home-tab.active {
-    background: var(--uz-surface2);
+    background: var(--uz-bg);
     color: var(--uz-text);
-    border-bottom: 2px solid var(--uz-gold);
+    border-bottom: 2px solid var(--uz-text);
   }
   .home-tab__icon { font-size: 16px; }
   .home-tab-panel {
-    border: 1px solid var(--uz-border);
+    border: none;
     border-radius: 0 0 12px 12px;
     overflow: hidden;
   }
   .home-tab-panel .card {
     border-radius: 0;
     border: none;
+    box-shadow: none;
+  }
+  .home-tab-panel .card__body {
+    padding: 0;
   }
   /* 出勤バナー通知 */
   #home-attendance-banner {
@@ -116,13 +120,9 @@
 
 <div class="page-wrapper">
 
-  <!-- ヘッダー -->
+  <!-- ヘッダー（ロゴ固定） -->
   <header class="app-header">
     <div class="app-header__store">スナック LEO</div>
-    <div class="app-header__datetime">
-      <div id="header-date" class="app-header__date">読み込み中...</div>
-      <div id="header-time" class="app-header__time">--:--:--</div>
-    </div>
   </header>
 
   <!-- メインコンテンツ -->
@@ -225,6 +225,12 @@
 
     <!-- ── 左カラム（iPad）/ 通常表示（スマホ） ─── -->
     <div class="ipad-col--left">
+
+      <!-- 日付・時刻（ボタン上） -->
+      <div class="home-datetime">
+        <span id="header-date" class="home-datetime__date">読み込み中...</span>
+        <span id="header-time" class="home-datetime__time">--:--:--</span>
+      </div>
 
       <!-- 入力セクション -->
       <section aria-label="入力ボタン">
@@ -363,18 +369,6 @@
 
       <!-- 確定申告タイマー -->
       <div id="tax-timer" style="display:none"></div>
-
-      <!-- 未収・買掛けショートカット -->
-      <section aria-label="未収・買掛け">
-        <a href="uncollected.html"
-           class="action-btn action-btn--neutral"
-           style="height:var(--btn-height-sm); font-size:15px;"
-           role="button">
-          <span class="action-btn__icon" aria-hidden="true">📋</span>
-          <span class="action-btn__label">未収・買掛けを確認する</span>
-          <span style="font-size:18px; color:var(--uz-muted);" aria-hidden="true">›</span>
-        </a>
-      </section>
 
     </div><!-- /ipad-col--right -->
 
