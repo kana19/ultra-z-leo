@@ -376,13 +376,15 @@ body {
 }
 
 /* ── 損益サマリー ────────────────────────────────────────── */
+/* 全行共通：3列grid（ラベル・金額・▼プレースホルダー）で列を統一 */
 .pl-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 20px;
   align-items: center;
-  justify-content: space-between;
   padding: 11px 12px;
   border-bottom: none;
   background: var(--uz-bg);
+  gap: 0;
 }
 
 .pl-row:last-child {
@@ -392,7 +394,6 @@ body {
 .pl-label {
   font-size: 14px;
   color: var(--uz-text2);
-  flex: 1;
 }
 
 .pl-value {
@@ -414,6 +415,7 @@ body {
   background: var(--uz-bg);
   margin: 0;
   padding: 11px 12px;
+  border-bottom: none !important;
 }
 
 .pl-row--result .pl-label {
@@ -421,28 +423,28 @@ body {
   font-weight: 500;
 }
 
-/* 経常利益：極薄・文字は損益に応じて赤/チャコール */
+/* 経常利益：極薄・文字はチャコール固定（シルバー系統一） */
 .pl-row--highlight {
-  background: var(--uz-bg);
-  margin: 0;
-  padding: 12px 12px;
-  border-radius: 0;
+  background: var(--uz-bg) !important;
+  margin: 0 !important;
+  padding: 12px 12px !important;
+  border-radius: 0 !important;
 }
 
 .pl-row--highlight .pl-label {
-  color: var(--uz-text);
+  color: var(--uz-text) !important;
   font-weight: 600;
   font-size: 14px;
 }
 
 .pl-row--highlight .pl-value {
-  color: var(--uz-text);
+  color: var(--uz-text) !important;
   font-size: 16px;
   font-weight: 700;
 }
 
 .pl-value--negative {
-  color: var(--uz-text);
+  color: var(--uz-text) !important;
 }
 
 .pl-month-label {
@@ -495,9 +497,9 @@ body {
 }
 
 .pl-accordion-btn {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 20px;
   align-items: center;
-  justify-content: space-between;
   width: 100%;
   padding: 11px 12px;
   border: none;
@@ -505,6 +507,7 @@ body {
   font-family: var(--font-main);
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+  gap: 0;
 }
 
 .pl-row--surface .pl-accordion-btn {
@@ -515,7 +518,8 @@ body {
   font-size: 14px;
   color: var(--uz-text3);
   transition: transform 0.2s;
-  flex-shrink: 0;
+  text-align: center;
+  width: 20px;
 }
 
 .pl-chevron--open {
@@ -594,6 +598,7 @@ body {
   justify-content: center;
   gap: 4px;
   text-decoration: none;
+  color: var(--uz-text3);
   cursor: pointer;
   border: none;
   background: transparent;
@@ -602,24 +607,29 @@ body {
 }
 
 .nav-item:active {
-  background: var(--uz-amber-bg);
+  background: var(--uz-surface2);
 }
 
 .nav-item__icon {
   font-size: 22px;
   line-height: 1;
+  color: inherit;
 }
 
 .nav-item__label {
   font-size: 10px;
   font-weight: 600;
-  color: var(--uz-muted);
+  color: inherit;
   font-family: var(--font-main);
+}
+
+.nav-item--active {
+  color: var(--uz-text);
 }
 
 .nav-item--active .nav-item__icon,
 .nav-item--active .nav-item__label {
-  color: var(--uz-gold);
+  color: var(--uz-text);
 }
 
 /* ── ユーティリティ ──────────────────────────────────────── */

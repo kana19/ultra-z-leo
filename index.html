@@ -24,10 +24,7 @@
   .home-tabs {
     display: flex;
     gap: 0;
-    border-radius: 12px 12px 0 0;
-    overflow: hidden;
-    border: 1px solid var(--uz-border);
-    border-bottom: none;
+    border-bottom: 1px solid var(--uz-border);
     margin-bottom: 0;
   }
   .home-tab {
@@ -37,33 +34,35 @@
     justify-content: center;
     gap: 6px;
     padding: 11px 8px;
-    background: var(--uz-surface);
+    background: transparent;
     border: none;
-    color: var(--uz-text2);
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    color: var(--uz-text3);
     font-size: 13px;
     font-family: inherit;
     font-weight: 600;
     cursor: pointer;
-    transition: background 0.15s, color 0.15s;
+    transition: color 0.15s, border-color 0.15s;
     letter-spacing: 0.02em;
     -webkit-tap-highlight-color: transparent;
   }
   .home-tab:active { opacity: 0.75; }
   .home-tab.active {
-    background: var(--uz-bg);
+    background: transparent;
     color: var(--uz-text);
     border-bottom: 2px solid var(--uz-text);
   }
-  .home-tab__icon { font-size: 16px; }
+  .home-tab__icon { font-size: 16px; color: inherit; }
   .home-tab-panel {
     border: none;
-    border-radius: 0 0 12px 12px;
     overflow: hidden;
   }
   .home-tab-panel .card {
     border-radius: 0;
     border: none;
     box-shadow: none;
+    background: transparent;
   }
   .home-tab-panel .card__body {
     padding: 0;
@@ -320,6 +319,7 @@
               <div class="pl-row pl-row--result">
                 <span class="pl-label">粗利</span>
                 <span id="pl-gross" class="pl-value">¥—</span>
+                <span></span>
               </div>
 
               <!-- 販管費行（アコーディオン） -->
@@ -338,6 +338,7 @@
               <div class="pl-row pl-row--highlight">
                 <span class="pl-label">経常利益</span>
                 <span id="pl-profit" class="pl-value">¥—</span>
+                <span></span>
               </div>
             </div>
           </div>

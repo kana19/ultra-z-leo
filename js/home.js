@@ -494,7 +494,7 @@ function _renderIpadPLRows(d) {
   set('ipad-pl-profit', profit);
 
   const profEl = document.getElementById('ipad-pl-profit');
-  if (profEl) profEl.style.color = profit >= 0 ? 'var(--uz-green)' : 'var(--uz-red)';
+  if (profEl) profEl.style.color = '';
 }
 
 function _renderIpadTaxTimer() {
