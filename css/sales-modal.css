@@ -1,15 +1,5 @@
 /* css/sales-modal.css — 売上登録モーダル */
 
-/* ── 発生日sticky固定ヘッダー ────────────────────────────── */
-.sales-sm-sticky-header {
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  background: var(--uz-surface);
-  padding: 10px 16px;
-  border-bottom: 1px solid var(--uz-border);
-}
-
 .sales-sm-body {
   padding: 4px 16px 16px;
 }
@@ -42,8 +32,8 @@
   gap: 8px;
 }
 .sales-sm-card {
-  min-height: 52px;
-  padding: 12px 10px;
+  min-height: 48px;
+  padding: 10px 10px;
   background: var(--uz-surface);
   border: 1.5px solid var(--uz-border);
   border-radius: 10px;

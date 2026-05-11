@@ -93,8 +93,15 @@ window.SheetModal = (() => {
     const body = _el('div', 'sm-body');
     body.innerHTML = options.bodyHtml || '';
 
+    /* sm-sticky-header が含まれている場合はsm-bodyの外に移動
+       （overflow-y:autoの親の中ではstickyが効かないため） */
+    const stickyHeader = body.querySelector('.sm-sticky-header');
+
     sheet.appendChild(handle);
     sheet.appendChild(header);
+    if (stickyHeader) {
+      sheet.appendChild(stickyHeader); /* sm-bodyの前に挿入 */
+    }
     sheet.appendChild(body);
 
     // onSubmit が提供された場合のみ SheetModal 管理のフッターボタンを表示

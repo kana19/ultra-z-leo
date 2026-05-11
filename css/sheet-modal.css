@@ -121,3 +121,61 @@
 body.sm-open {
   overflow: hidden;
 }
+
+/* ── 共通sticky固定ヘッダー（売上・経費モーダル共用） ────── */
+.sm-sticky-header {
+  flex-shrink: 0;
+  background: var(--uz-surface);
+  border-bottom: 1px solid var(--uz-border);
+  padding: 0 16px;
+}
+
+.sm-sticky-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--uz-border);
+}
+
+.sm-sticky-row:last-child {
+  border-bottom: none;
+}
+
+/* ラベル：sales-sm-label・cost-sm-labelと同じ見た目 */
+.sm-sticky-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--uz-text2);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+  min-width: 48px;
+}
+
+/* 日付入力：date-inputと同じ見た目 */
+.sm-sticky-date-input {
+  flex: 1;
+  min-width: 0;
+  height: 40px;
+  padding: 0 12px;
+  background: var(--uz-surface2);
+  border: 1px solid var(--uz-border2);
+  border-radius: var(--radius-md);
+  color: var(--uz-text);
+  font-family: var(--font-main);
+  font-size: 16px;
+  font-weight: 600;
+  box-sizing: border-box;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.sm-uncollected-check-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  user-select: none;
+  flex: 1;
+}

@@ -458,7 +458,7 @@ function _buildSalesFormBodyHTML() {
       <div class="sales-sm-section">
         <label class="uncollected-check-row">
           <input type="checkbox" id="uncollected-toggle" class="uncollected-check">
-          <span class="uncollected-check-label">□ 売掛（未入金）として登録</span>
+          <span class="uncollected-check-label">売掛（未入金）として登録</span>
         </label>
       </div>
 
