@@ -112,10 +112,7 @@ body {
 .app-header {
   background: var(--uz-bg);
   border-bottom: none;
-  padding: calc(env(safe-area-inset-top) + 14px) 16px 10px;
-  position: sticky;
-  top: 0;
-  z-index: 100;
+  padding: calc(env(safe-area-inset-top) + 16px) 16px 14px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -131,11 +128,11 @@ body {
   text-align: center;
 }
 
-/* ── ホームsticky固定エリア（日時・ボタン・タブ） ────────── */
+/* ── ホームsticky固定エリア（ヘッダー〜タブを一体固定） ──── */
 .home-sticky-top {
   position: sticky;
   top: 0;
-  z-index: 99;
+  z-index: 100;
   background: var(--uz-bg);
 }
 
@@ -469,7 +466,13 @@ body {
 }
 
 /* ── 入力ボタン カラータイマー縁 ────────────────────────── */
-/* ① 通常：シルバー縁のみ */
+/* 全ボタンのフォーカス枠を除去 */
+.action-btn:focus,
+.action-btn:focus-visible {
+  outline: none;
+}
+
+/* ① 通常：シルバー縁のみ（box-shadowで確実表示） */
 .action-btn--half {
   flex-direction: column;
   align-items: flex-start;
@@ -477,46 +480,31 @@ body {
   height: 96px;
   padding: 14px 18px;
   gap: 5px;
-  outline: 2.5px solid var(--uz-silver);
-  outline-offset: -2px;
-}
-
-/* フォーカス枠とカラータイマー縁が競合しないよう上書き */
-.action-btn--half:focus,
-.action-btn--half:focus-visible {
-  outline: 2.5px solid var(--uz-silver);
+  outline: none;
+  box-shadow: 0 0 0 2px var(--uz-silver);
 }
 
 /* ② 発生：青点灯 */
 .action-btn--timer-blue {
-  outline-color: #4A90D9 !important;
-  box-shadow: 0 0 0 3px rgba(74,144,217,0.2);
-}
-.action-btn--timer-blue:focus,
-.action-btn--timer-blue:focus-visible {
-  outline-color: #4A90D9 !important;
+  box-shadow: 0 0 0 2.5px #4A90D9, 0 0 0 5px rgba(74,144,217,0.15) !important;
 }
 
 /* ③ 3営業日前：赤点灯 */
 .action-btn--timer-red {
-  outline-color: var(--uz-danger) !important;
-  box-shadow: 0 0 0 3px rgba(192,57,43,0.2);
+  box-shadow: 0 0 0 2.5px var(--uz-danger), 0 0 0 5px rgba(192,57,43,0.15) !important;
 }
 
 /* ④ 1営業日前以降：赤点滅 */
 .action-btn--timer-blink {
-  outline-color: var(--uz-danger) !important;
   animation: timer-blink 0.8s ease-in-out infinite;
 }
 
 @keyframes timer-blink {
   0%, 100% {
-    outline-color: var(--uz-danger);
-    box-shadow: 0 0 0 3px rgba(192,57,43,0.35);
+    box-shadow: 0 0 0 2.5px var(--uz-danger), 0 0 0 5px rgba(192,57,43,0.3);
   }
   50% {
-    outline-color: rgba(192,57,43,0.15);
-    box-shadow: 0 0 0 3px rgba(192,57,43,0);
+    box-shadow: 0 0 0 2.5px rgba(192,57,43,0.2), 0 0 0 5px rgba(192,57,43,0);
   }
 }
 

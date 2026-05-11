@@ -119,11 +119,6 @@
 
 <div class="page-wrapper">
 
-  <!-- ヘッダー（ロゴ固定） -->
-  <header class="app-header">
-    <div class="app-header__store">スナック LEO</div>
-  </header>
-
   <!-- メインコンテンツ -->
   <main class="page-body">
 
@@ -225,8 +220,13 @@
     <!-- ── 左カラム（iPad）/ 通常表示（スマホ） ─── -->
     <div class="ipad-col--left">
 
-      <!-- sticky固定エリア（日時・ボタン・タブ） -->
+      <!-- sticky固定エリア（ヘッダー・日時・ボタン・タブ） -->
       <div class="home-sticky-top">
+
+        <!-- 店名ヘッダー -->
+        <header class="app-header">
+          <div class="app-header__store">スナック LEO</div>
+        </header>
 
         <!-- 日付・時刻 -->
         <div class="home-datetime">
@@ -235,7 +235,7 @@
         </div>
 
         <!-- 入力ボタン -->
-        <section aria-label="入力ボタン" style="padding:0 16px 10px;">
+        <section aria-label="入力ボタン" style="padding:0 10px 10px;">
           <div style="display:flex; gap:10px;">
 
             <div style="position:relative; flex:1;">
