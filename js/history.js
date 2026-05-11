@@ -196,6 +196,11 @@ async function loadAll() {
 }
 
 /* ── 修正ボタン（全期間・全データ修正可能） ──────────────── */
+/* getLockStatus：常にロックなしを返す（ロック廃止・互換性維持） */
+function getLockStatus(_dateStr) {
+  return { locked: false, grace: false, daysLeft: null };
+}
+
 function buildLockWidget(ls, idx, scope) {
   return `<button class="hist-edit-btn" type="button" data-idx="${idx}" data-scope="${scope}">修正</button>`;
 }
