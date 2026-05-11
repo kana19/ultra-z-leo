@@ -41,7 +41,33 @@ function renderHeaderDate() {
   if (el) el.textContent = `${y}年${m}月${d}日（${w}）`;
 }
 
-/* ── アラートドット描画 ──────────────────────────────────── */
+/* ── カラータイマー状態判定 ──────────────────────────────── */
+function _getTimerState(hasItem) {
+  if (!hasItem) return null;
+  const now  = new Date();
+  const last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  let bizDays = 0;
+  const cur = new Date(now); cur.setHours(0,0,0,0);
+  const end = new Date(last); end.setHours(0,0,0,0);
+  while (cur <= end) {
+    const dow = cur.getDay();
+    if (dow !== 0 && dow !== 6) bizDays++;
+    cur.setDate(cur.getDate() + 1);
+  }
+  if (bizDays <= 1) return 'blink';
+  if (bizDays <= 3) return 'red';
+  return 'blue';
+}
+
+function _applyTimerClass(btnEl, state) {
+  if (!btnEl) return;
+  btnEl.classList.remove('action-btn--timer-blue','action-btn--timer-red','action-btn--timer-blink');
+  if (state === 'blue')  btnEl.classList.add('action-btn--timer-blue');
+  if (state === 'red')   btnEl.classList.add('action-btn--timer-red');
+  if (state === 'blink') btnEl.classList.add('action-btn--timer-blink');
+}
+
+/* ── アラートドット描画（補助） ─────────────────────────── */
 function createAlertDot(urgent) {
   const dot = document.createElement('span');
   dot.className = urgent ? 'adot adot--red-blink' : 'adot adot--blue';
@@ -50,27 +76,9 @@ function createAlertDot(urgent) {
 }
 
 function renderAlerts(alerts) {
-  const { hasUncollected, uncollectedUrgent, hasPayable, payableUrgent, hasUnrecordedClockOut } = alerts;
-  const nearEnd = isNearMonthEnd();
-
-  const salesDot = document.getElementById('dot-uncollected');
-  if (salesDot) {
-    salesDot.innerHTML = '';
-    if (hasUncollected) {
-      salesDot.appendChild(createAlertDot(uncollectedUrgent ?? nearEnd));
-      salesDot.setAttribute('title', (uncollectedUrgent ?? nearEnd) ? '未収あり（緊急）' : '未収あり');
-    }
-  }
-
-  const costDot = document.getElementById('dot-payable');
-  if (costDot) {
-    costDot.innerHTML = '';
-    if (hasPayable) {
-      costDot.appendChild(createAlertDot(payableUrgent ?? nearEnd));
-      costDot.setAttribute('title', (payableUrgent ?? nearEnd) ? '買掛あり（緊急）' : '買掛あり');
-    }
-  }
-
+  const { hasUncollected, hasPayable, hasUnrecordedClockOut } = alerts;
+  _applyTimerClass(document.querySelector('.action-btn--sales'), _getTimerState(hasUncollected));
+  _applyTimerClass(document.querySelector('.action-btn--cost'),  _getTimerState(hasPayable));
   const clockDot = document.getElementById('dot-clockout');
   if (clockDot) {
     clockDot.innerHTML = '';
@@ -169,35 +177,17 @@ async function loadAttendance() {
   }
 }
 
-/* ── GAS から未収・買掛フラグを取得してアラート描画 ─────── */
+/* ── GAS から未収・買掛フラグを取得してカラータイマー更新 ─ */
 async function loadAlerts() {
-  // まず退店未記録なし・未収なし・買掛なしで初期描画
-  renderAlerts({
-    hasUncollected:        false,
-    uncollectedUrgent:     false,
-    hasPayable:            false,
-    payableUrgent:         false,
-    hasUnrecordedClockOut: false,
-  });
-
+  renderAlerts({ hasUncollected: false, hasPayable: false, hasUnrecordedClockOut: false });
   try {
     const res = await callGAS('getUncollected', {});
     if (res && res.status === 'ok' && Array.isArray(res.data)) {
-      const nearEnd       = isNearMonthEnd();
       const hasUncollected = res.data.some(r => r.type === 'uncollected');
       const hasPayable     = res.data.some(r => r.type === 'payable');
-
-      renderAlerts({
-        hasUncollected,
-        uncollectedUrgent:     hasUncollected && nearEnd,
-        hasPayable,
-        payableUrgent:         hasPayable && nearEnd,
-        hasUnrecordedClockOut: false, // loadAttendance 側で更新
-      });
+      renderAlerts({ hasUncollected, hasPayable, hasUnrecordedClockOut: false });
     }
-  } catch {
-    // GAS失敗時はアラートなし表示のまま
-  }
+  } catch { /* GAS失敗時はタイマーなし */ }
 }
 
 /* ── 損益サマリー描画 ────────────────────────────────────── */

@@ -49,10 +49,10 @@
   transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
 .cost-sm-division-tab--active {
-  border-color: var(--uz-red, #E05050);
-  background: var(--uz-red, #E05050);
+  border-color: var(--uz-gold);
+  background: var(--uz-gold);
   color: var(--uz-on-accent);
-  box-shadow: inset 0 3px 0 0 rgba(255, 255, 255, 0.28);
+  box-shadow: inset 0 3px 0 0 rgba(255, 255, 255, 0.15);
 }
 .cost-sm-division-tab:active {
   transform: scale(0.98);
@@ -86,11 +86,11 @@
   line-height: 1.2;
 }
 .cost-sm-card--active {
-  border-color: var(--uz-red, #E05050);
-  background: var(--uz-red-bg, rgba(224, 80, 80, 0.12));
+  border-color: var(--uz-gold);
+  background: var(--uz-surface2);
 }
 .cost-sm-card--active .cost-sm-card__label {
-  color: var(--uz-red, #E05050);
+  color: var(--uz-text);
 }
 .cost-sm-card:active {
   transform: scale(0.96);

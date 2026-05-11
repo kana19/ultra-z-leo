@@ -460,7 +460,8 @@ body {
   text-align: right;
 }
 
-/* ── 横並び入力ボタン（スマホホーム） ───────────────────── */
+/* ── 入力ボタン カラータイマー縁 ────────────────────────── */
+/* ① 通常：シルバー縁のみ */
 .action-btn--half {
   flex-direction: column;
   align-items: flex-start;
@@ -468,6 +469,37 @@ body {
   height: 96px;
   padding: 14px 18px;
   gap: 5px;
+  outline: 2px solid var(--uz-silver);
+  outline-offset: -2px;
+}
+
+/* ② 発生：青点灯 */
+.action-btn--timer-blue {
+  outline-color: #4A90D9;
+  box-shadow: 0 0 0 3px rgba(74,144,217,0.25);
+}
+
+/* ③ 3日前：赤点灯 */
+.action-btn--timer-red {
+  outline-color: var(--uz-danger);
+  box-shadow: 0 0 0 3px rgba(192,57,43,0.25);
+}
+
+/* ④ 1日前以降：赤点滅 */
+.action-btn--timer-blink {
+  outline-color: var(--uz-danger);
+  animation: timer-blink 0.8s ease-in-out infinite;
+}
+
+@keyframes timer-blink {
+  0%, 100% {
+    outline-color: var(--uz-danger);
+    box-shadow: 0 0 0 3px rgba(192,57,43,0.4);
+  }
+  50% {
+    outline-color: rgba(192,57,43,0.2);
+    box-shadow: 0 0 0 3px rgba(192,57,43,0);
+  }
 }
 
 .action-btn__main-label {
