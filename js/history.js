@@ -195,55 +195,9 @@ async function loadAll() {
   }
 }
 
-/* ══════════════════════════════════════════════════════════
-   ロック判定
-   ══════════════════════════════════════════════════════════ */
-
-/**
- * 指定日付のロック状態を返す
- * @param {string} dateStr - YYYY-MM-DD
- * @returns {{ locked:boolean, grace:boolean, daysLeft:number|null }}
- *
- * ロックルール:
- *   当月         → 自由に修正可（locked:false, grace:false）
- *   翌月1〜3日   → 猶予期間（locked:false, grace:true, daysLeft:残日数）
- *   翌月4日以降  → 完全ロック（locked:true）
- */
-function getLockStatus(dateStr) {
-  if (!dateStr) return { locked: true, grace: false, daysLeft: null };
-  const [dy, dm] = dateStr.split('-').map(Number);
-  const now = new Date();
-  const ty  = now.getFullYear();
-  const tm  = now.getMonth() + 1;
-  const td  = now.getDate();
-
-  // 当月
-  if (dy === ty && dm === tm) return { locked: false, grace: false, daysLeft: null };
-
-  // データ月の翌月を計算
-  const ny = dm === 12 ? dy + 1 : dy;
-  const nm = dm === 12 ? 1       : dm + 1;
-
-  // 今日がデータ月の翌月1〜3日
-  if (ty === ny && tm === nm && td <= 3) {
-    return { locked: false, grace: true, daysLeft: 4 - td };
-  }
-
-  return { locked: true, grace: false, daysLeft: null };
-}
-
-/**
- * ロック状態に応じたボタン/バッジHTMLを返す
- * @param {object} ls  - getLockStatus()の戻り値
- * @param {number} idx - キャッシュ配列のインデックス
- * @param {string} scope - 'sc'（売上コスト）| 'at'（入店）
- */
+/* ── 修正ボタン（全期間・全データ修正可能） ──────────────── */
 function buildLockWidget(ls, idx, scope) {
-  if (ls.locked) {
-    return `<span class="hist-locked-badge">修正不可</span>`;
-  }
-  const btnClass = ls.grace ? 'hist-edit-btn hist-edit-btn--grace' : 'hist-edit-btn';
-  return `<button class="${btnClass}" type="button" data-idx="${idx}" data-scope="${scope}">修正</button>`;
+  return `<button class="hist-edit-btn" type="button" data-idx="${idx}" data-scope="${scope}">修正</button>`;
 }
 
 /* ── リストのクリック委譲（1回だけ登録） ────────────────── */
@@ -367,7 +321,7 @@ function _renderFilteredList() {
   if (document.body.classList.contains('is-ipad')) {
     let html = `<table class="ipad-hist-flat-table">
       <thead><tr>
-        <th>日付</th><th>種別</th><th>内容</th><th>メモ</th><th class="ipad-td-r">金額</th><th>状態</th><th></th>
+        <th>日付</th><th>種別</th><th>内容</th><th>メモ</th><th class="ipad-td-r">金額</th><th></th><th></th>
       </tr></thead><tbody>`;
 
     sorted.forEach(item => {
@@ -377,12 +331,6 @@ function _renderFilteredList() {
         ? '<span style="color:var(--uz-text2);font-size:12px;">売上</span>'
         : '<span style="color:var(--uz-text2);font-size:12px;">経費</span>';
       const md  = (item.date || '').replace(/(\d{4})-(\d{2})-(\d{2})/, '$2/$3');
-      const ls  = getLockStatus(item.date);
-      const status = ls.locked
-        ? '<span style="font-size:11px;color:var(--uz-text3);">🔒</span>'
-        : ls.grace
-          ? `<span style="font-size:11px;color:var(--uz-danger);">残${ls.daysLeft}日</span>`
-          : '<span style="font-size:11px;color:var(--uz-text2);">✓</span>';
       const dot = buildTimerDotHTML(item);
       const rowBg = isSales ? '' : 'background:var(--uz-surface);';
 
@@ -392,7 +340,7 @@ function _renderFilteredList() {
         <td>${escHtml((item.itemName || '').substring(0, 16))}</td>
         <td style="font-size:12px;color:var(--uz-text3);">${escHtml((item.memo || '').substring(0, 12))}</td>
         <td class="ipad-td-r" style="font-weight:600;">${formatYen(item.amount)}</td>
-        <td style="text-align:center;">${status}</td>
+        <td style="text-align:center;"><button class="hist-edit-btn" type="button" data-idx="${idx}" data-scope="sc">修正</button></td>
         <td style="text-align:center;">${dot}</td>
       </tr>`;
     });
@@ -446,12 +394,16 @@ function renderSalesCostError() {
     </p>`;
 }
 
-/* ── カラータイマードット（売掛・買掛） ──────────────────── */
+/* ── カラータイマードット（全行表示・消灯=グレー縁のみ） ── */
 function buildTimerDotHTML(item) {
   const hasFlag = item.type === 'sales'
     ? Number(item.uncollected) === 1
     : Number(item.unpaid)      === 1;
-  if (!hasFlag) return '<span class="hist-row__timer"></span>';
+
+  if (!hasFlag) {
+    /* 消灯：グレー縁のみ（トップボタンの通常状態と統一） */
+    return `<span class="hist-row__timer"><span class="hist-timer-dot"></span></span>`;
+  }
 
   const now  = new Date();
   const last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
@@ -482,8 +434,6 @@ function buildDateHeader(dateStr) {
 /* ── 売上・コスト行HTML（行型） ──────────────────────────── */
 function buildSalesCostItemHTML(item, idx) {
   const isSales = item.type === 'sales';
-  const ls      = getLockStatus(item.date);
-  const widget  = buildLockWidget(ls, idx, 'sc');
   const dot     = buildTimerDotHTML(item);
   const rowCls  = isSales ? 'hist-row--sales' : 'hist-row--cost';
   const name    = escHtml((item.itemName || '').substring(0, 30));
@@ -496,7 +446,9 @@ function buildSalesCostItemHTML(item, idx) {
         ${memo}
       </div>
       <span class="hist-row__amount">${formatYen(item.amount)}</span>
-      <div class="hist-row__edit">${widget}</div>
+      <div class="hist-row__edit">
+        <button class="hist-edit-btn" type="button" data-idx="${idx}" data-scope="sc">修正</button>
+      </div>
       ${dot}
     </div>`;
 }

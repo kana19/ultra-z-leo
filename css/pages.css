@@ -886,26 +886,34 @@
   justify-content: center;
 }
 
-/* カラータイマードット */
+/* カラータイマードット（消灯=グレー縁のみ・点灯=内側色変化） */
 .hist-timer-dot {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  border: 1.5px solid var(--uz-silver);
+  border: 2px solid var(--uz-silver);
+  background: transparent;
+  display: block;
 }
-.hist-timer-dot--blue  { background: #4A90D9; border-color: #4A90D9; }
-.hist-timer-dot--red   { background: var(--uz-danger); border-color: var(--uz-danger); }
+.hist-timer-dot--blue  {
+  background: #4A90D9;
+  border-color: #4A90D9;
+  box-shadow: 0 0 0 2px rgba(74,144,217,0.2);
+}
+.hist-timer-dot--red   {
+  background: var(--uz-danger);
+  border-color: var(--uz-danger);
+  box-shadow: 0 0 0 2px rgba(192,57,43,0.2);
+}
 .hist-timer-dot--blink {
   background: var(--uz-danger);
   border-color: var(--uz-danger);
   animation: hist-dot-blink 0.8s ease-in-out infinite;
 }
 @keyframes hist-dot-blink {
-  0%, 100% { opacity: 1; }
-  50%       { opacity: 0.15; }
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 2px rgba(192,57,43,0.3); }
+  50%       { opacity: 0.15; box-shadow: 0 0 0 2px rgba(192,57,43,0); }
 }
-
-/* ── 日付グループヘッダー ────────────────────────────────── */
 .hist-date-header {
   padding: 8px 14px 4px;
   font-size: 12px;
@@ -915,22 +923,6 @@
   border-bottom: 1px solid var(--uz-border);
 }
 
-/* ── ロックバッジ ─────────────────────────────────────────── */
-.hist-locked-badge {
-  font-size: 10px;
-  color: var(--uz-text3);
-  background: var(--uz-surface2);
-  border-radius: 4px;
-  padding: 1px 5px;
-}
-
-.hist-grace-badge {
-  font-size: 10px;
-  color: var(--uz-danger);
-  background: var(--uz-red-bg);
-  border-radius: 4px;
-  padding: 1px 5px;
-}
 
 /* ══════════════════════════════════════════════════════════
    承認バナー(history.html)
