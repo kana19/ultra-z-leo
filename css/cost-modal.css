@@ -4,6 +4,39 @@
  * ここには cost 固有差分（区分タブ・赤系選択色 等）のみを記述する。
  */
 
+/* ── 発生日＋区分sticky固定ヘッダー ─────────────────────── */
+.cost-sm-sticky-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--uz-surface);
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--uz-border);
+}
+
+.cost-sm-date-division-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cost-sm-date-input {
+  flex: 1;
+  min-width: 0;
+  height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--uz-border2);
+  border-radius: 8px;
+  background: var(--uz-surface2);
+  color: var(--uz-text);
+  font-family: var(--font-main);
+  font-size: 15px;
+  font-weight: 600;
+  box-sizing: border-box;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
 /* ── body / section / label ───────────────────────────── */
 .cost-sm-body {
   padding: 8px 16px 16px;

@@ -538,20 +538,18 @@ function _smCostResetState() {
 function _smCostBuildFormBodyHTML() {
   const today = todayStr();
   return `
-    <div class="cost-sm-body">
-
-      <section class="cost-sm-section">
-        <label class="cost-sm-label" for="sm-cost-date">日付</label>
-        <input type="date" id="sm-cost-date" class="sm-date-input" value="${today}">
-      </section>
-
-      <section class="cost-sm-section">
-        <label class="cost-sm-label">区分</label>
+    <!-- 発生日＋区分sticky固定エリア -->
+    <div class="cost-sm-sticky-header">
+      <div class="cost-sm-date-division-row">
+        <input type="date" id="sm-cost-date" class="sm-date-input cost-sm-date-input" value="${today}">
         <div class="cost-sm-division-tabs" role="group" aria-label="区分選択">
           <button type="button" class="cost-sm-division-tab" data-division-code="1">仕入原価</button>
           <button type="button" class="cost-sm-division-tab cost-sm-division-tab--active" data-division-code="2">販管費</button>
         </div>
-      </section>
+      </div>
+    </div>
+
+    <div class="cost-sm-body">
 
       <section class="cost-sm-section">
         <label class="cost-sm-label">科目を選択</label>

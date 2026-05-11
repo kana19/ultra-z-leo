@@ -425,12 +425,13 @@ function escHtml(str) {
 
 function _buildSalesFormBodyHTML() {
   return `
-    <div class="sales-sm-body">
+    <!-- 発生日sticky固定エリア -->
+    <div class="sales-sm-sticky-header">
+      <label class="sales-sm-label" for="sm-sales-date">発生日</label>
+      <input type="date" id="sm-sales-date" class="sales-sm-date-input sm-date-input">
+    </div>
 
-      <div class="sales-sm-section">
-        <label class="sales-sm-label" for="sm-sales-date">日付</label>
-        <input type="date" id="sm-sales-date" class="sales-sm-date-input sm-date-input">
-      </div>
+    <div class="sales-sm-body">
 
       <div class="sales-sm-section">
         <label class="sales-sm-label">サービスを選択</label>
@@ -450,6 +451,13 @@ function _buildSalesFormBodyHTML() {
           <span class="sales-sm-yen">円</span>
         </div>
         <div id="sm-sales-tax-display" class="sm-tax-memo">内消費税 0 円</div>
+      </div>
+
+      <div class="sales-sm-section">
+        <label class="uncollected-check-row">
+          <input type="checkbox" id="sm-sales-uncollected" class="uncollected-check">
+          <span class="uncollected-check-label">□ 売掛（未入金）として登録</span>
+        </label>
       </div>
 
       <div class="sales-sm-section">

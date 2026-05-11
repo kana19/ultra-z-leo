@@ -136,6 +136,11 @@ body {
   background: var(--uz-bg);
 }
 
+/* iPad表示時はhome-sticky-topを非表示（iPad用レイアウトが代替） */
+body.is-ipad .home-sticky-top {
+  display: none;
+}
+
 /* ── ホーム日時（ボタン上） ──────────────────────────────── */
 .home-datetime {
   display: flex;
@@ -198,6 +203,7 @@ body {
   height: var(--btn-height);
   padding: 0 20px;
   border: none;
+  outline: none;
   border-radius: var(--radius-md);
   font-family: var(--font-main);
   font-size: 17px;
@@ -206,6 +212,7 @@ body {
   position: relative;
   transition: filter 0.15s, transform 0.1s;
   text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .action-btn:active {

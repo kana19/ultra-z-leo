@@ -119,6 +119,63 @@
 
 <div class="page-wrapper">
 
+  <!-- sticky固定エリア（ヘッダー・日時・ボタン・タブ）スマホのみ表示 -->
+  <div class="home-sticky-top">
+
+    <!-- 店名ヘッダー -->
+    <header class="app-header">
+      <div class="app-header__store">スナック LEO</div>
+    </header>
+
+    <!-- 日付・時刻 -->
+    <div class="home-datetime">
+      <span id="header-date" class="home-datetime__date">読み込み中...</span>
+      <span id="header-time" class="home-datetime__time">--:--:--</span>
+    </div>
+
+    <!-- 入力ボタン -->
+    <section aria-label="入力ボタン" style="padding:0 10px 10px;">
+      <div style="display:flex; gap:10px;">
+
+        <div style="position:relative; flex:1;">
+          <button type="button" class="action-btn action-btn--sales action-btn--half" onclick="openSalesModal()">
+            <span class="action-btn__main-label">売上</span>
+            <span class="action-btn__sub">
+              <span>service</span>
+              <i class="ti ti-pencil" aria-hidden="true"></i>
+            </span>
+          </button>
+          <span id="dot-uncollected" class="action-btn__dot" style="display:flex;align-items:center;gap:4px;" aria-label="未収あり"></span>
+        </div>
+
+        <div style="position:relative; flex:1;">
+          <button type="button" class="action-btn action-btn--cost action-btn--half" onclick="openCostModal()">
+            <span class="action-btn__main-label">経費</span>
+            <span class="action-btn__sub">
+              <span>cost</span>
+              <i class="ti ti-pencil" aria-hidden="true"></i>
+            </span>
+          </button>
+          <span id="dot-payable" class="action-btn__dot" style="display:flex;align-items:center;gap:4px;" aria-label="買掛あり"></span>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- タブ -->
+    <div class="home-tabs" id="home-tabs">
+      <button class="home-tab" id="tab-pl" onclick="switchHomeTab('pl')" type="button">
+        <i class="ti ti-chart-bar home-tab__icon" aria-hidden="true"></i>
+        <span class="home-tab__label">今月の損益</span>
+      </button>
+      <button class="home-tab" id="tab-attendance" onclick="switchHomeTab('attendance')" type="button">
+        <i class="ti ti-users home-tab__icon" aria-hidden="true"></i>
+        <span class="home-tab__label" data-uilabel-key="attendance_status">出勤状況</span>
+      </button>
+    </div>
+
+  </div><!-- /home-sticky-top -->
+
   <!-- メインコンテンツ -->
   <main class="page-body">
 
@@ -219,63 +276,6 @@
 
     <!-- ── 左カラム（iPad）/ 通常表示（スマホ） ─── -->
     <div class="ipad-col--left">
-
-      <!-- sticky固定エリア（ヘッダー・日時・ボタン・タブ） -->
-      <div class="home-sticky-top">
-
-        <!-- 店名ヘッダー -->
-        <header class="app-header">
-          <div class="app-header__store">スナック LEO</div>
-        </header>
-
-        <!-- 日付・時刻 -->
-        <div class="home-datetime">
-          <span id="header-date" class="home-datetime__date">読み込み中...</span>
-          <span id="header-time" class="home-datetime__time">--:--:--</span>
-        </div>
-
-        <!-- 入力ボタン -->
-        <section aria-label="入力ボタン" style="padding:0 10px 10px;">
-          <div style="display:flex; gap:10px;">
-
-            <div style="position:relative; flex:1;">
-              <button type="button" class="action-btn action-btn--sales action-btn--half" onclick="openSalesModal()">
-                <span class="action-btn__main-label">売上</span>
-                <span class="action-btn__sub">
-                  <span>service</span>
-                  <i class="ti ti-pencil" aria-hidden="true"></i>
-                </span>
-              </button>
-              <span id="dot-uncollected" class="action-btn__dot" style="display:flex;align-items:center;gap:4px;" aria-label="未収あり"></span>
-            </div>
-
-            <div style="position:relative; flex:1;">
-              <button type="button" class="action-btn action-btn--cost action-btn--half" onclick="openCostModal()">
-                <span class="action-btn__main-label">経費</span>
-                <span class="action-btn__sub">
-                  <span>cost</span>
-                  <i class="ti ti-pencil" aria-hidden="true"></i>
-                </span>
-              </button>
-              <span id="dot-payable" class="action-btn__dot" style="display:flex;align-items:center;gap:4px;" aria-label="買掛あり"></span>
-            </div>
-
-          </div>
-        </section>
-
-        <!-- タブ -->
-        <div class="home-tabs" id="home-tabs">
-          <button class="home-tab" id="tab-pl" onclick="switchHomeTab('pl')" type="button">
-            <i class="ti ti-chart-bar home-tab__icon" aria-hidden="true"></i>
-            <span class="home-tab__label">今月の損益</span>
-          </button>
-          <button class="home-tab" id="tab-attendance" onclick="switchHomeTab('attendance')" type="button">
-            <i class="ti ti-users home-tab__icon" aria-hidden="true"></i>
-            <span class="home-tab__label" data-uilabel-key="attendance_status">出勤状況</span>
-          </button>
-        </div>
-
-      </div><!-- /home-sticky-top -->
 
         <!-- 損益パネル -->
         <div id="panel-pl" class="home-tab-panel">
