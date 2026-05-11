@@ -538,10 +538,14 @@ function _smCostResetState() {
 function _smCostBuildFormBodyHTML() {
   const today = todayStr();
   return `
-    <!-- 発生日＋区分sticky固定エリア -->
-    <div class="cost-sm-sticky-header">
-      <div class="cost-sm-date-division-row">
-        <input type="date" id="sm-cost-date" class="sm-date-input cost-sm-date-input" value="${today}">
+    <!-- sticky固定エリア：発生日（1行目）+ 区分（2行目） -->
+    <div class="sm-sticky-header">
+      <div class="sm-sticky-row">
+        <span class="sm-sticky-label">発生日</span>
+        <input type="date" id="sm-cost-date" class="sm-sticky-date-input" value="${today}">
+      </div>
+      <div class="sm-sticky-row">
+        <span class="sm-sticky-label">区分</span>
         <div class="cost-sm-division-tabs" role="group" aria-label="区分選択">
           <button type="button" class="cost-sm-division-tab" data-division-code="1">仕入原価</button>
           <button type="button" class="cost-sm-division-tab cost-sm-division-tab--active" data-division-code="2">販管費</button>
@@ -723,10 +727,10 @@ function _smCostRenderItemCards(divisionCode) {
   const container = document.getElementById('sm-cost-item-cards');
   if (!container) return;
 
-  // getDivisionItems は既存のフルページ版ヘルパー（L21〜L48）
-  // 返り値：指定区分の科目配列（末尾に諸口 MISC_1 / MISC_2 が動的追加済み・空 name はフィルタ済み）
-  // スマホ版は smartphoneVisible: false の科目（業態テンプレート連動で非表示化）を除外する
   const items = getDivisionItems(divisionCode, { filterBySmartphoneVisible: true });
+
+  /* 仕入原価=2列 / 販管費=3列 */
+  container.style.gridTemplateColumns = divisionCode === '1' ? '1fr 1fr' : '1fr 1fr 1fr';
 
   container.innerHTML = items.map(item => {
     const isActive = item.code === _smCostSelectedItemCode;
@@ -739,7 +743,6 @@ function _smCostRenderItemCards(divisionCode) {
     `;
   }).join('');
 
-  // カード click イベントを再バインド（innerHTML 書き換えで失われるため毎回）
   container.querySelectorAll('.cost-sm-card').forEach(card => {
     card.addEventListener('click', () => {
       const itemCode = card.dataset.itemCode;

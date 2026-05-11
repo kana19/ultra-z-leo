@@ -456,6 +456,13 @@ function _buildSalesFormBodyHTML() {
       </div>
 
       <div class="sales-sm-section">
+        <label class="uncollected-check-row">
+          <input type="checkbox" id="uncollected-toggle" class="uncollected-check">
+          <span class="uncollected-check-label">□ 売掛（未入金）として登録</span>
+        </label>
+      </div>
+
+      <div class="sales-sm-section">
         <label class="sales-sm-label">メモ<span class="sales-sm-optional">任意</span></label>
         <textarea id="sm-sales-memo" class="sales-sm-memo" rows="2"></textarea>
       </div>
