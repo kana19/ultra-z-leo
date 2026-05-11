@@ -2,6 +2,13 @@
    ウルトラZAIMUくん LEO版 PWA — pl.css
    損益サマリー画面専用スタイル
    シルバー系濃淡のみ。カラーコード直書き禁止。
+
+   ⚠️ pl-row系・pl-accordion系・pl-detail-row系の本体定義は
+      css/base.css に集約されている(395行以降・539行以降)。
+      このファイルでは損益画面固有の補助スタイルのみを扱う。
+
+   A-9：旧pl-row-wrap・pl-main-row・pl-expand-icon・pl-breakdown系の
+        死コードを削除。前年比diffをpl-value-diffに統一。
    ============================================================ */
 
 /* ── 損益ページヘッダー ──────────────────────────────────── */
@@ -175,127 +182,18 @@
   gap: 0;
 }
 
-/* ── PLメイン行 ──────────────────────────────────────────── */
-.pl-row-wrap {
-  background: var(--uz-bg);
-  overflow: hidden;
-}
-.pl-row-wrap--surface { background: var(--uz-surface); }
-
-.pl-main-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 11px 14px;
-  cursor: pointer;
-  transition: background 0.15s;
-  user-select: none;
-  -webkit-user-select: none;
-  gap: 8px;
-}
-.pl-main-row:active { background: var(--uz-surface2); }
-.pl-main-row--static { cursor: default; }
-.pl-main-row--static:active { background: inherit; }
-
-.pl-main-row__left {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-}
-.pl-main-row__label {
-  font-size: 15px;
-  font-weight: 500;
-  color: var(--uz-text2);
-  white-space: nowrap;
-}
-.pl-expand-icon {
-  font-size: 13px;
-  color: var(--uz-text3);
-  transition: transform 0.25s;
-  display: inline-block;
-  line-height: 1;
-  flex-shrink: 0;
-}
-.pl-expand-icon--open { transform: rotate(90deg); }
-
-.pl-main-row__right { text-align: right; flex-shrink: 0; }
-.pl-main-row__value {
-  font-size: 17px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  color: var(--uz-text);
+/* ── 前年比 差分表示（金額の下にコンパクト表示） ────────── */
+.pl-value-diff {
   display: block;
-}
-
-/* 比較diff */
-.pl-main-row__diff {
   font-size: 11px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   margin-top: 2px;
-  display: none;
+  text-align: right;
 }
-.pl-main-row__diff--show { display: block; }
-.pl-main-row__diff--up   { color: var(--uz-text2); }
-.pl-main-row__diff--down { color: var(--uz-text2); }
-.pl-main-row__diff--flat { color: var(--uz-text3); }
-
-/* ── 粗利行 ──────────────────────────────────────────────── */
-.pl-row-wrap--result { background: var(--uz-bg); }
-.pl-row-wrap--result .pl-main-row__label {
-  font-weight: 600;
-  color: var(--uz-text2);
-}
-
-/* ── 経常利益行（シルバー系統一） ───────────────────────── */
-.pl-row-wrap--profit,
-.pl-row-wrap--loss {
-  background: var(--uz-bg);
-  border: none;
-}
-.pl-row-wrap--profit .pl-main-row__label,
-.pl-row-wrap--loss .pl-main-row__label {
-  color: var(--uz-text) !important;
-  font-size: 16px;
-  font-weight: 700;
-}
-.pl-row-wrap--profit .pl-main-row__value,
-.pl-row-wrap--loss .pl-main-row__value {
-  font-size: 20px;
-  color: var(--uz-text) !important;
-  font-weight: 700;
-}
-
-/* ── 内訳展開エリア ──────────────────────────────────────── */
-.pl-breakdown {
-  border-top: 1px solid var(--uz-border);
-  padding: 4px 0 6px;
-}
-.pl-breakdown[hidden] { display: none; }
-.pl-breakdown-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 6px 14px 6px 26px;
-  gap: 12px;
-}
-.pl-breakdown-item__name {
-  font-size: 13px;
-  color: var(--uz-text2);
-  flex: 1;
-  min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.pl-breakdown-item__value {
-  font-size: 13px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  color: var(--uz-text);
-  flex-shrink: 0;
-}
+.pl-value-diff--up   { color: var(--uz-text2); }
+.pl-value-diff--down { color: var(--uz-text2); }
+.pl-value-diff--flat { color: var(--uz-text3); }
 
 /* ── 比較情報バナー ──────────────────────────────────────── */
 .pl-compare-info {

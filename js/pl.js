@@ -1,6 +1,12 @@
 /**
  * ウルトラZAIMUくん LEO版 PWA — pl.js
  * 損益サマリー画面ロジック（GAS getSummary 連携版）
+ *
+ * A-9：トップ画面（index.html + home.js）と完全に同じアコーディオン実装に統一。
+ *   - HTML構造：index.html 287〜307行のpl-row + pl-accordion-btnパターンに準拠
+ *   - ID命名：pl-row-${key} / pl-chev-${key} / pl-detail-${key}
+ *   - トグル関数：togglePlAccordion（home.js準拠）
+ *   - 死コード「確定申告 科目別集計（収支内訳書 行番号対応）」を削除
  */
 
 'use strict';
@@ -32,7 +38,9 @@ let currentTab    = 'monthly';
 let currentPeriod = `${THIS_YEAR}-${String(THIS_MONTH).padStart(2, '0')}`;
 let currentYear   = THIS_YEAR;
 let compareMode   = false;
-const expandState = {};
+
+/* 内訳データの保持（home.js準拠：開閉時に再描画） */
+const _plBreakdown = {};
 
 /* ── 初期化 ──────────────────────────────────────────────── */
 document.addEventListener('DOMContentLoaded', () => {
@@ -196,7 +204,7 @@ async function renderYTD() {
   hideSection('monthly-section');
 
   const ytdLabel = document.getElementById('ytd-label');
-  if (ytdLabel) ytdLabel.textContent = `${currentYear}年（1〜12月）`;
+  if (ytdLabel) ytdLabel.textContent = `${currentYear}年(1〜12月)`;
 
   const ytdPrev = document.getElementById('ytd-prev');
   const ytdNext = document.getElementById('ytd-next');
@@ -236,16 +244,15 @@ async function renderYTD() {
     infoBanner.classList.toggle('pl-compare-info--show', compareMode);
     if (compareMode) {
       infoBanner.textContent = prevPlData
-        ? `比較対象: ${currentYear - 1}年（年度累計）`
+        ? `比較対象: ${currentYear - 1}年(年度累計)`
         : `${currentYear - 1}年のデータがありません`;
     }
   }
 
   renderPLTable(plData, prevPlData, 'ytd-pl-table');
-  renderTaxDeclaration(current);
 }
 
-/* ── 年度集計（月別にfetchして合算） ────────────────────── */
+/* ── 年度集計(月別にfetchして合算) ──────────────────────── */
 async function aggregateYear(year) {
   const maxMonth = (year === THIS_YEAR) ? THIS_MONTH : 12;
   const monthKeys = [];
@@ -291,13 +298,17 @@ function renderPLTable(plData, prevData, tableId = 'pl-table') {
   const container = document.getElementById(tableId);
   if (!container) return;
 
+  /* 内訳データを保持（アコーディオン展開時に参照） */
+  _plBreakdown[plData.sales.key] = plData.sales.breakdown || [];
+  _plBreakdown[plData.cogs.key]  = plData.cogs.breakdown  || [];
+  _plBreakdown[plData.sga.key]   = plData.sga.breakdown   || [];
+
   const rows = [
     {
       key:        plData.sales.key || 'sales',
       label:      '売上',
       value:      plData.sales.total,
       prevValue:  prevData?.sales,
-      breakdown:  plData.sales.breakdown,
       expandable: true,
       type:       'normal',
     },
@@ -306,7 +317,6 @@ function renderPLTable(plData, prevData, tableId = 'pl-table') {
       label:      '仕入原価',
       value:      plData.cogs.total,
       prevValue:  prevData?.cogs,
-      breakdown:  plData.cogs.breakdown,
       expandable: true,
       type:       'normal',
     },
@@ -323,7 +333,6 @@ function renderPLTable(plData, prevData, tableId = 'pl-table') {
       label:      '販管費',
       value:      plData.sga.total,
       prevValue:  prevData?.sga,
-      breakdown:  plData.sga.breakdown,
       expandable: true,
       type:       'normal',
     },
@@ -337,23 +346,30 @@ function renderPLTable(plData, prevData, tableId = 'pl-table') {
     },
   ];
 
-  container.innerHTML = rows.map(row => buildRowHTML(row, prevData)).join('');
+  container.innerHTML = rows.map(row => buildRowHTML(row)).join('');
 }
 
-function buildRowHTML(row, prevData) {
-  const { key, label, value, prevValue, breakdown, expandable, type } = row;
+/**
+ * 行HTMLを構築する。
+ * トップ画面(index.html 287〜307行)と完全に同じ構造を採用する。
+ *
+ *   売上・仕入原価・販管費 → expandable=true   → pl-accordion-btn(内訳展開可能)
+ *   粗利・経常利益         → expandable=false  → pl-row内に直接label+value
+ */
+function buildRowHTML(row) {
+  const { key, label, value, prevValue, expandable, type } = row;
 
-  /* 背景色：トップと統一
-     売上=白・仕入原価=薄グレー・粗利=白・販管費=薄グレー・経常利益=白 */
+  /* 行クラスを組み立て(base.css 395行以降に準拠)
+     売上・粗利・経常利益 = pl-row 単独(白背景)
+     仕入原価・販管費    = pl-row + pl-row--surface(薄グレー背景) */
   const isSurface = (key.startsWith('cogs') || key.startsWith('sga'));
   let rowCls = 'pl-row';
-  if (isSurface)        rowCls += ' pl-row--surface';
+  if (expandable)        rowCls += ' pl-row--accordion';
+  if (isSurface)         rowCls += ' pl-row--surface';
   if (type === 'result') rowCls += ' pl-row--result';
   if (type === 'profit') rowCls += ' pl-row--highlight';
 
-  /* アコーディオン行はpl-row--accordionを追加 */
-  if (expandable) rowCls += ' pl-row--accordion';
-
+  /* 前年比diff(金額の下にコンパクト表示) */
   let diffHTML = '';
   if (compareMode && prevValue != null) {
     const diff    = value - prevValue;
@@ -361,64 +377,68 @@ function buildRowHTML(row, prevData) {
     const sign    = diff >= 0 ? '+' : '';
     const isGood  = (type === 'profit' || key.startsWith('sales') || key === 'gross')
       ? diff >= 0 : diff <= 0;
-    const cls = isGood ? 'pl-main-row__diff--up' : 'pl-main-row__diff--down';
-    diffHTML = `<div class="pl-main-row__diff pl-main-row__diff--show ${cls}">前年比 ${sign}${formatYen(diff)}（${sign}${diffPct}%）</div>`;
+    const cls = isGood ? 'pl-value-diff--up' : 'pl-value-diff--down';
+    diffHTML = `<span class="pl-value-diff ${cls}">前年比 ${sign}${formatYen(diff)} (${sign}${diffPct}%)</span>`;
   }
 
-  const isExpanded = !!expandState[key];
-
-  /* アコーディオンあり */
-  if (expandable && breakdown?.length > 0) {
-    const items = breakdown.map(b => `
-      <div class="pl-detail-row">
-        <span class="pl-detail-row__name">${escHtml(b.name)}</span>
-        <span class="pl-detail-row__value">${formatYen(b.amount)}</span>
-      </div>`).join('');
-
+  /* アコーディオンあり(売上・仕入原価・販管費) */
+  if (expandable) {
     return `
-      <div class="${rowCls}" id="row-wrap-${key}">
+      <div class="${rowCls}" id="pl-row-${key}">
         <button class="pl-accordion-btn" type="button"
-                id="row-${key}"
-                onclick="toggleBreakdown('${key}')"
-                aria-expanded="${isExpanded}"
-                aria-controls="breakdown-${key}">
+                onclick="togglePlAccordion('${key}')"
+                aria-expanded="false"
+                aria-controls="pl-detail-${key}">
           <span class="pl-label-wrap">
             <span class="pl-label">${escHtml(label)}</span>
-            <i class="ti ti-chevron-down pl-chevron${isExpanded ? ' pl-chevron--open' : ''}" aria-hidden="true"></i>
+            <i class="ti ti-chevron-down pl-chevron" id="pl-chev-${key}" aria-hidden="true"></i>
           </span>
-          <span class="pl-value">${formatYen(value)}</span>
+          <span class="pl-value">${formatYen(value)}${diffHTML}</span>
         </button>
-        ${diffHTML ? `<div style="padding:0 14px 6px;text-align:right;">${diffHTML}</div>` : ''}
-        <div class="pl-accordion-detail" id="breakdown-${key}" ${isExpanded ? '' : 'hidden'}>
-          ${items}
-        </div>
+        <div class="pl-accordion-detail" id="pl-detail-${key}" hidden></div>
       </div>`;
   }
 
-  /* アコーディオンなし（粗利・経常利益） */
+  /* アコーディオンなし(粗利・経常利益) */
   return `
-    <div class="${rowCls}" id="row-wrap-${key}">
+    <div class="${rowCls}" id="pl-row-${key}">
       <span class="pl-label-wrap">
         <span class="pl-label">${escHtml(label)}</span>
       </span>
-      <div style="text-align:right;">
-        <span class="pl-value">${formatYen(value)}</span>
-        ${diffHTML}
-      </div>
+      <span class="pl-value">${formatYen(value)}${diffHTML}</span>
     </div>`;
 }
 
-/* ── 内訳展開トグル ──────────────────────────────────────── */
-function toggleBreakdown(key) {
-  expandState[key] = !expandState[key];
+/* ── 内訳展開トグル(home.js準拠) ──────────────────────── */
+function togglePlAccordion(key) {
+  const detail = document.getElementById(`pl-detail-${key}`);
+  const chev   = document.getElementById(`pl-chev-${key}`);
+  const btn    = detail?.previousElementSibling;
+  if (!detail) return;
 
-  const breakdown = document.getElementById(`breakdown-${key}`);
-  const rowEl     = document.getElementById(`row-${key}`);
-  const icon      = rowEl?.querySelector('.pl-chevron');
+  const isOpen = !detail.hidden;
 
-  if (breakdown) breakdown.hidden = !expandState[key];
-  if (icon)      icon.classList.toggle('pl-chevron--open', expandState[key]);
-  if (rowEl)     rowEl.setAttribute('aria-expanded', String(!!expandState[key]));
+  if (isOpen) {
+    detail.hidden = true;
+    chev?.classList.remove('pl-chevron--open');
+    btn?.setAttribute('aria-expanded', 'false');
+  } else {
+    /* 内訳を描画してから展開 */
+    const items = _plBreakdown[key] || [];
+    if (items.length === 0) {
+      detail.innerHTML = '<div class="pl-detail-row" style="color:var(--uz-text3);font-size:12px;padding:4px 0;">内訳データなし</div>';
+    } else {
+      detail.innerHTML = items.map(it =>
+        `<div class="pl-detail-row">
+          <span class="pl-detail-row__name">${escHtml(it.name)}</span>
+          <span class="pl-detail-row__val">${formatYen(it.amount)}</span>
+        </div>`
+      ).join('');
+    }
+    detail.hidden = false;
+    chev?.classList.add('pl-chevron--open');
+    btn?.setAttribute('aria-expanded', 'true');
+  }
 }
 
 /* ── ヘルパー ────────────────────────────────────────────── */
@@ -450,84 +470,6 @@ function escHtml(str) {
     .replace(/"/g, '&quot;');
 }
 
-/* ── 確定申告サマリー描画 ────────────────────────────────── */
-function renderTaxDeclaration(yearData) {
-  const section = document.getElementById('tax-declaration-section');
-  const table   = document.getElementById('tax-declaration-table');
-  if (!section || !table) return;
-
-  if (!yearData || (yearData.sales === 0 && yearData.cogs === 0 && yearData.sga === 0)) {
-    section.hidden = true;
-    return;
-  }
-
-  const master = getCostMaster();
-
-  // 内訳名 → taxRow マップ（名前で検索）
-  const nameToRow = {};
-  master.forEach(item => {
-    if (item.name && item.taxRow != null) nameToRow[item.name] = item.taxRow;
-  });
-
-  // 仕入原価内訳
-  const cogsItems = (yearData.cogsBreakdown || []).map(i => ({
-    row:    nameToRow[i.name] ?? null,
-    name:   i.name,
-    amount: i.amount,
-  }));
-
-  // 販管費内訳（taxRowでソート）
-  const sgaItems = (yearData.sgaBreakdown || []).map(i => ({
-    row:    nameToRow[i.name] ?? null,
-    name:   i.name,
-    amount: i.amount,
-  })).sort((a, b) => {
-    if (a.row == null && b.row == null) return 0;
-    if (a.row == null) return 1;
-    if (b.row == null) return -1;
-    return a.row - b.row;
-  });
-
-  const gross  = yearData.sales - yearData.cogs;
-  const profit = gross - yearData.sga;
-
-  function rowHTML(label, amount, rowNo, isTotal) {
-    const rowLabel = rowNo != null ? `<span style="font-size:11px;color:var(--uz-muted);margin-right:4px;">行${rowNo}</span>` : '';
-    const style    = isTotal
-      ? 'font-weight:700;border-top:1px solid var(--uz-border);padding-top:6px;'
-      : '';
-    return `
-      <div class="pl-breakdown-item" style="${style}">
-        <span class="pl-breakdown-item__name" style="font-size:13px;">
-          ${rowLabel}${escHtml(label)}
-        </span>
-        <span class="pl-breakdown-item__value">${formatYen(amount)}</span>
-      </div>`;
-  }
-
-  let html = '';
-
-  html += `<div style="padding:4px 0 2px;font-size:12px;color:var(--uz-muted);padding-left:4px;">▸ 売上金額</div>`;
-  html += rowHTML('売上（収入）金額', yearData.sales, 1, true);
-
-  html += `<div style="padding:8px 0 2px;font-size:12px;color:var(--uz-muted);padding-left:4px;">▸ 仕入原価</div>`;
-  cogsItems.forEach(i => { html += rowHTML(i.name, i.amount, i.row, false); });
-  html += rowHTML('仕入原価　合計', yearData.cogs, null, true);
-
-  html += `<div style="padding:8px 0 2px;font-size:12px;color:var(--uz-muted);padding-left:4px;">▸ 粗利</div>`;
-  html += rowHTML('粗利', gross, null, true);
-
-  html += `<div style="padding:8px 0 2px;font-size:12px;color:var(--uz-muted);padding-left:4px;">▸ 販管費</div>`;
-  sgaItems.forEach(i => { html += rowHTML(i.name, i.amount, i.row, false); });
-  html += rowHTML('販管費　合計', yearData.sga, null, true);
-
-  html += `<div style="padding:8px 0 2px;font-size:12px;color:var(--uz-muted);padding-left:4px;">▸ 経常利益</div>`;
-  html += rowHTML('経常利益', profit, 43, true);
-
-  table.innerHTML = html;
-  section.hidden  = false;
-}
-
 /* ── 税理士用DLボタン ────────────────────────────────────── */
 function bindTaxDownload() {
   const btn     = document.getElementById('tax-download-btn');
@@ -538,7 +480,7 @@ function bindTaxDownload() {
   // 期間プルダウン初期化
   const now      = new Date();
   const curMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  // デフォルト開始：当年1月（2025年以前なら2025-01）
+  // デフォルト開始：当年1月(2025年以前なら2025-01)
   const defaultFrom = `${Math.max(now.getFullYear(), 2025)}-01`;
   buildMonthOptions(fromSel, defaultFrom);
   buildMonthOptions(toSel,   curMonth);
