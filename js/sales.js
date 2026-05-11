@@ -544,9 +544,8 @@ async function _renderSalesCards() {
   const services = _getServiceMasterSorted(ranking);
 
   container.innerHTML = services.map(svc => `
-    <div class="sales-sm-card" data-code="${escHtml(svc.code)}">
-      <div class="sales-sm-card__icon">${svc.icon || '📝'}</div>
-      <div class="sales-sm-card__label">${escHtml(svc.name)}</div>
+    <div class="radio-card" data-code="${escHtml(svc.code)}">
+      <div class="radio-card__label">${escHtml(svc.name)}</div>
     </div>
   `).join('');
 }
@@ -607,8 +606,8 @@ function _smHandleCardTap(e) {
   const card = e.target.closest('.sales-sm-card');
   if (!card) return;
 
-  document.querySelectorAll('.sales-sm-card').forEach(c => c.classList.remove('selected'));
-  card.classList.add('selected');
+  document.querySelectorAll('.radio-card').forEach(c => c.classList.remove('radio-card--checked-blue'));
+  card.classList.add('radio-card--checked-blue');
 
   const code = card.dataset.code;
   _smSelectedServiceCode = code;
@@ -634,7 +633,7 @@ async function _smHandleSalesSubmit() {
   if (!btn || btn.disabled) return;
 
   const date         = document.getElementById('sm-sales-date')?.value || '';
-  const selectedCard = document.querySelector('.sales-sm-card.selected');
+  const selectedCard = document.querySelector('.radio-card.radio-card--checked-blue');
   const rawAmt       = (document.getElementById('sm-sales-amount')?.value || '').replace(/,/g, '');
   const amount       = parseInt(rawAmt, 10);
   const memo         = document.getElementById('sm-sales-memo')?.value.trim() || '';

@@ -112,7 +112,7 @@ body {
 .app-header {
   background: var(--uz-bg);
   border-bottom: none;
-  padding: 10px 16px 8px;
+  padding: calc(env(safe-area-inset-top) + 14px) 16px 10px;
   position: sticky;
   top: 0;
   z-index: 100;
@@ -131,13 +131,21 @@ body {
   text-align: center;
 }
 
+/* ── ホームsticky固定エリア（日時・ボタン・タブ） ────────── */
+.home-sticky-top {
+  position: sticky;
+  top: 0;
+  z-index: 99;
+  background: var(--uz-bg);
+}
+
 /* ── ホーム日時（ボタン上） ──────────────────────────────── */
 .home-datetime {
   display: flex;
   align-items: baseline;
   justify-content: center;
   gap: 10px;
-  padding: 4px 0 10px;
+  padding: 6px 16px 8px;
 }
 
 .home-datetime__date {
@@ -384,7 +392,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 14px;
+  padding: 10px 14px;
   border-bottom: none;
   background: var(--uz-bg);
 }
@@ -420,7 +428,7 @@ body {
 .pl-row--result {
   background: var(--uz-bg);
   margin: 0;
-  padding: 12px 14px;
+  padding: 10px 14px;
   border-bottom: none !important;
 }
 
@@ -433,7 +441,7 @@ body {
 .pl-row--highlight {
   background: var(--uz-bg) !important;
   margin: 0 !important;
-  padding: 12px 14px !important;
+  padding: 10px 14px !important;
   border-radius: 0 !important;
 }
 
@@ -469,35 +477,45 @@ body {
   height: 96px;
   padding: 14px 18px;
   gap: 5px;
-  outline: 2px solid var(--uz-silver);
+  outline: 2.5px solid var(--uz-silver);
   outline-offset: -2px;
+}
+
+/* フォーカス枠とカラータイマー縁が競合しないよう上書き */
+.action-btn--half:focus,
+.action-btn--half:focus-visible {
+  outline: 2.5px solid var(--uz-silver);
 }
 
 /* ② 発生：青点灯 */
 .action-btn--timer-blue {
-  outline-color: #4A90D9;
-  box-shadow: 0 0 0 3px rgba(74,144,217,0.25);
+  outline-color: #4A90D9 !important;
+  box-shadow: 0 0 0 3px rgba(74,144,217,0.2);
+}
+.action-btn--timer-blue:focus,
+.action-btn--timer-blue:focus-visible {
+  outline-color: #4A90D9 !important;
 }
 
-/* ③ 3日前：赤点灯 */
+/* ③ 3営業日前：赤点灯 */
 .action-btn--timer-red {
-  outline-color: var(--uz-danger);
-  box-shadow: 0 0 0 3px rgba(192,57,43,0.25);
+  outline-color: var(--uz-danger) !important;
+  box-shadow: 0 0 0 3px rgba(192,57,43,0.2);
 }
 
-/* ④ 1日前以降：赤点滅 */
+/* ④ 1営業日前以降：赤点滅 */
 .action-btn--timer-blink {
-  outline-color: var(--uz-danger);
+  outline-color: var(--uz-danger) !important;
   animation: timer-blink 0.8s ease-in-out infinite;
 }
 
 @keyframes timer-blink {
   0%, 100% {
     outline-color: var(--uz-danger);
-    box-shadow: 0 0 0 3px rgba(192,57,43,0.4);
+    box-shadow: 0 0 0 3px rgba(192,57,43,0.35);
   }
   50% {
-    outline-color: rgba(192,57,43,0.2);
+    outline-color: rgba(192,57,43,0.15);
     box-shadow: 0 0 0 3px rgba(192,57,43,0);
   }
 }

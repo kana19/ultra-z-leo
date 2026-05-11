@@ -100,18 +100,23 @@
 .cost-sm-amount-wrap {
   display: flex;
   align-items: center;
+  width: 100%;
+  box-sizing: border-box;
 }
 .cost-sm-amount-input {
   flex: 1;
+  min-width: 0;
+  width: 100%;
   min-height: 44px;
   padding: 8px 12px;
   font-size: 20px;
   font-weight: 700;
   text-align: right;
   font-family: var(--font-main);
-  border: 1px solid var(--uz-border);
+  border: 1px solid var(--uz-border2);
   border-radius: 8px;
-  background: var(--uz-bg-surface);
+  background: var(--uz-surface);
+  color: var(--uz-text);
   box-sizing: border-box;
 }
 .cost-sm-yen {

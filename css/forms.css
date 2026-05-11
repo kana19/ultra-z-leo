@@ -89,9 +89,19 @@
   padding: 0 0 calc(80px + env(safe-area-inset-bottom));
 }
 
+/* ── 発生日セクション sticky固定 ────────────────────────── */
+.form-section--sticky {
+  position: sticky;
+  top: 56px; /* sub-headerの高さ分 */
+  z-index: 90;
+  background: var(--uz-bg);
+  border-bottom: 1px solid var(--uz-border);
+  padding: 10px 16px;
+}
+
 /* ── フォームセクション ──────────────────────────────────── */
 .form-section {
-  padding: 18px 16px;
+  padding: 12px 16px;
   border-bottom: 1px solid var(--uz-border);
 }
 
@@ -101,9 +111,9 @@
   font-size: 11px;
   font-weight: 700;
   color: var(--uz-text2);
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
   display: block;
 }
 
@@ -112,7 +122,7 @@
   width: 100%;
   height: var(--btn-height-sm);
   padding: 0 12px;
-  background: var(--uz-surface2);
+  background: var(--uz-surface);
   border: 1px solid var(--uz-border2);
   border-radius: var(--radius-md);
   color: var(--uz-text);
@@ -122,10 +132,51 @@
   appearance: none;
   -webkit-appearance: none;
   cursor: pointer;
+  box-sizing: border-box;
 }
 
 .date-input:focus {
   outline: none;
+  border-color: var(--uz-text2);
+}
+
+/* 発生日＋区分選択を同一行に（経費モーダル用） */
+.date-division-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.date-division-row .date-input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* 区分ボタン（仕入原価・販管費） */
+.division-group {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.division-btn {
+  height: var(--btn-height-sm);
+  padding: 0 12px;
+  border: 1px solid var(--uz-border2);
+  border-radius: var(--radius-md);
+  background: var(--uz-surface);
+  color: var(--uz-text2);
+  font-family: var(--font-main);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.division-btn--active {
+  background: var(--uz-gold);
+  color: var(--uz-on-accent);
   border-color: var(--uz-gold);
 }
 
@@ -142,38 +193,37 @@
 }
 
 .radio-card {
-  padding: 14px 12px;
-  background: var(--uz-surface2);
-  border: 2px solid var(--uz-border);
+  padding: 12px 10px;
+  background: var(--uz-surface);
+  border: 1.5px solid var(--uz-border);
   border-radius: var(--radius-md);
   cursor: pointer;
   transition: border-color 0.15s, background 0.15s;
   user-select: none;
   -webkit-user-select: none;
+  text-align: center;
 }
 
-.radio-card:active { filter: brightness(0.9); }
+.radio-card:active { filter: brightness(0.93); }
 
-.radio-card--checked-blue {
-  border-color: var(--uz-gold);
-  background: var(--uz-amber-bg);
-}
-
+/* 選択状態：シルバー系統一（青・赤廃止） */
+.radio-card--checked-blue,
 .radio-card--checked-red {
-  border-color: var(--uz-red);
-  background: var(--uz-red-bg);
+  border-color: var(--uz-gold);
+  background: var(--uz-surface2);
 }
 
 .radio-card__label {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
   color: var(--uz-text);
-  margin-bottom: 3px;
+  line-height: 1.3;
 }
 
 .radio-card__sub {
   font-size: 11px;
-  color: var(--uz-muted);
+  color: var(--uz-text3);
+  margin-top: 2px;
 }
 
 /* ── テキスト入力（品目名・メモ） ───────────────────────── */

@@ -1,427 +1,70 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <meta name="theme-color" content="#FFFFFF">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>ウルトラZAIMUくん</title>
-  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-  <link rel="icon" type="image/png" href="icons/icon-192.png">
-  <link rel="manifest" href="manifest.json">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.9.0/dist/tabler-icons.min.css">
-  <link rel="stylesheet" href="css/base.css">
-  <link rel="stylesheet" href="css/forms.css">
-  <link rel="stylesheet" href="css/sheet-modal.css">
-  <link rel="stylesheet" href="css/sales-modal.css">
-  <link rel="stylesheet" href="css/cost-modal.css">
-  <style>
-  /* ── ホームタブ切替 ───────────────────────────────────── */
-  .home-tabs {
-    display: flex;
-    gap: 0;
-    border-bottom: 1px solid var(--uz-border);
-    margin-bottom: 0;
-  }
-  .home-tab {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    padding: 11px 8px;
-    background: transparent;
-    border: none;
-    border-bottom: 2px solid transparent;
-    margin-bottom: -1px;
-    color: var(--uz-text3);
-    font-size: 13px;
-    font-family: inherit;
-    font-weight: 600;
-    cursor: pointer;
-    transition: color 0.15s, border-color 0.15s;
-    letter-spacing: 0.02em;
-    -webkit-tap-highlight-color: transparent;
-  }
-  .home-tab:active { opacity: 0.75; }
-  .home-tab.active {
-    background: transparent;
-    color: var(--uz-text);
-    border-bottom: 2px solid var(--uz-text);
-  }
-  .home-tab__icon { font-size: 16px; color: inherit; }
-  .home-tab-panel {
-    border: none;
-    overflow: hidden;
-  }
-  .home-tab-panel .card {
-    border-radius: 0;
-    border: none;
-    box-shadow: none;
-    background: transparent;
-  }
-  .home-tab-panel .card__body {
-    padding: 0;
-  }
-  /* 出勤バナー通知 */
-  #home-attendance-banner {
-    position: fixed;
-    top: -60px;
-    left: 16px; right: 16px;
-    background: var(--uz-surface);
-    border: 1px solid var(--uz-gold);
-    border-radius: 10px;
-    padding: 10px 14px;
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--uz-text);
-    text-align: center;
-    z-index: 200;
-    transition: top 0.4s cubic-bezier(0.34,1.56,0.64,1);
-    box-shadow: 0 4px 16px var(--uz-border2);
-  }
-  #home-attendance-banner.show { top: 12px; }
-  </style>
+<meta charset="UTF-8">
+<title>ホーム | ウルトラZAIMUくん PC版</title>
+<link rel="icon" type="image/png" href="../icons/icon-192.png">
+<link rel="stylesheet" href="../css/base.css">
+<link rel="stylesheet" href="css/pc.css">
 </head>
-<body data-page="home">
-
-<!-- iPad サイドバーナビ（スマホでは非表示） -->
-<nav class="nav-sidebar" aria-label="メインナビゲーション">
-  <div class="nav-sidebar__logo">ウルトラZAIMUくん</div>
-  <a href="index.html" class="sidebar-item sidebar-item--active" aria-current="page">
-    <span class="sidebar-item__icon" aria-hidden="true">🏠</span>
-    <span>ホーム</span>
-  </a>
-  <a href="sales.html" class="sidebar-item">
-    <span class="sidebar-item__icon" aria-hidden="true">💰</span>
-    <span>売上入力</span>
-  </a>
-  <a href="cost.html" class="sidebar-item">
-    <span class="sidebar-item__icon" aria-hidden="true">💳</span>
-    <span>コスト入力</span>
-  </a>
-  <a href="history.html" class="sidebar-item">
-    <span class="sidebar-item__icon" aria-hidden="true">📋</span>
-    <span>履歴・修正</span>
-  </a>
-  <a href="settings.html" class="sidebar-item">
-    <span class="sidebar-item__icon" aria-hidden="true">⚙️</span>
-    <span>設定</span>
-  </a>
-
-  <!-- 最近の入力（iPad ホームのみ） -->
-  <div class="sidebar-recent" id="sidebar-recent"></div>
-</nav>
-
-<div class="page-wrapper">
-
-  <!-- ヘッダー（ロゴ固定） -->
-  <header class="app-header">
-    <div class="app-header__store">スナック LEO</div>
-  </header>
-
-  <!-- メインコンテンツ -->
-  <main class="page-body">
-
-    <!-- ── iPad ホームダッシュボード（iPad のみ表示） ─── -->
-    <div class="ipad-home-dashboard" id="ipad-home-dashboard">
-
-      <!-- 左カラム（1/2幅）：損益テーブル＋出勤状況 -->
-      <div class="ipad-home-left">
-
-        <!-- 損益テーブル -->
-        <div class="ipad-dash-section">
-          <div class="ipad-dash-header">
-            <span class="ipad-dash-header__title">月次損益</span>
-            <select id="ipad-month-select" class="ipad-month-select" aria-label="表示月"></select>
+<body class="pc-body">
+<div id="pc-app" class="pc-layout">
+  <main class="pc-main" id="pc-main">
+    <div class="pc-body-inner">
+      <a href="transactions.html" class="pc-dashboard-card">
+        <h3>取引一覧 →</h3>
+        <p>売上・仕入原価・販管費を1画面で確認・編集／案件紐付けと粗利集計もこちら</p>
+      </a>
+      <div class="pc-card">
+        <div class="pc-filter-row">
+          <label>年
+            <select id="pc-year" class="pc-select"></select>
+          </label>
+          <span class="text-muted" id="pc-status"></span>
+          <div class="pc-tax-dl-row">
+            <span class="text-muted" style="font-size:11px;">税理士用CSV:</span>
+            <select id="pc-tax-from" class="pc-select" aria-label="開始月"></select>
+            <span class="text-muted">〜</span>
+            <select id="pc-tax-to" class="pc-select" aria-label="終了月"></select>
+            <button id="pc-tax-dl-btn" class="pc-btn pc-btn--ghost" type="button">⬇️ DL</button>
           </div>
-          <table class="ipad-dash-table" id="ipad-pl-table">
-            <tbody>
-              <tr><td>売上</td><td class="ipad-td-r" id="ipad-pl-sales">¥—</td></tr>
-              <tr><td>仕入原価</td><td class="ipad-td-r" id="ipad-pl-cogs">¥—</td></tr>
-              <tr class="row-gross"><td>粗利</td><td class="ipad-td-r" id="ipad-pl-gross">¥—</td></tr>
-              <tr><td>販管費</td><td class="ipad-td-r" id="ipad-pl-sga">¥—</td></tr>
-              <tr class="row-profit"><td>経常利益</td><td class="ipad-td-r" id="ipad-pl-profit">¥—</td></tr>
-            </tbody>
+        </div>
+        <div style="overflow-x:auto;">
+          <table class="pl-table" id="pl-table">
+            <thead><tr id="pl-head"></tr></thead>
+            <tbody id="pl-body"></tbody>
           </table>
-          <div class="ipad-dash-actions">
-            <button class="ipad-btn-ghost" id="ipad-btn-copy" type="button">📋 コピー</button>
-            <button class="ipad-btn-ghost" id="ipad-btn-dl" type="button">⬇️ CSV</button>
-            <a href="pl.html" class="ipad-btn-ghost">📊 詳細</a>
-          </div>
-          <!-- 税理士用CSV DLパネル（DLボタン押下で表示） -->
-          <div class="ipad-tax-dl-panel" id="ipad-tax-dl-panel" hidden>
-            <div class="ipad-tax-dl-row">
-              <select id="ipad-tax-from" class="ipad-tax-select" aria-label="開始月"></select>
-              <span class="ipad-tax-sep">〜</span>
-              <select id="ipad-tax-to" class="ipad-tax-select" aria-label="終了月"></select>
-            </div>
-            <button id="ipad-tax-dl-exec" class="ipad-tax-dl-btn" type="button">ダウンロード実行</button>
-          </div>
         </div>
-
-        <!-- 月次損益グラフ -->
-        <div class="ipad-dash-section">
-          <div class="ipad-dash-header">
-            <span class="ipad-dash-header__title">月次推移</span>
-          </div>
-          <div class="ipad-chart-wrap">
-            <div class="ipad-chart-loading" id="ipad-chart-loading">読み込み中...</div>
-            <canvas id="ipad-pl-chart"></canvas>
-          </div>
+      </div>
+      <div class="pl-chart-wrap">
+        <canvas id="pl-chart"></canvas>
+      </div>
+      <!-- 直近入力 -->
+      <div class="pc-card" id="pc-recent-card">
+        <div class="pc-filter-row">
+          <span style="font-weight:600;">直近の入力</span>
         </div>
-
-        <!-- 出勤状況 -->
-        <div class="ipad-dash-section">
-          <div class="ipad-dash-header">
-            <span class="ipad-dash-header__title" data-uilabel-key="clockin_record">出勤状況</span>
-          </div>
-          <div id="ipad-staff-list" class="ipad-dash-staff">
-            <!-- home.js が描画 -->
-          </div>
-        </div>
-
-        <!-- 確定申告タイマー（期間中のみ） -->
-        <div id="ipad-tax-timer-right"></div>
-
-      </div><!-- /ipad-home-left -->
-
-      <!-- 右カラム（1/2幅）：直近入力 -->
-      <div class="ipad-home-right">
-
-        <div class="ipad-dash-section">
-          <div class="ipad-dash-header">
-            <span class="ipad-dash-header__title">直近の入力</span>
-          </div>
-          <table class="ipad-dash-table ipad-recent-table" id="ipad-recent-table">
+        <div style="overflow-x:auto;">
+          <table class="pl-table" id="pc-recent-table">
             <thead>
               <tr>
                 <th>日付</th>
                 <th>種別</th>
                 <th>内容</th>
-                <th class="ipad-td-r">金額</th>
+                <th class="num">金額</th>
               </tr>
             </thead>
-            <tbody id="ipad-recent-body">
-              <!-- home.js が描画 -->
-            </tbody>
+            <tbody id="pc-recent-body"></tbody>
           </table>
-          <div class="ipad-dash-empty" id="ipad-recent-empty" hidden>今月の記録はありません</div>
         </div>
-
-        <!-- 未収・買掛けリンク -->
-        <div class="ipad-dash-section">
-          <a href="uncollected.html" class="ipad-btn-link">📋 未収・買掛けを確認する ›</a>
-        </div>
-
-      </div><!-- /ipad-home-right -->
-
-    </div><!-- /ipad-home-dashboard -->
-
-    <!-- ── 左カラム（iPad）/ 通常表示（スマホ） ─── -->
-    <div class="ipad-col--left">
-
-      <!-- 日付・時刻（ボタン上） -->
-      <div class="home-datetime">
-        <span id="header-date" class="home-datetime__date">読み込み中...</span>
-        <span id="header-time" class="home-datetime__time">--:--:--</span>
+        <div id="pc-recent-empty" hidden style="padding:16px;text-align:center;color:var(--uz-text2);font-size:13px;">今月の記録はありません</div>
       </div>
-
-      <!-- 入力セクション -->
-      <section aria-label="入力ボタン">
-        <div style="display:flex; gap:10px;">
-
-          <!-- 売上入力ボタン -->
-          <div style="position:relative; flex:1;">
-            <button type="button" class="action-btn action-btn--sales action-btn--half" onclick="openSalesModal()">
-              <span class="action-btn__main-label">売上</span>
-              <span class="action-btn__sub">
-                <span>service</span>
-                <i class="ti ti-pencil" aria-hidden="true"></i>
-              </span>
-            </button>
-            <span id="dot-uncollected"
-                  class="action-btn__dot"
-                  style="display:flex; align-items:center; gap:4px;"
-                  aria-label="未収あり">
-            </span>
-          </div>
-
-          <!-- 経費入力ボタン -->
-          <div style="position:relative; flex:1;">
-            <button type="button" class="action-btn action-btn--cost action-btn--half" onclick="openCostModal()">
-              <span class="action-btn__main-label">経費</span>
-              <span class="action-btn__sub">
-                <span>cost</span>
-                <i class="ti ti-pencil" aria-hidden="true"></i>
-              </span>
-            </button>
-            <span id="dot-payable"
-                  class="action-btn__dot"
-                  style="display:flex; align-items:center; gap:4px;"
-                  aria-label="買掛あり">
-            </span>
-          </div>
-
-        </div>
-      </section>
-
-      <!-- ホームタブ切替（損益 ⇔ 出勤状況） -->
-      <section aria-label="ホームタブ">
-
-        <!-- タブヘッダー -->
-        <div class="home-tabs" id="home-tabs">
-          <button class="home-tab" id="tab-pl" onclick="switchHomeTab('pl')" type="button">
-            <i class="ti ti-chart-bar home-tab__icon" aria-hidden="true"></i>
-            <span class="home-tab__label">今月の損益</span>
-          </button>
-          <button class="home-tab" id="tab-attendance" onclick="switchHomeTab('attendance')" type="button">
-            <i class="ti ti-users home-tab__icon" aria-hidden="true"></i>
-            <span class="home-tab__label" data-uilabel-key="attendance_status">出勤状況</span>
-          </button>
-        </div>
-
-        <!-- 損益パネル -->
-        <div id="panel-pl" class="home-tab-panel">
-          <div class="card">
-            <div class="card__body">
-              <div id="pl-month-label" class="pl-month-label">読み込み中...</div>
-
-              <!-- 売上行（アコーディオン） -->
-              <div class="pl-row pl-row--accordion" id="pl-row-sales">
-                <button class="pl-accordion-btn" type="button" onclick="togglePlAccordion('sales')" aria-expanded="false" aria-controls="pl-detail-sales">
-                  <span class="pl-label-wrap">
-                    <span class="pl-label">売上</span>
-                    <i class="ti ti-chevron-down pl-chevron" id="pl-chev-sales" aria-hidden="true"></i>
-                  </span>
-                  <span id="pl-sales" class="pl-value">¥—</span>
-                </button>
-                <div class="pl-accordion-detail" id="pl-detail-sales" hidden></div>
-              </div>
-
-              <!-- 仕入原価行（アコーディオン） -->
-              <div class="pl-row pl-row--accordion pl-row--surface" id="pl-row-cogs">
-                <button class="pl-accordion-btn" type="button" onclick="togglePlAccordion('cogs')" aria-expanded="false" aria-controls="pl-detail-cogs">
-                  <span class="pl-label-wrap">
-                    <span class="pl-label">仕入原価</span>
-                    <i class="ti ti-chevron-down pl-chevron" id="pl-chev-cogs" aria-hidden="true"></i>
-                  </span>
-                  <span id="pl-cogs" class="pl-value">¥—</span>
-                </button>
-                <div class="pl-accordion-detail" id="pl-detail-cogs" hidden></div>
-              </div>
-
-              <!-- 粗利行（アコーディオンなし） -->
-              <div class="pl-row pl-row--result">
-                <span class="pl-label-wrap">
-                  <span class="pl-label">粗利</span>
-                </span>
-                <span id="pl-gross" class="pl-value">¥—</span>
-              </div>
-
-              <!-- 販管費行（アコーディオン） -->
-              <div class="pl-row pl-row--accordion pl-row--surface" id="pl-row-sga">
-                <button class="pl-accordion-btn" type="button" onclick="togglePlAccordion('sga')" aria-expanded="false" aria-controls="pl-detail-sga">
-                  <span class="pl-label-wrap">
-                    <span class="pl-label">販管費</span>
-                    <i class="ti ti-chevron-down pl-chevron" id="pl-chev-sga" aria-hidden="true"></i>
-                  </span>
-                  <span id="pl-sga" class="pl-value">¥—</span>
-                </button>
-                <div class="pl-accordion-detail" id="pl-detail-sga" hidden></div>
-              </div>
-
-              <!-- 経常利益行 -->
-              <div class="pl-row pl-row--highlight">
-                <span class="pl-label-wrap">
-                  <span class="pl-label">経常利益</span>
-                </span>
-                <span id="pl-profit" class="pl-value">¥—</span>
-              </div>
-            </div>
-          </div>
-          <div style="text-align:right; padding:6px 4px 0;">
-            <a href="pl.html" style="font-size:12px; color:var(--uz-muted); text-decoration:none;">詳細を見る ›</a>
-          </div>
-        </div>
-
-        <!-- 出勤状況パネル -->
-        <div id="panel-attendance" class="home-tab-panel" style="display:none">
-          <div class="card">
-            <div class="card__body" style="padding:0;">
-              <div id="staff-list">
-                <!-- home.js が描画 -->
-              </div>
-            </div>
-          </div>
-          <div style="text-align:right; padding:6px 4px 0;">
-            <a href="history.html#attendance" style="font-size:12px; color:var(--uz-muted); text-decoration:none;" data-uilabel-key="clockin_record">入店記録へ ›</a>
-          </div>
-        </div>
-
-      </section>
-
-    </div><!-- /ipad-col--left -->
-
-    <!-- ── 右カラム（iPad）/ 通常表示（スマホ） ─── -->
-    <div class="ipad-col--right">
-
-      <!-- 確定申告タイマー -->
-      <div id="tax-timer" style="display:none"></div>
-
-    </div><!-- /ipad-col--right -->
-
+    </div>
   </main>
-
-</div><!-- /page-wrapper -->
-
-<!-- ── ボトムナビゲーション（スマホ用） ──────────────────── -->
-<nav class="bottom-nav" aria-label="メインナビゲーション">
-
-  <a href="index.html" class="nav-item nav-item--active" aria-current="page">
-    <i class="ti ti-home nav-item__icon" aria-hidden="true"></i>
-    <span class="nav-item__label">ホーム</span>
-  </a>
-
-  <a href="pl.html" class="nav-item">
-    <i class="ti ti-chart-bar nav-item__icon" aria-hidden="true"></i>
-    <span class="nav-item__label">損益</span>
-  </a>
-
-  <a href="history.html" class="nav-item">
-    <i class="ti ti-history nav-item__icon" aria-hidden="true"></i>
-    <span class="nav-item__label">履歴・修正</span>
-  </a>
-
-  <a href="settings.html" class="nav-item">
-    <i class="ti ti-settings nav-item__icon" aria-hidden="true"></i>
-    <span class="nav-item__label">設定</span>
-  </a>
-
-</nav>
-
-<!-- 出勤バナー通知 -->
-<div id="home-attendance-banner"></div>
-
-<!-- ローディングオーバーレイ -->
-<div id="loading-overlay" class="loading-overlay" aria-hidden="true">
-  <div class="spinner"></div>
 </div>
-
-<!-- AIフック（フェーズ3用・削除禁止） -->
-<div id="receipt-capture-area" style="display:none"></div>
-<div id="csv-import-area"      style="display:none"></div>
-<div id="ai-suggestion-area"   style="display:none"></div>
-
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<script src="js/app.js"></script>
-<script src="js/sheet-modal.js"></script>
-<script src="js/sales.js"></script>
-<script src="js/cost.js"></script>
-<script src="js/home.js"></script>
+<script src="../js/app.js"></script>
+<script src="js/pc-common.js"></script>
+<script src="js/pc-home.js"></script>
 </body>
 </html>

@@ -80,21 +80,14 @@
   <!-- 入力フォーム（iPad右カラム / モバイルはメイン） -->
   <div class="form-body">
 
-    <!-- ① 発生日 -->
-    <div class="form-section">
-      <label class="form-section__label" for="date-input">発生日</label>
-      <input type="date"
-             id="date-input"
-             class="date-input"
-             aria-label="発生日">
-    </div>
-
-    <!-- ② 区分選択（仕入原価 / 販管費） -->
-    <div class="form-section">
-      <span class="form-section__label">区分</span>
-      <div class="division-group" role="group" aria-label="区分選択">
-        <button class="division-btn" data-div="1" type="button">仕入原価</button>
-        <button class="division-btn" data-div="2" type="button">販管費</button>
+    <!-- ① 発生日＋区分選択（sticky固定・同一行） -->
+    <div class="form-section form-section--sticky">
+      <div class="date-division-row">
+        <input type="date" id="date-input" class="date-input" aria-label="発生日">
+        <div class="division-group" role="group" aria-label="区分選択">
+          <button class="division-btn" data-div="1" type="button">仕入原価</button>
+          <button class="division-btn" data-div="2" type="button">販管費</button>
+        </div>
       </div>
     </div>
 
