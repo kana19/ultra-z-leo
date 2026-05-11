@@ -343,10 +343,16 @@ function renderPLTable(plData, prevData, tableId = 'pl-table') {
 function buildRowHTML(row, prevData) {
   const { key, label, value, prevValue, breakdown, expandable, type } = row;
 
-  let wrapClass = 'pl-row-wrap';
-  if (type === 'result') wrapClass += ' pl-row-wrap--result';
-  if (type === 'profit')
-    wrapClass += value >= 0 ? ' pl-row-wrap--profit' : ' pl-row-wrap--loss';
+  /* 背景色：トップと統一
+     売上=白・仕入原価=薄グレー・粗利=白・販管費=薄グレー・経常利益=白 */
+  const isSurface = (key.startsWith('cogs') || key.startsWith('sga'));
+  let rowCls = 'pl-row';
+  if (isSurface)        rowCls += ' pl-row--surface';
+  if (type === 'result') rowCls += ' pl-row--result';
+  if (type === 'profit') rowCls += ' pl-row--highlight';
+
+  /* アコーディオン行はpl-row--accordionを追加 */
+  if (expandable) rowCls += ' pl-row--accordion';
 
   let diffHTML = '';
   if (compareMode && prevValue != null) {
@@ -354,52 +360,51 @@ function buildRowHTML(row, prevData) {
     const diffPct = prevValue !== 0 ? Math.round(diff / prevValue * 100) : 0;
     const sign    = diff >= 0 ? '+' : '';
     const isGood  = (type === 'profit' || key.startsWith('sales') || key === 'gross')
-      ? diff >= 0
-      : diff <= 0;
-    const displayCls = isGood ? 'up' : 'down';
-    diffHTML = `
-      <div class="pl-main-row__diff pl-main-row__diff--show pl-main-row__diff--${displayCls}">
-        前年比 ${sign}${formatYen(diff)}（${sign}${diffPct}%）
-      </div>`;
+      ? diff >= 0 : diff <= 0;
+    const cls = isGood ? 'pl-main-row__diff--up' : 'pl-main-row__diff--down';
+    diffHTML = `<div class="pl-main-row__diff pl-main-row__diff--show ${cls}">前年比 ${sign}${formatYen(diff)}（${sign}${diffPct}%）</div>`;
   }
 
   const isExpanded = !!expandState[key];
-  const iconClass  = isExpanded ? 'pl-expand-icon pl-expand-icon--open' : 'pl-expand-icon';
-  const expandIcon = expandable
-    ? `<span class="${iconClass}" aria-hidden="true">›</span>` : '';
 
-  const clickAttr = expandable
-    ? `onclick="toggleBreakdown('${key}')" role="button" tabindex="0" aria-expanded="${isExpanded}"`
-    : '';
-
-  let breakdownHTML = '';
+  /* アコーディオンあり */
   if (expandable && breakdown?.length > 0) {
-    const items = breakdown
-      .map(b => `
-        <div class="pl-breakdown-item">
-          <span class="pl-breakdown-item__name">${escHtml(b.name)}</span>
-          <span class="pl-breakdown-item__value">${formatYen(b.amount)}</span>
-        </div>`)
-      .join('');
-    breakdownHTML = `
-      <div class="pl-breakdown" id="breakdown-${key}" ${isExpanded ? '' : 'hidden'}>
-        ${items}
+    const items = breakdown.map(b => `
+      <div class="pl-detail-row">
+        <span class="pl-detail-row__name">${escHtml(b.name)}</span>
+        <span class="pl-detail-row__value">${formatYen(b.amount)}</span>
+      </div>`).join('');
+
+    return `
+      <div class="${rowCls}" id="row-wrap-${key}">
+        <button class="pl-accordion-btn" type="button"
+                id="row-${key}"
+                onclick="toggleBreakdown('${key}')"
+                aria-expanded="${isExpanded}"
+                aria-controls="breakdown-${key}">
+          <span class="pl-label-wrap">
+            <span class="pl-label">${escHtml(label)}</span>
+            <i class="ti ti-chevron-down pl-chevron${isExpanded ? ' pl-chevron--open' : ''}" aria-hidden="true"></i>
+          </span>
+          <span class="pl-value">${formatYen(value)}</span>
+        </button>
+        ${diffHTML ? `<div style="padding:0 14px 6px;text-align:right;">${diffHTML}</div>` : ''}
+        <div class="pl-accordion-detail" id="breakdown-${key}" ${isExpanded ? '' : 'hidden'}>
+          ${items}
+        </div>
       </div>`;
   }
 
+  /* アコーディオンなし（粗利・経常利益） */
   return `
-    <div class="${wrapClass}">
-      <div class="pl-main-row${expandable ? '' : ' pl-main-row--static'}" ${clickAttr} id="row-${key}">
-        <div class="pl-main-row__left">
-          <span class="pl-main-row__label">${escHtml(label)}</span>
-          ${expandIcon}
-        </div>
-        <div class="pl-main-row__right">
-          <span class="pl-main-row__value">${formatYen(value)}</span>
-          ${diffHTML}
-        </div>
+    <div class="${rowCls}" id="row-wrap-${key}">
+      <span class="pl-label-wrap">
+        <span class="pl-label">${escHtml(label)}</span>
+      </span>
+      <div style="text-align:right;">
+        <span class="pl-value">${formatYen(value)}</span>
+        ${diffHTML}
       </div>
-      ${breakdownHTML}
     </div>`;
 }
 
@@ -409,10 +414,10 @@ function toggleBreakdown(key) {
 
   const breakdown = document.getElementById(`breakdown-${key}`);
   const rowEl     = document.getElementById(`row-${key}`);
-  const icon      = rowEl?.querySelector('.pl-expand-icon');
+  const icon      = rowEl?.querySelector('.pl-chevron');
 
   if (breakdown) breakdown.hidden = !expandState[key];
-  if (icon)      icon.classList.toggle('pl-expand-icon--open', expandState[key]);
+  if (icon)      icon.classList.toggle('pl-chevron--open', expandState[key]);
   if (rowEl)     rowEl.setAttribute('aria-expanded', String(!!expandState[key]));
 }
 

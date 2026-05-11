@@ -105,43 +105,65 @@
   border-color: var(--uz-border2);
 }
 
-/* ── 税理士用CSV（テーブル下・同行） ────────────────────── */
-.tax-dl-row {
+/* ── 税理士用CSV DL（カード型） ──────────────────────────── */
+.tax-dl-card {
+  margin: 8px 14px 4px;
+  padding: 12px 14px;
+  background: var(--uz-surface);
+  border: 1px solid var(--uz-border2);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tax-dl-card__label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--uz-text2);
+  letter-spacing: 0.04em;
+}
+
+.tax-dl-card__row {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 14px 8px;
 }
+
 .tax-dl-select {
-  height: 34px;
+  flex: 1;
+  height: 36px;
   padding: 0 8px;
   border: 1px solid var(--uz-border2);
   border-radius: 8px;
-  background: var(--uz-surface);
+  background: var(--uz-bg);
   color: var(--uz-text);
   font-family: var(--font-main);
   font-size: 13px;
-  flex: 1;
   min-width: 0;
 }
+
 .tax-dl-sep {
   font-size: 13px;
   color: var(--uz-text3);
   flex-shrink: 0;
 }
+
 .btn-tax-dl {
-  height: 34px;
-  padding: 0 12px;
+  width: 100%;
+  height: 40px;
   border: 1px solid var(--uz-border2);
   border-radius: 8px;
   background: var(--uz-surface2);
   color: var(--uz-text);
   font-family: var(--font-main);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   cursor: pointer;
-  white-space: nowrap;
-  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
 }
 .btn-tax-dl:active { background: var(--uz-surface); }
 

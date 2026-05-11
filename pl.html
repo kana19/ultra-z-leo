@@ -77,28 +77,34 @@
 
     <!-- 月選択ナビ＋前年同月比（同一行） -->
     <div class="pl-period-nav">
-      <button id="period-prev" class="pl-period-btn" type="button" aria-label="前の月">‹</button>
+      <button id="period-prev" class="pl-period-btn" type="button" aria-label="前の月">
+        <i class="ti ti-chevron-left"></i>
+      </button>
       <span id="period-label" class="pl-period-label">読み込み中...</span>
-      <button id="period-next" class="pl-period-btn" type="button" aria-label="次の月">›</button>
+      <button id="period-next" class="pl-period-btn" type="button" aria-label="次の月">
+        <i class="ti ti-chevron-right"></i>
+      </button>
       <div class="pl-compare-wrap">
         <button id="compare-btn" class="pl-compare-btn" type="button" aria-pressed="false">前年同月比</button>
       </div>
     </div>
-
-    <!-- 比較インフォバナー -->
-    <div id="compare-info" class="pl-compare-info" role="status" aria-live="polite"></div>
 
     <!-- PLテーブル（月次） -->
     <div id="pl-table" class="pl-table" role="region" aria-label="月次損益">
       <!-- pl.js が描画 -->
     </div>
 
-    <!-- 税理士用CSV DL（テーブル下） -->
-    <div class="tax-dl-row">
-      <select id="tax-from-month" class="tax-dl-select" aria-label="開始月"></select>
-      <span class="tax-dl-sep">〜</span>
-      <select id="tax-to-month" class="tax-dl-select" aria-label="終了月"></select>
-      <button id="tax-download-btn" class="btn-tax-dl" type="button">税理士用CSV</button>
+    <!-- 税理士用CSV DL（カード型） -->
+    <div class="tax-dl-card">
+      <div class="tax-dl-card__label">税理士用CSV</div>
+      <div class="tax-dl-card__row">
+        <select id="tax-from-month" class="tax-dl-select" aria-label="開始月"></select>
+        <span class="tax-dl-sep">〜</span>
+        <select id="tax-to-month" class="tax-dl-select" aria-label="終了月"></select>
+      </div>
+      <button id="tax-download-btn" class="btn-tax-dl" type="button">
+        <i class="ti ti-download"></i> ダウンロード
+      </button>
     </div>
 
     <div class="pl-footer-space"></div>
@@ -109,9 +115,13 @@
 
     <!-- 年選択ナビ＋前年比較（同一行） -->
     <div class="pl-ytd-nav">
-      <button id="ytd-prev" class="pl-period-btn" type="button" aria-label="前の年">‹</button>
+      <button id="ytd-prev" class="pl-period-btn" type="button" aria-label="前の年">
+        <i class="ti ti-chevron-left"></i>
+      </button>
       <span id="ytd-label" class="pl-ytd-label">読み込み中...</span>
-      <button id="ytd-next" class="pl-period-btn" type="button" aria-label="次の年">›</button>
+      <button id="ytd-next" class="pl-period-btn" type="button" aria-label="次の年">
+        <i class="ti ti-chevron-right"></i>
+      </button>
       <div class="pl-compare-wrap">
         <button id="ytd-compare-btn" class="pl-compare-btn" type="button" aria-pressed="false">前年比較</button>
       </div>
