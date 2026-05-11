@@ -345,8 +345,8 @@ function _renderFilteredList() {
         <td>${escHtml((item.itemName || '').substring(0, 16))}</td>
         <td style="font-size:12px;color:var(--uz-text3);">${escHtml((item.memo || '').substring(0, 12))}</td>
         <td class="ipad-td-r" style="font-weight:600;">${formatYen(item.amount)}</td>
-        <td style="text-align:center;"><button class="hist-edit-btn" type="button" data-idx="${idx}" data-scope="sc">修正</button></td>
         <td style="text-align:center;">${dot}</td>
+        <td style="text-align:center;"><button class="hist-edit-btn" type="button" data-idx="${idx}" data-scope="sc">編集</button></td>
       </tr>`;
     });
 
@@ -399,16 +399,14 @@ function renderSalesCostError() {
     </p>`;
 }
 
-/* ── カラータイマードット（全行表示・消灯=グレー縁のみ） ── */
+/* ── カラータイマードット（売掛・買掛ありのみ表示） ──────── */
 function buildTimerDotHTML(item) {
   const hasFlag = item.type === 'sales'
     ? Number(item.uncollected) === 1
     : Number(item.unpaid)      === 1;
 
-  if (!hasFlag) {
-    /* 消灯：グレー縁のみ（トップボタンの通常状態と統一） */
-    return `<span class="hist-row__timer"><span class="hist-timer-dot"></span></span>`;
-  }
+  /* 売掛・買掛なし → 固定幅の空スペース（列揃え維持） */
+  if (!hasFlag) return `<span class="hist-row__timer"></span>`;
 
   const now  = new Date();
   const last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
@@ -436,7 +434,7 @@ function buildDateHeader(dateStr) {
   return `<div class="hist-date-header">${y}年${m}月${d}日（${days[dow]}）</div>`;
 }
 
-/* ── 売上・コスト行HTML（行型） ──────────────────────────── */
+/* ── 売上・コスト行HTML（行型・列順：科目名→金額→ドット→編集） */
 function buildSalesCostItemHTML(item, idx) {
   const isSales = item.type === 'sales';
   const dot     = buildTimerDotHTML(item);
@@ -451,10 +449,10 @@ function buildSalesCostItemHTML(item, idx) {
         ${memo}
       </div>
       <span class="hist-row__amount">${formatYen(item.amount)}</span>
-      <div class="hist-row__edit">
-        <button class="hist-edit-btn" type="button" data-idx="${idx}" data-scope="sc">修正</button>
-      </div>
       ${dot}
+      <div class="hist-row__edit">
+        <button class="hist-edit-btn" type="button" data-idx="${idx}" data-scope="sc">編集</button>
+      </div>
     </div>`;
 }
 
