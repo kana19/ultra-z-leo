@@ -41,7 +41,7 @@
       font-family: var(--font-main);
       transition: color .15s, border-color .15s;
     }
-    .hist-tab--active { color: var(--uz-gold); border-bottom-color: var(--uz-gold); }
+    .hist-tab--active { color: var(--uz-text); border-bottom-color: var(--uz-text); }
     .hist-tab-content { display: none; }
     .hist-tab-content--active { display: block; }
 
@@ -409,19 +409,32 @@
         </button>
       </div>
 
-      <!-- 月選択ナビゲーター（共通） -->
-      <div class="pl-period-nav" style="padding:8px 16px;">
-        <button id="hist-prev" class="pl-period-btn" type="button" aria-label="前の月">‹</button>
-        <span id="hist-label" class="pl-period-label">読み込み中...</span>
-        <button id="hist-next" class="pl-period-btn" type="button" aria-label="次の月">›</button>
+      <!-- 月選択ナビゲーター -->
+      <div class="hist-month-nav">
+        <button id="hist-prev" class="hist-month-btn" type="button" aria-label="前の月">
+          <i class="ti ti-chevron-left"></i>
+        </button>
+        <span id="hist-label" class="hist-month-label">読み込み中...</span>
+        <button id="hist-next" class="hist-month-btn" type="button" aria-label="次の月">
+          <i class="ti ti-chevron-right"></i>
+        </button>
       </div>
 
       <!-- タブ1：売上・コスト -->
       <div id="panel-salescost" class="hist-tab-content hist-tab-content--active"
            role="tabpanel" aria-labelledby="tab-salescost">
 
+        <!-- フィルターバー -->
+        <div class="hist-filter-bar">
+          <button class="hist-filter-btn hist-filter-btn--active" data-filter="all" type="button">全件</button>
+          <button class="hist-filter-btn" data-filter="uncollected" type="button">売掛</button>
+          <button class="hist-filter-btn" data-filter="payable" type="button">買掛</button>
+          <span id="hist-filter-total" class="hist-filter-total" style="display:none;"></span>
+        </div>
+
         <div id="history-list"
-             style="padding:0 0 calc(var(--nav-height) + env(safe-area-inset-bottom) + 16px);"
+             class="hist-list"
+             style="padding-bottom:calc(var(--nav-height) + env(safe-area-inset-bottom) + 16px);"
              role="region" aria-label="売上・コスト履歴">
         </div>
       </div>

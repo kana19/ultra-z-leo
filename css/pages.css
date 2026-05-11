@@ -726,59 +726,211 @@
 }
 
 /* 履歴アイテム */
-.history-item {
+/* ══════════════════════════════════════════════════════════
+   履歴・修正画面
+   ══════════════════════════════════════════════════════════ */
+
+/* ── 月ナビゲーター ──────────────────────────────────────── */
+.hist-month-nav {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 14px 16px;
-  background: var(--uz-surface);
-  border-radius: var(--radius-md);
-  margin: 0 16px 6px;
+  padding: 12px 14px 8px;
+  gap: 8px;
 }
 
-.history-item__type {
+.hist-month-btn {
   width: 36px;
   height: 36px;
-  border-radius: 50%;
+  border: 1px solid var(--uz-border2);
+  border-radius: 8px;
+  background: var(--uz-surface);
+  color: var(--uz-text);
+  font-size: 18px;
+  cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 16px;
   flex-shrink: 0;
+  transition: background 0.15s;
+}
+.hist-month-btn:active { background: var(--uz-surface2); }
+.hist-month-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.hist-month-btn .ti { font-size: 16px; }
+
+.hist-month-label {
+  flex: 1;
+  text-align: center;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--uz-text);
 }
 
-.history-item__type--sales      { background: var(--uz-green-bg); }
-.history-item__type--cost       { background: var(--uz-amber-bg); }
-.history-item__type--attendance { background: var(--uz-green-bg); }
+/* ── フィルターバー ──────────────────────────────────────── */
+.hist-filter-bar {
+  display: flex;
+  align-items: center;
+  padding: 0 14px 8px;
+  gap: 8px;
+}
 
-.history-item__info { flex: 1; min-width: 0; }
-
-.history-item__name {
-  font-size: 14px;
+.hist-filter-btn {
+  height: 30px;
+  padding: 0 14px;
+  border: 1px solid var(--uz-border2);
+  border-radius: 15px;
+  background: var(--uz-surface);
+  color: var(--uz-text2);
+  font-family: var(--font-main);
+  font-size: 12px;
   font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s;
+}
+
+.hist-filter-btn--active {
+  background: var(--uz-gold);
+  color: var(--uz-on-accent);
+  border-color: var(--uz-gold);
+}
+
+.hist-filter-total {
+  margin-left: auto;
+  font-size: 13px;
+  font-weight: 700;
   color: var(--uz-text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── 履歴リスト（行型） ──────────────────────────────────── */
+.hist-list {
+  border-top: 1px solid var(--uz-border);
+}
+
+.hist-row {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--uz-border);
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.hist-row--sales { background: var(--uz-bg); }
+.hist-row--cost  { background: var(--uz-surface); }
+.hist-row:active { filter: brightness(0.96); }
+
+.hist-row__name {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--uz-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  padding-right: 8px;
+}
+
+.hist-row__memo {
+  font-size: 11px;
+  color: var(--uz-text3);
+  margin-top: 1px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.history-item__date {
-  font-size: 12px;
-  color: var(--uz-muted);
-  margin-top: 2px;
-}
-
-.history-item__amount {
-  font-size: 15px;
-  font-weight: 700;
+.hist-row__amount {
+  font-size: 14px;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
+  color: var(--uz-text);
   flex-shrink: 0;
+  min-width: 80px;
+  text-align: right;
 }
 
-.history-item__amount--sales             { color: var(--uz-green); }
-.history-item__amount--cost              { color: var(--uz-gold);  }
-.history-item__amount--attendance-active { color: var(--uz-green); font-size: 12px; font-weight: 700; }
-.history-item__amount--attendance-out    { color: var(--uz-muted); font-size: 12px; }
+.hist-row__edit {
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+
+.hist-edit-btn {
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--uz-border2);
+  border-radius: 6px;
+  background: var(--uz-surface2);
+  color: var(--uz-text2);
+  font-family: var(--font-main);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.hist-edit-btn--grace {
+  border-color: var(--uz-danger);
+  color: var(--uz-danger);
+}
+
+.hist-row__timer {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  margin-left: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* カラータイマードット */
+.hist-timer-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1.5px solid var(--uz-silver);
+}
+.hist-timer-dot--blue  { background: #4A90D9; border-color: #4A90D9; }
+.hist-timer-dot--red   { background: var(--uz-danger); border-color: var(--uz-danger); }
+.hist-timer-dot--blink {
+  background: var(--uz-danger);
+  border-color: var(--uz-danger);
+  animation: hist-dot-blink 0.8s ease-in-out infinite;
+}
+@keyframes hist-dot-blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.15; }
+}
+
+/* ── 日付グループヘッダー ────────────────────────────────── */
+.hist-date-header {
+  padding: 8px 14px 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--uz-text3);
+  background: var(--uz-bg);
+  border-bottom: 1px solid var(--uz-border);
+}
+
+/* ── ロックバッジ ─────────────────────────────────────────── */
+.hist-locked-badge {
+  font-size: 10px;
+  color: var(--uz-text3);
+  background: var(--uz-surface2);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+
+.hist-grace-badge {
+  font-size: 10px;
+  color: var(--uz-danger);
+  background: var(--uz-red-bg);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
 
 /* ══════════════════════════════════════════════════════════
    承認バナー(history.html)

@@ -100,9 +100,9 @@ document.addEventListener('DOMContentLoaded', () => {
   bindTabs();
   bindNav();
   bindEditPanel();
-  bindListClicks(); // 委譲リスナーは1回だけ登録
+  bindListClicks();
+  bindFilterBtns();
   document.getElementById('ci-open-btn')?.addEventListener('click', openCIModal);
-  // URLハッシュで入店履歴タブ直行対応（§8統合：clockin.html廃止→history.html#attendance）
   if (location.hash === '#attendance') {
     switchTab('attendance');
   }
@@ -243,17 +243,7 @@ function buildLockWidget(ls, idx, scope) {
     return `<span class="hist-locked-badge">修正不可</span>`;
   }
   const btnClass = ls.grace ? 'hist-edit-btn hist-edit-btn--grace' : 'hist-edit-btn';
-  const badge    = ls.grace
-    ? `<span class="hist-grace-badge">期限まであと${ls.daysLeft}日</span>`
-    : '';
-  return `
-    <div style="display:flex;flex-direction:column;align-items:flex-end;">
-      <button class="${btnClass}"
-              type="button"
-              data-idx="${idx}"
-              data-scope="${scope}">修正</button>
-      ${badge}
-    </div>`;
+  return `<button class="${btnClass}" type="button" data-idx="${idx}" data-scope="${scope}">修正</button>`;
 }
 
 /* ── リストのクリック委譲（1回だけ登録） ────────────────── */
@@ -325,50 +315,85 @@ function bindListClicks() {
    タブ1：売上・コスト描画
    ══════════════════════════════════════════════════════════ */
 
-function renderSalesCost(items) {
+/* ── フィルター状態 ──────────────────────────────────────── */
+let _currentFilter   = 'all';
+let _allSalesCostItems = [];
+
+function bindFilterBtns() {
+  document.querySelectorAll('.hist-filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      _currentFilter = btn.dataset.filter;
+      document.querySelectorAll('.hist-filter-btn').forEach(b =>
+        b.classList.toggle('hist-filter-btn--active', b.dataset.filter === _currentFilter)
+      );
+      _renderFilteredList();
+    });
+  });
+}
+
+function _renderFilteredList() {
   const container = document.getElementById('history-list');
+  const totalEl   = document.getElementById('hist-filter-total');
   if (!container) return;
+
   editableItems = [];
 
-  if (items.length === 0) {
-    container.innerHTML = `
-      <p style="text-align:center;padding:40px 20px;font-size:13px;color:var(--uz-muted);">
-        この月の売上・コスト履歴はありません
-      </p>`;
+  let filtered = _allSalesCostItems;
+  if (_currentFilter === 'uncollected') {
+    filtered = _allSalesCostItems.filter(r => r.type === 'sales' && Number(r.uncollected) === 1);
+  } else if (_currentFilter === 'payable') {
+    filtered = _allSalesCostItems.filter(r => r.type === 'cost' && Number(r.unpaid) === 1);
+  }
+
+  /* フィルター時の合計金額表示 */
+  if (totalEl) {
+    if (_currentFilter !== 'all' && filtered.length > 0) {
+      const total = filtered.reduce((s, r) => s + (Number(r.amount) || 0), 0);
+      totalEl.textContent = `合計 ${formatYen(total)}`;
+      totalEl.style.display = '';
+    } else {
+      totalEl.style.display = 'none';
+    }
+  }
+
+  if (filtered.length === 0) {
+    container.innerHTML = `<p style="text-align:center;padding:40px 20px;font-size:13px;color:var(--uz-text3);">該当するデータがありません</p>`;
     return;
   }
 
-  const sorted = [...items].sort((a, b) => b.date.localeCompare(a.date));
+  const sorted = [...filtered].sort((a, b) => b.date.localeCompare(a.date));
 
-  // iPad：フラットテーブル表示
+  /* iPad：フラットテーブル表示 */
   if (document.body.classList.contains('is-ipad')) {
     let html = `<table class="ipad-hist-flat-table">
       <thead><tr>
-        <th>日付</th><th>種別</th><th>内容</th><th>メモ</th><th class="ipad-td-r">金額</th><th>状態</th>
+        <th>日付</th><th>種別</th><th>内容</th><th>メモ</th><th class="ipad-td-r">金額</th><th>状態</th><th></th>
       </tr></thead><tbody>`;
 
     sorted.forEach(item => {
-      const idx = editableItems.push(item) - 1;
+      const idx     = editableItems.push(item) - 1;
       const isSales = item.type === 'sales';
-      const badge = isSales
-        ? '<span style="color:var(--uz-gold);font-size:12px;">売上</span>'
-        : '<span style="color:var(--uz-red);font-size:12px;">コスト</span>';
-      const color = isSales ? 'var(--uz-gold)' : 'var(--uz-red)';
-      const md = (item.date || '').replace(/(\d{4})-(\d{2})-(\d{2})/, '$2/$3');
-      const ls = getLockStatus(item.date);
+      const typeLabel = isSales
+        ? '<span style="color:var(--uz-text2);font-size:12px;">売上</span>'
+        : '<span style="color:var(--uz-text2);font-size:12px;">経費</span>';
+      const md  = (item.date || '').replace(/(\d{4})-(\d{2})-(\d{2})/, '$2/$3');
+      const ls  = getLockStatus(item.date);
       const status = ls.locked
-        ? '<span style="font-size:11px;color:var(--uz-muted);">🔒</span>'
+        ? '<span style="font-size:11px;color:var(--uz-text3);">🔒</span>'
         : ls.grace
-          ? `<span style="font-size:11px;color:var(--uz-red);">残${ls.daysLeft}日</span>`
-          : '<span style="font-size:11px;color:var(--uz-green);">✓</span>';
+          ? `<span style="font-size:11px;color:var(--uz-danger);">残${ls.daysLeft}日</span>`
+          : '<span style="font-size:11px;color:var(--uz-text2);">✓</span>';
+      const dot = buildTimerDotHTML(item);
+      const rowBg = isSales ? '' : 'background:var(--uz-surface);';
 
-      html += `<tr class="ipad-hist-row" data-idx="${idx}" data-scope="sc">
+      html += `<tr class="ipad-hist-row" data-idx="${idx}" data-scope="sc" style="${rowBg}">
         <td style="white-space:nowrap;">${md}</td>
-        <td>${badge}</td>
+        <td>${typeLabel}</td>
         <td>${escHtml((item.itemName || '').substring(0, 16))}</td>
-        <td style="font-size:12px;color:var(--uz-muted);">${escHtml((item.memo || '').substring(0, 12))}</td>
-        <td class="ipad-td-r" style="color:${color};font-weight:600;">${formatYen(item.amount)}</td>
+        <td style="font-size:12px;color:var(--uz-text3);">${escHtml((item.memo || '').substring(0, 12))}</td>
+        <td class="ipad-td-r" style="font-weight:600;">${formatYen(item.amount)}</td>
         <td style="text-align:center;">${status}</td>
+        <td style="text-align:center;">${dot}</td>
       </tr>`;
     });
 
@@ -377,7 +402,7 @@ function renderSalesCost(items) {
     return;
   }
 
-  // スマホ：従来のカード表示
+  /* スマホ：行型表示 */
   const groups = {};
   sorted.forEach(item => {
     if (!groups[item.date]) groups[item.date] = [];
@@ -396,6 +421,23 @@ function renderSalesCost(items) {
   container.innerHTML = html;
 }
 
+function renderSalesCost(items) {
+  _allSalesCostItems = items || [];
+  _currentFilter     = 'all';
+  document.querySelectorAll('.hist-filter-btn').forEach(b =>
+    b.classList.toggle('hist-filter-btn--active', b.dataset.filter === 'all')
+  );
+  const totalEl = document.getElementById('hist-filter-total');
+  if (totalEl) totalEl.style.display = 'none';
+
+  if (!_allSalesCostItems.length) {
+    const container = document.getElementById('history-list');
+    if (container) container.innerHTML = `<p style="text-align:center;padding:40px 20px;font-size:13px;color:var(--uz-text3);">この月の売上・コスト履歴はありません</p>`;
+    return;
+  }
+  _renderFilteredList();
+}
+
 function renderSalesCostError() {
   const container = document.getElementById('history-list');
   if (container) container.innerHTML = `
@@ -404,26 +446,58 @@ function renderSalesCostError() {
     </p>`;
 }
 
+/* ── カラータイマードット（売掛・買掛） ──────────────────── */
+function buildTimerDotHTML(item) {
+  const hasFlag = item.type === 'sales'
+    ? Number(item.uncollected) === 1
+    : Number(item.unpaid)      === 1;
+  if (!hasFlag) return '<span class="hist-row__timer"></span>';
+
+  const now  = new Date();
+  const last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  let bizDays = 0;
+  const cur = new Date(now); cur.setHours(0,0,0,0);
+  const end = new Date(last); end.setHours(0,0,0,0);
+  while (cur <= end) {
+    const dow = cur.getDay();
+    if (dow !== 0 && dow !== 6) bizDays++;
+    cur.setDate(cur.getDate() + 1);
+  }
+
+  let cls = 'hist-timer-dot--blue';
+  if (bizDays <= 1) cls = 'hist-timer-dot--blink';
+  else if (bizDays <= 3) cls = 'hist-timer-dot--red';
+
+  return `<span class="hist-row__timer"><span class="hist-timer-dot ${cls}"></span></span>`;
+}
+
+/* ── 日付ヘッダー ────────────────────────────────────────── */
+function buildDateHeader(dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const days = ['日','月','火','水','木','金','土'];
+  const dow = new Date(y, m - 1, d).getDay();
+  return `<div class="hist-date-header">${y}年${m}月${d}日（${days[dow]}）</div>`;
+}
+
+/* ── 売上・コスト行HTML（行型） ──────────────────────────── */
 function buildSalesCostItemHTML(item, idx) {
-  const isSales   = item.type === 'sales';
-  const icon      = isSales ? '💰' : '💸';
-  const typeClass = isSales ? 'sales' : 'cost';
-  const ls        = getLockStatus(item.date);
-  const widget    = buildLockWidget(ls, idx, 'sc');
+  const isSales = item.type === 'sales';
+  const ls      = getLockStatus(item.date);
+  const widget  = buildLockWidget(ls, idx, 'sc');
+  const dot     = buildTimerDotHTML(item);
+  const rowCls  = isSales ? 'hist-row--sales' : 'hist-row--cost';
+  const name    = escHtml((item.itemName || '').substring(0, 30));
+  const memo    = item.memo ? `<div class="hist-row__memo">${escHtml((item.memo).substring(0, 20))}</div>` : '';
 
   return `
-    <div class="history-item">
-      <div class="history-item__type history-item__type--${typeClass}">${icon}</div>
-      <div class="history-item__info">
-        <div class="history-item__name">${escHtml(item.itemName)}</div>
-        ${item.memo ? `<div class="history-item__date">${escHtml(item.memo)}</div>` : ''}
+    <div class="hist-row ${rowCls}" data-idx="${idx}">
+      <div class="hist-row__name">
+        ${name}
+        ${memo}
       </div>
-      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0;">
-        <span class="history-item__amount history-item__amount--${typeClass}">
-          ${formatYen(item.amount)}
-        </span>
-        ${widget}
-      </div>
+      <span class="hist-row__amount">${formatYen(item.amount)}</span>
+      <div class="hist-row__edit">${widget}</div>
+      ${dot}
     </div>`;
 }
 
