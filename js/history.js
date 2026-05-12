@@ -126,6 +126,11 @@ function switchTab(tab) {
   document.querySelectorAll('.hist-tab-content').forEach(panel => {
     panel.classList.toggle('hist-tab-content--active', panel.id === `panel-${tab}`);
   });
+  // A-9：上段固定エリア内のフィルタバー/新規登録ボタンをタブ連動で表示切替
+  const filterBar  = document.getElementById('fixed-filter-bar');
+  const ciBtnWrap  = document.getElementById('fixed-ci-open-btn-wrap');
+  if (filterBar)  filterBar.hidden  = (tab !== 'salescost');
+  if (ciBtnWrap)  ciBtnWrap.hidden  = (tab !== 'attendance');
 }
 
 /* ── 月ナビゲーション ────────────────────────────────────── */
@@ -524,8 +529,9 @@ function renderAttendance(items) {
     return;
   }
 
-  // スマホ：日付グルーピング型（売上・コスト履歴と統一テイスト）
-  // 日付ごとに集約 → 同日内でスタッフ別の打刻行を縦に並べる
+  // スマホ：日付グルーピング型（売上・コスト履歴と完全同型）
+  // A-9整流化：黄色●点滅マーカー・「出勤中/退勤済」バッジ・「退勤未記録」テキストを撤廃
+  // 退勤空欄行は businessHours ベースで「勤務中」「打刻忘れ」を判定し、行末バッジで表現
   const dateMap = {};
   items.forEach(item => {
     const d = item.date || '';
@@ -534,22 +540,15 @@ function renderAttendance(items) {
   });
 
   const dateKeys = Object.keys(dateMap).sort((a, b) => b.localeCompare(a));
-
-  // 入店中スタッフ判定（黄色●点滅マーカー用・現時点で退店未記録があるスタッフ）
-  const activeStaffIds = new Set();
-  items.forEach(r => {
-    if (!parseTimeStr(r.clockOut)) {
-      activeStaffIds.add(String(r.staffId || r.staffName || ''));
-    }
-  });
+  const now = new Date();
 
   let html = '';
   dateKeys.forEach(dateKey => {
     const [y, m, d] = dateKey.split(/[-\/]/).map(Number);
     const dow       = WEEKDAYS[new Date(y, m - 1, d).getDay()];
-    const dateLabel = `${m}/${d}（${dow}）`;
+    const dateLabel = `${y}年${m}月${d}日(${dow})`;
 
-    // 同日内をスタッフごとに集約 → 入店中のスタッフを上に
+    // 同日内をスタッフごとに集約 → 退勤空欄を上に
     const recsOfDay = dateMap[dateKey];
     const byStaff = {};
     recsOfDay.forEach(r => {
@@ -559,9 +558,9 @@ function renderAttendance(items) {
     });
 
     const staffNames = Object.keys(byStaff).sort((a, b) => {
-      const aActive = byStaff[a].some(r => !parseTimeStr(r.clockOut));
-      const bActive = byStaff[b].some(r => !parseTimeStr(r.clockOut));
-      if (aActive !== bActive) return aActive ? -1 : 1;
+      const aOpen = byStaff[a].some(r => !parseTimeStr(r.clockOut));
+      const bOpen = byStaff[b].some(r => !parseTimeStr(r.clockOut));
+      if (aOpen !== bOpen) return aOpen ? -1 : 1;
       return a.localeCompare(b, 'ja');
     });
 
@@ -569,16 +568,10 @@ function renderAttendance(items) {
       <div class="hist-date-header">${dateLabel}</div>`;
 
     staffNames.forEach(sname => {
-      const recs    = byStaff[sname];
-      const sid     = String(recs[0].staffId || sname);
-      const isStaffActive = activeStaffIds.has(sid);
-      const marker = isStaffActive
-        ? `<span class="attend-active-marker" aria-label="入店中" title="入店中"></span>`
-        : `<span class="attend-spacer" aria-hidden="true"></span>`;
-
+      const recs = byStaff[sname];
       recs.sort((a, b) => (a.clockIn || '').localeCompare(b.clockIn || ''));
 
-      recs.forEach((r, ridx) => {
+      recs.forEach((r) => {
         const enriched = { ...r, type: 'attendance' };
         const atIdx    = attendItems.push(enriched) - 1;
 
@@ -588,6 +581,7 @@ function renderAttendance(items) {
           (clockOut ? calcWorkDuration(clockIn, clockOut)?.isOvernight : false);
         const dur = clockOut ? calcWorkDuration(clockIn, clockOut) : null;
 
+        // 時刻表示：1行に集約（退勤空欄なら矢印の後ろは空・「退勤未記録」テキストは撤廃）
         let timeStr;
         if (clockOut) {
           if (dur?.isAbnormal) {
@@ -598,48 +592,42 @@ function renderAttendance(items) {
             timeStr = `${escHtml(clockIn)} → ${escHtml(clockOut)}`;
           }
         } else {
-          timeStr = `${escHtml(clockIn)} — ${escHtml(labels.clockout_unrecorded)}`;
+          timeStr = `${escHtml(clockIn)} →`;
         }
 
+        // 勤務時間（2行目・小フォント・売上コスト履歴の「メモ」相当）
         const wMin = r.workMinutes || dur?.minutes;
         let durLabel = '';
         if (wMin && !dur?.isAbnormal) {
           const wh = Math.floor(wMin / 60);
           const wm = wMin % 60;
-          durLabel = wm > 0 ? `(${wh}時間${wm}分)` : `(${wh}時間)`;
+          durLabel = wm > 0 ? `${wh}時間${wm}分` : `${wh}時間`;
         }
 
-        const isActive = !clockOut;
-        const ls       = getLockStatus(r.date);
-        const widget   = buildLockWidget(ls, atIdx, 'at'); // A-9で空文字返却・後方互換のため呼び出し維持
+        // 勤務状態判定（businessHours ベース・未設定時は24時間フォールバック）
+        // app.js の judgeAttendanceState を使用
+        let stateBadge = '';
+        if (!clockOut && typeof judgeAttendanceState === 'function') {
+          const state = judgeAttendanceState(r, now);
+          if (state === 'working') {
+            stateBadge = `<span class="attend-state-badge attend-state-badge--working">勤務中</span>`;
+          } else if (state === 'forgotten') {
+            stateBadge = `<span class="attend-state-badge attend-state-badge--forgotten">打刻忘れ</span>`;
+          }
+        }
 
-        // A-9整流化：履歴画面の「退店を記録」ボタンを廃止
-        // 修正ボタンで開く編集フォーム（buildAttendanceFormHTML）に退勤時刻入力欄が既に含まれており
-        // 退勤入力もそこで完結する。ホーム画面の出勤状況タブの退店ボタンは商売動線として維持（02_画面仕様_md.md §4-1）
-
-        const editBtn = !ls.locked
-          ? `<button class="attend-edit-btn" type="button" data-idx="${atIdx}" data-scope="at" aria-label="修正">修正・更新</button>`
-          : '';
-
-        // 1スタッフ複数行のとき、2行目以降は★/スペーサーを空にしてスタッフ名も省略
-        const showStaffCol = (ridx === 0);
+        // 売上コスト同型の行構造（左:スタッフ名+勤務時間 / 中:時刻+状態バッジ / 右:編集ボタン）
         html += `
           <div class="hist-attend-row">
-            <div class="hist-attend-marker">${showStaffCol ? marker : ''}</div>
-            <div class="hist-attend-name">${showStaffCol ? escHtml(sname) : ''}</div>
-            <div class="hist-attend-times">
-              <div>${timeStr}</div>
-              ${durLabel ? `<div class="hist-attend-dur">${durLabel}</div>` : ''}
+            <div class="hist-attend-main">
+              <div class="hist-attend-name">${escHtml(sname)}</div>
+              ${durLabel ? `<div class="hist-attend-sub">${durLabel}</div>` : ''}
             </div>
-            <div class="hist-attend-status">
-              <span class="attend-status ${isActive ? 'attend-status--active' : 'attend-status--out'}">
-                ${isActive ? escHtml(labels.clockin_active) : escHtml(labels.clockout_done)}
-              </span>
+            <div class="hist-attend-time-col">
+              <div class="hist-attend-time">${timeStr}</div>
+              ${stateBadge ? `<div class="hist-attend-state-wrap">${stateBadge}</div>` : ''}
             </div>
-            <div class="hist-attend-actions">
-              ${editBtn}
-            </div>
-            ${widget}
+            <button class="hist-edit-btn" type="button" data-idx="${atIdx}" data-scope="at" aria-label="編集">編集</button>
           </div>`;
       });
     });

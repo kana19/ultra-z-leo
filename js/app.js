@@ -95,6 +95,14 @@ async function syncSettingsAtStartup() {
       localStorage.setItem('uz_staff_list', JSON.stringify(d.staffList));
     }
 
+    // businessHours 同期（A-9：出勤履歴の打刻忘れ判定・設定画面表示で使用）
+    // 形式：{open:"HH:MM", close:"HH:MM", closeNextDay:boolean}
+    if (d.businessHours && typeof d.businessHours === 'object' && d.businessHours.open && d.businessHours.close) {
+      localStorage.setItem('uz_business_hours', JSON.stringify(d.businessHours));
+    } else {
+      localStorage.removeItem('uz_business_hours');
+    }
+
     // 取得後にUI用語を反映
     applyUILabels();
 
@@ -188,6 +196,109 @@ const UI_LABELS_GENERAL = {
  */
 function getTemplateId() {
   return localStorage.getItem(TEMPLATE_ID_KEY) || 'general-shop';
+}
+
+/* ── businessHours（営業時間）取得・判定ヘルパー ──────────
+ * settings B18 から取得した営業時間に基づき、出勤履歴の打刻忘れ判定を行う。
+ * 設計：02_画面仕様_md.md §6「勤務状態表示」
+ *   - 退勤打刻あり = 通常表示
+ *   - 退勤空欄 + 営業終了時刻＋1時間未経過 = 勤務中
+ *   - 退勤空欄 + 営業終了時刻＋1時間経過後 = 打刻忘れ
+ *   - businessHours 未設定時：入店打刻から24時間ルールにフォールバック
+ */
+
+const BUSINESS_HOURS_KEY = 'uz_business_hours';
+
+/**
+ * 営業時間情報を取得（未設定時は null）
+ * @returns {{open:string, close:string, closeNextDay:boolean} | null}
+ */
+function getBusinessHours() {
+  try {
+    const raw = localStorage.getItem(BUSINESS_HOURS_KEY);
+    if (!raw) return null;
+    const bh = JSON.parse(raw);
+    if (!bh || !bh.open || !bh.close) return null;
+    return bh;
+  } catch (e) {
+    return null;
+  }
+}
+
+/**
+ * 営業時間を表示文字列に整形（例：「19:00 〜 翌03:00」）
+ * @param {Object} bh businessHours オブジェクト
+ * @returns {string|null}
+ */
+function formatBusinessHours(bh) {
+  if (!bh || !bh.open || !bh.close) return null;
+  const prefix = bh.closeNextDay ? '翌' : '';
+  return `${bh.open} 〜 ${prefix}${bh.close}`;
+}
+
+/**
+ * 「HH:MM」文字列を分数に変換
+ */
+function _hmToMinutes(hm) {
+  if (!hm) return 0;
+  const m = String(hm).match(/^(\d{1,2}):(\d{2})/);
+  if (!m) return 0;
+  return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+}
+
+/**
+ * 出勤記録に対する打刻忘れ判定。
+ * @param {Object} record  attendance行 { date:'YYYY-MM-DD', clockIn:'HH:MM' or Date文字列, clockOut:同 }
+ * @param {Date}   [now]   現在時刻（テスト時オーバーライド用）
+ * @returns {'completed'|'working'|'forgotten'}
+ *   - completed: 退勤打刻済み（通常表示）
+ *   - working  : 退勤空欄かつ営業終了+1h未経過（勤務中）
+ *   - forgotten: 退勤空欄かつ営業終了+1h経過後（打刻忘れ）
+ */
+function judgeAttendanceState(record, now) {
+  if (!record) return 'completed';
+  // parseTimeStr は history.js 側にしか無いため、ここでは最小実装で時刻を抜き出す
+  const clockOutStr = _extractHHMM(record.clockOut);
+  if (clockOutStr) return 'completed';
+
+  const clockInStr = _extractHHMM(record.clockIn);
+  if (!clockInStr || !record.date) return 'completed';
+
+  const nowDt = now || new Date();
+  const bh = getBusinessHours();
+
+  // 入店日時を Date オブジェクト化
+  const [y, m, d] = String(record.date).split(/[-\/]/).map(Number);
+  if (!y || !m || !d) return 'completed';
+  const clockInMin = _hmToMinutes(clockInStr);
+  const clockInDt = new Date(y, m - 1, d, Math.floor(clockInMin / 60), clockInMin % 60, 0);
+
+  let thresholdDt;
+  if (bh) {
+    // 営業時間ベース：閉店時刻 + 1時間
+    const closeMin = _hmToMinutes(bh.close);
+    const closeDt = new Date(y, m - 1, d, Math.floor(closeMin / 60), closeMin % 60, 0);
+    if (bh.closeNextDay) closeDt.setDate(closeDt.getDate() + 1);
+    thresholdDt = new Date(closeDt.getTime() + 60 * 60 * 1000); // +1時間
+  } else {
+    // フォールバック：入店から24時間
+    thresholdDt = new Date(clockInDt.getTime() + 24 * 60 * 60 * 1000);
+  }
+
+  return nowDt.getTime() > thresholdDt.getTime() ? 'forgotten' : 'working';
+}
+
+/**
+ * シリアル日時/ISO/HH:MM 文字列から HH:MM を取り出す（最小実装）
+ */
+function _extractHHMM(val) {
+  if (!val) return '';
+  const s = String(val).trim();
+  if (!s) return '';
+  if (/^\d{1,2}:\d{2}/.test(s)) return s.slice(0, 5);
+  const m = s.match(/\b(\d{1,2}):(\d{2})\b/);
+  if (m) return `${m[1].padStart(2, '0')}:${m[2]}`;
+  return '';
 }
 
 /**

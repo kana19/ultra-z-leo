@@ -130,7 +130,7 @@ async function loadSettingsFromGAS() {
   try {
     const res = await callGAS('getSettings', {});
     if (res && res.status === 'ok' && res.data) {
-      const { storeName, staffList, serviceList, storeType, templateId } = res.data;
+      const { storeName, staffList, serviceList, storeType, templateId, businessHours } = res.data;
       if (storeName   != null) _saveStoreName(storeName);
       if (Array.isArray(staffList))   _saveStaffList(staffList);
       if (Array.isArray(serviceList)) _saveServiceList(serviceList);
@@ -139,6 +139,12 @@ async function loadSettingsFromGAS() {
       // templateId も localStorage にキャッシュ（基本情報セクション表示用）
       if (templateId) {
         try { localStorage.setItem('uz_template_id', templateId); } catch { /* ignore */ }
+      }
+      // businessHours も localStorage に保存（A-9：基本情報・出勤履歴判定で使用）
+      if (businessHours && typeof businessHours === 'object' && businessHours.open && businessHours.close) {
+        try { localStorage.setItem('uz_business_hours', JSON.stringify(businessHours)); } catch { /* ignore */ }
+      } else {
+        try { localStorage.removeItem('uz_business_hours'); } catch { /* ignore */ }
       }
       // UIを最新データで再描画
       initBasicInfo();
@@ -232,6 +238,35 @@ function initBasicInfo() {
   const templateEl = document.getElementById('info-template-id');
   if (storeEl)    storeEl.textContent    = getStoreName() || '—';
   if (templateEl) templateEl.textContent = _templateIdLabel();
+
+  // 営業時間（A-9：businessHours が設定されていれば表示・未設定なら行ごと非表示）
+  _renderBusinessHoursRow();
+}
+
+/**
+ * 基本情報セクションの「営業時間」行を描画。
+ * businessHours が localStorage にあれば「19:00 〜 翌03:00」形式で表示・無ければ行ごと非表示。
+ * GAS同期完了後にも呼び出される。
+ */
+function _renderBusinessHoursRow() {
+  const row = document.getElementById('info-business-hours-row');
+  const val = document.getElementById('info-business-hours');
+  if (!row || !val) return;
+
+  let formatted = null;
+  try {
+    if (typeof getBusinessHours === 'function' && typeof formatBusinessHours === 'function') {
+      const bh = getBusinessHours();
+      formatted = formatBusinessHours(bh);
+    }
+  } catch { formatted = null; }
+
+  if (formatted) {
+    val.textContent = formatted;
+    row.hidden = false;
+  } else {
+    row.hidden = true;
+  }
 }
 
 function _templateIdLabel() {

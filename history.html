@@ -19,29 +19,27 @@
   <link rel="stylesheet" href="css/sheet-modal.css">
   <link rel="stylesheet" href="css/sales-modal.css">
   <style>
-    /* ── 上段sticky階層 ──
-       スマホで「タブ・月ナビ・フィルタ・新規登録ボタン」を上段固定する。
-       page-wrapper をスクロール親としているため、各 sticky 要素の top 値を
-       相対的に積み上げて、上にスクロールしてもタブ〜ボタンが常時可視となるようにする。
-       A-9：実機で sticky が効かなかった原因は history-header が非sticky だったこと。
-       ヘッダーも sticky 化して階層の最上位に固定する。 */
-
-    /* ページヘッダーを sticky 化（スマホのみ・iPadはサイドバーがあるため非sticky） */
-    body[data-page="history"]:not(.is-ipad) .history-header {
-      position: sticky;
-      top: 0;
-      z-index: 12;
+    /* ══════════════════════════════════════════════════════════
+       上段固定領域（A-9整流化）
+       ヘッダー〜タブ〜月ナビ〜フィルタ/新規登録ボタンを単一ラッパで
+       スマホ時に position:sticky top:0 で完全固定する。
+       子要素の top 値積み上げ方式は実機で不安定だったため廃止。
+       ══════════════════════════════════════════════════════════ */
+    .hist-fixed-top {
       background: var(--uz-bg, #fff);
     }
+    body[data-page="history"]:not(.is-ipad) .hist-fixed-top {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      box-shadow: 0 1px 0 var(--uz-border);
+    }
 
-    /* タブ：ヘッダー直下に固定（top値は history-header の実高さに合わせる） */
+    /* ── タブ ── */
     .hist-tabs {
       display: flex;
       border-bottom: 1px solid var(--uz-border);
       background: var(--uz-surface);
-      position: sticky;
-      top: 44px;
-      z-index: 11;
     }
     .hist-tab {
       flex: 1;
@@ -60,44 +58,20 @@
     .hist-tab-content { display: none; }
     .hist-tab-content--active { display: block; }
 
-    /* 月選択ナビ：タブ直下に固定 */
-    .hist-month-nav {
-      position: sticky;
-      top: 88px;
-      z-index: 10;
-      background: var(--uz-surface);
-    }
-
-    /* フィルタバー（売上コストタブ）：月ナビ直下に固定 */
-    .hist-filter-bar {
-      position: sticky;
-      top: 132px;
-      z-index: 9;
-      background: var(--uz-surface);
-    }
-
-    /* 新規登録ボタン（出勤履歴タブ）：月ナビ直下に固定 */
-    #panel-attendance > .ci-open-btn-wrap {
-      position: sticky;
-      top: 132px;
-      z-index: 9;
+    /* ── 月ナビ・フィルタ・新規登録ボタンは通常配置（sticky は親に委譲） ── */
+    .hist-month-nav { background: var(--uz-surface); }
+    .hist-filter-bar { background: var(--uz-surface); }
+    .ci-open-btn-wrap {
       background: var(--uz-surface);
       padding: 12px 16px 8px;
     }
 
-    /* iPadでは sticky 不要（左カラム自体がスクロール領域） */
-    body.is-ipad .hist-tabs,
-    body.is-ipad .hist-month-nav,
-    body.is-ipad .hist-filter-bar,
-    body.is-ipad #panel-attendance > .ci-open-btn-wrap {
-      position: relative;
-      top: auto;
-    }
-
-    /* ── 出勤履歴：日付グルーピング型（売上・コスト履歴と統一） ── */
-    .hist-date-group {
-      padding: 8px 0;
-    }
+    /* ══════════════════════════════════════════════════════════
+       出勤履歴：売上コスト履歴と完全同型レイアウト（A-9整流化）
+       マーカー・「出勤中/退勤済」バッジ・「退勤未記録」テキスト撤廃
+       退勤空欄行は businessHours ベースで「勤務中」「打刻忘れ」バッジ
+       ══════════════════════════════════════════════════════════ */
+    .hist-date-group { padding: 8px 0; }
     .hist-date-header {
       padding: 8px 16px 4px;
       font-size: 13px;
@@ -106,30 +80,14 @@
     }
     .hist-attend-row {
       display: grid;
-      grid-template-columns: 20px 92px 1fr auto auto;
+      grid-template-columns: 1fr auto auto;
       align-items: center;
-      column-gap: 8px;
+      column-gap: 10px;
       padding: 6px 16px;
       font-size: 13px;
       color: var(--uz-text);
     }
-    .hist-attend-marker {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .attend-active-marker {
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      background: var(--uz-marker-active, #E5B939);
-      animation: attendBlink 1.2s ease-in-out infinite;
-    }
-    @keyframes attendBlink {
-      0%, 100% { opacity: 1; }
-      50%      { opacity: 0.25; }
-    }
-    .attend-spacer { width: 10px; height: 10px; display: inline-block; }
+    .hist-attend-main { min-width: 0; }
     .hist-attend-name {
       font-size: 13px;
       font-weight: 700;
@@ -138,37 +96,58 @@
       overflow: hidden;
       text-overflow: ellipsis;
     }
-    .hist-attend-times { font-size: 13px; min-width: 0; }
-    .hist-attend-dur {
+    .hist-attend-sub {
       font-size: 11px;
       color: var(--uz-muted);
       margin-top: 1px;
     }
-    .hist-attend-status { display: flex; align-items: center; }
-    .hist-attend-actions { display: flex; gap: 6px; align-items: center; }
-    .attend-edit-btn {
-      font-size: 11px;
-      padding: 3px 10px;
-      border-radius: 20px;
-      border: 0.5px solid var(--uz-border2);
-      cursor: pointer;
-      font-family: var(--font-main);
-      font-weight: 600;
-      background: var(--uz-amber-bg);
+    .hist-attend-time-col {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 2px;
+      min-width: 0;
+    }
+    .hist-attend-time {
+      font-size: 13px;
       color: var(--uz-text);
       white-space: nowrap;
-      flex-shrink: 0;
+      font-variant-numeric: tabular-nums;
     }
-    .attend-status {
-      font-size: 11px; padding: 2px 8px; border-radius: 20px; font-weight: 600;
+    .hist-attend-state-wrap { display: block; }
+
+    /* 勤務状態バッジ（勤務中＝黄色弱・打刻忘れ＝赤系） */
+    .attend-state-badge {
+      display: inline-block;
+      font-size: 10px;
+      padding: 2px 8px;
+      border-radius: 20px;
+      font-weight: 600;
+      font-family: var(--font-main);
+      white-space: nowrap;
     }
-    .attend-status--active {
+    .attend-state-badge--working {
       background: var(--uz-marker-active-bg, rgba(229,185,57,0.14));
       color: var(--uz-marker-active, #E5B939);
     }
-    .attend-status--out    { background: rgba(136,136,170,.12); color: var(--uz-muted); }
+    .attend-state-badge--forgotten {
+      background: var(--uz-red-bg, rgba(192,57,43,0.08));
+      color: var(--uz-red, #C0392B);
+    }
 
-    /* ── 修正ボタン・ロックバッジ ── */
+    /* 異常値・翌日表示の特殊文字色（残置） */
+    .attend-time-abnormal { color: var(--uz-red, #C0392B); }
+    .attend-time-overnight {
+      font-size: 10px;
+      padding: 1px 4px;
+      margin-right: 2px;
+      background: rgba(59,130,246,.12);
+      color: #3b82f6;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+
+    /* ── 編集ボタン（売上コスト履歴と統一） ── */
     .hist-edit-btn {
       font-size: 11px;
       padding: 3px 10px;
@@ -281,7 +260,7 @@
       font-size: 13px; font-family: var(--font-main); cursor: pointer;
     }
     .tax-toggle--active {
-      background: var(--uz-amber-bg); color: var(--uz-gold); border-color: var(--uz-border2);
+      background: var(--uz-amber-bg); color: var(--uz-text); border-color: var(--uz-border2);
     }
 
     .edit-panel__footer {
@@ -291,14 +270,14 @@
     }
     .edit-save-btn {
       width: 100%; padding: 14px;
-      background: var(--uz-amber-bg); color: var(--uz-gold);
+      background: var(--uz-amber-bg); color: var(--uz-text);
       border: 0.5px solid var(--uz-border2); border-radius: 10px;
       font-size: 15px; font-weight: 700; font-family: var(--font-main);
       cursor: pointer;
     }
     .edit-save-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
-    /* ── 新規入店登録セクション ── */
+    /* ── 新規登録セクション ── */
     .ci-section {
       margin: 12px 16px 4px;
       background: var(--uz-surface);
@@ -360,18 +339,18 @@
     .ci-date-input:focus { outline: none; border-color: var(--uz-gold); }
     .ci-submit-btn {
       width: 100%; min-height: 44px; padding: 10px 16px;
-      background: var(--uz-amber-bg); color: var(--uz-gold);
+      background: var(--uz-amber-bg); color: var(--uz-text);
       border: 1px solid var(--uz-border2); border-radius: 10px;
       font-size: 13px; font-weight: 700; font-family: var(--font-main);
       cursor: pointer; line-height: 1.4; text-align: center;
       transition: background 0.15s;
     }
-    .ci-submit-btn:active { background: rgba(212,175,55,0.22); }
+    .ci-submit-btn:active { background: rgba(0,0,0,0.05); }
     .ci-submit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-    /* A-9：履歴画面の「退店を記録」ボタンは廃止（修正フォームに統合）
-       .ci-clockout-btn のCSSは削除済み。ホーム出勤状況タブの退店ボタンは
-       .staff-clockout-btn として別途定義（index.html）。 */
+    /* A-9：履歴画面の「退店を記録」ボタンは廃止
+       退勤入力は「編集」ボタン→修正フォームの退勤時刻欄で完結。
+       ホーム出勤状況タブの退店ボタン（.staff-clockout-btn）は維持。 */
 
     /* ── バリデーションエラー ── */
     .ci-field-error {
@@ -400,13 +379,13 @@
       flex-shrink: 0;
     }
 
-    /* ── 新規入店登録 開くボタン ── */
+    /* ── 新規登録 開くボタン ── */
     .ci-open-btn {
       display: block;
       width: 100%;
       padding: 12px 16px;
       background: var(--uz-amber-bg);
-      color: var(--uz-gold);
+      color: var(--uz-text);
       border: 1px solid var(--uz-border2);
       border-radius: 10px;
       font-size: 14px;
@@ -416,7 +395,7 @@
       text-align: center;
       transition: background 0.15s;
     }
-    .ci-open-btn:active { background: rgba(212,175,55,0.22); }
+    .ci-open-btn:active { background: rgba(0,0,0,0.05); }
 
     /* ── シートモーダル内のフォーム調整 ── */
     .sm-body .ci-section {
@@ -425,6 +404,12 @@
       border-radius: 0;
     }
 
+    /* iPad では sticky 解除（左カラム自体がスクロール領域） */
+    body.is-ipad .hist-fixed-top {
+      position: relative;
+      top: auto;
+      box-shadow: none;
+    }
   </style>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.9.0/dist/tabler-icons.min.css">
 </head>
@@ -478,44 +463,57 @@
     <!-- 左カラム：履歴一覧 -->
     <div class="ipad-hist-left">
 
-      <!-- タブナビゲーション -->
-      <div class="hist-tabs" role="tablist">
-        <button id="tab-salescost"
-                class="hist-tab hist-tab--active"
-                type="button" role="tab"
-                aria-selected="true" aria-controls="panel-salescost">
-          売上・コスト
-        </button>
-        <button id="tab-attendance"
-                class="hist-tab"
-                type="button" role="tab"
-                aria-selected="false" aria-controls="panel-attendance">
-          <span data-uilabel-key="clockin_history">出勤履歴</span>
-        </button>
-      </div>
+      <!-- 上段固定エリア（タブ・月ナビ・フィルタ/新規登録ボタン）
+           sticky を1階層に集約することで実機での挙動を安定化（A-9整流化） -->
+      <div class="hist-fixed-top">
 
-      <!-- 月選択ナビゲーター -->
-      <div class="hist-month-nav">
-        <button id="hist-prev" class="hist-month-btn" type="button" aria-label="前の月">
-          <i class="ti ti-chevron-left"></i>
-        </button>
-        <span id="hist-label" class="hist-month-label">読み込み中...</span>
-        <button id="hist-next" class="hist-month-btn" type="button" aria-label="次の月">
-          <i class="ti ti-chevron-right"></i>
-        </button>
-      </div>
+        <!-- タブナビゲーション -->
+        <div class="hist-tabs" role="tablist">
+          <button id="tab-salescost"
+                  class="hist-tab hist-tab--active"
+                  type="button" role="tab"
+                  aria-selected="true" aria-controls="panel-salescost">
+            売上・コスト
+          </button>
+          <button id="tab-attendance"
+                  class="hist-tab"
+                  type="button" role="tab"
+                  aria-selected="false" aria-controls="panel-attendance">
+            <span data-uilabel-key="clockin_history">出勤履歴</span>
+          </button>
+        </div>
 
-      <!-- タブ1：売上・コスト -->
-      <div id="panel-salescost" class="hist-tab-content hist-tab-content--active"
-           role="tabpanel" aria-labelledby="tab-salescost">
+        <!-- 月選択ナビゲーター -->
+        <div class="hist-month-nav">
+          <button id="hist-prev" class="hist-month-btn" type="button" aria-label="前の月">
+            <i class="ti ti-chevron-left"></i>
+          </button>
+          <span id="hist-label" class="hist-month-label">読み込み中...</span>
+          <button id="hist-next" class="hist-month-btn" type="button" aria-label="次の月">
+            <i class="ti ti-chevron-right"></i>
+          </button>
+        </div>
 
-        <!-- フィルターバー -->
-        <div class="hist-filter-bar">
+        <!-- フィルタバー（売上・コストタブ時のみ表示） -->
+        <div id="fixed-filter-bar" class="hist-filter-bar">
           <button class="hist-filter-btn hist-filter-btn--active" data-filter="all" type="button">全件</button>
           <button class="hist-filter-btn" data-filter="uncollected" type="button">売掛</button>
           <button class="hist-filter-btn" data-filter="payable" type="button">買掛</button>
           <span id="hist-filter-total" class="hist-filter-total" style="display:none;"></span>
         </div>
+
+        <!-- 新規登録ボタン（出勤履歴タブ時のみ表示） -->
+        <div id="fixed-ci-open-btn-wrap" class="ci-open-btn-wrap" hidden>
+          <button id="ci-open-btn" type="button" class="ci-open-btn">
+            ＋ <span data-uilabel-key="clockin_register">新規登録</span>
+          </button>
+        </div>
+
+      </div><!-- /hist-fixed-top -->
+
+      <!-- タブ1：売上・コスト -->
+      <div id="panel-salescost" class="hist-tab-content hist-tab-content--active"
+           role="tabpanel" aria-labelledby="tab-salescost">
 
         <div id="history-list"
              class="hist-list"
@@ -524,16 +522,9 @@
         </div>
       </div>
 
-      <!-- タブ2：入店履歴 -->
+      <!-- タブ2：出勤履歴 -->
       <div id="panel-attendance" class="hist-tab-content"
            role="tabpanel" aria-labelledby="tab-attendance">
-
-        <!-- ▸ 新規登録ボタン -->
-        <div class="ci-open-btn-wrap">
-          <button id="ci-open-btn" type="button" class="ci-open-btn">
-            ＋ <span data-uilabel-key="clockin_register">新規登録</span>
-          </button>
-        </div>
 
         <!-- ▸ 出勤履歴一覧 -->
         <div id="attendance-list"
