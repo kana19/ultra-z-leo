@@ -318,42 +318,46 @@ function editStaff(id) {
 
   const empType = _normalizeEmpType(staff.employmentType);
   row.innerHTML = `
-    <input type="text"
-           id="staff-edit-name-${id}"
-           class="settings-input"
-           style="flex:1;min-width:80px;height:40px;font-size:14px;"
-           value="${escHtml(staff.name)}"
-           maxlength="20"
-           autocomplete="off"
-           aria-label="スタッフ名">
-    <select id="staff-edit-emp-${id}"
-            class="form-select"
-            style="height:40px;font-size:13px;flex-shrink:0;"
-            aria-label="雇用形態">
-      <option value="employed_full"${empType === 'employed_full' ? ' selected' : ''}>常勤雇用（社員）</option>
-      <option value="employed_temp"${empType === 'employed_temp' ? ' selected' : ''}>臨時アルバイト</option>
-      <option value="contractor"${empType === 'contractor' ? ' selected' : ''}>委託・外注</option>
-    </select>
-    <input type="text"
-           id="staff-edit-password-${id}"
-           class="settings-input"
-           style="flex:1;min-width:120px;height:40px;font-size:14px;"
-           placeholder="パスワード変更（任意・5桁英数字）"
-           maxlength="5"
-           autocomplete="off"
-           aria-label="パスワード変更">
-    <button class="staff-save-btn"
-            type="button"
-            onclick="saveEditStaff(${id})"
-            aria-label="保存">
-      保存
-    </button>
-    <button class="staff-cancel-btn"
-            type="button"
-            onclick="renderStaffList()"
-            aria-label="キャンセル">
-      キャンセル
-    </button>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;width:100%;">
+      <input type="text"
+             id="staff-edit-name-${id}"
+             class="settings-input"
+             style="flex:1 1 120px;min-width:0;height:40px;font-size:14px;"
+             value="${escHtml(staff.name)}"
+             maxlength="20"
+             autocomplete="off"
+             aria-label="スタッフ名">
+      <select id="staff-edit-emp-${id}"
+              class="form-select"
+              style="flex:1 1 120px;min-width:0;height:40px;font-size:13px;"
+              aria-label="雇用形態">
+        <option value="employed_full"${empType === 'employed_full' ? ' selected' : ''}>常勤雇用（社員）</option>
+        <option value="employed_temp"${empType === 'employed_temp' ? ' selected' : ''}>臨時アルバイト</option>
+        <option value="contractor"${empType === 'contractor' ? ' selected' : ''}>委託・外注</option>
+      </select>
+      <input type="text"
+             id="staff-edit-password-${id}"
+             class="settings-input"
+             style="flex:1 1 100%;min-width:0;height:40px;font-size:14px;"
+             placeholder="パスワード変更（任意・5桁英数字）"
+             maxlength="5"
+             autocomplete="off"
+             aria-label="パスワード変更">
+      <button class="staff-save-btn"
+              type="button"
+              style="flex:1 1 calc(50% - 4px);height:40px;"
+              onclick="saveEditStaff('${id}')"
+              aria-label="保存">
+        保存
+      </button>
+      <button class="staff-cancel-btn"
+              type="button"
+              style="flex:1 1 calc(50% - 4px);height:40px;"
+              onclick="renderStaffList()"
+              aria-label="キャンセル">
+        キャンセル
+      </button>
+    </div>
   `;
   document.getElementById(`staff-edit-name-${id}`)?.focus();
 }
