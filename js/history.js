@@ -103,9 +103,10 @@ document.addEventListener('DOMContentLoaded', () => {
   bindListClicks();
   bindFilterBtns();
   document.getElementById('ci-open-btn')?.addEventListener('click', openCIModal);
-  if (location.hash === '#attendance') {
-    switchTab('attendance');
-  }
+  // A-9：初期表示時に必ず switchTab を呼び、上段固定エリア内のフィルタバー/新規登録ボタンの
+  // 表示状態を確定させる（呼ばないと出勤履歴タブでもフィルタバーが見えてしまうバグの修正）
+  const initialTab = (location.hash === '#attendance') ? 'attendance' : 'salescost';
+  switchTab(initialTab);
   loadAll();
   updateIpadApprovalBanner();
 });
@@ -595,13 +596,13 @@ function renderAttendance(items) {
           timeStr = `${escHtml(clockIn)} →`;
         }
 
-        // 勤務時間（2行目・小フォント・売上コスト履歴の「メモ」相当）
+        // 勤務時間（時刻の後ろに小フォント・売上コスト履歴と同行に表示）
+        // 形式：「(4.50H)」（小数点表記・10進化）
         const wMin = r.workMinutes || dur?.minutes;
         let durLabel = '';
         if (wMin && !dur?.isAbnormal) {
-          const wh = Math.floor(wMin / 60);
-          const wm = wMin % 60;
-          durLabel = wm > 0 ? `${wh}時間${wm}分` : `${wh}時間`;
+          const hours10 = (wMin / 60).toFixed(2); // 小数点2桁で10進表記
+          durLabel = `(${hours10}H)`;
         }
 
         // 勤務状態判定（businessHours ベース・未設定時は24時間フォールバック）
@@ -616,16 +617,14 @@ function renderAttendance(items) {
           }
         }
 
-        // 売上コスト同型の行構造（左:スタッフ名+勤務時間 / 中:時刻+状態バッジ / 右:編集ボタン）
+        // 1行レイアウト：スタッフ名（長い場合は省略） | 時刻+勤務時間+状態バッジ | 編集ボタン
         html += `
           <div class="hist-attend-row">
-            <div class="hist-attend-main">
-              <div class="hist-attend-name">${escHtml(sname)}</div>
-              ${durLabel ? `<div class="hist-attend-sub">${durLabel}</div>` : ''}
-            </div>
-            <div class="hist-attend-time-col">
-              <div class="hist-attend-time">${timeStr}</div>
-              ${stateBadge ? `<div class="hist-attend-state-wrap">${stateBadge}</div>` : ''}
+            <div class="hist-attend-name">${escHtml(sname)}</div>
+            <div class="hist-attend-meta">
+              <span class="hist-attend-time">${timeStr}</span>
+              ${durLabel ? `<span class="hist-attend-dur">${durLabel}</span>` : ''}
+              ${stateBadge}
             </div>
             <button class="hist-edit-btn" type="button" data-idx="${atIdx}" data-scope="at" aria-label="編集">編集</button>
           </div>`;

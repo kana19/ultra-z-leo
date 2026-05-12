@@ -20,19 +20,50 @@
   <link rel="stylesheet" href="css/sales-modal.css">
   <style>
     /* ══════════════════════════════════════════════════════════
-       上段固定領域（A-9整流化）
-       ヘッダー〜タブ〜月ナビ〜フィルタ/新規登録ボタンを単一ラッパで
-       スマホ時に position:sticky top:0 で完全固定する。
-       子要素の top 値積み上げ方式は実機で不安定だったため廃止。
+       上部完全固定構造（A-9整流化・最終版）
+       sticky の連鎖が実機で不安定だった経緯を踏まえ、
+       スマホ時は page-wrapper 自体を flex で縦分割し、
+         上段：history-header + hist-fixed-top（flex-shrink:0 で固定）
+         下段：hist-scroll-area（flex:1 + overflow-y:auto でスクロール）
+       とすることで100%確実な固定を実現する。
        ══════════════════════════════════════════════════════════ */
+    body[data-page="history"]:not(.is-ipad) .page-wrapper {
+      display: flex;
+      flex-direction: column;
+      height: 100dvh;
+      padding-bottom: 0; /* base.css の bottom padding を打ち消す */
+    }
+    body[data-page="history"]:not(.is-ipad) .history-header {
+      flex-shrink: 0;
+      background: var(--uz-bg, #fff);
+      z-index: 50;
+    }
+    body[data-page="history"]:not(.is-ipad) .ipad-hist-wrap {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    body[data-page="history"]:not(.is-ipad) .ipad-hist-left {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
     .hist-fixed-top {
       background: var(--uz-bg, #fff);
     }
     body[data-page="history"]:not(.is-ipad) .hist-fixed-top {
-      position: sticky;
-      top: 0;
-      z-index: 50;
+      flex-shrink: 0;
       box-shadow: 0 1px 0 var(--uz-border);
+      z-index: 40;
+    }
+    body[data-page="history"]:not(.is-ipad) .hist-scroll-area {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      padding-bottom: calc(var(--nav-height) + env(safe-area-inset-bottom) + 16px);
     }
 
     /* ── タブ ── */
@@ -67,9 +98,10 @@
     }
 
     /* ══════════════════════════════════════════════════════════
-       出勤履歴：売上コスト履歴と完全同型レイアウト（A-9整流化）
-       マーカー・「出勤中/退勤済」バッジ・「退勤未記録」テキスト撤廃
-       退勤空欄行は businessHours ベースで「勤務中」「打刻忘れ」バッジ
+       出勤履歴：1行レイアウト（A-9整流化・最終版）
+       スタッフ名（長い場合は…で省略） | 時刻+勤務時間+状態バッジ | 編集ボタン
+       見本：「不明  09:30 → 14:00 (4.50H)  [編集]」
+            「●●コンパニオン…  09:30 →  勤務中  [編集]」
        ══════════════════════════════════════════════════════════ */
     .hist-date-group { padding: 8px 0; }
     .hist-date-header {
@@ -79,16 +111,17 @@
       color: var(--uz-text);
     }
     .hist-attend-row {
-      display: grid;
-      grid-template-columns: 1fr auto auto;
+      display: flex;
       align-items: center;
-      column-gap: 10px;
-      padding: 6px 16px;
+      gap: 8px;
+      padding: 8px 16px;
       font-size: 13px;
       color: var(--uz-text);
     }
-    .hist-attend-main { min-width: 0; }
+    /* スタッフ名：長い場合は…で省略（残幅を時刻メタが占有しないよう min-width:0 で縮小許可） */
     .hist-attend-name {
+      flex: 1 1 0;
+      min-width: 0;
       font-size: 13px;
       font-weight: 700;
       color: var(--uz-text);
@@ -96,25 +129,23 @@
       overflow: hidden;
       text-overflow: ellipsis;
     }
-    .hist-attend-sub {
-      font-size: 11px;
-      color: var(--uz-muted);
-      margin-top: 1px;
-    }
-    .hist-attend-time-col {
-      display: flex;
-      flex-direction: column;
-      align-items: flex-end;
-      gap: 2px;
-      min-width: 0;
+    /* 時刻＋勤務時間＋状態バッジを1行で右寄せ */
+    .hist-attend-meta {
+      flex-shrink: 0;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
     }
     .hist-attend-time {
       font-size: 13px;
       color: var(--uz-text);
-      white-space: nowrap;
       font-variant-numeric: tabular-nums;
     }
-    .hist-attend-state-wrap { display: block; }
+    .hist-attend-dur {
+      font-size: 11px;
+      color: var(--uz-muted);
+    }
 
     /* 勤務状態バッジ（勤務中＝黄色弱・打刻忘れ＝赤系） */
     .attend-state-badge {
@@ -511,29 +542,32 @@
 
       </div><!-- /hist-fixed-top -->
 
-      <!-- タブ1：売上・コスト -->
-      <div id="panel-salescost" class="hist-tab-content hist-tab-content--active"
-           role="tabpanel" aria-labelledby="tab-salescost">
+      <!-- スクロール領域（A-9：上部完全固定の確実実現のため flex 子要素として明示） -->
+      <div class="hist-scroll-area">
 
-        <div id="history-list"
-             class="hist-list"
-             style="padding-bottom:calc(var(--nav-height) + env(safe-area-inset-bottom) + 16px);"
-             role="region" aria-label="売上・コスト履歴">
+        <!-- タブ1：売上・コスト -->
+        <div id="panel-salescost" class="hist-tab-content hist-tab-content--active"
+             role="tabpanel" aria-labelledby="tab-salescost">
+
+          <div id="history-list"
+               class="hist-list"
+               role="region" aria-label="売上・コスト履歴">
+          </div>
         </div>
-      </div>
 
-      <!-- タブ2：出勤履歴 -->
-      <div id="panel-attendance" class="hist-tab-content"
-           role="tabpanel" aria-labelledby="tab-attendance">
+        <!-- タブ2：出勤履歴 -->
+        <div id="panel-attendance" class="hist-tab-content"
+             role="tabpanel" aria-labelledby="tab-attendance">
 
-        <!-- ▸ 出勤履歴一覧 -->
-        <div id="attendance-list"
-             style="padding:0 0 calc(var(--nav-height) + env(safe-area-inset-bottom) + 16px);"
-             role="region"
-             aria-label="出勤履歴"
-             data-uilabel-aria-key="clockin_history">
+          <!-- ▸ 出勤履歴一覧 -->
+          <div id="attendance-list"
+               role="region"
+               aria-label="出勤履歴"
+               data-uilabel-aria-key="clockin_history">
+          </div>
         </div>
-      </div>
+
+      </div><!-- /hist-scroll-area -->
 
     </div><!-- /ipad-hist-left -->
 
