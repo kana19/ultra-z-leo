@@ -97,11 +97,20 @@
       padding: 12px 16px 8px;
     }
 
+    /* hidden 属性を確実に効かせる（switchTab がタブ連動で出し分け）
+       pages.css 等で .hist-filter-bar に display:flex が指定されている可能性に備え、
+       ID + !important で詳細度を最大化する */
+    #fixed-filter-bar[hidden],
+    #fixed-ci-open-btn-wrap[hidden] {
+      display: none !important;
+    }
+
     /* ══════════════════════════════════════════════════════════
-       出勤履歴：1行レイアウト（A-9整流化・最終版）
-       スタッフ名（長い場合は…で省略） | 時刻+勤務時間+状態バッジ | 編集ボタン
-       見本：「不明  09:30 → 14:00 (4.50H)  [編集]」
-            「●●コンパニオン…  09:30 →  勤務中  [編集]」
+       出勤履歴：Grid整列レイアウト（A-9整流化・最終版）
+       カラム：スタッフ名 | 出勤時刻 | → | 退勤時刻 | 勤務時間or状態 | 編集
+       全行で時刻位置・矢印位置・退勤位置が完全に揃う
+       見本：「不明           09:30 → 14:00  (4.50H)  [編集]」
+            「●●コンパニオン…   14:50 →   —    勤務中   [編集]」
        ══════════════════════════════════════════════════════════ */
     .hist-date-group { padding: 8px 0; }
     .hist-date-header {
@@ -111,16 +120,16 @@
       color: var(--uz-text);
     }
     .hist-attend-row {
-      display: flex;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto 14px auto auto auto;
       align-items: center;
-      gap: 8px;
+      column-gap: 6px;
       padding: 8px 16px;
       font-size: 13px;
       color: var(--uz-text);
     }
-    /* スタッフ名：長い場合は…で省略（残幅を時刻メタが占有しないよう min-width:0 で縮小許可） */
+    /* スタッフ名：長い場合は…で省略 */
     .hist-attend-name {
-      flex: 1 1 0;
       min-width: 0;
       font-size: 13px;
       font-weight: 700;
@@ -129,33 +138,38 @@
       overflow: hidden;
       text-overflow: ellipsis;
     }
-    /* 時刻＋勤務時間＋状態バッジを1行で右寄せ */
-    .hist-attend-meta {
-      flex-shrink: 0;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      white-space: nowrap;
-    }
-    .hist-attend-time {
+    .hist-attend-time-in,
+    .hist-attend-time-out {
       font-size: 13px;
       color: var(--uz-text);
       font-variant-numeric: tabular-nums;
+      white-space: nowrap;
     }
-    .hist-attend-dur {
-      font-size: 11px;
+    .hist-attend-arrow {
+      font-size: 13px;
       color: var(--uz-muted);
+      text-align: center;
+    }
+    .hist-attend-time-out--empty { color: var(--uz-text3); }
+    /* 勤務時間（4.50H）：時刻と同サイズ・グレー寄り */
+    .hist-attend-dur {
+      font-size: 13px;
+      color: var(--uz-muted);
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+      margin-left: 4px;
     }
 
-    /* 勤務状態バッジ（勤務中＝黄色弱・打刻忘れ＝赤系） */
+    /* 勤務状態バッジ（勤務中＝黄色弱・打刻忘れ＝赤系）。退勤時刻列の右隣に配置 */
     .attend-state-badge {
       display: inline-block;
-      font-size: 10px;
+      font-size: 11px;
       padding: 2px 8px;
       border-radius: 20px;
       font-weight: 600;
       font-family: var(--font-main);
       white-space: nowrap;
+      margin-left: 4px;
     }
     .attend-state-badge--working {
       background: var(--uz-marker-active-bg, rgba(229,185,57,0.14));
