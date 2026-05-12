@@ -613,7 +613,7 @@ function _bindSalesAmountFormatting() {
 }
 
 function _smHandleCardTap(e) {
-  const card = e.target.closest('.sales-sm-card');
+  const card = e.target.closest('.radio-card');
   if (!card) return;
 
   document.querySelectorAll('.radio-card').forEach(c => c.classList.remove('radio-card--checked-blue'));

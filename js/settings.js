@@ -268,13 +268,13 @@ function renderStaffList() {
         ${badge}
         <button class="staff-edit-btn"
                 type="button"
-                onclick="editStaff(${s.id})"
+                onclick="editStaff('${s.id}')"
                 aria-label="${escHtml(s.name)}を編集">
           編集
         </button>
         <button class="staff-delete-btn"
                 type="button"
-                onclick="deleteStaff(${s.id})"
+                onclick="deleteStaff('${s.id}')"
                 aria-label="${escHtml(s.name)}を削除">
           削除
         </button>
@@ -310,7 +310,7 @@ function _empTypeBadge(empType) {
 
 function editStaff(id) {
   const list  = getStaffList();
-  const staff = list.find(s => s.id === id);
+  const staff = list.find(s => String(s.id) === String(id));
   if (!staff) return;
 
   const row = document.getElementById(`staff-row-${id}`);
@@ -368,7 +368,7 @@ async function saveEditStaff(id) {
   if (!name) return showToast('スタッフ名を入力してください', 'error');
 
   const list = getStaffList();
-  if (list.some(s => s.id !== id && s.name === name)) {
+  if (list.some(s => String(s.id) !== String(id) && s.name === name)) {
     return showToast('同じ名前のスタッフが既に登録されています', 'error');
   }
 
@@ -387,7 +387,7 @@ async function saveEditStaff(id) {
   }
 
   const newList = list.map(s =>
-    s.id === id
+    String(s.id) === String(id)
       ? { ...s, name, employmentType: _normalizeEmpType(empEl.value), ...(passwordUpdate || {}) }
       : s
   );
@@ -402,12 +402,12 @@ async function saveEditStaff(id) {
 
 function deleteStaff(id) {
   const list   = getStaffList();
-  const target = list.find(s => s.id === id);
+  const target = list.find(s => String(s.id) === String(id));
   if (!target) return;
 
   if (!confirm(`「${target.name}」を削除しますか？\n入退店の記録済みデータには影響しません。`)) return;
 
-  const newList = list.filter(s => s.id !== id);
+  const newList = list.filter(s => String(s.id) !== String(id));
   _saveStaffList(newList);
   renderStaffList();
   showToast(`${target.name}を削除しました`, 'success');
