@@ -566,6 +566,7 @@ function getSettings() {
   var templateIdRaw = sheet.getRange('B13').getValue();
   var uiLabelsJson  = sheet.getRange('B14').getValue();
   var featureVisibilityJson = sheet.getRange('B16').getValue();
+  var businessHoursRaw = sheet.getRange('B18').getValue();
   var staffList = [], serviceList = [];
   try { if (staffJson)   staffList   = JSON.parse(staffJson);   } catch(e) {}
   try { if (serviceJson) serviceList = JSON.parse(serviceJson); } catch(e) {}
@@ -593,6 +594,21 @@ function getSettings() {
   var featureVisibility = {};
   try { if (featureVisibilityJson) featureVisibility = JSON.parse(featureVisibilityJson); } catch(e) {}
   if (!featureVisibility || typeof featureVisibility !== 'object') featureVisibility = {};
+  // businessHours は JSON 文字列。パース失敗・未設定時は null を返す（A-9：出勤履歴の打刻状態判定で使用）
+  // 形式：{open:"HH:MM", close:"HH:MM", closeNextDay:boolean}
+  var businessHours = null;
+  try {
+    if (businessHoursRaw) {
+      var bhParsed = (typeof businessHoursRaw === 'string') ? JSON.parse(businessHoursRaw) : businessHoursRaw;
+      if (bhParsed && typeof bhParsed === 'object' && bhParsed.open && bhParsed.close) {
+        businessHours = {
+          open: String(bhParsed.open),
+          close: String(bhParsed.close),
+          closeNextDay: !!bhParsed.closeNextDay
+        };
+      }
+    }
+  } catch(e) { businessHours = null; }
   return { status: 'ok', data: {
     storeName: storeName || '',
     staffList: staffList,
@@ -600,7 +616,8 @@ function getSettings() {
     storeType: storeType,
     templateId: templateId,
     uiLabels: uiLabels,
-    featureVisibility: featureVisibility
+    featureVisibility: featureVisibility,
+    businessHours: businessHours
   }};
 }
 
@@ -647,6 +664,20 @@ function saveSettings(data) {
   if (data.featureVisibility !== undefined) {
     sheet.getRange('A16').setValue('featureVisibility');
     sheet.getRange('B16').setValue(JSON.stringify(data.featureVisibility || {}));
+  }
+  // businessHours は通常の顧客UIからは送信されないが、運営ポータルから送信された場合のみ更新（A-9）
+  // 形式：{open:"HH:MM", close:"HH:MM", closeNextDay:boolean}
+  if (data.businessHours !== undefined) {
+    sheet.getRange('A18').setValue('businessHours');
+    if (data.businessHours && typeof data.businessHours === 'object' && data.businessHours.open && data.businessHours.close) {
+      sheet.getRange('B18').setValue(JSON.stringify({
+        open: String(data.businessHours.open),
+        close: String(data.businessHours.close),
+        closeNextDay: !!data.businessHours.closeNextDay
+      }));
+    } else {
+      sheet.getRange('B18').setValue('');
+    }
   }
   return { status: 'ok' };
 }
