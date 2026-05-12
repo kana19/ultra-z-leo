@@ -59,12 +59,16 @@ function _getTimerState(hasItem) {
   return 'blue';
 }
 
-function _applyTimerClass(btnEl, state) {
-  if (!btnEl) return;
-  btnEl.classList.remove('action-btn--timer-blue','action-btn--timer-red','action-btn--timer-blink');
-  if (state === 'blue')  btnEl.classList.add('action-btn--timer-blue');
-  if (state === 'red')   btnEl.classList.add('action-btn--timer-red');
-  if (state === 'blink') btnEl.classList.add('action-btn--timer-blink');
+/* カラータイマークラスをドット要素に付与する
+   ボタン本体ではなく、ボタン内の dot 要素にクラスを当てる。
+   消灯時（state=null）はクラスなし=ダークグレー縁のみ。
+   history.js buildTimerDotHTML と同じ表現を採用。 */
+function _applyTimerClass(dotEl, state) {
+  if (!dotEl) return;
+  dotEl.classList.remove('home-timer-dot--blue','home-timer-dot--red','home-timer-dot--blink');
+  if (state === 'blue')  dotEl.classList.add('home-timer-dot--blue');
+  if (state === 'red')   dotEl.classList.add('home-timer-dot--red');
+  if (state === 'blink') dotEl.classList.add('home-timer-dot--blink');
 }
 
 /* ── アラートドット描画（補助） ─────────────────────────── */
@@ -77,8 +81,9 @@ function createAlertDot(urgent) {
 
 function renderAlerts(alerts) {
   const { hasUncollected, hasPayable, hasUnrecordedClockOut } = alerts;
-  _applyTimerClass(document.querySelector('.action-btn--sales'), _getTimerState(hasUncollected));
-  _applyTimerClass(document.querySelector('.action-btn--cost'),  _getTimerState(hasPayable));
+  /* カラータイマーはボタン内のドット要素（id=dot-uncollected/dot-payable）に当てる */
+  _applyTimerClass(document.getElementById('dot-uncollected'), _getTimerState(hasUncollected));
+  _applyTimerClass(document.getElementById('dot-payable'),     _getTimerState(hasPayable));
   const clockDot = document.getElementById('dot-clockout');
   if (clockDot) {
     clockDot.innerHTML = '';

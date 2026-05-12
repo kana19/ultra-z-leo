@@ -48,7 +48,7 @@
   --uz-info-bg:    rgba(41,128,185,0.08);
 
   /* アラートドット縁 */
-  --uz-silver:   #D8D8D8;
+  --uz-silver:   #5A5A5A;
 
   /* 損益カラー（後方互換） */
   --uz-sales:    #333333;
@@ -246,12 +246,12 @@ body.is-ipad .home-sticky-top {
   text-align: left;
 }
 
-/* アラートドット（ボタン右端） */
+/* カラータイマードット位置（ボタン右上） */
 .action-btn__dot {
   position: absolute;
-  top: 50%;
-  right: 16px;
-  transform: translateY(-50%);
+  top: 8px;
+  right: 10px;
+  pointer-events: none;
 }
 
 /* ── アラートドット ───────────────────────────────────────── */
@@ -472,15 +472,14 @@ body.is-ipad .home-sticky-top {
   text-align: center;
 }
 
-/* ── 入力ボタン カラータイマー縁 ────────────────────────── */
+/* ── 入力ボタン カラータイマー（ボタン枠でなくドット表示） ── */
 /* 全ボタンのフォーカス枠を除去 */
 .action-btn:focus,
 .action-btn:focus-visible {
   outline: none;
 }
 
-/* ① 通常：シルバー縁のみ（box-shadowで確実表示）
-   タイマー色と太さを統一（2.5px）し、シルバー色は#D8D8D8で視認性確保 */
+/* .action-btn--half：ボタン枠装飾なし（カラータイマーはドットで表示） */
 .action-btn--half {
   flex-direction: column;
   align-items: flex-start;
@@ -489,31 +488,40 @@ body.is-ipad .home-sticky-top {
   padding: 10px 18px;
   gap: 5px;
   outline: none;
-  box-shadow: 0 0 0 2.5px var(--uz-silver);
 }
 
-/* ② 発生：青点灯 */
-.action-btn--timer-blue {
-  box-shadow: 0 0 0 2.5px #4A90D9, 0 0 0 5px rgba(74,144,217,0.15) !important;
+/* ── ホーム画面カラータイマードット（history.css準拠） ────── */
+/* 売上・経費ボタン右上に表示する円形ドット
+   ①消灯：ダークグレー縁のみ・中身透明（売掛/買掛なし）
+   ②発生：青塗り（売掛/買掛あり・残営業日4以上）
+   ③接近：赤塗り（残営業日1〜3）
+   ④直前：赤点滅（残営業日1以下） */
+.home-timer-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid var(--uz-silver);
+  background: transparent;
+  display: block;
 }
-
-/* ③ 3営業日前：赤点灯 */
-.action-btn--timer-red {
-  box-shadow: 0 0 0 2.5px var(--uz-danger), 0 0 0 5px rgba(192,57,43,0.15) !important;
+.home-timer-dot--blue {
+  background: #4A90D9;
+  border-color: #4A90D9;
+  box-shadow: 0 0 0 2px rgba(74,144,217,0.2);
 }
-
-/* ④ 1営業日前以降：赤点滅 */
-.action-btn--timer-blink {
-  animation: timer-blink 0.8s ease-in-out infinite;
+.home-timer-dot--red {
+  background: var(--uz-danger);
+  border-color: var(--uz-danger);
+  box-shadow: 0 0 0 2px rgba(192,57,43,0.2);
 }
-
-@keyframes timer-blink {
-  0%, 100% {
-    box-shadow: 0 0 0 2.5px var(--uz-danger), 0 0 0 5px rgba(192,57,43,0.3);
-  }
-  50% {
-    box-shadow: 0 0 0 2.5px rgba(192,57,43,0.2), 0 0 0 5px rgba(192,57,43,0);
-  }
+.home-timer-dot--blink {
+  background: var(--uz-danger);
+  border-color: var(--uz-danger);
+  animation: home-dot-blink 0.8s ease-in-out infinite;
+}
+@keyframes home-dot-blink {
+  0%, 100% { opacity: 1;    box-shadow: 0 0 0 2px rgba(192,57,43,0.3); }
+  50%      { opacity: 0.15; box-shadow: 0 0 0 2px rgba(192,57,43,0); }
 }
 
 .action-btn__main-label {
