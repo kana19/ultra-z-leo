@@ -246,11 +246,13 @@ body.is-ipad .home-sticky-top {
   text-align: left;
 }
 
-/* カラータイマードット位置（ボタン右上） */
+/* カラータイマードット位置（ボタン右寄り縦中央）
+   ウルトラマンの胸中央のカラータイマーをモチーフ */
 .action-btn__dot {
   position: absolute;
-  top: 8px;
-  right: 10px;
+  top: 50%;
+  right: 14px;
+  transform: translateY(-50%);
   pointer-events: none;
 }
 
