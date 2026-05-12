@@ -114,12 +114,13 @@ async function syncStoreTypeAtStartup() {
 }
 
 // 起動時にバックグラウンドで settings を同期（UIブロックなし）
-// 他ページの初期化処理(home.js loadAll等)とGAS呼び出し競合しないよう
-// 5秒遅延させてから実行する。コスト入力モーダルが開かれる頃には完了している前提
+// templateId / uiLabels の即時反映が必要なため、5秒遅延を撤廃し即時実行に変更（A-9整流化）
+// 旧版は遅延中にキャッシュ値で初期描画され、UI用語の切替が遅れて見えるバグがあった
 document.addEventListener('DOMContentLoaded', function() {
   // 起動直後にもキャッシュ済みのラベルを適用しておく（GASを待たない）
   applyUILabels();
-  setTimeout(syncSettingsAtStartup, 5000);
+  // GAS同期は即時実行（バックグラウンド・他のGAS呼び出しと並列で走らせて問題なし）
+  syncSettingsAtStartup();
 });
 
 /* ── 業態テンプレート連動UI用語切替 ───────────────────────
@@ -135,7 +136,7 @@ document.addEventListener('DOMContentLoaded', function() {
  *   - clockout_time        : 退店時刻 / 退勤時刻
  *   - clockin_action       : 入店を記録 / 出勤を記録
  *   - clockout_action      : 退店を記録 / 退勤を記録
- *   - clockin_register     : 新規入店登録 / 新規出勤登録
+ *   - clockin_register     : 新規登録（業態共通・A-9で「新規入店登録/新規出勤登録」から統一）
  *   - clockout_done        : 退店済 / 退勤済
  *   - not_clocked_in       : 未入店 / 未出勤
  *   - clockin_label        : 入店 / 出勤
@@ -155,7 +156,7 @@ const UI_LABELS_HOSTESS = {
   clockout_time:       '退店時刻',
   clockin_action:      '入店を記録',
   clockout_action:     '退店を記録',
-  clockin_register:    '新規入店登録',
+  clockin_register:    '新規登録',
   clockout_done:       '退店済',
   not_clocked_in:      '未入店',
   clockin_label:       '入店',
@@ -172,7 +173,7 @@ const UI_LABELS_GENERAL = {
   clockout_time:       '退勤時刻',
   clockin_action:      '出勤を記録',
   clockout_action:     '退勤を記録',
-  clockin_register:    '新規出勤登録',
+  clockin_register:    '新規登録',
   clockout_done:       '退勤済',
   not_clocked_in:      '未出勤',
   clockin_label:       '出勤',

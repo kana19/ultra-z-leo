@@ -99,6 +99,13 @@ function renderStaffList() {
   const container = document.getElementById('staff-list');
   if (!container) return;
 
+  // 業態テンプレートのUI用語を取得（出勤中/入店中・退勤/退店等）
+  const labels = (typeof deriveUILabels === 'function') ? deriveUILabels() : {
+    clockin_active: '出勤中',
+    clockout_label: '退勤',
+    attendance_empty: '本日の出勤記録がありません',
+  };
+
   const active   = todayAttendance.filter(s => s.isActive);
   const inactive = todayAttendance.filter(s => !s.isActive);
   const display  = [...active, ...inactive].slice(0, 6);
@@ -108,7 +115,7 @@ function renderStaffList() {
       <div class="staff-item">
         <span class="staff-marker staff-marker--off">☆</span>
         <div class="staff-info">
-          <div class="staff-name" style="color:var(--uz-muted)">本日の入店記録なし</div>
+          <div class="staff-name" style="color:var(--uz-muted)">${escapeHtml(labels.attendance_empty || '本日の出勤記録がありません')}</div>
         </div>
       </div>`;
     return;
@@ -118,19 +125,19 @@ function renderStaffList() {
     const ci = escapeHtml(s.clockIn || '—');
     const co = s.clockOut ? escapeHtml(s.clockOut) : '';
     if (s.isActive) {
-      // 入店中：黄色●点滅 + 入店時刻
+      // 入店中（出勤中）：黄色●点滅 + 入店時刻
       return `
         <div class="staff-item">
-          <span class="staff-marker staff-marker--active" aria-label="入店中" title="入店中"></span>
+          <span class="staff-marker staff-marker--active" aria-label="${escapeHtml(labels.clockin_active)}" title="${escapeHtml(labels.clockin_active)}"></span>
           <div class="staff-info">
             <div class="staff-name">${escapeHtml(s.name)}</div>
             <div class="staff-time">${ci}</div>
           </div>
-          <span class="staff-status staff-status--active">入店中</span>
-          <button class="staff-clockout-btn" type="button" onclick="handleClockOut(${s.id})">退店</button>
+          <span class="staff-status staff-status--active">${escapeHtml(labels.clockin_active)}</span>
+          <button class="staff-clockout-btn" type="button" onclick="handleClockOut(${s.id})">${escapeHtml(labels.clockout_label || '退勤')}</button>
         </div>`;
     } else {
-      // 退店済み：グレー☆ + 入店→退店時刻
+      // 退店済み（退勤済み）：グレー☆ + 入店→退店時刻
       return `
         <div class="staff-item">
           <span class="staff-marker staff-marker--off" aria-hidden="true">☆</span>

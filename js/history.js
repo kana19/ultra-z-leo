@@ -202,7 +202,11 @@ function getLockStatus(_dateStr) {
 }
 
 function buildLockWidget(ls, idx, scope) {
-  return `<button class="hist-edit-btn" type="button" data-idx="${idx}" data-scope="${scope}">修正</button>`;
+  // A-9でロック機能廃止。修正ボタンは `.attend-edit-btn`（出勤履歴）／
+  // 売上コスト履歴側の `.hist-edit-btn` 描画箇所に一本化したため、
+  // 本関数は後方互換のため残置するが空文字を返す。
+  // ※ 売上コスト履歴の修正ボタンは別途 _renderFilteredList 内で `.hist-edit-btn` を直接描画している
+  return '';
 }
 
 /* ── リストのクリック委譲（1回だけ登録） ────────────────── */
@@ -607,21 +611,14 @@ function renderAttendance(items) {
 
         const isActive = !clockOut;
         const ls       = getLockStatus(r.date);
-        const widget   = buildLockWidget(ls, atIdx, 'at');
+        const widget   = buildLockWidget(ls, atIdx, 'at'); // A-9で空文字返却・後方互換のため呼び出し維持
 
-        const clockoutBtn = (isActive && !ls.locked)
-          ? `<button class="ci-clockout-btn"
-                     type="button"
-                     data-row-index="${enriched.rowIndex || ''}"
-                     data-staff-id="${escHtml(String(enriched.staffId || ''))}"
-                     data-staff-name="${escHtml(enriched.staffName || '')}"
-                     aria-label="${escHtml(enriched.staffName || '')}の${escHtml(labels.clockout_action)}">
-               ${escHtml(labels.clockout_action)}
-             </button>`
-          : '';
+        // A-9整流化：履歴画面の「退店を記録」ボタンを廃止
+        // 修正ボタンで開く編集フォーム（buildAttendanceFormHTML）に退勤時刻入力欄が既に含まれており
+        // 退勤入力もそこで完結する。ホーム画面の出勤状況タブの退店ボタンは商売動線として維持（02_画面仕様_md.md §4-1）
 
         const editBtn = !ls.locked
-          ? `<button class="attend-edit-btn" type="button" data-idx="${atIdx}" data-scope="at" aria-label="修正">修正</button>`
+          ? `<button class="attend-edit-btn" type="button" data-idx="${atIdx}" data-scope="at" aria-label="修正">修正・更新</button>`
           : '';
 
         // 1スタッフ複数行のとき、2行目以降は★/スペーサーを空にしてスタッフ名も省略
@@ -640,7 +637,6 @@ function renderAttendance(items) {
               </span>
             </div>
             <div class="hist-attend-actions">
-              ${clockoutBtn}
               ${editBtn}
             </div>
             ${widget}
