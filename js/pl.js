@@ -1,18 +1,21 @@
 /**
  * ウルトラZAIMUくん LEO版 PWA — pl.js
- * 損益サマリー画面ロジック（GAS getSummary 連携版）
+ * 損益サマリー画面ロジック（GAS getSummary + getHistory 連携版）
  *
  * A-9：トップ画面（index.html + home.js）と完全に同じアコーディオン実装に統一。
  *   - HTML構造：index.html 287〜307行のpl-row + pl-accordion-btnパターンに準拠
  *   - ID命名：pl-row-${key} / pl-chev-${key} / pl-detail-${key}
  *   - トグル関数：togglePlAccordion（home.js準拠）
+ *   - 内訳取得：home.js _loadBreakdown 準拠（getHistoryからJS側自前集計）
+ *   - 内訳プロパティ：{name, amt}（home.js準拠）
  *   - 死コード「確定申告 科目別集計（収支内訳書 行番号対応）」を削除
  */
 
 'use strict';
 
 /* ── GASレスポンスキャッシュ ─────────────────────────────── */
-const gasCache = {};
+const gasCache       = {};   // 月別 getSummary キャッシュ
+const breakdownCache = {};   // 月別 getHistory→内訳 キャッシュ
 
 async function fetchSummary(monthStr) {
   if (gasCache[monthStr] !== undefined) return gasCache[monthStr];
@@ -24,6 +27,48 @@ async function fetchSummary(monthStr) {
   } catch (e) {
     gasCache[monthStr] = null;
     return null;
+  }
+}
+
+/**
+ * 月別の内訳データを取得する。
+ * home.js _loadBreakdown と同じロジック：getHistoryから自前集計。
+ * 返却形式: { sales: [{name, amt}, ...], cogs: [...], sga: [...] }
+ */
+async function fetchBreakdown(monthStr) {
+  if (breakdownCache[monthStr] !== undefined) return breakdownCache[monthStr];
+  try {
+    const res = await callGAS('getHistory', { month: monthStr }).catch(() => null);
+    const data = (res?.status === 'ok' && Array.isArray(res.data)) ? res.data : [];
+
+    const salesMap = {}, cogsMap = {}, sgaMap = {};
+
+    data.forEach(r => {
+      if (r.type === 'sales') {
+        const name = r.itemName || '売上';
+        salesMap[name] = (salesMap[name] || 0) + (Number(r.amount) || 0);
+      } else if (r.type === 'cost') {
+        const name = r.itemName || '経費';
+        const amt  = Number(r.amount) || 0;
+        if (String(r.divisionCode) === '1') {
+          cogsMap[name] = (cogsMap[name] || 0) + amt;
+        } else {
+          sgaMap[name] = (sgaMap[name] || 0) + amt;
+        }
+      }
+    });
+
+    const toArr = map => Object.entries(map)
+      .map(([name, amt]) => ({ name, amt }))
+      .sort((a, b) => b.amt - a.amt);
+
+    const result = { sales: toArr(salesMap), cogs: toArr(cogsMap), sga: toArr(sgaMap) };
+    breakdownCache[monthStr] = result;
+    return result;
+  } catch {
+    const empty = { sales: [], cogs: [], sga: [] };
+    breakdownCache[monthStr] = empty;
+    return empty;
   }
 }
 
@@ -39,7 +84,7 @@ let currentPeriod = `${THIS_YEAR}-${String(THIS_MONTH).padStart(2, '0')}`;
 let currentYear   = THIS_YEAR;
 let compareMode   = false;
 
-/* 内訳データの保持（home.js準拠：開閉時に再描画） */
+/* 内訳データの保持（home.js準拠：開閉時に参照） */
 const _plBreakdown = {};
 
 /* ── 初期化 ──────────────────────────────────────────────── */
@@ -154,7 +199,11 @@ async function renderMonthly() {
 
   showLoading('pl-table');
 
-  const data = await fetchSummary(currentPeriod);
+  /* getSummary と getHistory(内訳) を並行取得 */
+  const [data, breakdown] = await Promise.all([
+    fetchSummary(currentPeriod),
+    fetchBreakdown(currentPeriod),
+  ]);
 
   const prevKey  = `${y - 1}-${String(m).padStart(2, '0')}`;
   const prevData = compareMode ? await fetchSummary(prevKey) : null;
@@ -178,10 +227,10 @@ async function renderMonthly() {
   const profit = gross - data.sga;
 
   const plData = {
-    sales:  { total: data.sales, breakdown: data.salesBreakdown, key: 'sales' },
-    cogs:   { total: data.cogs,  breakdown: data.cogsBreakdown,  key: 'cogs'  },
+    sales:  { total: data.sales, breakdown: breakdown.sales, key: 'sales' },
+    cogs:   { total: data.cogs,  breakdown: breakdown.cogs,  key: 'cogs'  },
     gross:  { total: gross },
-    sga:    { total: data.sga,   breakdown: data.sgaBreakdown,   key: 'sga'   },
+    sga:    { total: data.sga,   breakdown: breakdown.sga,   key: 'sga'   },
     profit: { total: profit },
   };
 
@@ -260,36 +309,42 @@ async function aggregateYear(year) {
     monthKeys.push(`${year}-${String(mm).padStart(2, '0')}`);
   }
 
-  const results = await Promise.all(monthKeys.map(fetchSummary));
+  /* 合計値とbreakdownを月別に並行取得 */
+  const summaries  = await Promise.all(monthKeys.map(fetchSummary));
+  const breakdowns = await Promise.all(monthKeys.map(fetchBreakdown));
 
   let sales = 0, cogs = 0, sga = 0;
-  const salesBreakdown = {}, cogsBreakdown = {}, sgaBreakdown = {};
+  const salesMap = {}, cogsMap = {}, sgaMap = {};
 
-  results.forEach(d => {
+  summaries.forEach(d => {
     if (!d) return;
     sales += d.sales || 0;
     cogs  += d.cogs  || 0;
     sga   += d.sga   || 0;
-    (d.salesBreakdown || []).forEach(i => {
-      salesBreakdown[i.name] = (salesBreakdown[i.name] || 0) + i.amount;
+  });
+
+  /* breakdownを合算（プロパティ amt） */
+  breakdowns.forEach(b => {
+    (b?.sales || []).forEach(i => {
+      salesMap[i.name] = (salesMap[i.name] || 0) + (i.amt || 0);
     });
-    (d.cogsBreakdown || []).forEach(i => {
-      cogsBreakdown[i.name] = (cogsBreakdown[i.name] || 0) + i.amount;
+    (b?.cogs || []).forEach(i => {
+      cogsMap[i.name] = (cogsMap[i.name] || 0) + (i.amt || 0);
     });
-    (d.sgaBreakdown || []).forEach(i => {
-      sgaBreakdown[i.name] = (sgaBreakdown[i.name] || 0) + i.amount;
+    (b?.sga || []).forEach(i => {
+      sgaMap[i.name] = (sgaMap[i.name] || 0) + (i.amt || 0);
     });
   });
 
   const toArr = obj => Object.entries(obj)
-    .map(([name, amount]) => ({ name, amount }))
-    .sort((a, b) => b.amount - a.amount);
+    .map(([name, amt]) => ({ name, amt }))
+    .sort((a, b) => b.amt - a.amt);
 
   return {
     sales, cogs, sga,
-    salesBreakdown: toArr(salesBreakdown),
-    cogsBreakdown:  toArr(cogsBreakdown),
-    sgaBreakdown:   toArr(sgaBreakdown),
+    salesBreakdown: toArr(salesMap),
+    cogsBreakdown:  toArr(cogsMap),
+    sgaBreakdown:   toArr(sgaMap),
   };
 }
 
@@ -409,7 +464,7 @@ function buildRowHTML(row) {
     </div>`;
 }
 
-/* ── 内訳展開トグル(home.js準拠) ──────────────────────── */
+/* ── 内訳展開トグル(home.js準拠・amt参照) ────────────── */
 function togglePlAccordion(key) {
   const detail = document.getElementById(`pl-detail-${key}`);
   const chev   = document.getElementById(`pl-chev-${key}`);
@@ -423,7 +478,7 @@ function togglePlAccordion(key) {
     chev?.classList.remove('pl-chevron--open');
     btn?.setAttribute('aria-expanded', 'false');
   } else {
-    /* 内訳を描画してから展開 */
+    /* 内訳を描画してから展開（プロパティ amt 参照） */
     const items = _plBreakdown[key] || [];
     if (items.length === 0) {
       detail.innerHTML = '<div class="pl-detail-row" style="color:var(--uz-text3);font-size:12px;padding:4px 0;">内訳データなし</div>';
@@ -431,7 +486,7 @@ function togglePlAccordion(key) {
       detail.innerHTML = items.map(it =>
         `<div class="pl-detail-row">
           <span class="pl-detail-row__name">${escHtml(it.name)}</span>
-          <span class="pl-detail-row__val">${formatYen(it.amount)}</span>
+          <span class="pl-detail-row__val">${formatYen(it.amt)}</span>
         </div>`
       ).join('');
     }
