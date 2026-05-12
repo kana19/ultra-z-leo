@@ -130,14 +130,18 @@ async function loadSettingsFromGAS() {
   try {
     const res = await callGAS('getSettings', {});
     if (res && res.status === 'ok' && res.data) {
-      const { storeName, staffList, serviceList, storeType } = res.data;
+      const { storeName, staffList, serviceList, storeType, templateId } = res.data;
       if (storeName   != null) _saveStoreName(storeName);
       if (Array.isArray(staffList))   _saveStaffList(staffList);
       if (Array.isArray(serviceList)) _saveServiceList(serviceList);
       // storeType は納品時設定（顧客UIに出さない）。GASから取得して localStorage にキャッシュ
       if (storeType != null) _saveStoreType(storeType);
+      // templateId も localStorage にキャッシュ（基本情報セクション表示用）
+      if (templateId) {
+        try { localStorage.setItem('uz_template_id', templateId); } catch { /* ignore */ }
+      }
       // UIを最新データで再描画
-      initStoreName();
+      initBasicInfo();
       renderStaffList();
       renderServiceList();
       updateGasStatus(true);
@@ -209,34 +213,63 @@ function updateGasStatus(connected) {
 /* ── 初期化 ──────────────────────────────────────────────── */
 document.addEventListener('DOMContentLoaded', () => {
   // まずlocalStorageで即時描画
-  initStoreName();
   initStaffList();
   initServiceList();
   initCostMaster();
-  bindStoreSave();
+  initBasicInfo();
   bindStaffAdd();
   bindServiceAdd();
   bindCostMasterSave();
+  bindVersionTapDebug();
   // GASから最新データを取得して上書き
   loadSettingsFromGAS();
 });
 
-/* ── 店舗名 ──────────────────────────────────────────────── */
-function initStoreName() {
-  const input = document.getElementById('store-name-input');
-  if (input) input.value = getStoreName();
+/* ── 基本情報セクション（読み取り専用） ──────────────────── */
+function initBasicInfo() {
+  // 店舗名・業態表示はlocalStorage即時値で先に描画
+  const storeEl    = document.getElementById('info-store-name');
+  const templateEl = document.getElementById('info-template-id');
+  if (storeEl)    storeEl.textContent    = getStoreName() || '—';
+  if (templateEl) templateEl.textContent = _templateIdLabel();
 }
 
-function bindStoreSave() {
-  document.getElementById('store-name-save')?.addEventListener('click', () => {
-    const input = document.getElementById('store-name-input');
-    const name  = input?.value.trim() || '';
+function _templateIdLabel() {
+  // localStorage または app.js の getTemplateId() を参照
+  let tid = '';
+  try {
+    tid = (typeof getTemplateId === 'function') ? getTemplateId() : (localStorage.getItem('uz_template_id') || '');
+  } catch { tid = ''; }
+  if (tid === 'hostess-shop') return '店舗形態の事業（接待）';
+  if (tid === 'general-shop') return '店舗形態の事業';
+  if (tid === 'non-shop')     return '一人事業主等';
+  if (tid === 'custom')       return 'カスタム';
+  return '—';
+}
 
-    if (!name) return showToast('店舗名を入力してください', 'error');
+/* ── バージョン5タップで GAS接続情報を展開（隠しコマンド） ── */
+function bindVersionTapDebug() {
+  const ver = document.getElementById('info-version');
+  const dbg = document.getElementById('info-debug');
+  if (!ver || !dbg) return;
 
-    _saveStoreName(name);
-    showToast('店舗名を保存しました ✓', 'success');
-    saveSettingsToGAS();
+  let count = 0;
+  let timer = null;
+  ver.addEventListener('click', () => {
+    count++;
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(() => { count = 0; }, 1200);
+    if (count >= 5) {
+      count = 0;
+      dbg.hidden = !dbg.hidden;
+      if (!dbg.hidden) {
+        // WebアプリURL を埋め込み（app.js の GAS_URL を参照）
+        const urlEl = document.getElementById('gas-url-val');
+        try {
+          if (urlEl && typeof GAS_URL === 'string') urlEl.textContent = GAS_URL;
+        } catch { /* ignore */ }
+      }
+    }
   });
 }
 
@@ -268,13 +301,13 @@ function renderStaffList() {
         ${badge}
         <button class="staff-edit-btn"
                 type="button"
-                onclick="editStaff('${s.id}')"
+                onclick="editStaff(${s.id})"
                 aria-label="${escHtml(s.name)}を編集">
           編集
         </button>
         <button class="staff-delete-btn"
                 type="button"
-                onclick="deleteStaff('${s.id}')"
+                onclick="deleteStaff(${s.id})"
                 aria-label="${escHtml(s.name)}を削除">
           削除
         </button>
@@ -310,7 +343,7 @@ function _empTypeBadge(empType) {
 
 function editStaff(id) {
   const list  = getStaffList();
-  const staff = list.find(s => String(s.id) === String(id));
+  const staff = list.find(s => s.id === id);
   if (!staff) return;
 
   const row = document.getElementById(`staff-row-${id}`);
@@ -318,46 +351,42 @@ function editStaff(id) {
 
   const empType = _normalizeEmpType(staff.employmentType);
   row.innerHTML = `
-    <div style="display:flex;flex-wrap:wrap;gap:8px;width:100%;">
-      <input type="text"
-             id="staff-edit-name-${id}"
-             class="settings-input"
-             style="flex:1 1 120px;min-width:0;height:40px;font-size:14px;"
-             value="${escHtml(staff.name)}"
-             maxlength="20"
-             autocomplete="off"
-             aria-label="スタッフ名">
-      <select id="staff-edit-emp-${id}"
-              class="form-select"
-              style="flex:1 1 120px;min-width:0;height:40px;font-size:13px;"
-              aria-label="雇用形態">
-        <option value="employed_full"${empType === 'employed_full' ? ' selected' : ''}>常勤雇用（社員）</option>
-        <option value="employed_temp"${empType === 'employed_temp' ? ' selected' : ''}>臨時アルバイト</option>
-        <option value="contractor"${empType === 'contractor' ? ' selected' : ''}>委託・外注</option>
-      </select>
-      <input type="text"
-             id="staff-edit-password-${id}"
-             class="settings-input"
-             style="flex:1 1 100%;min-width:0;height:40px;font-size:14px;"
-             placeholder="パスワード変更（任意・5桁英数字）"
-             maxlength="5"
-             autocomplete="off"
-             aria-label="パスワード変更">
-      <button class="staff-save-btn"
-              type="button"
-              style="flex:1 1 calc(50% - 4px);height:40px;"
-              onclick="saveEditStaff('${id}')"
-              aria-label="保存">
-        保存
-      </button>
-      <button class="staff-cancel-btn"
-              type="button"
-              style="flex:1 1 calc(50% - 4px);height:40px;"
-              onclick="renderStaffList()"
-              aria-label="キャンセル">
-        キャンセル
-      </button>
-    </div>
+    <input type="text"
+           id="staff-edit-name-${id}"
+           class="settings-input"
+           style="flex:1;min-width:80px;height:40px;font-size:14px;"
+           value="${escHtml(staff.name)}"
+           maxlength="20"
+           autocomplete="off"
+           aria-label="スタッフ名">
+    <select id="staff-edit-emp-${id}"
+            class="form-select"
+            style="height:40px;font-size:13px;flex-shrink:0;"
+            aria-label="雇用形態">
+      <option value="employed_full"${empType === 'employed_full' ? ' selected' : ''}>常勤雇用（社員）</option>
+      <option value="employed_temp"${empType === 'employed_temp' ? ' selected' : ''}>臨時アルバイト</option>
+      <option value="contractor"${empType === 'contractor' ? ' selected' : ''}>委託・外注</option>
+    </select>
+    <input type="text"
+           id="staff-edit-password-${id}"
+           class="settings-input"
+           style="flex:1;min-width:120px;height:40px;font-size:14px;"
+           placeholder="パスワード変更（任意・5桁英数字）"
+           maxlength="5"
+           autocomplete="off"
+           aria-label="パスワード変更">
+    <button class="staff-save-btn"
+            type="button"
+            onclick="saveEditStaff(${id})"
+            aria-label="保存">
+      保存
+    </button>
+    <button class="staff-cancel-btn"
+            type="button"
+            onclick="renderStaffList()"
+            aria-label="キャンセル">
+      キャンセル
+    </button>
   `;
   document.getElementById(`staff-edit-name-${id}`)?.focus();
 }
@@ -372,7 +401,7 @@ async function saveEditStaff(id) {
   if (!name) return showToast('スタッフ名を入力してください', 'error');
 
   const list = getStaffList();
-  if (list.some(s => String(s.id) !== String(id) && s.name === name)) {
+  if (list.some(s => s.id !== id && s.name === name)) {
     return showToast('同じ名前のスタッフが既に登録されています', 'error');
   }
 
@@ -391,7 +420,7 @@ async function saveEditStaff(id) {
   }
 
   const newList = list.map(s =>
-    String(s.id) === String(id)
+    s.id === id
       ? { ...s, name, employmentType: _normalizeEmpType(empEl.value), ...(passwordUpdate || {}) }
       : s
   );
@@ -406,12 +435,12 @@ async function saveEditStaff(id) {
 
 function deleteStaff(id) {
   const list   = getStaffList();
-  const target = list.find(s => String(s.id) === String(id));
+  const target = list.find(s => s.id === id);
   if (!target) return;
 
   if (!confirm(`「${target.name}」を削除しますか？\n入退店の記録済みデータには影響しません。`)) return;
 
-  const newList = list.filter(s => String(s.id) !== String(id));
+  const newList = list.filter(s => s.id !== id);
   _saveStaffList(newList);
   renderStaffList();
   showToast(`${target.name}を削除しました`, 'success');
@@ -593,11 +622,11 @@ function renderCostMaster() {
   const costItems   = master.filter(i => i.divisionCode === '1');
   // 販管費 固定
   const fixedItems  = master.filter(i => i.divisionCode === '2' && i.type === 'fixed');
-  // 販管費 任意（行26〜30）
+  // 販管費 任意（科目番号26〜30）
   const customItems = master.filter(i => i.divisionCode === '2' && i.type === 'custom');
 
   function fixedRow(item) {
-    const rowLabel = item.taxRow ? `行${item.taxRow}　` : '';
+    const rowLabel = item.taxRow ? `${item.taxRow}　` : '';
     return `
       <div class="staff-row" style="align-items:center;gap:8px;flex-wrap:wrap;">
         <span class="staff-row__name" style="flex:1;min-width:120px;font-size:13px;">
@@ -610,7 +639,7 @@ function renderCostMaster() {
   function customRow(item) {
     return `
       <div class="staff-row" style="align-items:center;gap:8px;flex-wrap:wrap;">
-        <span style="font-size:12px;color:var(--uz-muted);min-width:32px;flex-shrink:0;">行${item.taxRow}</span>
+        <span style="font-size:12px;color:var(--uz-muted);min-width:32px;flex-shrink:0;">${item.taxRow}</span>
         <input type="text"
                id="cm-name-${item.code}"
                class="settings-input"
@@ -631,7 +660,7 @@ function renderCostMaster() {
   html += `<div style="padding:12px 16px 4px;font-size:12px;font-weight:700;color:var(--uz-muted);">▸ 販管費（固定科目）</div>`;
   html += fixedItems.map(fixedRow).join('');
 
-  html += `<div style="padding:12px 16px 4px;font-size:12px;font-weight:700;color:var(--uz-muted);">▸ 販管費（任意科目 行26〜30）</div>`;
+  html += `<div style="padding:12px 16px 4px;font-size:12px;font-weight:700;color:var(--uz-muted);">▸ 販管費（任意科目 番号26〜30）</div>`;
   html += customItems.map(customRow).join('');
 
   html += `
@@ -639,7 +668,7 @@ function renderCostMaster() {
       <p style="font-size:12px;color:var(--uz-muted);line-height:1.6;">
         固定科目は名称変更不可・税率のみ変更可。<br>
         任意科目は科目名を入力すると有効になります。<br>
-        行番号は確定申告書（収支内訳書）の行番号に対応しています。
+        科目番号は確定申告書（収支内訳書）の科目番号に対応しています。
       </p>
     </div>`;
 
@@ -703,10 +732,10 @@ function toggleSettingsAccordion(btn) {
   }
 }
 
-// iPad初期状態：補助金・GAS・アプリ情報は折りたたむ
+// iPad初期状態：基本情報セクションは折りたたむ
 document.addEventListener('DOMContentLoaded', () => {
   if (!document.body.classList.contains('is-ipad')) return;
-  ['sec-subsidy-body', 'sec-gas-body', 'sec-info-body'].forEach(id => {
+  ['sec-info-body'].forEach(id => {
     const bodyEl = document.getElementById(id);
     if (bodyEl) bodyEl.setAttribute('hidden', '');
     const btn = document.querySelector(`[aria-controls="${id}"]`);

@@ -20,6 +20,65 @@
   <link rel="stylesheet" href="css/sales-modal.css">
   <link rel="stylesheet" href="css/cost-modal.css">
   <style>
+  /* ── 出勤状況リスト（ホーム） ─────────────────────────── */
+  .staff-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--uz-border);
+  }
+  .staff-item:last-child { border-bottom: none; }
+  .staff-marker {
+    width: 14px;
+    height: 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 14px;
+    line-height: 1;
+  }
+  .staff-marker--active {
+    border-radius: 50%;
+    background: var(--uz-gold, #d4af37);
+    animation: homeStaffBlink 1.2s ease-in-out infinite;
+  }
+  .staff-marker--off {
+    color: var(--uz-muted);
+  }
+  @keyframes homeStaffBlink {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.25; }
+  }
+  .staff-info { flex: 1; min-width: 0; }
+  .staff-name { font-size: 14px; font-weight: 700; }
+  .staff-time { font-size: 12px; color: var(--uz-muted); margin-top: 2px; }
+  .staff-status {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-weight: 600;
+    flex-shrink: 0;
+  }
+  .staff-status--active {
+    background: rgba(212,175,55,0.14);
+    color: var(--uz-gold, #d4af37);
+  }
+  .staff-clockout-btn {
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    border: 0.5px solid var(--uz-border2);
+    background: var(--uz-surface);
+    color: var(--uz-text);
+    cursor: pointer;
+    font-family: var(--font-main);
+    font-weight: 600;
+    flex-shrink: 0;
+  }
+  .staff-clockout-btn:active { opacity: 0.75; }
+
   /* ── ホームタブ切替 ───────────────────────────────────── */
   .home-tabs {
     display: flex;

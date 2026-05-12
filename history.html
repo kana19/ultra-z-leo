@@ -45,37 +45,96 @@
     .hist-tab-content { display: none; }
     .hist-tab-content--active { display: block; }
 
-    /* ── 入店履歴スタッフカード ── */
-    .attend-staff-card {
-      margin: 8px 16px;
+    /* ── スクロール固定（月ナビ・フィルタ・新規入店ボタン） ── */
+    .hist-month-nav {
+      position: sticky;
+      top: 44px;
+      z-index: 9;
       background: var(--uz-surface);
-      border-radius: 10px;
+    }
+    .hist-filter-bar {
+      position: sticky;
+      top: 88px;
+      z-index: 8;
+      background: var(--uz-surface);
+    }
+    #panel-attendance > .ci-open-btn-wrap {
+      position: sticky;
+      top: 88px;
+      z-index: 8;
+      background: var(--uz-surface);
+      padding: 12px 16px 8px;
+    }
+
+    /* ── 出勤履歴：日付グルーピング型（売上・コスト履歴と統一） ── */
+    .hist-date-group {
+      padding: 8px 0;
+    }
+    .hist-date-header {
+      padding: 8px 16px 4px;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--uz-text);
+    }
+    .hist-attend-row {
+      display: grid;
+      grid-template-columns: 20px 92px 1fr auto auto;
+      align-items: center;
+      column-gap: 8px;
+      padding: 6px 16px;
+      font-size: 13px;
+      color: var(--uz-text);
+    }
+    .hist-attend-marker {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .attend-active-marker {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--uz-gold, #d4af37);
+      animation: attendBlink 1.2s ease-in-out infinite;
+    }
+    @keyframes attendBlink {
+      0%, 100% { opacity: 1; }
+      50%      { opacity: 0.25; }
+    }
+    .attend-spacer { width: 10px; height: 10px; display: inline-block; }
+    .hist-attend-name {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--uz-text);
+      white-space: nowrap;
       overflow: hidden;
-      border: 1px solid var(--uz-border);
+      text-overflow: ellipsis;
     }
-    .attend-staff-header {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 10px 14px;
-      border-bottom: 1px solid var(--uz-border);
+    .hist-attend-times { font-size: 13px; min-width: 0; }
+    .hist-attend-dur {
+      font-size: 11px;
+      color: var(--uz-muted);
+      margin-top: 1px;
     }
-    .attend-staff-name { font-size: 14px; font-weight: 700; color: var(--uz-text); }
-    .attend-record-row {
-      display: flex;
-      align-items: center;
-      flex-wrap: wrap;
-      padding: 8px 14px;
-      gap: 6px;
-      border-bottom: 1px solid var(--uz-border);
+    .hist-attend-status { display: flex; align-items: center; }
+    .hist-attend-actions { display: flex; gap: 6px; align-items: center; }
+    .attend-edit-btn {
+      font-size: 11px;
+      padding: 3px 10px;
+      border-radius: 20px;
+      border: 0.5px solid var(--uz-border2);
+      cursor: pointer;
+      font-family: var(--font-main);
+      font-weight: 600;
+      background: var(--uz-amber-bg);
+      color: var(--uz-gold);
+      white-space: nowrap;
+      flex-shrink: 0;
     }
-    .attend-record-row:last-child { border-bottom: none; }
-    .attend-record-date { font-size: 12px; color: var(--uz-muted); min-width: 72px; }
-    .attend-record-times { font-size: 13px; color: var(--uz-text); flex: 1; min-width: 0; }
     .attend-status {
       font-size: 11px; padding: 2px 8px; border-radius: 20px; font-weight: 600;
     }
-    .attend-status--active { background: var(--uz-green-bg); color: var(--uz-green); }
+    .attend-status--active { background: rgba(212,175,55,0.14); color: var(--uz-gold, #d4af37); }
     .attend-status--out    { background: rgba(136,136,170,.12); color: var(--uz-muted); }
 
     /* ── 修正ボタン・ロックバッジ ── */
@@ -444,7 +503,7 @@
            role="tabpanel" aria-labelledby="tab-attendance">
 
         <!-- ▸ 新規入店登録ボタン -->
-        <div style="padding: 12px 16px 4px;">
+        <div class="ci-open-btn-wrap">
           <button id="ci-open-btn" type="button" class="ci-open-btn">
             ＋ <span data-uilabel-key="clockin_register">新規入店登録</span>
           </button>

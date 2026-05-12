@@ -101,12 +101,12 @@ function renderStaffList() {
 
   const active   = todayAttendance.filter(s => s.isActive);
   const inactive = todayAttendance.filter(s => !s.isActive);
-  const display  = [...active, ...inactive].slice(0, 3);
+  const display  = [...active, ...inactive].slice(0, 6);
 
   if (display.length === 0) {
     container.innerHTML = `
       <div class="staff-item">
-        <span class="staff-dot staff-dot--off"></span>
+        <span class="staff-marker staff-marker--off">☆</span>
         <div class="staff-info">
           <div class="staff-name" style="color:var(--uz-muted)">本日の入店記録なし</div>
         </div>
@@ -114,22 +114,33 @@ function renderStaffList() {
     return;
   }
 
-  container.innerHTML = display.map(s => `
-    <div class="staff-item">
-      <span class="staff-dot${s.isActive ? '' : ' staff-dot--off'}"></span>
-      <div class="staff-info">
-        <div class="staff-name">${escapeHtml(s.name)}</div>
-        <div class="staff-time">
-          ${s.isActive
-            ? `入店 ${escapeHtml(s.clockIn)} — 在店中`
-            : `${escapeHtml(s.clockIn)} → ${escapeHtml(s.clockOut)}`}
-        </div>
-      </div>
-      ${s.isActive
-        ? `<button class="staff-clockout-btn" type="button" onclick="handleClockOut(${s.id})">退店</button>`
-        : ''}
-    </div>
-  `).join('');
+  container.innerHTML = display.map(s => {
+    const ci = escapeHtml(s.clockIn || '—');
+    const co = s.clockOut ? escapeHtml(s.clockOut) : '';
+    if (s.isActive) {
+      // 入店中：黄色●点滅 + 入店時刻
+      return `
+        <div class="staff-item">
+          <span class="staff-marker staff-marker--active" aria-label="入店中" title="入店中"></span>
+          <div class="staff-info">
+            <div class="staff-name">${escapeHtml(s.name)}</div>
+            <div class="staff-time">${ci}</div>
+          </div>
+          <span class="staff-status staff-status--active">入店中</span>
+          <button class="staff-clockout-btn" type="button" onclick="handleClockOut(${s.id})">退店</button>
+        </div>`;
+    } else {
+      // 退店済み：グレー☆ + 入店→退店時刻
+      return `
+        <div class="staff-item">
+          <span class="staff-marker staff-marker--off" aria-hidden="true">☆</span>
+          <div class="staff-info">
+            <div class="staff-name" style="color:var(--uz-muted)">${escapeHtml(s.name)}</div>
+            <div class="staff-time">${ci} → ${co}</div>
+          </div>
+        </div>`;
+    }
+  }).join('');
 }
 
 /* ── 勤怠データをlocalStorageから即時描画 ────────────────── */

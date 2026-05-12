@@ -55,34 +55,6 @@
   <!-- スクロール本体（iPad：600px中央寄せ） -->
   <div class="ipad-settings-wrap" style="padding-bottom:calc(var(--nav-height) + env(safe-area-inset-bottom) + 16px);">
 
-    <!-- ① 店舗情報 -->
-    <section class="settings-section" aria-labelledby="sec-store">
-      <button class="settings-accordion-btn" type="button" aria-expanded="true" aria-controls="sec-store-body" onclick="toggleSettingsAccordion(this)">
-        <span id="sec-store">店舗情報</span>
-        <span class="settings-accordion-chevron" aria-hidden="true">›</span>
-      </button>
-      <div class="settings-section__body" id="sec-store-body">
-        <div class="settings-row">
-          <div class="settings-row__label">
-            <div>店舗名</div>
-            <div class="settings-row__sub">ホーム画面に表示されます</div>
-          </div>
-        </div>
-        <div style="padding:0 16px 14px; display:flex; gap:8px;">
-          <input type="text"
-                 id="store-name-input"
-                 class="settings-input"
-                 placeholder="例：スナック LEO"
-                 maxlength="30"
-                 autocomplete="off"
-                 aria-label="店舗名">
-          <button id="store-name-save"
-                  class="settings-save-btn"
-                  type="button">保存</button>
-        </div>
-      </div>
-    </section>
-
     <!-- ② スタッフ管理 -->
     <section class="settings-section" aria-labelledby="sec-staff">
       <button class="settings-accordion-btn" type="button" aria-expanded="true" aria-controls="sec-staff-body" onclick="toggleSettingsAccordion(this)">
@@ -181,7 +153,7 @@
     <!-- ③-B コスト科目マスタ -->
     <section class="settings-section" aria-labelledby="sec-cost-master">
       <button class="settings-accordion-btn" type="button" aria-expanded="true" aria-controls="sec-cost-master-body" onclick="toggleSettingsAccordion(this)">
-        <span id="sec-cost-master">コスト科目マスタ（確定申告行番号対応）</span>
+        <span id="sec-cost-master">コスト科目マスタ（確定申告書 科目番号対応）</span>
         <span class="settings-accordion-chevron" aria-hidden="true">›</span>
       </button>
       <div class="settings-section__body" id="sec-cost-master-body">
@@ -199,79 +171,54 @@
       </div>
     </section>
 
-    <!-- ④ 補助金対応チェック -->
-    <section class="settings-section" aria-labelledby="sec-subsidy">
-      <button class="settings-accordion-btn" type="button" aria-expanded="false" aria-controls="sec-subsidy-body" onclick="toggleSettingsAccordion(this)">
-        <span id="sec-subsidy">補助金対応状況</span>
-        <span class="settings-accordion-chevron" aria-hidden="true">›</span>
-      </button>
-      <div class="settings-section__body" id="sec-subsidy-body">
-        <div class="info-row">
-          <span class="info-row__key">会計機能（損益計算書）</span>
-          <span class="info-row__val" style="color:var(--uz-green);">✓ 対応済み</span>
-        </div>
-        <div class="info-row">
-          <span class="info-row__key">受発注機能（売上・コスト管理）</span>
-          <span class="info-row__val" style="color:var(--uz-green);">✓ 対応済み</span>
-        </div>
-        <div class="info-row">
-          <span class="info-row__key">インボイス対応（税率記録）</span>
-          <span class="info-row__val" style="color:var(--uz-green);">✓ 対応済み</span>
-        </div>
-        <div style="padding:10px 16px 14px;">
-          <p style="font-size:12px;color:var(--uz-muted);line-height:1.6;">
-            デジタル化・AI導入補助金2026 インボイス枠のITツール登録要件を満たしています。
-          </p>
-        </div>
-      </div>
-    </section>
 
-    <!-- ④ GAS接続情報 -->
-    <section class="settings-section" aria-labelledby="sec-gas">
-      <button class="settings-accordion-btn" type="button" aria-expanded="false" aria-controls="sec-gas-body" onclick="toggleSettingsAccordion(this)">
-        <span id="sec-gas">GAS接続情報</span>
-        <span class="settings-accordion-chevron" aria-hidden="true">›</span>
-      </button>
-      <div class="settings-section__body" id="sec-gas-body">
-        <div class="info-row">
-          <span class="info-row__key">接続状態</span>
-          <span id="gas-status-val" class="info-row__val" style="color:var(--uz-muted);">確認中...</span>
-        </div>
-        <div class="info-row" style="flex-direction:column;align-items:flex-start;gap:4px;">
-          <span class="info-row__key">WebアプリURL</span>
-          <span class="info-row__url" title="GAS WebアプリURL">
-            https://script.google.com/macros/s/AKfycbx...
-          </span>
-        </div>
-        <div style="padding:10px 16px 14px;">
-          <p style="font-size:12px;color:var(--uz-muted);line-height:1.6;">
-            GAS連携テスト完了後、接続を有効化してください。
-          </p>
-        </div>
-      </div>
-    </section>
-
-    <!-- ⑤ アプリ情報 -->
+    <!-- ④ 基本情報 -->
     <section class="settings-section" aria-labelledby="sec-info">
       <button class="settings-accordion-btn" type="button" aria-expanded="false" aria-controls="sec-info-body" onclick="toggleSettingsAccordion(this)">
-        <span id="sec-info">アプリ情報</span>
+        <span id="sec-info">基本情報</span>
         <span class="settings-accordion-chevron" aria-hidden="true">›</span>
       </button>
       <div class="settings-section__body" id="sec-info-body">
         <div class="info-row">
-          <span class="info-row__key">アプリ名</span>
-          <span class="info-row__val">ウルトラZAIMUくん LEO版</span>
+          <span class="info-row__key">店舗名</span>
+          <span id="info-store-name" class="info-row__val">—</span>
+        </div>
+        <div class="info-row">
+          <span class="info-row__key">業態</span>
+          <span id="info-template-id" class="info-row__val">—</span>
+        </div>
+        <div class="info-row">
+          <span class="info-row__key">プラン</span>
+          <span class="info-row__val">レオ</span>
+        </div>
+        <div class="info-row">
+          <span class="info-row__key">提供元</span>
+          <span class="info-row__val">株式会社ターゲット</span>
         </div>
         <div class="info-row">
           <span class="info-row__key">バージョン</span>
-          <span class="info-row__val">1.0.0</span>
+          <span id="info-version" class="info-row__val" style="cursor:pointer;user-select:none;" title="サポート用情報">1.0.0</span>
         </div>
-        <div class="info-row">
-          <span class="info-row__key">対応OS</span>
-          <span class="info-row__val">iOS / Android</span>
+
+        <!-- GAS接続情報（既定非表示・バージョンを5回タップで展開） -->
+        <div id="info-debug" hidden>
+          <div class="info-row" style="margin-top:8px;border-top:1px dashed var(--uz-border);padding-top:10px;">
+            <span class="info-row__key">GAS接続状態</span>
+            <span id="gas-status-val" class="info-row__val" style="color:var(--uz-muted);">確認中...</span>
+          </div>
+          <div class="info-row" style="flex-direction:column;align-items:flex-start;gap:4px;">
+            <span class="info-row__key">WebアプリURL</span>
+            <span id="gas-url-val" class="info-row__url" title="GAS WebアプリURL"></span>
+          </div>
         </div>
+
+        <p style="padding:10px 16px 14px;font-size:12px;color:var(--uz-muted);line-height:1.6;">
+          店舗情報・業態設定は株式会社ターゲットが管理します。<br>
+          変更が必要な場合はサポートにご連絡ください。
+        </p>
       </div>
     </section>
+
 
     <!-- フッター -->
     <div class="settings-footer">
@@ -288,7 +235,7 @@
 <nav class="bottom-nav" aria-label="メインナビゲーション">
 
   <a href="index.html" class="nav-item">
-    <i class="ti ti-home nav-item__icon" aria-hidden="true"></i>
+    <i class="ti ti-planet nav-item__icon" aria-hidden="true"></i>
     <span class="nav-item__label">ホーム</span>
   </a>
 

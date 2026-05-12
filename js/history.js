@@ -246,7 +246,7 @@ function bindListClicks() {
       return;
     }
 
-    const editBtn = e.target.closest('.hist-edit-btn[data-scope="at"]');
+    const editBtn = e.target.closest('.hist-edit-btn[data-scope="at"], .attend-edit-btn[data-scope="at"]');
     if (editBtn) {
       const idx = parseInt(editBtn.dataset.idx, 10);
       if (!isNaN(idx) && attendItems[idx]) {
@@ -520,91 +520,132 @@ function renderAttendance(items) {
     return;
   }
 
-  // スマホ：従来のスタッフカード表示
-  const staffMap = {};
+  // スマホ：日付グルーピング型（売上・コスト履歴と統一テイスト）
+  // 日付ごとに集約 → 同日内でスタッフ別の打刻行を縦に並べる
+  const dateMap = {};
   items.forEach(item => {
-    const name = item.staffName || '不明';
-    if (!staffMap[name]) staffMap[name] = [];
-    staffMap[name].push(item);
+    const d = item.date || '';
+    if (!dateMap[d]) dateMap[d] = [];
+    dateMap[d].push(item);
   });
 
-  Object.values(staffMap).forEach(recs => recs.sort((a, b) => b.date.localeCompare(a.date)));
+  const dateKeys = Object.keys(dateMap).sort((a, b) => b.localeCompare(a));
 
-  const staffNames = Object.keys(staffMap).sort((a, b) =>
-    staffMap[b][0].date.localeCompare(staffMap[a][0].date));
+  // 入店中スタッフ判定（黄色●点滅マーカー用・現時点で退店未記録があるスタッフ）
+  const activeStaffIds = new Set();
+  items.forEach(r => {
+    if (!parseTimeStr(r.clockOut)) {
+      activeStaffIds.add(String(r.staffId || r.staffName || ''));
+    }
+  });
 
   let html = '';
-  staffNames.forEach(name => {
-    const recs      = staffMap[name];
-    const hasActive = recs.some(r => !parseTimeStr(r.clockOut));
+  dateKeys.forEach(dateKey => {
+    const [y, m, d] = dateKey.split(/[-\/]/).map(Number);
+    const dow       = WEEKDAYS[new Date(y, m - 1, d).getDay()];
+    const dateLabel = `${m}/${d}（${dow}）`;
 
-    html += `
-      <div class="attend-staff-card">
-        <div class="attend-staff-header">
-          <span class="attendance-dot ${hasActive ? 'attendance-dot--active' : 'attendance-dot--out'}"
-                aria-hidden="true"></span>
-          <span class="attend-staff-name">${escHtml(name)}</span>
-        </div>`;
+    // 同日内をスタッフごとに集約 → 入店中のスタッフを上に
+    const recsOfDay = dateMap[dateKey];
+    const byStaff = {};
+    recsOfDay.forEach(r => {
+      const sname = r.staffName || '不明';
+      if (!byStaff[sname]) byStaff[sname] = [];
+      byStaff[sname].push(r);
+    });
 
-    recs.forEach(r => {
-      const enriched = { ...r, type: 'attendance' };
-      const atIdx    = attendItems.push(enriched) - 1;
+    const staffNames = Object.keys(byStaff).sort((a, b) => {
+      const aActive = byStaff[a].some(r => !parseTimeStr(r.clockOut));
+      const bActive = byStaff[b].some(r => !parseTimeStr(r.clockOut));
+      if (aActive !== bActive) return aActive ? -1 : 1;
+      return a.localeCompare(b, 'ja');
+    });
 
-      const [y, m, d] = r.date.split(/[-\/]/).map(Number);
-      const dow        = WEEKDAYS[new Date(y, m - 1, d).getDay()];
-      const dateLabel  = `${m}/${d}（${dow}）`;
-      const clockIn    = parseTimeStr(r.clockIn);
-      const clockOut   = parseTimeStr(r.clockOut);
+    html += `<div class="hist-date-group">
+      <div class="hist-date-header">${dateLabel}</div>`;
 
-      const isOvernightFlag = r.is_overnight === true ||
-        (clockOut ? calcWorkDuration(clockIn, clockOut)?.isOvernight : false);
-      const dur = clockOut ? calcWorkDuration(clockIn, clockOut) : null;
+    staffNames.forEach(sname => {
+      const recs    = byStaff[sname];
+      const sid     = String(recs[0].staffId || sname);
+      const isStaffActive = activeStaffIds.has(sid);
+      const marker = isStaffActive
+        ? `<span class="attend-active-marker" aria-label="入店中" title="入店中"></span>`
+        : `<span class="attend-spacer" aria-hidden="true"></span>`;
 
-      let timeStr;
-      if (clockOut) {
-        if (dur?.isAbnormal) {
-          timeStr = `<span class="attend-time-abnormal">${escHtml(clockIn)} → ${escHtml(dur.clockOutDisplay)}</span>`;
-        } else if (isOvernightFlag) {
-          timeStr = `${escHtml(clockIn)} → <span class="attend-time-overnight">翌</span>${escHtml(clockOut)}`;
+      recs.sort((a, b) => (a.clockIn || '').localeCompare(b.clockIn || ''));
+
+      recs.forEach((r, ridx) => {
+        const enriched = { ...r, type: 'attendance' };
+        const atIdx    = attendItems.push(enriched) - 1;
+
+        const clockIn  = parseTimeStr(r.clockIn);
+        const clockOut = parseTimeStr(r.clockOut);
+        const isOvernightFlag = r.is_overnight === true ||
+          (clockOut ? calcWorkDuration(clockIn, clockOut)?.isOvernight : false);
+        const dur = clockOut ? calcWorkDuration(clockIn, clockOut) : null;
+
+        let timeStr;
+        if (clockOut) {
+          if (dur?.isAbnormal) {
+            timeStr = `<span class="attend-time-abnormal">${escHtml(clockIn)} → ${escHtml(dur.clockOutDisplay)}</span>`;
+          } else if (isOvernightFlag) {
+            timeStr = `${escHtml(clockIn)} → <span class="attend-time-overnight">翌</span>${escHtml(clockOut)}`;
+          } else {
+            timeStr = `${escHtml(clockIn)} → ${escHtml(clockOut)}`;
+          }
         } else {
-          timeStr = `${escHtml(clockIn)} → ${escHtml(clockOut)}`;
+          timeStr = `${escHtml(clockIn)} — ${escHtml(labels.clockout_unrecorded)}`;
         }
+
         const wMin = r.workMinutes || dur?.minutes;
+        let durLabel = '';
         if (wMin && !dur?.isAbnormal) {
           const wh = Math.floor(wMin / 60);
           const wm = wMin % 60;
-          const durLabel = wm > 0 ? `${wh}時間${wm}分` : `${wh}時間`;
-          timeStr += ` <span style="font-size:11px;color:var(--uz-muted);">(${durLabel})</span>`;
+          durLabel = wm > 0 ? `(${wh}時間${wm}分)` : `(${wh}時間)`;
         }
-      } else {
-        timeStr = `${escHtml(clockIn)} — ${escHtml(labels.clockout_unrecorded)}`;
-      }
 
-      const isActive   = !clockOut;
-      const ls         = getLockStatus(r.date);
-      const widget     = buildLockWidget(ls, atIdx, 'at');
+        const isActive = !clockOut;
+        const ls       = getLockStatus(r.date);
+        const widget   = buildLockWidget(ls, atIdx, 'at');
 
-      const clockoutBtn = (isActive && !ls.locked)
-        ? `<button class="ci-clockout-btn"
-                   type="button"
-                   data-row-index="${enriched.rowIndex || ''}"
-                   data-staff-id="${escHtml(String(enriched.staffId || ''))}"
-                   data-staff-name="${escHtml(enriched.staffName || '')}"
-                   aria-label="${escHtml(enriched.staffName || '')}の${escHtml(labels.clockout_action)}">
-             ${escHtml(labels.clockout_action)}
-           </button>`
-        : '';
+        const clockoutBtn = (isActive && !ls.locked)
+          ? `<button class="ci-clockout-btn"
+                     type="button"
+                     data-row-index="${enriched.rowIndex || ''}"
+                     data-staff-id="${escHtml(String(enriched.staffId || ''))}"
+                     data-staff-name="${escHtml(enriched.staffName || '')}"
+                     aria-label="${escHtml(enriched.staffName || '')}の${escHtml(labels.clockout_action)}">
+               ${escHtml(labels.clockout_action)}
+             </button>`
+          : '';
 
-      html += `
-        <div class="attend-record-row">
-          <div class="attend-record-date">${dateLabel}</div>
-          <div class="attend-record-times">${timeStr}</div>
-          <span class="attend-status ${isActive ? 'attend-status--active' : 'attend-status--out'}">
-            ${isActive ? escHtml(labels.clockin_active) : escHtml(labels.clockout_done)}
-          </span>
-          ${clockoutBtn}
-          ${widget}
-        </div>`;
+        const editBtn = !ls.locked
+          ? `<button class="attend-edit-btn" type="button" data-idx="${atIdx}" data-scope="at" aria-label="修正">修正</button>`
+          : '';
+
+        // 1スタッフ複数行のとき、2行目以降は★/スペーサーを空にしてスタッフ名も省略
+        const showStaffCol = (ridx === 0);
+        html += `
+          <div class="hist-attend-row">
+            <div class="hist-attend-marker">${showStaffCol ? marker : ''}</div>
+            <div class="hist-attend-name">${showStaffCol ? escHtml(sname) : ''}</div>
+            <div class="hist-attend-times">
+              <div>${timeStr}</div>
+              ${durLabel ? `<div class="hist-attend-dur">${durLabel}</div>` : ''}
+            </div>
+            <div class="hist-attend-status">
+              <span class="attend-status ${isActive ? 'attend-status--active' : 'attend-status--out'}">
+                ${isActive ? escHtml(labels.clockin_active) : escHtml(labels.clockout_done)}
+              </span>
+            </div>
+            <div class="hist-attend-actions">
+              ${clockoutBtn}
+              ${editBtn}
+            </div>
+            ${widget}
+          </div>`;
+      });
     });
 
     html += `</div>`;
