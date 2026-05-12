@@ -42,6 +42,11 @@ function doGet(e) {
       case 'requestUnlock':             result = requestUnlock(data);                     break;
       // 指示書15：行削除（売上・コスト両対応・ロック行拒否・売上削除時は紐付け経費のV列を空欄化）
       case 'deleteRow':                 result = deleteRow(data);                         break;
+      // A-2タスク：PC版出勤管理 給与計算確定処理（コストシートT列に源泉徴収額を記録）
+      case 'confirmPayroll':            result = confirmPayroll(data);                    break;
+      // A-1タスク：タイムカードPWA（スタッフ別出勤履歴・スタッフ検証）
+      case 'validateStaff':             result = validateStaff(data);                     break;
+      case 'getAttendanceForStaff':     result = getAttendanceForStaff(data);             break;
       default: result = { status: 'error', message: '不明なアクション: ' + action };
     }
   } catch (err) {
@@ -178,6 +183,14 @@ function migrateSalesRowIds() {
  * V列 は取引ペア紐付けモデルの 子キー（紐付け先売上行ID）
  *  PC版の通常追加経路では空文字を入れて作成し、紐付けは linkTransactions で後付けする
  *  後方互換のため payload.projectId も受け付ける（同一意味で扱う）
+ *
+ * A-2-X-3拡張：
+ *  - data.staffId / data.staffName を受付
+ *  - 給与系科目（20/21/25）でスタッフ名がある場合、H列にプレフィックス＋スタッフ名を記録
+ *    科目20 → 「[スポット]スタッフ名」（20bコスト入力経路のみ。20aはPC給与確定経由）
+ *    科目21/25 → 「スタッフ名」（科目名自体で種別が分かるためプレフィックス不要）
+ *  - data.staffId がある場合、attendanceシートに金額由来行を連動追記（時刻空欄）
+ *    マスタ外フリー入力（staffId空）の場合はattendance連動なし
  */
 function addCost(data) {
   var date = data.date || '';
@@ -187,11 +200,28 @@ function addCost(data) {
   var rate = Number(data.taxRate) || 0;
   var inAmt = Math.max(0, Math.floor(Number(data.taxIncluded) || 0));
   var t = calcTax_(inAmt, rate);
+
+  // --- A-2-X-3：給与系科目（20/21/25）のスタッフ指定対応 ---
+  var staffId   = String(data.staffId   || '');
+  var staffName = String(data.staffName || '');
+  var itemCode  = String(data.itemCode  || '');
+
+  // H列（miscItemName）にプレフィックス＋スタッフ名を組み立て
+  // 給与系科目（20/21/25）でスタッフ名がある場合のみプレフィックス付与
+  // 20のコスト入力経路は全て20b（スポット）扱い（20aはPC給与確定経由のみ）
+  var PAYROLL_CODES = ['20', '21', '25'];
+  var miscItemName = data.miscItemName || '';
+  if (PAYROLL_CODES.indexOf(itemCode) >= 0 && staffName) {
+    // 科目20はスポット、21/25はそのまま科目名で識別可能なのでプレフィックスは20のみ
+    var prefix = (itemCode === '20') ? (String(data.subType || '') === '20a' ? '[月次]' : '[スポット]') : '';
+    miscItemName = prefix + staffName;
+  }
+
   sheet.appendRow([
     date, Number(parts[0]) || '', Number(parts[1]) || '',
     data.divisionCode || '', data.divisionName || '',
-    data.itemCode     || '', data.itemName     || '',
-    data.miscItemName || '',
+    itemCode, data.itemName || '',
+    miscItemName,
     t.taxExcluded, rate,
     t.taxAmount, inAmt,
     data.memo || '', '', '',
@@ -200,6 +230,42 @@ function addCost(data) {
     String(data.clientId || ''),            // U列(21)
     String(data.projectId || '')            // V列(22) 紐付け先売上行ID（取引ペア紐付けモデル・§3-9-3）
   ]);
+
+  // --- A-2-X-3：スタッフID指定時はattendanceシートに金額由来行を連動追記 ---
+  // マスタ外フリー入力（staffId空・staffNameあり）の場合はattendance連動しない（仕様確定）
+  if (staffId && PAYROLL_CODES.indexOf(itemCode) >= 0) {
+    try {
+      // staffListから雇用形態を引く
+      var ss = SpreadsheetApp.getActiveSpreadsheet();
+      var settingsSheet = ss.getSheetByName('settings');
+      var employmentType = '';
+      if (settingsSheet) {
+        var staffJson = settingsSheet.getRange('B2').getValue();
+        var staffList = [];
+        try { if (staffJson) staffList = JSON.parse(staffJson); } catch(e) {}
+        var matched = staffList.filter(function(s) { return s.id === staffId; });
+        if (matched.length > 0) {
+          employmentType = _normalizeEmploymentType_(matched[0].employmentType || '');
+        }
+      }
+      // attendanceシートに金額由来行を追記（時刻空欄＝金額由来を示す）
+      var attSheet = getOrCreateSheet_('attendance', ['日付','スタッフID','スタッフ名','雇用形態','入店時刻','退店時刻','登録日時','案件ID']);
+      attSheet.appendRow([
+        date,                          // A:日付
+        staffId,                       // B:スタッフID
+        staffName,                     // C:スタッフ名
+        employmentType,                // D:雇用形態
+        '',                            // E:入店時刻（空欄＝金額由来）
+        '',                            // F:退店時刻（空欄）
+        new Date().toISOString(),      // G:登録日時
+        ''                             // H:案件ID（空欄・PC月次管理☆で後付け）
+      ]);
+    } catch(e) {
+      // attendance連動失敗はコスト追記の成功に影響させない（ログのみ）
+      Logger.log('addCost attendance連動エラー: ' + e.message);
+    }
+  }
+
   return { status: 'ok' };
 }
 
@@ -586,24 +652,111 @@ function saveSettings(data) {
 }
 
 /**
- * スタッフリスト保存
- * passwordHash / passwordUpdatedAt はスタッフごとパスワード機能（システム仕様書§10-3）用
+ * スタッフリスト保存（マージ型・PC設定値消失バグ対策）
+ *
+ * 重要設計方針：
+ * スマホ版 settings.js は name / employmentType / passwordHash / passwordUpdatedAt のみを送信し、
+ * PC版限定の hourlyWage / dailyWage / monthlyWage / commissionRate / withholdingMode / costCategory / managerMemo
+ * は送信しない。旧実装ではスマホ保存時にこれらが消滅していたため、本実装ではマージ処理を実施する。
+ *
+ * 動作：
+ *  1. スプレッドシート既存の staffList を読み込み、id をキーにしたマップを作成
+ *  2. 受信した staffList の各要素について、フィールド毎に「明示指定があれば上書き、なければ既存維持」を判定
+ *     - undefined : 「送られていない」とみなして既存値を維持
+ *     - null      : 「明示的なクリア指示」とみなして空文字または null に
+ *     - 値あり    : 上書き
+ *  3. 削除されたスタッフはリストから消える（既存挙動と同じ）
+ *
+ * 保持フィールド：
+ *  - 基本3項目（常にスマホ・PCから送信）：id / name / employmentType
+ *  - パスワード系（スマホでも明示送信）：passwordHash / passwordUpdatedAt
+ *  - PC版限定（スマホからは送信されない）：
+ *      withholdingMode（'off' / 'standard' / 'hostess'）
+ *      costCategory（'21' / '25'・contractor時のみ意味あり）
+ *      hourlyWage / dailyWage / monthlyWage / commissionRate（Number または null）
+ *      managerMemo（String）
+ *
+ * 数値フィールドは「未設定（null）」と「0円」を区別するため null 許容。
+ * 0 のままだとPC給与計算で「時給0円で算出」してしまうため意図的に null を維持。
  */
 function saveStaffList(staffList) {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('settings');
   if (!sheet) return { status: 'error', message: 'settingsシートが見つかりません' };
+
+  // --- 既存staffListを読み込んでマージ用辞書化 ---
+  var existingJson = sheet.getRange('B2').getValue();
+  var existing = [];
+  try { if (existingJson) existing = JSON.parse(existingJson); } catch (e) {}
+  if (!Array.isArray(existing)) existing = [];
+  var existingById = {};
+  existing.forEach(function(s) {
+    if (s && s.id) existingById[String(s.id)] = s;
+  });
+
+  // --- 受信側 staffList をマージ正規化 ---
   var normalized = (staffList || []).map(function(s) {
+    var prev = existingById[String(s.id || '')] || {};
+
+    // 基本3項目（受信側で常に指定される前提・受信値を優先）
+    var id   = String(s.id   || prev.id   || '');
+    var name = String(s.name || prev.name || '');
+    var employmentType = _normalizeEmploymentType_(
+      s.employmentType !== undefined ? s.employmentType : prev.employmentType
+    );
+
+    // パスワード系（受信側に明示があれば上書き・なければ既存維持）
+    var passwordHash      = (s.passwordHash      !== undefined) ? String(s.passwordHash      || '') : String(prev.passwordHash      || '');
+    var passwordUpdatedAt = (s.passwordUpdatedAt !== undefined) ? String(s.passwordUpdatedAt || '') : String(prev.passwordUpdatedAt || '');
+
+    // PC版限定フィールド（スマホからは送信されない → undefined → 既存維持）
+    var withholdingMode = (s.withholdingMode !== undefined) ? String(s.withholdingMode || '') : String(prev.withholdingMode || '');
+    var costCategory    = (s.costCategory    !== undefined) ? String(s.costCategory    || '') : String(prev.costCategory    || '');
+    var managerMemo     = (s.managerMemo     !== undefined) ? String(s.managerMemo     || '') : String(prev.managerMemo     || '');
+
+    // 数値フィールド（null許容・「未設定」と「0」を区別）
+    var hourlyWage     = _mergeNullableNumber_(s.hourlyWage,     prev.hourlyWage);
+    var dailyWage      = _mergeNullableNumber_(s.dailyWage,      prev.dailyWage);
+    var monthlyWage    = _mergeNullableNumber_(s.monthlyWage,    prev.monthlyWage);
+    var commissionRate = _mergeNullableNumber_(s.commissionRate, prev.commissionRate);
+
     return {
-      id: String(s.id || ''),
-      name: String(s.name || ''),
-      employmentType: _normalizeEmploymentType_(s.employmentType),
-      passwordHash: String(s.passwordHash || ''),
-      passwordUpdatedAt: s.passwordUpdatedAt ? String(s.passwordUpdatedAt) : ''
+      id: id,
+      name: name,
+      employmentType: employmentType,
+      passwordHash: passwordHash,
+      passwordUpdatedAt: passwordUpdatedAt,
+      withholdingMode: withholdingMode,
+      costCategory: costCategory,
+      hourlyWage: hourlyWage,
+      dailyWage: dailyWage,
+      monthlyWage: monthlyWage,
+      commissionRate: commissionRate,
+      managerMemo: managerMemo
     };
   });
+
   sheet.getRange('A2').setValue('staffList');
   sheet.getRange('B2').setValue(JSON.stringify(normalized));
   return { status: 'ok' };
+}
+
+/**
+ * 数値フィールドのマージ用ヘルパー
+ *  - 受信値が undefined          → 既存値を維持（null 含む）
+ *  - 受信値が null               → null（「明示的クリア」を許容）
+ *  - 受信値が ''（空文字）         → null（PC版UIで空欄入力された場合）
+ *  - 受信値が数値文字列または数値 → Number 化（NaN なら null）
+ */
+function _mergeNullableNumber_(received, previous) {
+  if (received === undefined) {
+    // 既存値を維持。既存値が undefined/null/空文字なら null
+    if (previous === undefined || previous === null || previous === '') return null;
+    var prevNum = Number(previous);
+    return isNaN(prevNum) ? null : prevNum;
+  }
+  if (received === null || received === '') return null;
+  var num = Number(received);
+  return isNaN(num) ? null : num;
 }
 
 /**
@@ -1117,6 +1270,7 @@ function _isLinkableCostRow_(costRow) {
  *    （複数アイテムが同一 salesRowId を指していても親売上の参照は1回で済ます）
  *  - 後方互換：data.rowIndex + data.salesRowId 形式の単発 payload も内部で items[] に変換して処理
  *  - 紐付け解除（salesRowId 空）の場合、売上側の U列 は変更しない（案件管理画面に残し続ける運用）
+ *  - A-2-X-7：給与系コスト（20/21/25）紐付け時、同日同スタッフのattendance行のprojectIdも連動更新
  */
 function linkTransactions(data) {
   // payload 正規化：items 配列を優先・なければ単発を1要素配列として扱う（後方互換）
@@ -1176,7 +1330,6 @@ function linkTransactions(data) {
             if (String(idValues[m][1]) !== '1') {
               salesSheet.getRange(m + 2, 21).setValue('1');
             }
-            // 後方互換のため最後にヒットした行を返す（旧 payload 時の単発相当）
             salesRowIndex = m + 2;
             break;
           }
@@ -1184,6 +1337,53 @@ function linkTransactions(data) {
       }
     }
   }
+
+  // ═══ A-2-X-7：給与系コスト紐付け時のattendance.projectId連動更新 ═══
+  var PAYROLL_CODES_LINK = ['20', '21', '25'];
+  var attSheet = ss.getSheetByName('attendance');
+  if (attSheet) {
+    var attLastRow = attSheet.getLastRow();
+    var attLastCol = attSheet.getLastColumn();
+    var attData = attLastRow >= 2
+      ? attSheet.getRange(2, 1, attLastRow - 1, attLastCol).getValues()
+      : [];
+    // attendance列構成:
+    //   8列版(main.gs getOrCreateSheet_): H列(8)=案件ID → 書き込み先=col 8
+    //   9列版(attendance_v3.gs):          I列(9)=案件ID → 書き込み先=col 9
+    var attProjectCol = attLastCol >= 9 ? 9 : 8;
+
+    for (var q = 0; q < normalized.length; q++) {
+      var costRowIdx = normalized[q].rowIndex;
+      var newSalesRowId = normalized[q].salesRowId; // 空文字なら解除
+
+      // コスト行のデータを取得（科目コード・H列・日付）
+      var costRowData = costSheet.getRange(costRowIdx, 1, 1, 22).getValues()[0];
+      var costItemCode = String(costRowData[5] || '');  // F列(6)=index 5
+      if (PAYROLL_CODES_LINK.indexOf(costItemCode) < 0) continue; // 給与系以外はスキップ
+
+      var costDate = toDateStr_(costRowData[0]);
+      var costMisc = String(costRowData[7] || '');  // H列(8)=index 7
+      // スタッフ名を抽出（[スポット]/[月次]プレフィックス除去）
+      var costStaffName = costMisc
+        .replace(/^\[スポット\]/, '')
+        .replace(/^\[月次\]/, '')
+        .trim();
+      if (!costStaffName) continue; // スタッフ名なしはスキップ
+
+      // attendanceシートから同日・同スタッフ名の行を検索して projectId を更新
+      for (var r = 0; r < attData.length; r++) {
+        var attDate = attData[r][0] instanceof Date
+          ? Utilities.formatDate(attData[r][0], 'Asia/Tokyo', 'yyyy-MM-dd')
+          : String(attData[r][0] || '').substring(0, 10);
+        var attStaffName = String(attData[r][2] || '');  // C列(3)=index 2
+
+        if (attDate === costDate && attStaffName === costStaffName) {
+          attSheet.getRange(r + 2, attProjectCol).setValue(newSalesRowId);
+        }
+      }
+    }
+  }
+  // ═══ A-2-X-7 ここまで ═══
 
   return {
     status: 'ok',
@@ -1323,7 +1523,7 @@ function getTransactionsHierarchy(data) {
 }
 
 /**
- * 紐付け候補取得（双方向対応・指示書5§1-4 / 技術仕様§9-6）
+ * 紐付け候補取得(双方向対応・指示書5§1-4 / 技術仕様§9-6)
  *
  * direction='sales-to-cost'（売上→コスト）：
  *   - 範囲：salesDate の前月頭〜salesDate
@@ -1687,47 +1887,81 @@ function updateRow(data) {
 }
 
 /**
- * 行削除（指示書15・売上 / コスト 両対応）
- * 戦略思想§1-5-2 AI自動確定禁止：呼び出し元 PC版で「削除→確認ダイアログ→削除する」の3ステップを保証する
- * 物理削除に伴い rowIndex がズレるため、フロント側は本処理成功後に再取得して再描画する
+ * ロック解除申請（PC版「月次管理」ロック行の解除申請ボタンから呼ばれる・3デバイス統合§3）
+ * _unlock_requests シート（なければ作成）に申請レコードを追記する
+ * 承認画面（スマホ・iPad）の実装は別指示書で対応（本指示書ではスキーマと append のみ）
  *
  * payload:
  *   - sheetName : "売上" または "コスト"
- *   - rowIndex  : 対象行番号（2以上）
+ *   - rowIndex  : 対象行番号
+ *   - reason    : （任意）申請理由
+ */
+function requestUnlock(data) {
+  var sheetName = String(data && data.sheetName || '').trim();
+  var rowIndex  = parseInt(data && data.rowIndex, 10);
+  var reason    = String(data && data.reason || '');
+  var clientId  = String(data && data.clientId || '');
+
+  if (sheetName !== '売上' && sheetName !== 'コスト') {
+    return { status: 'error', message: 'invalid sheetName' };
+  }
+  if (!rowIndex || rowIndex < 2) {
+    return { status: 'error', message: 'invalid rowIndex' };
+  }
+
+  var ss = SpreadsheetApp.getActive();
+  var sheet = ss.getSheetByName('_unlock_requests');
+  if (!sheet) {
+    sheet = ss.insertSheet('_unlock_requests');
+    sheet.appendRow(['clientId', 'sheetName', 'rowIndex', 'reason', 'requestedAt', 'status']);
+    sheet.setFrozenRows(1);
+  }
+  var requestedAt = new Date();
+  sheet.appendRow([clientId, sheetName, rowIndex, reason, requestedAt, 'pending']);
+  var requestId = sheet.getLastRow(); // 行番号を ID として返す（簡易・ユニーク）
+  return { status: 'ok', data: { requestId: requestId } };
+}
+
+/**
+ * 指示書15：行削除（売上・コスト両対応）
+ * 売上削除時は紐付け経費のV列を自動空欄化（経費自体は削除しない・月次管理に残る）
+ * S列(19)=1 のロック行は削除拒否（GAS側で防御・フロント側でも削除ボタンを非表示）
  *
- * 動作仕様：
- *   1. S列(19)='1' のロック行は削除拒否（'ロック行は削除できません'）
- *   2. 売上削除時：T列(20) の売上行ID と一致するコスト行のV列(22) を空欄化（紐付け解除）
- *      コスト行自体は削除しない（月次管理に未紐付け状態で残る）
- *   3. コスト削除時：紐付け先売上のU列はそのまま（経費0件案件として残す・案件解除はユーザー操作で別途）
- *   4. 物理削除は sheet.deleteRow(rowIndex) を呼ぶ
+ * payload:
+ *   - sheetName : "売上" または "コスト"
+ *   - rowIndex  : 削除対象の行番号（2以上）
+ *
+ * レスポンス：
+ *   - status: 'ok'
+ *   - data.unlinkedCostRows : 売上削除時に空欄化したコスト行番号配列
+ *   - data.deletedSalesRowId : 売上削除時の削除した salesRowId
  */
 function deleteRow(data) {
   try {
     var sheetName = String(data && data.sheetName || '').trim();
-    var rowIndex  = parseInt(data && data.rowIndex, 10);
+    var rowIndex = parseInt(data && data.rowIndex, 10);
 
     if (sheetName !== '売上' && sheetName !== 'コスト') {
-      return { status: 'error', message: 'invalid sheetName' };
+      return { status: 'error', message: 'sheetNameが不正です' };
     }
     if (!rowIndex || rowIndex < 2) {
-      return { status: 'error', message: 'invalid rowIndex' };
+      return { status: 'error', message: 'rowIndexが不正です' };
     }
 
     var ss = SpreadsheetApp.getActive();
     var sheet = ss.getSheetByName(sheetName);
     if (!sheet) {
-      return { status: 'error', message: sheetName + 'シートが見つかりません' };
+      return { status: 'error', message: 'シートが見つかりません: ' + sheetName };
     }
 
     var lastRow = sheet.getLastRow();
     if (rowIndex > lastRow) {
-      return { status: 'error', message: 'rowIndex out of range' };
+      return { status: 'error', message: '指定行が存在しません' };
     }
 
-    // ロックチェック（S列=19）
+    // ロック行チェック（S列=19）
     var lockFlag = sheet.getRange(rowIndex, 19).getValue();
-    if (lockFlag === 1 || lockFlag === '1' || Number(lockFlag) === 1) {
+    if (lockFlag === 1 || lockFlag === '1') {
       return { status: 'error', message: 'ロック行は削除できません' };
     }
 
@@ -1735,8 +1969,8 @@ function deleteRow(data) {
     var deletedSalesRowId = '';
 
     if (sheetName === '売上') {
-      // 売上削除時：紐付け経費のV列(22) を空欄化
-      var salesRowId = sheet.getRange(rowIndex, 20).getValue(); // T列(20)
+      // 売上削除時：紐付け経費のV列を空欄化（経費自体は残す・月次管理に残り続ける）
+      var salesRowId = sheet.getRange(rowIndex, 20).getValue(); // T列
       deletedSalesRowId = String(salesRowId || '');
 
       if (deletedSalesRowId) {
@@ -1775,38 +2009,227 @@ function deleteRow(data) {
   }
 }
 
+// =============================================================
+// confirmPayroll — 給与確定（コストシートT列に源泉徴収額を記録）
+// A-2タスク：PC版出勤管理 給与計算確定処理
+// =============================================================
+
 /**
- * ロック解除申請（PC版「月次管理」ロック行の解除申請ボタンから呼ばれる・3デバイス統合§3）
- * _unlock_requests シート（なければ作成）に申請レコードを追記する
- * 承認画面（スマホ・iPad）の実装は別指示書で対応（本指示書ではスキーマと append のみ）
+ * confirmPayroll
+ * フロント（pc-attendance.js _executeConfirm）から呼ばれる。
+ * targets配列の各要素について、コストシートT列(col 20)に源泉徴収額を書き込む。
  *
- * payload:
- *   - sheetName : "売上" または "コスト"
- *   - rowIndex  : 対象行番号
- *   - reason    : （任意）申請理由
+ * リクエスト形式:
+ * {
+ *   "targets": [
+ *     { "sheetName": "コスト", "rowIndex": 5, "withholdingAmount": 3063 },
+ *     { "sheetName": "コスト", "rowIndex": 8, "withholdingAmount": 3063 }
+ *   ]
+ * }
+ *
+ * 処理内容:
+ * 1. 各targetのrowIndexが有効行か確認
+ * 2. ロック行(S列=1)は書き込み拒否
+ * 3. T列(col 20)にwithholdingAmountを書き込み
+ *
+ * @param {Object} data - { targets: Array }
+ * @return {Object} { status: 'ok', data: { updated: Number, skipped: Array } }
  */
-function requestUnlock(data) {
-  var sheetName = String(data && data.sheetName || '').trim();
-  var rowIndex  = parseInt(data && data.rowIndex, 10);
-  var reason    = String(data && data.reason || '');
-  var clientId  = String(data && data.clientId || '');
-
-  if (sheetName !== '売上' && sheetName !== 'コスト') {
-    return { status: 'error', message: 'invalid sheetName' };
-  }
-  if (!rowIndex || rowIndex < 2) {
-    return { status: 'error', message: 'invalid rowIndex' };
+function confirmPayroll(data) {
+  var targets = data.targets;
+  if (!targets || !Array.isArray(targets) || targets.length === 0) {
+    return { status: 'error', message: 'targetsが空です' };
   }
 
-  var ss = SpreadsheetApp.getActive();
-  var sheet = ss.getSheetByName('_unlock_requests');
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var updated = 0;
+  var skipped = [];
+
+  // シート名ごとにグループ化して一括処理
+  var bySheet = {};
+  targets.forEach(function(t) {
+    var name = t.sheetName || 'コスト';
+    if (!bySheet[name]) bySheet[name] = [];
+    bySheet[name].push(t);
+  });
+
+  for (var sheetName in bySheet) {
+    var sheet = ss.getSheetByName(sheetName);
+    if (!sheet) {
+      bySheet[sheetName].forEach(function(t) {
+        skipped.push({ rowIndex: t.rowIndex, reason: 'シート未発見: ' + sheetName });
+      });
+      continue;
+    }
+
+    var lastRow = sheet.getLastRow();
+
+    bySheet[sheetName].forEach(function(t) {
+      var row = Number(t.rowIndex);
+
+      // 行番号バリデーション（ヘッダー行=1は除外、最終行を超えない）
+      if (!row || row < 2 || row > lastRow) {
+        skipped.push({ rowIndex: row, reason: '無効な行番号' });
+        return;
+      }
+
+      // ロックチェック：S列(col 19) = 1 ならロック済み
+      var lockFlag = sheet.getRange(row, 19).getValue();
+      if (Number(lockFlag) === 1) {
+        skipped.push({ rowIndex: row, reason: 'ロック済み' });
+        return;
+      }
+
+      // T列(col 20) に源泉徴収額を書き込み
+      var whAmount = Number(t.withholdingAmount) || 0;
+      sheet.getRange(row, 20).setValue(whAmount);
+      updated++;
+    });
+  }
+
+  return {
+    status: 'ok',
+    data: {
+      updated: updated,
+      skipped: skipped
+    }
+  };
+}
+
+// =============================================================
+// A-1 タイムカードPWA用 GASアクション
+// =============================================================
+
+function validateStaff(data) {
+  var staffId = String(data && data.staffId || '').trim();
+  if (!staffId) {
+    return { status: 'ok', data: { valid: false, staffId: staffId } };
+  }
+  var settings = getSettings();
+  if (settings.status !== 'ok') {
+    return { status: 'ok', data: { valid: false, staffId: staffId } };
+  }
+  var staffList = settings.data.staffList || [];
+  var found = null;
+  for (var i = 0; i < staffList.length; i++) {
+    if (String(staffList[i].id || '') === staffId) {
+      found = staffList[i];
+      break;
+    }
+  }
+  if (!found) {
+    return { status: 'ok', data: { valid: false, staffId: staffId } };
+  }
+  return {
+    status: 'ok',
+    data: {
+      valid: true,
+      staffId: staffId,
+      staffName: String(found.name || ''),
+      storeName: String(settings.data.storeName || ''),
+      templateId: String(settings.data.templateId || 'general-shop')
+    }
+  };
+}
+
+function getAttendanceForStaff(data) {
+  var staffId = String(data && data.staffId || '').trim();
+  if (!staffId) {
+    return { status: 'error', message: 'staffId が必要です' };
+  }
+  var ss    = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName('attendance');
   if (!sheet) {
-    sheet = ss.insertSheet('_unlock_requests');
-    sheet.appendRow(['clientId', 'sheetName', 'rowIndex', 'reason', 'requestedAt', 'status']);
-    sheet.setFrozenRows(1);
+    return { status: 'ok', data: { myRecord: null, todayList: [], myMonthly: [] } };
   }
-  var requestedAt = new Date();
-  sheet.appendRow([clientId, sheetName, rowIndex, reason, requestedAt, 'pending']);
-  var requestId = sheet.getLastRow(); // 行番号を ID として返す（簡易・ユニーク）
-  return { status: 'ok', data: { requestId: requestId } };
+  var tz      = Session.getScriptTimeZone();
+  var today   = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
+  var month   = String(data && data.month || '').trim() || today.substring(0, 7);
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) {
+    return { status: 'ok', data: { myRecord: null, todayList: [], myMonthly: [] } };
+  }
+  var lastCol = Math.max(8, Math.min(9, sheet.getLastColumn()));
+  var rows    = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
+  var myRecord  = null;
+  var todayMap  = {};
+  var myMonthly = [];
+  for (var i = 0; i < rows.length; i++) {
+    var row          = rows[i];
+    var rawDate      = row[0];
+    var rowStaffId   = String(row[1] || '');
+    var rowStaffName = String(row[2] || '');
+    var ciTimeRaw    = row[4];
+    var rawCoDate    = row[5];
+    var coTimeRaw    = row[6];
+    var clockInDate  = rawDate instanceof Date
+      ? Utilities.formatDate(rawDate, tz, 'yyyy-MM-dd')
+      : String(rawDate || '').substring(0, 10);
+    if (!clockInDate || !rowStaffId) continue;
+    var clockInTime  = _normalizeTimeStr(ciTimeRaw);
+    var clockOutTime = _normalizeTimeStr(coTimeRaw);
+    var clockOutDate = rawCoDate instanceof Date
+      ? Utilities.formatDate(rawCoDate, tz, 'yyyy-MM-dd')
+      : String(rawCoDate || '').substring(0, 10);
+    var isActive = (!clockOutTime || clockOutTime === '');
+    if (clockInDate === today) {
+      if (!todayMap[rowStaffId] || isActive) {
+        todayMap[rowStaffId] = { staffName: rowStaffName, isActive: isActive };
+      }
+      if (rowStaffId === staffId) {
+        myRecord = {
+          rowIndex: i + 2,
+          date: clockInDate,
+          clockIn: clockInTime,
+          clockOut: clockOutTime || null,
+          clockOutDate: clockOutDate || null,
+          isActive: isActive
+        };
+      }
+    }
+    if (rowStaffId === staffId && clockInDate.indexOf(month) === 0) {
+      var workMinutes = null;
+      if (clockInTime && clockOutTime) {
+        var ci = _parseHHMM(clockInTime);
+        var co = _parseHHMM(clockOutTime);
+        if (ci && co) {
+          var diff = (co.h * 60 + co.m) - (ci.h * 60 + ci.m);
+          if (clockOutDate && clockOutDate !== clockInDate) diff += 24 * 60;
+          if (diff > 0) workMinutes = diff;
+        }
+      }
+      myMonthly.push({
+        rowIndex: i + 2,
+        date: clockInDate,
+        clockIn: clockInTime,
+        clockOut: clockOutTime || null,
+        clockOutDate: clockOutDate || null,
+        workMinutes: workMinutes,
+        isActive: isActive
+      });
+    }
+  }
+  var todayList = [];
+  for (var sid in todayMap) {
+    todayList.push({
+      staffId: sid,
+      staffName: todayMap[sid].staffName,
+      isActive: todayMap[sid].isActive,
+      isSelf: (sid === staffId)
+    });
+  }
+  todayList.sort(function(a, b) {
+    if (a.isSelf !== b.isSelf) return a.isSelf ? -1 : 1;
+    if (a.isActive !== b.isActive) return a.isActive ? -1 : 1;
+    return 0;
+  });
+  myMonthly.sort(function(a, b) { return b.date.localeCompare(a.date); });
+  return {
+    status: 'ok',
+    data: {
+      myRecord: myRecord,
+      todayList: todayList,
+      myMonthly: myMonthly
+    }
+  };
 }
