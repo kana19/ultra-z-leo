@@ -1,10 +1,12 @@
 /**
  * staff-clockin.js v3 — スタッフ専用タイムカードPWA
  * v4: ボタンラベル統一（再表示廃止・0〜23時対応・日跨ぎ自動判定）
+ * v5: localStorage で staffId 保持（PWAホーム画面起動時のゼロタップ対応）
  */
 
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbwBDHj9-p6ZT6ExXrxF1Q-XwiEkNMPwDc0aAuk7zptivRhWhepvaCDsjaIJd7WHh_h9-A/exec';
 const WD = ['日','月','火','水','木','金','土'];
+const STAFF_ID_KEY = 'uz_staff_id';
 
 let state = {
   staffId:'', staffName:'', storeName:'', templateId:'general-shop',
@@ -31,12 +33,34 @@ async function callGAS(action, data={}) {
 
 document.addEventListener('DOMContentLoaded', async () => {
   startClock();
-  const staffId = new URLSearchParams(location.search).get('staff') || '';
-  if (!staffId) { showError('URLが正しくありません','staff=スタッフIDパラメータが必要です。\nオーナーから共有されたURLを使用してください。'); return; }
+
+  // 1. URLパラメータから取得試行（初回・オーナーから共有URL）
+  let staffId = new URLSearchParams(location.search).get('staff') || '';
+
+  // 2. URLになければ localStorage から復元（PWAホーム画面起動）
+  if (!staffId) {
+    try { staffId = localStorage.getItem(STAFF_ID_KEY) || ''; } catch(e) {}
+  }
+
+  if (!staffId) {
+    showError('URLが正しくありません','staff=スタッフIDパラメータが必要です。\nオーナーから共有されたURLを使用してください。');
+    return;
+  }
+
   state.staffId = staffId;
+
   try {
     const v = await callGAS('validateStaff', { staffId });
-    if (!v || !v.valid) { showError('スタッフが見つかりません',`スタッフID「${staffId}」は登録されていません。\nオーナーに確認してください。`); return; }
+    if (!v || !v.valid) {
+      // 無効な staffId は localStorage からも削除（古い端末等の救済）
+      try { localStorage.removeItem(STAFF_ID_KEY); } catch(e) {}
+      showError('スタッフが見つかりません',`スタッフID「${staffId}」は登録されていません。\nオーナーに確認してください。`);
+      return;
+    }
+
+    // 3. 有効が確認できた段階で localStorage に保存（2回目以降のゼロタップ起動用）
+    try { localStorage.setItem(STAFF_ID_KEY, staffId); } catch(e) {}
+
     state.staffName  = v.staffName;
     state.storeName  = v.storeName;
     state.templateId = v.templateId || 'general-shop';
