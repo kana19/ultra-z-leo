@@ -122,8 +122,9 @@
     .hist-attend-row {
       display: grid;
       /* スタッフ名を固定幅にして、全行で出勤時刻位置を完全に揃える（A-9整流化追加）
-         スタッフ名 90px | 出勤時刻 auto | → 14px | 退勤時刻 auto | 状態or勤務時間 auto | 編集 auto */
-      grid-template-columns: 90px auto 14px auto 1fr auto;
+         スタッフ名 105px | 出勤時刻 auto | → 14px | 退勤時刻 auto | 状態or勤務時間 auto | 編集 auto
+         105pxは約7文字（「コンパニオン」等）まで省略なし表示できる幅 */
+      grid-template-columns: 105px auto 14px auto 1fr auto;
       align-items: center;
       column-gap: 6px;
       padding: 8px 16px;
@@ -133,7 +134,7 @@
     /* スタッフ名：固定幅・長い場合は…で省略 */
     .hist-attend-name {
       min-width: 0;
-      width: 90px;
+      width: 105px;
       font-size: 13px;
       font-weight: 700;
       color: var(--uz-text);

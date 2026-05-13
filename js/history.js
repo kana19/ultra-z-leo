@@ -601,12 +601,13 @@ function renderAttendance(items) {
           timeOutClass += ' hist-attend-time-out--empty';
         }
 
-        // 勤務時間（4.50H 小数点表記・時刻と同サイズ）
+        // 勤務時間（4.50h 小数点表記・時刻と同サイズ・細字グレーで時刻と区別）
+        // A-9：カッコ削除＋小文字h（freee等のSaaSタイムカード標準表記に統一）
         const wMin = r.workMinutes || dur?.minutes;
         let durLabel = '';
         if (wMin && !dur?.isAbnormal) {
           const hours10 = (wMin / 60).toFixed(2);
-          durLabel = `(${hours10}H)`;
+          durLabel = `${hours10}h`;
         }
 
         // 勤務状態判定（businessHours ベース・未設定時は24時間フォールバック）
