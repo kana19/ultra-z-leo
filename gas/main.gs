@@ -549,12 +549,11 @@ function getOrCreateSheet(name) {
 
 /**
  * settings読み込み
- * B1:storeName / B2:staffList / B3:serviceList / B12:storeType
- * B13:templateId / B14:uiLabels(JSON) / B16:featureVisibility(JSON)
- * storeType 未設定時は 'off' をデフォルトで返す（源泉徴収機能OFF状態・納品時に書き換え）
- * templateId 未設定時は 'general-shop' をデフォルトで返す（業態テンプレート・納品時に書き換え）
- * uiLabels 未設定時は {} をデフォルトで返す（custom時のみ意味がある・通常は空）
- * featureVisibility 未設定時は {} をデフォルトで返す（custom時のみ意味がある・§3-9-3 §3-8）
+ * B1:storeName / B2:staffList / B3:serviceList / B16:featureVisibility(JSON) / B18:businessHours(JSON)
+ *
+ * A-9-X：業態固定概念撤廃に伴い、B12:storeType / B13:templateId / B14:uiLabels の参照を廃止。
+ * 既存ユーザーのスプレッドシートに値が残っていても無害（コード側で参照しない）。
+ * featureVisibility 未設定時は {} をデフォルトで返す（運営ポータルから設定される）。
  */
 function getSettings() {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('settings');
@@ -562,9 +561,6 @@ function getSettings() {
   var storeName   = sheet.getRange('B1').getValue();
   var staffJson   = sheet.getRange('B2').getValue();
   var serviceJson = sheet.getRange('B3').getValue();
-  var storeTypeRaw = sheet.getRange('B12').getValue();
-  var templateIdRaw = sheet.getRange('B13').getValue();
-  var uiLabelsJson  = sheet.getRange('B14').getValue();
   var featureVisibilityJson = sheet.getRange('B16').getValue();
   var businessHoursRaw = sheet.getRange('B18').getValue();
   var staffList = [], serviceList = [];
@@ -576,20 +572,6 @@ function getSettings() {
     s.employmentType = _normalizeEmploymentType_(s.employmentType);
     return s;
   });
-  // storeType は hostess / standard / off のみ許容。未設定や不正値は 'off' に寄せる
-  var storeType = String(storeTypeRaw || '').toLowerCase();
-  if (storeType !== 'hostess' && storeType !== 'standard') {
-    storeType = 'off';
-  }
-  // templateId は hostess-shop / general-shop / non-shop / custom のみ許容。未設定や不正値は 'general-shop' に寄せる
-  var templateId = String(templateIdRaw || '');
-  if (templateId !== 'hostess-shop' && templateId !== 'general-shop' && templateId !== 'non-shop' && templateId !== 'custom') {
-    templateId = 'general-shop';
-  }
-  // uiLabels は JSON 文字列。パース失敗・未設定時は {} を返す
-  var uiLabels = {};
-  try { if (uiLabelsJson) uiLabels = JSON.parse(uiLabelsJson); } catch(e) {}
-  if (!uiLabels || typeof uiLabels !== 'object') uiLabels = {};
   // featureVisibility は JSON 文字列。パース失敗・未設定時は {} を返す
   var featureVisibility = {};
   try { if (featureVisibilityJson) featureVisibility = JSON.parse(featureVisibilityJson); } catch(e) {}
@@ -613,9 +595,6 @@ function getSettings() {
     storeName: storeName || '',
     staffList: staffList,
     serviceList: serviceList,
-    storeType: storeType,
-    templateId: templateId,
-    uiLabels: uiLabels,
     featureVisibility: featureVisibility,
     businessHours: businessHours
   }};
@@ -623,10 +602,8 @@ function getSettings() {
 
 /**
  * settings保存
- * storeType は B12 に直書き（payload に含まれていれば更新・通常は顧客UIからは送信されない）
- * templateId は B13 に直書き（payload に含まれていれば更新・通常は顧客UIからは送信されない）
- * uiLabels は B14 に JSON.stringify して直書き（payload に含まれていれば更新）
- * 顧客UIには出さず納品時にスプレッドシート直接編集で設定する運用（戦略思想§3-2）
+ * A-9-X：業態固定概念撤廃に伴い、storeType / templateId / uiLabels の受け取りを廃止。
+ * 既存ユーザーのスプレッドシート B12 / B13 / B14 セルは触らない（残置しても無害）。
  */
 function saveSettings(data) {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('settings');
@@ -641,26 +618,7 @@ function saveSettings(data) {
   sheet.getRange('B2').setValue(JSON.stringify(staffList));
   sheet.getRange('A3').setValue('serviceList');
   sheet.getRange('B3').setValue(JSON.stringify(data.serviceList || []));
-  // storeType は通常の顧客UIからは送信されないが、送信された場合のみ更新
-  if (data.storeType !== undefined) {
-    var st = String(data.storeType || '').toLowerCase();
-    if (st !== 'hostess' && st !== 'standard') st = 'off';
-    sheet.getRange('A12').setValue('storeType');
-    sheet.getRange('B12').setValue(st);
-  }
-  // templateId は通常の顧客UIからは送信されないが、送信された場合のみ更新
-  if (data.templateId !== undefined) {
-    var tid = String(data.templateId || '');
-    if (tid !== 'hostess-shop' && tid !== 'general-shop' && tid !== 'non-shop' && tid !== 'custom') tid = 'general-shop';
-    sheet.getRange('A13').setValue('templateId');
-    sheet.getRange('B13').setValue(tid);
-  }
-  // uiLabels は通常の顧客UIからは送信されないが、送信された場合のみ更新
-  if (data.uiLabels !== undefined) {
-    sheet.getRange('A14').setValue('uiLabels');
-    sheet.getRange('B14').setValue(JSON.stringify(data.uiLabels || {}));
-  }
-  // featureVisibility は custom テンプレート時のみ意味がある（§3-9-3 §3-8）
+  // featureVisibility は運営ポータルから送信された場合のみ更新（納品時設定原則）
   if (data.featureVisibility !== undefined) {
     sheet.getRange('A16').setValue('featureVisibility');
     sheet.getRange('B16').setValue(JSON.stringify(data.featureVisibility || {}));
@@ -845,7 +803,7 @@ function clockOut(data) {
       return { status: 'ok' };
     }
   }
-  return { status: 'error', message: '対応する入店記録が見つかりません' };
+  return { status: 'error', message: '対応する出勤記録が見つかりません' };
 }
 
 function getAttendanceColMap_(sheet) {
@@ -1098,31 +1056,17 @@ function setupPhaseA() {
 
 // =============================================================
 // 源泉徴収・clientId マイグレーション
-// settings B12 storeType 初期化 + コストシート T列・U列 追加
+// コストシート T列・U列 追加（A-9-X：B12 storeType 初期化は撤廃）
 // =============================================================
 
 /**
  * 源泉徴収機能の初期セットアップ（1回だけ実行）
- * - settings B12 に storeType='off' を初期化（納品時に hostess/standard/off へ書き換え）
  * - コストシートに T列:源泉徴収額・U列:クライアントID を追加
  * - 既存データは0/空文字で埋める
+ * A-9-X：源泉徴収はスタッフ個別の withholdingMode で判定するため、storeType 初期化は撤廃。
  */
 function setupWithholdingAndClientId() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-
-  // --- settings B12 storeType 初期化 ---
-  var settings = ss.getSheetByName('settings');
-  if (!settings) {
-    settings = ss.insertSheet('settings');
-  }
-  var currentStoreType = settings.getRange('B12').getValue();
-  if (!currentStoreType || currentStoreType === '') {
-    settings.getRange('A12').setValue('storeType');
-    settings.getRange('B12').setValue('off');
-    Logger.log('settings B12 に storeType="off" を初期化しました');
-  } else {
-    Logger.log('settings B12 は既に "' + currentStoreType + '" が設定済みのためスキップ');
-  }
 
   // --- コストシート T列・U列 追加 ---
   var cost = ss.getSheetByName('コスト');
@@ -1165,41 +1109,20 @@ function setupWithholdingAndClientId() {
 }
 
 // =============================================================
-// 業態テンプレート・スタッフパスワード マイグレーション
-// settings B13 templateId 初期化 + B14 uiLabels 初期化 + 既存スタッフリストに passwordHash/passwordUpdatedAt 補完
+// スタッフパスワード マイグレーション
+// 既存スタッフリストに passwordHash/passwordUpdatedAt 補完
+// （A-9-X：業態テンプレート B13 templateId / B14 uiLabels 初期化は撤廃）
 // =============================================================
 
 /**
- * templateId/uiLabels/passwordHash 機能の初期セットアップ（1回だけ実行）
- * - settings B13 に templateId='general-shop' を初期化（納品時に hostess-shop/general-shop/non-shop/custom へ書き換え）
- * - settings B14 に uiLabels='{}' を初期化（custom時のみ意味がある・通常は空）
+ * passwordHash 機能の初期セットアップ（1回だけ実行）
  * - 既存スタッフリストに passwordHash=''・passwordUpdatedAt='' を補完
  */
 function setupTemplateAndPassword() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-
-  // --- settings B13 templateId 初期化 ---
   var settings = ss.getSheetByName('settings');
   if (!settings) {
     settings = ss.insertSheet('settings');
-  }
-  var currentTemplateId = settings.getRange('B13').getValue();
-  if (!currentTemplateId || currentTemplateId === '') {
-    settings.getRange('A13').setValue('templateId');
-    settings.getRange('B13').setValue('general-shop');
-    Logger.log('settings B13 に templateId="general-shop" を初期化しました');
-  } else {
-    Logger.log('settings B13 は既に "' + currentTemplateId + '" が設定済みのためスキップ');
-  }
-
-  // --- settings B14 uiLabels 初期化 ---
-  var currentUiLabels = settings.getRange('B14').getValue();
-  if (!currentUiLabels || currentUiLabels === '') {
-    settings.getRange('A14').setValue('uiLabels');
-    settings.getRange('B14').setValue('{}');
-    Logger.log('settings B14 に uiLabels="{}" を初期化しました');
-  } else {
-    Logger.log('settings B14 は既に "' + currentUiLabels + '" が設定済みのためスキップ');
   }
 
   // --- 既存スタッフリストに passwordHash/passwordUpdatedAt 補完 ---
@@ -2157,8 +2080,7 @@ function validateStaff(data) {
       valid: true,
       staffId: staffId,
       staffName: String(found.name || ''),
-      storeName: String(settings.data.storeName || ''),
-      templateId: String(settings.data.templateId || 'general-shop')
+      storeName: String(settings.data.storeName || '')
     }
   };
 }

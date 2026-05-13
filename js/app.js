@@ -45,13 +45,8 @@ async function callGAS(action, data = {}) {
 }
 
 /**
- * アプリ起動時にGASからsettings（storeType・templateId・uiLabels）を取得して
- * localStorageに同期する
- *  - storeType : 源泉徴収UIの出し分けに使う（cost.js参照）
- *  - templateId: 業態テンプレート（hostess-shop / general-shop / non-shop / custom）
- *  - uiLabels  : custom テンプレート時の個別ラベル（JSON）・通常はderiveUILabelsで動的導出
- *
- * 通信失敗時は既存キャッシュを維持・初回失敗時は安全側のデフォルトで動作
+ * アプリ起動時にGASからsettings（staffList・businessHours等）を取得して
+ * localStorageに同期する。通信失敗時は既存キャッシュを維持。
  *
  * 実行タイミング：DOMContentLoaded時にバックグラウンドで非同期実行
  * モーダル起動時には既にlocalStorageが最新化されている設計
@@ -62,33 +57,6 @@ async function syncSettingsAtStartup() {
     if (!res || res.status !== 'ok' || !res.data) return;
 
     const d = res.data;
-
-    // storeType 同期（既存）
-    if (typeof d.storeType === 'string') {
-      const st = d.storeType.toLowerCase();
-      const normalized = (st === 'hostess' || st === 'standard') ? st : 'off';
-      localStorage.setItem('uz_store_type', normalized);
-    }
-
-    // templateId 同期（新規）
-    if (typeof d.templateId === 'string') {
-      const valid = ['hostess-shop', 'general-shop', 'non-shop', 'custom'];
-      const tid = valid.includes(d.templateId) ? d.templateId : 'general-shop';
-      localStorage.setItem('uz_template_id', tid);
-    }
-
-    // uiLabels 同期（custom時のみ意味がある・通常は空）
-    if (d.uiLabels && typeof d.uiLabels === 'object') {
-      localStorage.setItem('uz_ui_labels', JSON.stringify(d.uiLabels));
-    }
-
-    // featureVisibility 同期（custom時のみ実値を保存・他テンプレート時は localStorage を空にする）
-    // §3-9-3 §3-8 deriveFeatureVisibility が custom 時のみ localStorage を読み出す設計
-    if (d.templateId === 'custom' && d.featureVisibility && typeof d.featureVisibility === 'object') {
-      localStorage.setItem('uz_feature_visibility', JSON.stringify(d.featureVisibility));
-    } else {
-      localStorage.removeItem('uz_feature_visibility');
-    }
 
     // staffList 同期（A-2-X-1：コスト入力のスタッフプルダウンで使用）
     if (Array.isArray(d.staffList)) {
@@ -103,11 +71,7 @@ async function syncSettingsAtStartup() {
       localStorage.removeItem('uz_business_hours');
     }
 
-    // 取得後にUI用語を反映
-    applyUILabels();
-
     // settings 同期完了イベント発火
-    // 各ページが templateId 確定後の表示制御（案件粗利タブ等）を再評価できるよう通知する
     try {
       document.dispatchEvent(new CustomEvent('uz:settings-synced', { detail: { data: d } }));
     } catch (e) { /* CustomEvent 非対応環境は無視 */ }
@@ -116,64 +80,17 @@ async function syncSettingsAtStartup() {
   }
 }
 
-// 後方互換用エイリアス（既存呼び出しが残っている場合のため）
-async function syncStoreTypeAtStartup() {
-  return syncSettingsAtStartup();
-}
-
 // 起動時にバックグラウンドで settings を同期（UIブロックなし）
-// templateId / uiLabels の即時反映が必要なため、5秒遅延を撤廃し即時実行に変更（A-9整流化）
-// 旧版は遅延中にキャッシュ値で初期描画され、UI用語の切替が遅れて見えるバグがあった
 document.addEventListener('DOMContentLoaded', function() {
-  // 起動直後にもキャッシュ済みのラベルを適用しておく（GASを待たない）
-  applyUILabels();
-  // GAS同期は即時実行（バックグラウンド・他のGAS呼び出しと並列で走らせて問題なし）
   syncSettingsAtStartup();
 });
 
-/* ── 業態テンプレート連動UI用語切替 ───────────────────────
- * 戦略思想§3-2「納品時設定原則」+ 3デバイス統合仕様§6-7 準拠：
- *   - 業態テンプレート(templateId)により入店/出勤等のUI用語を動的に切り替える
- *   - 顧客が直接設定するUIは出さない（管理ポータルから設定される）
- *   - 通常は templateId から動的導出・custom時のみ uz_ui_labels の個別保存値を優先
- * 対象キー：
- *   - clockin_record       : 入店記録 / 出勤記録
- *   - clockin_history      : 入店履歴 / 出勤履歴
- *   - clockin_active       : 入店中 / 出勤中
- *   - clockin_time         : 入店時刻 / 出勤時刻
- *   - clockout_time        : 退店時刻 / 退勤時刻
- *   - clockin_action       : 入店を記録 / 出勤を記録
- *   - clockout_action      : 退店を記録 / 退勤を記録
- *   - clockin_register     : 新規登録（業態共通・A-9で「新規入店登録/新規出勤登録」から統一）
- *   - clockout_done        : 退店済 / 退勤済
- *   - not_clocked_in       : 未入店 / 未出勤
- *   - clockin_label        : 入店 / 出勤
- *   - clockout_label       : 退店 / 退勤
- *   - clockout_unrecorded  : 退店未記録 / 退勤未記録
- *   - attendance_empty     : 本日の入店記録がありません / 本日の出勤記録がありません
+/* ── UI用語（A-9-X：業態固定概念撤廃後・「出勤／退勤」表記に静的統一） ─
+ * 業態判定ロジックは撤廃し、deriveUILabels() は固定ラベルを返すスタブとして残す。
+ * 既存呼び出し側（history.js / home.js / pc-common.js）が ReferenceError にならないための
+ * 後方互換措置。新規コードはラベルリテラルを直接書くことを推奨。
  */
-
-const UI_LABELS_KEY  = 'uz_ui_labels';
-const TEMPLATE_ID_KEY = 'uz_template_id';
-
-const UI_LABELS_HOSTESS = {
-  clockin_record:      '入店記録',
-  clockin_history:     '入店履歴',
-  clockin_active:      '入店中',
-  clockin_time:        '入店時刻',
-  clockout_time:       '退店時刻',
-  clockin_action:      '入店を記録',
-  clockout_action:     '退店を記録',
-  clockin_register:    '新規登録',
-  clockout_done:       '退店済',
-  not_clocked_in:      '未入店',
-  clockin_label:       '入店',
-  clockout_label:      '退店',
-  clockout_unrecorded: '退店未記録',
-  attendance_empty:    '本日の入店記録がありません',
-};
-
-const UI_LABELS_GENERAL = {
+const _UI_LABELS_STATIC = {
   clockin_record:      '出勤記録',
   clockin_history:     '出勤履歴',
   clockin_active:      '出勤中',
@@ -189,14 +106,6 @@ const UI_LABELS_GENERAL = {
   clockout_unrecorded: '退勤未記録',
   attendance_empty:    '本日の出勤記録がありません',
 };
-
-/**
- * 現在のtemplateIdを取得（localStorage・デフォルト 'general-shop'）
- * @returns {string}
- */
-function getTemplateId() {
-  return localStorage.getItem(TEMPLATE_ID_KEY) || 'general-shop';
-}
 
 /* ── businessHours（営業時間）取得・判定ヘルパー ──────────
  * settings B18 から取得した営業時間に基づき、出勤履歴の打刻忘れ判定を行う。
@@ -302,81 +211,12 @@ function _extractHHMM(val) {
 }
 
 /**
- * templateIdからUI用語ラベルを動的導出する。
- * custom テンプレートの場合のみ、localStorage の uz_ui_labels を読み出して優先する。
- * @param {string} templateId
+ * UI用語ラベルマップを返すスタブ（A-9-X：業態固定概念撤廃後の後方互換層）。
+ * 引数は無視され、常に「出勤／退勤」表記の固定ラベルを返す。
  * @returns {Object} ラベルマップ
  */
-function deriveUILabels(templateId) {
-  const tid = templateId || getTemplateId();
-
-  // custom時：個別保存ラベルがあれば優先（無ければ general-shop ベース）
-  if (tid === 'custom') {
-    try {
-      const stored = localStorage.getItem(UI_LABELS_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        return Object.assign({}, UI_LABELS_GENERAL, parsed);
-      }
-    } catch (e) {
-      console.warn('[app.js] uz_ui_labels の読み込みに失敗:', e);
-    }
-    return Object.assign({}, UI_LABELS_GENERAL);
-  }
-
-  // hostess-shop
-  if (tid === 'hostess-shop') return Object.assign({}, UI_LABELS_HOSTESS);
-
-  // general-shop / non-shop / 不明値はすべて general 系
-  return Object.assign({}, UI_LABELS_GENERAL);
-}
-
-/**
- * DOM内の data-uilabel-key 属性を持つ要素のテキストを業態に応じて書き換える。
- * aria-label 属性についても data-uilabel-aria-key で同様に書き換える。
- *
- * 対象例：
- *   <span data-uilabel-key="clockin_record">入店記録</span>
- *   <input data-uilabel-aria-key="clockin_time" aria-label="入店時刻（時）">
- *
- * 起動時とテンプレート変更後に呼び出す。
- */
-function applyUILabels() {
-  const labels = deriveUILabels();
-
-  // テキスト書き換え（data-uilabel-key）
-  document.querySelectorAll('[data-uilabel-key]').forEach(el => {
-    const key = el.getAttribute('data-uilabel-key');
-    if (key && labels[key]) {
-      el.textContent = labels[key];
-    }
-  });
-
-  // aria-label 書き換え（data-uilabel-aria-key・suffixで「（時）」等を保持できる）
-  document.querySelectorAll('[data-uilabel-aria-key]').forEach(el => {
-    const key = el.getAttribute('data-uilabel-aria-key');
-    if (!key || !labels[key]) return;
-    const suffix = el.getAttribute('data-uilabel-aria-suffix') || '';
-    el.setAttribute('aria-label', labels[key] + suffix);
-  });
-
-  // title書き換え（data-uilabel-title-key）
-  document.querySelectorAll('[data-uilabel-title-key]').forEach(el => {
-    const key = el.getAttribute('data-uilabel-title-key');
-    if (key && labels[key]) {
-      el.title = labels[key];
-    }
-  });
-
-  // document.title書き換え（body に data-uilabel-title-key）
-  const body = document.body;
-  if (body && body.dataset && body.dataset.uilabelDocTitleKey) {
-    const key = body.dataset.uilabelDocTitleKey;
-    const baseSuffix = body.dataset.uilabelDocTitleSuffix || '';
-    if (labels[key]) {
-      document.title = labels[key] + baseSuffix;
-    }
-  }
+function deriveUILabels() {
+  return Object.assign({}, _UI_LABELS_STATIC);
 }
 
 /* ── 雇用形態ラベル（3種化対応） ─────────────────────────────
@@ -396,61 +236,12 @@ function employmentTypeLabel(value) {
 }
 
 /* ── 機能表示フラグ（featureVisibility）─────────────────────
- * 戦略思想§3-9-3 §3-8 準拠：
- *   - templateId に応じて機能の表示／非表示を導出する
- *   - custom テンプレート時のみ localStorage の uz_feature_visibility を優先
- *   - 通常は templateId から動的導出（管理ポータル設定不要）
- *
- * 2キー（サイクルA：project_grossprofit を廃止し全業態で案件機能を標準搭載）：
- *   - clockin_menu        : 入店記録メニュー
- *   - payroll_menu        : 月末経理メニュー（プレースホルダ・本体未実装）
- */
-const FEATURE_VISIBILITY_KEY = 'uz_feature_visibility';
-
-/**
- * templateIdから featureVisibility を動的導出する。
- * custom テンプレートの場合のみ、localStorage の uz_feature_visibility を読み出して優先する。
- * @param {string} templateId
- * @returns {{clockin_menu:boolean, payroll_menu:boolean}}
- */
-function deriveFeatureVisibility(templateId) {
-  const tid = templateId || getTemplateId();
-
-  if (tid === 'hostess-shop') {
-    return { clockin_menu: true,  payroll_menu: true  };
-  }
-  if (tid === 'general-shop') {
-    return { clockin_menu: true,  payroll_menu: false };
-  }
-  if (tid === 'non-shop') {
-    return { clockin_menu: false, payroll_menu: false };
-  }
-  if (tid === 'custom') {
-    try {
-      const stored = localStorage.getItem(FEATURE_VISIBILITY_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        return Object.assign(
-          { clockin_menu: true, payroll_menu: false },
-          parsed
-        );
-      }
-    } catch (e) {
-      console.warn('[app.js] uz_feature_visibility の読み込みに失敗:', e);
-    }
-    return { clockin_menu: true, payroll_menu: false };
-  }
-
-  // 不明値は安全側のデフォルト
-  return { clockin_menu: true, payroll_menu: false };
-}
-
-/**
- * 現在の templateId に対応する featureVisibility を取得する。
- * @returns {{clockin_menu:boolean, payroll_menu:boolean}}
+ * A-9-X：業態固定概念撤廃後、業態判定なしで固定値返却。
+ * 納品時設定原則に従い、ターゲット社が必要に応じて運営ポータル経由で
+ * settings B16 を直接書き換える運用に移行する（運営ポータル実装時に対応）。
  */
 function getFeatureVisibility() {
-  return deriveFeatureVisibility(getTemplateId());
+  return { clockin_menu: true, payroll_menu: false };
 }
 
 

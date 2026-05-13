@@ -504,8 +504,6 @@ function openCostModal() {
   _smCostResetState();
 
   // 2. HTML 生成
-  //    storeType は app.js の syncStoreTypeAtStartup() で起動時に
-  //    localStorage に同期済み。ここでは同期で読むだけ（_smCostReadStoreType）
   const bodyHtml = _smCostBuildFormBodyHTML();
 
   // 3. SheetModal 基盤の存在確認（sales 側と同 API）

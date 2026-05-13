@@ -12,10 +12,6 @@
 const STORE_NAME_KEY     = 'uz_store_name';
 const STAFF_MASTER_KEY   = 'uz_staff_master';
 const SERVICE_MASTER_KEY = 'uz_service_master';
-// storeType：源泉徴収機能の計算方式（hostess / standard / off）
-// 顧客UIには出さず、納品時にターゲット社・パートナーがGASスプレッドシート直接編集で設定する
-// localStorageにはGAS取得結果をキャッシュするが、ここから編集するUIは提供しない
-const STORE_TYPE_KEY     = 'uz_store_type';
 
 /* ── デフォルト値 ────────────────────────────────────────── */
 const DEFAULT_STORE_NAME = 'スナック LEO';
@@ -98,28 +94,6 @@ function _saveServiceList(list) {
   localStorage.setItem(SERVICE_MASTER_KEY, JSON.stringify(list));
 }
 
-/**
- * storeType取得（源泉徴収の計算方式）
- * 'hostess' : ホステス報酬特例計算
- * 'standard': 一般報酬計算
- * 'off'     : 源泉徴収機能OFF（UI表示なし）
- * デフォルトは 'off'（未設定時は機能を出さない安全側挙動）
- */
-function getStoreType() {
-  const raw = (localStorage.getItem(STORE_TYPE_KEY) || '').toLowerCase();
-  if (raw === 'hostess' || raw === 'standard') return raw;
-  return 'off';
-}
-
-function _saveStoreType(val) {
-  const v = String(val || '').toLowerCase();
-  const normalized = (v === 'hostess' || v === 'standard') ? v : 'off';
-  localStorage.setItem(STORE_TYPE_KEY, normalized);
-}
-
-// cost.js から参照されるためグローバル公開
-window.getStoreType = getStoreType;
-
 /* ── GAS 同期 ────────────────────────────────────────────── */
 
 /**
@@ -130,16 +104,10 @@ async function loadSettingsFromGAS() {
   try {
     const res = await callGAS('getSettings', {});
     if (res && res.status === 'ok' && res.data) {
-      const { storeName, staffList, serviceList, storeType, templateId, businessHours } = res.data;
+      const { storeName, staffList, serviceList, businessHours } = res.data;
       if (storeName   != null) _saveStoreName(storeName);
       if (Array.isArray(staffList))   _saveStaffList(staffList);
       if (Array.isArray(serviceList)) _saveServiceList(serviceList);
-      // storeType は納品時設定（顧客UIに出さない）。GASから取得して localStorage にキャッシュ
-      if (storeType != null) _saveStoreType(storeType);
-      // templateId も localStorage にキャッシュ（基本情報セクション表示用）
-      if (templateId) {
-        try { localStorage.setItem('uz_template_id', templateId); } catch { /* ignore */ }
-      }
       // businessHours も localStorage に保存（A-9：基本情報・出勤履歴判定で使用）
       if (businessHours && typeof businessHours === 'object' && businessHours.open && businessHours.close) {
         try { localStorage.setItem('uz_business_hours', JSON.stringify(businessHours)); } catch { /* ignore */ }
@@ -233,11 +201,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
 /* ── 基本情報セクション（読み取り専用） ──────────────────── */
 function initBasicInfo() {
-  // 店舗名・業態表示はlocalStorage即時値で先に描画
-  const storeEl    = document.getElementById('info-store-name');
-  const templateEl = document.getElementById('info-template-id');
-  if (storeEl)    storeEl.textContent    = getStoreName() || '—';
-  if (templateEl) templateEl.textContent = _templateIdLabel();
+  // 店舗名はlocalStorage即時値で先に描画
+  const storeEl = document.getElementById('info-store-name');
+  if (storeEl) storeEl.textContent = getStoreName() || '—';
 
   // 営業時間（A-9：businessHours が設定されていれば表示・未設定なら行ごと非表示）
   _renderBusinessHoursRow();
@@ -267,19 +233,6 @@ function _renderBusinessHoursRow() {
   } else {
     row.hidden = true;
   }
-}
-
-function _templateIdLabel() {
-  // localStorage または app.js の getTemplateId() を参照
-  let tid = '';
-  try {
-    tid = (typeof getTemplateId === 'function') ? getTemplateId() : (localStorage.getItem('uz_template_id') || '');
-  } catch { tid = ''; }
-  if (tid === 'hostess-shop') return '店舗形態の事業（接待）';
-  if (tid === 'general-shop') return '店舗形態の事業';
-  if (tid === 'non-shop')     return '一人事業主等';
-  if (tid === 'custom')       return 'カスタム';
-  return '—';
 }
 
 /* ── バージョン5タップで GAS接続情報を展開（隠しコマンド） ── */
@@ -473,7 +426,7 @@ function deleteStaff(id) {
   const target = list.find(s => s.id === id);
   if (!target) return;
 
-  if (!confirm(`「${target.name}」を削除しますか？\n入退店の記録済みデータには影響しません。`)) return;
+  if (!confirm(`「${target.name}」を削除しますか？\n出退勤の記録済みデータには影響しません。`)) return;
 
   const newList = list.filter(s => s.id !== id);
   _saveStaffList(newList);

@@ -89,7 +89,7 @@ function renderAlerts(alerts) {
     clockDot.innerHTML = '';
     if (hasUnrecordedClockOut) {
       clockDot.appendChild(createAlertDot(true));
-      clockDot.setAttribute('title', '退店未記録（24時間経過）');
+      clockDot.setAttribute('title', '退勤未記録（24時間経過）');
     }
   }
 }
@@ -191,7 +191,7 @@ async function loadAttendance() {
         const clockDot = document.getElementById('dot-clockout');
         if (clockDot && !clockDot.hasChildNodes()) {
           clockDot.appendChild(createAlertDot(true));
-          clockDot.setAttribute('title', '退店未記録（24時間経過）');
+          clockDot.setAttribute('title', '退勤未記録（24時間経過）');
         }
       }
     }
@@ -344,12 +344,12 @@ async function loadPL() {
   }
 }
 
-/* ── 退店処理（ホーム画面から） ──────────────────────────── */
+/* ── 退勤処理（ホーム画面から） ──────────────────────────── */
 async function handleClockOut(staffId) {
   const record = todayAttendance.find(s => s.id === staffId);
   if (!record) return;
 
-  if (!confirm(`${record.name}さんを退店記録しますか？`)) return;
+  if (!confirm(`${record.name}さんを退勤記録しますか？`)) return;
 
   const now = new Date();
   const clockOutTime = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
@@ -370,10 +370,10 @@ async function handleClockOut(staffId) {
     localStorage.setItem(ATTENDANCE_DATA_KEY, JSON.stringify(todayAttendance));
 
     renderStaffList();
-    showToast(`${record.name}さんの退店を記録しました`, 'success');
+    showToast(`${record.name}さんの退勤を記録しました`, 'success');
 
   } catch (e) {
-    showToast('退店記録に失敗しました：' + e.message, 'error');
+    showToast('退勤記録に失敗しました：' + e.message, 'error');
   }
 }
 

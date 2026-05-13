@@ -9,18 +9,10 @@ const WD = ['日','月','火','水','木','金','土'];
 const STAFF_ID_KEY = 'uz_staff_id';
 
 let state = {
-  staffId:'', staffName:'', storeName:'', templateId:'general-shop',
+  staffId:'', staffName:'', storeName:'',
   myRecord:null, todayList:[], myMonthly:[],
   isPunching:false, isEditingTime:false, editHour:0, editMin:0,
 };
-
-const UI_LABELS = {
-  'hostess-shop': { in:'入店', out:'退店', today:'今日の入店状況', active:'入店中', inactive:'未入店' },
-  'general-shop': { in:'出勤', out:'退勤', today:'今日の出勤状況', active:'出勤中', inactive:'未出勤' },
-};
-function getLabel(key) {
-  return (UI_LABELS[state.templateId] || UI_LABELS['general-shop'])[key] || '';
-}
 
 async function callGAS(action, data={}) {
   const url = `${GAS_URL}?action=${encodeURIComponent(action)}&data=${encodeURIComponent(JSON.stringify(data))}`;
@@ -63,10 +55,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     state.staffName  = v.staffName;
     state.storeName  = v.storeName;
-    state.templateId = v.templateId || 'general-shop';
     document.getElementById('header-store').textContent = state.storeName || 'ULTRA ZAIMU';
     document.getElementById('header-name').textContent  = state.staffName;
-    document.getElementById('section-today-title').textContent = getLabel('today');
+    document.getElementById('section-today-title').textContent = '今日の出勤状況';
     hideLoading();
     await loadAttendanceData();
   } catch(e) { showError('接続エラー','通信に失敗しました。\nWi-Fiや電波状況を確認してください。\n\n'+e.message); }
@@ -94,12 +85,12 @@ function renderPunchArea() {
   const rec=state.myRecord, area=document.getElementById('punch-area');
   const isActive=rec&&rec.isActive, isDone=rec&&!rec.isActive;
   const badgeClass=isActive?'active':'inactive';
-  const badgeText=isActive?getLabel('active'):getLabel('inactive');
+  const badgeText=isActive?'出勤中':'未出勤';
   const btnClass=isActive?'clockout-btn':'clockin-btn';
   const btnIcon=isActive?'🔴':'🟢';
-  const btnLabel=isActive?getLabel('out'):getLabel('in');
+  const btnLabel=isActive?'退勤':'出勤';
   const subInfo=isActive
-    ?`<div class="ci-info">${getLabel('in')}：<span class="ci-time">${rec.clockIn}</span></div>`
+    ?`<div class="ci-info">出勤：<span class="ci-time">${rec.clockIn}</span></div>`
     :isDone?`<div class="prev-record">直前：${rec.clockIn} 〜 ${rec.clockOut||'--:--'}</div>`:'';
 
   area.innerHTML=`
@@ -187,13 +178,13 @@ async function executePunch(time) {
     if(rec&&rec.isActive) {
       await callGAS('clockOut',{staffId:state.staffId,rowIndex:rec.rowIndex,clockOutTime:time});
       state.myRecord={...rec,clockOut:time,isActive:false};
-      showBanner(`${getLabel('out')}しました（${time}）`);
+      showBanner(`退勤しました（${time}）`);
     } else {
       const settings=await callGAS('getSettings',{});
       const staff=(settings.staffList||[]).find(s=>s.id===state.staffId)||{};
       const result=await callGAS('clockIn',{staffId:state.staffId,staffName:state.staffName,employmentType:staff.employmentType||'employed_full',date,clockInTime:time});
       state.myRecord={rowIndex:result.rowIndex||0,date,clockIn:time,clockOut:null,isActive:true};
-      showBanner(`${getLabel('in')}しました（${time}）`);
+      showBanner(`出勤しました（${time}）`);
     }
     await loadAttendanceData();
   } catch(e) {
@@ -206,7 +197,7 @@ async function executePunch(time) {
 
 function renderTodayList() {
   const card=document.getElementById('today-card');
-  if(!state.todayList.length){ card.innerHTML=`<div class="today-empty">まだ誰も${getLabel('in')}していません</div>`; return; }
+  if(!state.todayList.length){ card.innerHTML=`<div class="today-empty">まだ誰も出勤していません</div>`; return; }
   card.innerHTML=state.todayList.map(s=>`
     <div class="staff-row ${s.isSelf?'self-row':''} ${s.isActive?'active-row':''}">
       <div class="staff-avatar">${(s.staffName||'？').charAt(0)}</div>
@@ -214,7 +205,7 @@ function renderTodayList() {
         <div class="staff-name-text">${esc(s.staffName)}</div>
         ${s.isSelf?'<div class="self-label">あなた</div>':''}
       </div>
-      <div class="staff-status-tag ${s.isActive?'in':'out'}">${s.isActive?getLabel('active'):getLabel('inactive')}</div>
+      <div class="staff-status-tag ${s.isActive?'in':'out'}">${s.isActive?'出勤中':'未出勤'}</div>
     </div>`).join('');
 }
 
@@ -226,12 +217,12 @@ function renderMonthly() {
   if(!state.myMonthly.length){ list.innerHTML='<div class="monthly-empty">記録がありません</div>'; return; }
   list.innerHTML=state.myMonthly.map(r=>{
     const d=new Date(r.date+'T00:00:00');
-    const coTxt=r.clockOut?r.clockOut:`<span style="color:var(--green)">${getLabel('active')}</span>`;
+    const coTxt=r.clockOut?r.clockOut:`<span style="color:var(--green)">出勤中</span>`;
     return `<div class="monthly-row">
       <div class="monthly-date-col"><div class="monthly-date-day">${d.getDate()}</div><div class="monthly-date-wd">${WD[d.getDay()]}</div></div>
       <div class="monthly-times">
         <div class="monthly-time-row">${r.clockIn||'--:--'}<span class="sep">〜</span>${coTxt}</div>
-        ${r.isActive?`<div class="monthly-time-active">● ${getLabel('active')}</div>`:''}
+        ${r.isActive?`<div class="monthly-time-active">● 出勤中</div>`:''}
       </div>
       <div class="monthly-duration">${r.workMinutes?fmtMin(r.workMinutes):''}</div>
     </div>`;
