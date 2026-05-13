@@ -582,50 +582,58 @@ function renderAttendance(items) {
           (clockOut ? calcWorkDuration(clockIn, clockOut)?.isOvernight : false);
         const dur = clockOut ? calcWorkDuration(clockIn, clockOut) : null;
 
-        // 時刻表示：1行に集約（退勤空欄なら矢印の後ろは空・「退勤未記録」テキストは撤廃）
-        let timeStr;
+        // 時刻表示：Grid整列のため 出勤時刻 / 矢印 / 退勤時刻 を別々に持つ
+        // 退勤未記録の場合は退勤時刻列を空白（「—」）にして、状態バッジを別列で表示
+        let timeInStr  = escHtml(clockIn);
+        let timeOutStr = '';
+        let timeOutClass = 'hist-attend-time-out';
         if (clockOut) {
           if (dur?.isAbnormal) {
-            timeStr = `<span class="attend-time-abnormal">${escHtml(clockIn)} → ${escHtml(dur.clockOutDisplay)}</span>`;
+            timeInStr  = `<span class="attend-time-abnormal">${escHtml(clockIn)}</span>`;
+            timeOutStr = `<span class="attend-time-abnormal">${escHtml(dur.clockOutDisplay)}</span>`;
           } else if (isOvernightFlag) {
-            timeStr = `${escHtml(clockIn)} → <span class="attend-time-overnight">翌</span>${escHtml(clockOut)}`;
+            timeOutStr = `<span class="attend-time-overnight">翌</span>${escHtml(clockOut)}`;
           } else {
-            timeStr = `${escHtml(clockIn)} → ${escHtml(clockOut)}`;
+            timeOutStr = escHtml(clockOut);
           }
         } else {
-          timeStr = `${escHtml(clockIn)} →`;
+          timeOutStr = '—';
+          timeOutClass += ' hist-attend-time-out--empty';
         }
 
-        // 勤務時間（時刻の後ろに小フォント・売上コスト履歴と同行に表示）
-        // 形式：「(4.50H)」（小数点表記・10進化）
+        // 勤務時間（4.50H 小数点表記・時刻と同サイズ）
         const wMin = r.workMinutes || dur?.minutes;
         let durLabel = '';
         if (wMin && !dur?.isAbnormal) {
-          const hours10 = (wMin / 60).toFixed(2); // 小数点2桁で10進表記
+          const hours10 = (wMin / 60).toFixed(2);
           durLabel = `(${hours10}H)`;
         }
 
         // 勤務状態判定（businessHours ベース・未設定時は24時間フォールバック）
-        // app.js の judgeAttendanceState を使用
         let stateBadge = '';
         if (!clockOut && typeof judgeAttendanceState === 'function') {
           const state = judgeAttendanceState(r, now);
           if (state === 'working') {
             stateBadge = `<span class="attend-state-badge attend-state-badge--working">勤務中</span>`;
           } else if (state === 'forgotten') {
-            stateBadge = `<span class="attend-state-badge attend-state-badge--forgotten">打刻忘れ</span>`;
+            // A-9：「打刻忘れ」→「未記録」リネーム（短く・「勤務中」と枠幅統一）
+            stateBadge = `<span class="attend-state-badge attend-state-badge--forgotten">未記録</span>`;
           }
         }
 
-        // 1行レイアウト：スタッフ名（長い場合は省略） | 時刻+勤務時間+状態バッジ | 編集ボタン
+        // 「勤務時間」または「状態バッジ」を5番目のカラムに配置（どちらか片方のみ）
+        const durOrState = clockOut
+          ? `<span class="hist-attend-dur">${durLabel}</span>`
+          : stateBadge;
+
+        // Grid 6カラム行：スタッフ名 | 出勤時刻 | → | 退勤時刻 | 勤務時間or状態 | 編集
         html += `
           <div class="hist-attend-row">
             <div class="hist-attend-name">${escHtml(sname)}</div>
-            <div class="hist-attend-meta">
-              <span class="hist-attend-time">${timeStr}</span>
-              ${durLabel ? `<span class="hist-attend-dur">${durLabel}</span>` : ''}
-              ${stateBadge}
-            </div>
+            <span class="hist-attend-time-in">${timeInStr}</span>
+            <span class="hist-attend-arrow">→</span>
+            <span class="${timeOutClass}">${timeOutStr}</span>
+            <span class="hist-attend-state-col">${durOrState}</span>
             <button class="hist-edit-btn" type="button" data-idx="${atIdx}" data-scope="at" aria-label="編集">編集</button>
           </div>`;
       });

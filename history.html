@@ -121,16 +121,19 @@
     }
     .hist-attend-row {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) auto 14px auto auto auto;
+      /* スタッフ名を固定幅にして、全行で出勤時刻位置を完全に揃える（A-9整流化追加）
+         スタッフ名 90px | 出勤時刻 auto | → 14px | 退勤時刻 auto | 状態or勤務時間 auto | 編集 auto */
+      grid-template-columns: 90px auto 14px auto 1fr auto;
       align-items: center;
       column-gap: 6px;
       padding: 8px 16px;
       font-size: 13px;
       color: var(--uz-text);
     }
-    /* スタッフ名：長い場合は…で省略 */
+    /* スタッフ名：固定幅・長い場合は…で省略 */
     .hist-attend-name {
       min-width: 0;
+      width: 90px;
       font-size: 13px;
       font-weight: 700;
       color: var(--uz-text);
@@ -160,16 +163,19 @@
       margin-left: 4px;
     }
 
-    /* 勤務状態バッジ（勤務中＝黄色弱・打刻忘れ＝赤系）。退勤時刻列の右隣に配置 */
+    /* 勤務状態バッジ（勤務中＝黄色弱・未記録＝赤系）。退勤時刻列の右隣に配置
+       「勤務中」と「未記録」で枠幅を統一するため min-width 指定 */
     .attend-state-badge {
       display: inline-block;
       font-size: 11px;
-      padding: 2px 8px;
+      padding: 2px 0;
+      min-width: 52px;
       border-radius: 20px;
       font-weight: 600;
       font-family: var(--font-main);
       white-space: nowrap;
       margin-left: 4px;
+      text-align: center;
     }
     .attend-state-badge--working {
       background: var(--uz-marker-active-bg, rgba(229,185,57,0.14));
@@ -192,10 +198,13 @@
       font-weight: 600;
     }
 
-    /* ── 編集ボタン（売上コスト履歴と統一） ── */
+    /* ── 編集ボタン（売上コスト履歴と統一）
+       A-9：padding不足で「編集」文字が枠右端からはみ出ていたバグを修正
+       padding 3px 10px → 4px 14px に拡大、line-height 1.4 で縦余裕も確保 */
     .hist-edit-btn {
       font-size: 11px;
-      padding: 3px 10px;
+      padding: 4px 14px;
+      line-height: 1.4;
       border-radius: 20px;
       border: 0.5px solid var(--uz-border2);
       cursor: pointer;
@@ -205,6 +214,7 @@
       color: var(--uz-text);
       white-space: nowrap;
       flex-shrink: 0;
+      box-sizing: border-box;
     }
     .hist-edit-btn--grace { background: var(--uz-red-bg); border-color: rgba(224,80,80,0.3); color: var(--uz-red); }
     .hist-grace-badge {
