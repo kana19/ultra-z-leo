@@ -9,9 +9,11 @@
 'use strict';
 
 /* ── ストレージキー ──────────────────────────────────────── */
-const STORE_NAME_KEY     = 'uz_store_name';
-const STAFF_MASTER_KEY   = 'uz_staff_master';
-const SERVICE_MASTER_KEY = 'uz_service_master';
+const STORE_NAME_KEY        = 'uz_store_name';
+const STAFF_MASTER_KEY      = 'uz_staff_master';
+const SERVICE_MASTER_KEY    = 'uz_service_master';
+const PURCHASE_MASTER_KEY   = 'uz_purchase_master';     // 6-G フェーズ2 新設
+const MASTER_QUOTA_KEY      = 'uz_master_quota';        // 6-G フェーズ2 新設
 
 /* ── デフォルト値 ────────────────────────────────────────── */
 const DEFAULT_STORE_NAME = 'スナック LEO';
@@ -23,11 +25,14 @@ const DEFAULT_STAFF = [
   { id: 3, name: 'みか',   employmentType: 'employed_full' },
   { id: 4, name: 'ゆき',   employmentType: 'employed_full' },
 ];
+// 既存ユーザーのフォールバック用デフォルト（id 採番方式は sv001〜・01_商品体系.md §4-3-1）
 const DEFAULT_SERVICES = [
-  { code: 'S001', name: '店内売上',     taxRate: 10 },
-  { code: 'S002', name: 'テイクアウト', taxRate:  8 },
+  { id: 'sv001', name: '店内売上',     taxRate: 10 },
+  { id: 'sv002', name: 'テイクアウト', taxRate:  8 },
 ];
-const MAX_SERVICES = 3;
+const DEFAULT_PURCHASES = [];  // 業種固有・ターゲット社が納品時に投入する想定（フォールバックは空）
+// 既存ユーザーで masterQuota 未投入時のフォールバック（01_商品体系.md §4-3）
+const DEFAULT_MASTER_QUOTA = { serviceMasterQuota: 5, purchaseMasterQuota: 3, costOptionalQuota: 5 };
 
 /* ── パスワード関連ヘルパー（スタッフ枠パスワード）──────────────
  * 戦略思想§3-7「商売の都合優先」+ システム仕様書§10-3 準拠：
@@ -94,6 +99,38 @@ function _saveServiceList(list) {
   localStorage.setItem(SERVICE_MASTER_KEY, JSON.stringify(list));
 }
 
+/* ── 仕入原価マスタ（6-G フェーズ2 新設）─────────────────── */
+function getPurchaseList() {
+  try {
+    const saved = localStorage.getItem(PURCHASE_MASTER_KEY);
+    return saved ? JSON.parse(saved) : [...DEFAULT_PURCHASES];
+  } catch { return [...DEFAULT_PURCHASES]; }
+}
+
+function _savePurchaseList(list) {
+  localStorage.setItem(PURCHASE_MASTER_KEY, JSON.stringify(list));
+}
+
+/* ── マスタ件数枠（6-G フェーズ2 新設・運営付与の枠数キャッシュ）─ */
+function getMasterQuota() {
+  try {
+    const saved = localStorage.getItem(MASTER_QUOTA_KEY);
+    if (!saved) return { ...DEFAULT_MASTER_QUOTA };
+    const parsed = JSON.parse(saved);
+    if (parsed && typeof parsed === 'object'
+        && typeof parsed.serviceMasterQuota === 'number'
+        && typeof parsed.purchaseMasterQuota === 'number') {
+      return parsed;
+    }
+    return { ...DEFAULT_MASTER_QUOTA };
+  } catch { return { ...DEFAULT_MASTER_QUOTA }; }
+}
+
+function _saveMasterQuota(quota) {
+  if (!quota || typeof quota !== 'object') return;
+  localStorage.setItem(MASTER_QUOTA_KEY, JSON.stringify(quota));
+}
+
 /* ── GAS 同期 ────────────────────────────────────────────── */
 
 /**
@@ -104,10 +141,16 @@ async function loadSettingsFromGAS() {
   try {
     const res = await callGAS('getSettings', {});
     if (res && res.status === 'ok' && res.data) {
-      const { storeName, staffList, serviceList, businessHours } = res.data;
+      const { storeName, staffList, serviceList, purchaseMasterList, masterQuota, businessHours } = res.data;
       if (storeName   != null) _saveStoreName(storeName);
       if (Array.isArray(staffList))   _saveStaffList(staffList);
       if (Array.isArray(serviceList)) _saveServiceList(serviceList);
+      // 6-G フェーズ2：仕入マスタを受け取る
+      if (Array.isArray(purchaseMasterList)) _savePurchaseList(purchaseMasterList);
+      // 6-G フェーズ2：マスタ件数枠を受け取る（null なら既存ユーザー扱い・フォールバック）
+      if (masterQuota && typeof masterQuota === 'object') {
+        _saveMasterQuota(masterQuota);
+      }
       // businessHours も localStorage に保存（A-9：基本情報・出勤履歴判定で使用）
       if (businessHours && typeof businessHours === 'object' && businessHours.open && businessHours.close) {
         try { localStorage.setItem('uz_business_hours', JSON.stringify(businessHours)); } catch { /* ignore */ }
@@ -118,6 +161,7 @@ async function loadSettingsFromGAS() {
       initBasicInfo();
       renderStaffList();
       renderServiceList();
+      renderPurchaseList();
       updateGasStatus(true);
     } else {
       updateGasStatus(false);
@@ -131,13 +175,18 @@ async function loadSettingsFromGAS() {
 
 /**
  * 現在のlocalStorage全設定をGASに保存（バックグラウンド・失敗はサイレント）。
+ *
+ * 6-G フェーズ2：
+ *   サービスマスタ／仕入マスタの追加・更新・削除はサーバ側専用 action
+ *   （addServiceItem / updateServiceItem / deleteServiceItem / addPurchaseItem /
+ *    updatePurchaseItem / deletePurchaseItem）で行う。saveSettings には serviceList /
+ *   purchaseMasterList を含めない（サーバ側のID採番・枠超過チェックと競合するため）。
  */
 async function saveSettingsToGAS() {
   try {
     await callGAS('saveSettings', {
       storeName:   getStoreName(),
       staffList:   getStaffList(),
-      serviceList: getServiceList(),
     });
   } catch {
     // localStorageには保存済みのため、GAS失敗はサイレントフェイル
@@ -189,10 +238,12 @@ document.addEventListener('DOMContentLoaded', () => {
   // まずlocalStorageで即時描画
   initStaffList();
   initServiceList();
+  initPurchaseList();
   initCostMaster();
   initBasicInfo();
   bindStaffAdd();
   bindServiceAdd();
+  bindPurchaseAdd();
   bindCostMasterSave();
   bindVersionTapDebug();
   // GASから最新データを取得して上書き
@@ -497,17 +548,21 @@ function renderServiceList() {
   if (!container) return;
 
   const list = getServiceList();
+  const quota = getMasterQuota().serviceMasterQuota;
 
-  let html = list.map(s => `
-    <div class="staff-row" id="service-row-${escHtml(s.code)}">
-      <span class="staff-row__name">${escHtml(s.name)}</span>
-      <span class="service-tax-badge">税率 ${s.taxRate}%</span>
-      <button class="staff-delete-btn"
-              type="button"
-              onclick="deleteService('${escHtml(s.code)}')"
-              aria-label="${escHtml(s.name)}を削除">削除</button>
-    </div>
-  `).join('');
+  let html = list.map(s => {
+    const idKey = String(s.id || s.code || '');  // 旧データ互換（code フィールドも受ける）
+    return `
+      <div class="staff-row" id="service-row-${escHtml(idKey)}">
+        <span class="staff-row__name">${escHtml(s.name)}</span>
+        <span class="service-tax-badge">税率 ${s.taxRate}%</span>
+        <button class="staff-delete-btn"
+                type="button"
+                onclick="deleteService('${escHtml(idKey)}')"
+                aria-label="${escHtml(s.name)}を削除">削除</button>
+      </div>
+    `;
+  }).join('');
 
   html += `
     <div class="staff-row" style="opacity:0.5;">
@@ -518,27 +573,45 @@ function renderServiceList() {
 
   container.innerHTML = html;
 
+  // 件数バッジ表示（運営付与枠 vs 現使用件数）
+  const badge = document.getElementById('service-count-badge');
+  if (badge) {
+    badge.hidden = false;
+    badge.textContent = ` ${list.length}/${quota}`;
+  }
+  // 追加フォーム表示制御
   const addRow = document.getElementById('service-add-row');
   const hint   = document.getElementById('service-limit-hint');
-  const atMax  = list.length >= MAX_SERVICES;
+  const atMax  = list.length >= quota;
   if (addRow) addRow.hidden = atMax;
-  if (hint)   hint.hidden   = !atMax;
+  if (hint) {
+    hint.hidden = !atMax;
+    hint.textContent = `件数枠の上限（${quota}件）に達しています。追加するにはターゲット社にご相談ください。`;
+  }
 }
 
-function deleteService(code) {
+async function deleteService(id) {
   const list   = getServiceList();
-  const target = list.find(s => s.code === code);
+  const target = list.find(s => String(s.id || s.code) === String(id));
   if (!target) return;
 
   if (list.length <= 1) return showToast('最低1種のサービスが必要です', 'error');
 
   if (!confirm(`「${target.name}」を削除しますか？\n登録済みの売上データには影響しません。`)) return;
 
-  const newList = list.filter(s => s.code !== code);
-  _saveServiceList(newList);
-  renderServiceList();
-  showToast(`${target.name}を削除しました`, 'success');
-  saveSettingsToGAS();
+  // サーバ側 deleteServiceItem を呼ぶ（サーバ側 serviceList が真実の所在地）
+  try {
+    const res = await callGAS('deleteServiceItem', { id: String(target.id || target.code) });
+    if (res && res.status === 'ok' && Array.isArray(res.serviceList)) {
+      _saveServiceList(res.serviceList);
+      renderServiceList();
+      showToast(`${target.name}を削除しました`, 'success');
+    } else {
+      showToast((res && res.message) || '削除に失敗しました', 'error');
+    }
+  } catch {
+    showToast('通信エラーで削除できませんでした', 'error');
+  }
 }
 
 function bindServiceAdd() {
@@ -547,35 +620,175 @@ function bindServiceAdd() {
   const taxSelect = document.getElementById('service-add-tax');
   if (!btn || !nameInput || !taxSelect) return;
 
-  const doAdd = () => {
+  const doAdd = async () => {
     const name    = nameInput.value.trim();
     const taxRate = parseInt(taxSelect.value);
 
     if (!name) return showToast('サービス名を入力してください', 'error');
+    if (name.length > 30) return showToast('サービス名は30文字以内で入力してください', 'error');
 
+    // クライアント側でも枠超過チェック（即時フィードバック・サーバ側でも再チェック）
     const list = getServiceList();
-
-    if (list.length >= MAX_SERVICES) {
-      return showToast(`サービスは最大${MAX_SERVICES}種まで登録できます`, 'error');
+    const quota = getMasterQuota().serviceMasterQuota;
+    if (list.length >= quota) {
+      return showToast(`件数枠の上限（${quota}件）に達しています`, 'error');
     }
     if (list.some(s => s.name === name)) {
       return showToast('同じ名前のサービスが既に登録されています', 'error');
     }
 
-    const nums = list
-      .map(s => parseInt(s.code.replace('S', '')))
-      .filter(n => !isNaN(n) && n < 99);
-    const nextNum = nums.length > 0 ? Math.max(...nums) + 1 : 1;
-    const code    = `S${String(nextNum).padStart(3, '0')}`;
+    // サーバ側で sv001〜採番＋枠超過チェック＋保存
+    btn.disabled = true;
+    try {
+      const res = await callGAS('addServiceItem', { name, taxRate });
+      if (res && res.status === 'ok' && Array.isArray(res.serviceList)) {
+        _saveServiceList(res.serviceList);
+        nameInput.value = '';
+        taxSelect.value = '10';
+        renderServiceList();
+        showToast(`${name}を追加しました ✓`, 'success');
+      } else if (res && res.code === 'quota_exceeded') {
+        showToast(res.message || '件数枠の上限に達しています', 'error');
+        // 枠数キャッシュを最新化（運営側で枠を絞った直後の同期遅延ケース）
+        if (typeof res.quota === 'number') {
+          const q = getMasterQuota();
+          q.serviceMasterQuota = res.quota;
+          _saveMasterQuota(q);
+        }
+        renderServiceList();
+      } else {
+        showToast((res && res.message) || '追加に失敗しました', 'error');
+      }
+    } catch {
+      showToast('通信エラーで追加できませんでした', 'error');
+    } finally {
+      btn.disabled = false;
+    }
+  };
 
-    const newList = [...list, { code, name, taxRate }];
-    _saveServiceList(newList);
+  btn.addEventListener('click', doAdd);
+  nameInput.addEventListener('keydown', e => { if (e.key === 'Enter') doAdd(); });
+}
 
-    nameInput.value = '';
-    taxSelect.value = '10';
-    renderServiceList();
-    showToast(`${name}を追加しました ✓`, 'success');
-    saveSettingsToGAS();
+/* ── 仕入原価マスタ（6-G フェーズ2 新設）────────────────── */
+function initPurchaseList() {
+  renderPurchaseList();
+}
+
+function renderPurchaseList() {
+  const container = document.getElementById('purchase-list-container');
+  if (!container) return;
+
+  const list = getPurchaseList();
+  const quota = getMasterQuota().purchaseMasterQuota;
+
+  let html = list.map(p => {
+    const idKey = String(p.id || '');
+    const rate = (p.defaultTaxRate !== undefined) ? p.defaultTaxRate : (p.taxRate !== undefined ? p.taxRate : 10);
+    return `
+      <div class="staff-row" id="purchase-row-${escHtml(idKey)}">
+        <span class="staff-row__name">${escHtml(p.name)}</span>
+        <span class="service-tax-badge">税率 ${rate}%</span>
+        <button class="staff-delete-btn"
+                type="button"
+                onclick="deletePurchase('${escHtml(idKey)}')"
+                aria-label="${escHtml(p.name)}を削除">削除</button>
+      </div>
+    `;
+  }).join('');
+
+  html += `
+    <div class="staff-row" style="opacity:0.5;">
+      <span class="staff-row__name">諸口</span>
+      <span class="service-tax-badge">税率 10%</span>
+      <span style="font-size:12px;color:var(--uz-muted);padding:0 4px;">固定</span>
+    </div>`;
+
+  container.innerHTML = html;
+
+  const badge = document.getElementById('purchase-count-badge');
+  if (badge) {
+    badge.hidden = false;
+    badge.textContent = ` ${list.length}/${quota}`;
+  }
+  const addRow = document.getElementById('purchase-add-row');
+  const hint   = document.getElementById('purchase-limit-hint');
+  const atMax  = list.length >= quota;
+  if (addRow) addRow.hidden = atMax;
+  if (hint) {
+    hint.hidden = !atMax;
+    hint.textContent = `件数枠の上限（${quota}件）に達しています。追加するにはターゲット社にご相談ください。`;
+  }
+}
+
+async function deletePurchase(id) {
+  const list = getPurchaseList();
+  const target = list.find(p => String(p.id) === String(id));
+  if (!target) return;
+
+  if (!confirm(`「${target.name}」を削除しますか？\n登録済みのコストデータには影響しません。`)) return;
+
+  try {
+    const res = await callGAS('deletePurchaseItem', { id: String(target.id) });
+    if (res && res.status === 'ok' && Array.isArray(res.purchaseMasterList)) {
+      _savePurchaseList(res.purchaseMasterList);
+      renderPurchaseList();
+      showToast(`${target.name}を削除しました`, 'success');
+    } else {
+      showToast((res && res.message) || '削除に失敗しました', 'error');
+    }
+  } catch {
+    showToast('通信エラーで削除できませんでした', 'error');
+  }
+}
+
+function bindPurchaseAdd() {
+  const btn       = document.getElementById('purchase-add-btn');
+  const nameInput = document.getElementById('purchase-add-name');
+  const taxSelect = document.getElementById('purchase-add-tax');
+  if (!btn || !nameInput || !taxSelect) return;
+
+  const doAdd = async () => {
+    const name = nameInput.value.trim();
+    const taxRate = parseInt(taxSelect.value);
+
+    if (!name) return showToast('科目名を入力してください', 'error');
+    if (name.length > 30) return showToast('科目名は30文字以内で入力してください', 'error');
+
+    const list = getPurchaseList();
+    const quota = getMasterQuota().purchaseMasterQuota;
+    if (list.length >= quota) {
+      return showToast(`件数枠の上限（${quota}件）に達しています`, 'error');
+    }
+    if (list.some(p => p.name === name)) {
+      return showToast('同じ名前の科目が既に登録されています', 'error');
+    }
+
+    btn.disabled = true;
+    try {
+      const res = await callGAS('addPurchaseItem', { name, defaultTaxRate: taxRate });
+      if (res && res.status === 'ok' && Array.isArray(res.purchaseMasterList)) {
+        _savePurchaseList(res.purchaseMasterList);
+        nameInput.value = '';
+        taxSelect.value = '10';
+        renderPurchaseList();
+        showToast(`${name}を追加しました ✓`, 'success');
+      } else if (res && res.code === 'quota_exceeded') {
+        showToast(res.message || '件数枠の上限に達しています', 'error');
+        if (typeof res.quota === 'number') {
+          const q = getMasterQuota();
+          q.purchaseMasterQuota = res.quota;
+          _saveMasterQuota(q);
+        }
+        renderPurchaseList();
+      } else {
+        showToast((res && res.message) || '追加に失敗しました', 'error');
+      }
+    } catch {
+      showToast('通信エラーで追加できませんでした', 'error');
+    } finally {
+      btn.disabled = false;
+    }
   };
 
   btn.addEventListener('click', doAdd);

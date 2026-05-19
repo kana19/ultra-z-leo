@@ -16,6 +16,13 @@ function doGet(e) {
       case 'reconcile':                 result = reconcile(data);                         break;
       case 'getSettings':               result = getSettings();                           break;
       case 'saveSettings':              result = saveSettings(data);                      break;
+      // 6-G フェーズ2：サービス／仕入マスタ追加・更新・削除（枠超過チェック付・サーバ側ID採番）
+      case 'addServiceItem':            result = addServiceItem(data);                    break;
+      case 'updateServiceItem':         result = updateServiceItem(data);                 break;
+      case 'deleteServiceItem':         result = deleteServiceItem(data);                 break;
+      case 'addPurchaseItem':           result = addPurchaseItem(data);                   break;
+      case 'updatePurchaseItem':        result = updatePurchaseItem(data);                break;
+      case 'deletePurchaseItem':        result = deletePurchaseItem(data);                break;
       case 'saveStaffList':             result = saveStaffList(data.staffList || []);     break;
       case 'clockIn':                   result = _doClockInV3(data);                      break;
       case 'clockOut':                  result = _doClockOutV3(data);                     break;
@@ -549,23 +556,48 @@ function getOrCreateSheet(name) {
 
 /**
  * settings読み込み
- * B1:storeName / B2:staffList / B3:serviceList / B16:featureVisibility(JSON) / B18:businessHours(JSON)
+ * B1:storeName / B2:staffList / B3:serviceList / B4:costMasterList /
+ * B5:purchaseMasterList / B16:featureVisibility(JSON) /
+ * B17:masterQuota(JSON・v0.5.6 新設) / B18:businessHours(JSON)
  *
  * A-9-X：業態固定概念撤廃に伴い、B12:storeType / B13:templateId / B14:uiLabels の参照を廃止。
  * 既存ユーザーのスプレッドシートに値が残っていても無害（コード側で参照しない）。
  * featureVisibility 未設定時は {} をデフォルトで返す（運営ポータルから設定される）。
+ *
+ * 6-G フェーズ2（v0.5.6 連動）：
+ *   - B4 costMasterList を応答に含める（フロントで枠超過チェック等に使用）
+ *   - B5 purchaseMasterList を応答に含める
+ *   - B17 masterQuota を応答に含める
+ *     未設定（既存ユーザー）は null。フロント側は null 時に上限制御を無効化する
+ *     （00_原則.md §6-6 の上限制御は枠数取得不能時はフォールバック動作）
  */
 function getSettings() {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('settings');
   if (!sheet) return { status: 'error', message: 'settingsシートが見つかりません' };
-  var storeName   = sheet.getRange('B1').getValue();
-  var staffJson   = sheet.getRange('B2').getValue();
-  var serviceJson = sheet.getRange('B3').getValue();
+  var storeName            = sheet.getRange('B1').getValue();
+  var staffJson            = sheet.getRange('B2').getValue();
+  var serviceJson          = sheet.getRange('B3').getValue();
+  var costMasterJson       = sheet.getRange('B4').getValue();
+  var purchaseMasterJson   = sheet.getRange('B5').getValue();
   var featureVisibilityJson = sheet.getRange('B16').getValue();
-  var businessHoursRaw = sheet.getRange('B18').getValue();
-  var staffList = [], serviceList = [];
-  try { if (staffJson)   staffList   = JSON.parse(staffJson);   } catch(e) {}
-  try { if (serviceJson) serviceList = JSON.parse(serviceJson); } catch(e) {}
+  var masterQuotaRaw       = sheet.getRange('B17').getValue();
+  var businessHoursRaw     = sheet.getRange('B18').getValue();
+  var staffList = [], serviceList = [], costMasterList = [], purchaseMasterList = [];
+  try { if (staffJson)            staffList            = JSON.parse(staffJson);          } catch(e) {}
+  try { if (serviceJson)          serviceList          = JSON.parse(serviceJson);        } catch(e) {}
+  try { if (costMasterJson)       costMasterList       = JSON.parse(costMasterJson);     } catch(e) {}
+  try { if (purchaseMasterJson)   purchaseMasterList   = JSON.parse(purchaseMasterJson); } catch(e) {}
+  // costMasterList は smartphoneVisible キーを保証（販管費マスタのみ搭載・戦略思想§3-5）
+  if (Array.isArray(costMasterList)) {
+    costMasterList = costMasterList.map(function(item) {
+      item.smartphoneVisible = item.smartphoneVisible !== false;
+      return item;
+    });
+  } else {
+    costMasterList = [];
+  }
+  if (!Array.isArray(purchaseMasterList)) purchaseMasterList = [];
+  if (!Array.isArray(serviceList)) serviceList = [];
   // employmentType を3種化（employed_full / employed_temp / contractor）
   // 旧 'employed' および未設定は 'employed_full' に自動マイグレーション（戦略思想§3-9-3 サイクルA）
   staffList = staffList.map(function(s) {
@@ -576,6 +608,23 @@ function getSettings() {
   var featureVisibility = {};
   try { if (featureVisibilityJson) featureVisibility = JSON.parse(featureVisibilityJson); } catch(e) {}
   if (!featureVisibility || typeof featureVisibility !== 'object') featureVisibility = {};
+  // masterQuota は JSON 文字列。パース失敗・未設定時は null を返す（6-G フェーズ2）
+  // 形式：{serviceMasterQuota:number, purchaseMasterQuota:number, costOptionalQuota:number}
+  var masterQuota = null;
+  try {
+    if (masterQuotaRaw) {
+      var mqParsed = (typeof masterQuotaRaw === 'string') ? JSON.parse(masterQuotaRaw) : masterQuotaRaw;
+      if (mqParsed && typeof mqParsed === 'object'
+          && typeof mqParsed.serviceMasterQuota === 'number'
+          && typeof mqParsed.purchaseMasterQuota === 'number') {
+        masterQuota = {
+          serviceMasterQuota: Math.max(1, Math.floor(Number(mqParsed.serviceMasterQuota) || 5)),
+          purchaseMasterQuota: Math.max(1, Math.floor(Number(mqParsed.purchaseMasterQuota) || 3)),
+          costOptionalQuota: Math.max(1, Math.floor(Number(mqParsed.costOptionalQuota) || 5))
+        };
+      }
+    }
+  } catch(e) { masterQuota = null; }
   // businessHours は JSON 文字列。パース失敗・未設定時は null を返す（A-9：出勤履歴の打刻状態判定で使用）
   // 形式：{open:"HH:MM", close:"HH:MM", closeNextDay:boolean}
   var businessHours = null;
@@ -595,7 +644,10 @@ function getSettings() {
     storeName: storeName || '',
     staffList: staffList,
     serviceList: serviceList,
+    costMasterList: costMasterList,
+    purchaseMasterList: purchaseMasterList,
     featureVisibility: featureVisibility,
+    masterQuota: masterQuota,
     businessHours: businessHours
   }};
 }
@@ -604,6 +656,11 @@ function getSettings() {
  * settings保存
  * A-9-X：業態固定概念撤廃に伴い、storeType / templateId / uiLabels の受け取りを廃止。
  * 既存ユーザーのスプレッドシート B12 / B13 / B14 セルは触らない（残置しても無害）。
+ *
+ * 6-G フェーズ2（v0.5.6 連動）：
+ *   - serviceList / purchaseMasterList / costMasterList の受口を整理
+ *   - 各リスト送信時のみ更新（未送信時は既存値維持）
+ *   - スマホ・PC 設定画面のサービスマスタ／仕入マスタ／販管費マスタ編集で使用
  */
 function saveSettings(data) {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('settings');
@@ -616,8 +673,21 @@ function saveSettings(data) {
   sheet.getRange('B1').setValue(data.storeName || '');
   sheet.getRange('A2').setValue('staffList');
   sheet.getRange('B2').setValue(JSON.stringify(staffList));
-  sheet.getRange('A3').setValue('serviceList');
-  sheet.getRange('B3').setValue(JSON.stringify(data.serviceList || []));
+  // serviceList は送信された場合のみ更新（部分更新方式）
+  if (data.serviceList !== undefined) {
+    sheet.getRange('A3').setValue('serviceList');
+    sheet.getRange('B3').setValue(JSON.stringify(data.serviceList || []));
+  }
+  // costMasterList は送信された場合のみ更新（PC設定画面・運営ポータル経由想定）
+  if (data.costMasterList !== undefined) {
+    sheet.getRange('A4').setValue('costMasterList');
+    sheet.getRange('B4').setValue(JSON.stringify(data.costMasterList || []));
+  }
+  // purchaseMasterList は送信された場合のみ更新（6-G フェーズ2 で受口追加）
+  if (data.purchaseMasterList !== undefined) {
+    sheet.getRange('A5').setValue('purchaseMasterList');
+    sheet.getRange('B5').setValue(JSON.stringify(data.purchaseMasterList || []));
+  }
   // featureVisibility は運営ポータルから送信された場合のみ更新（納品時設定原則）
   if (data.featureVisibility !== undefined) {
     sheet.getRange('A16').setValue('featureVisibility');
@@ -638,6 +708,300 @@ function saveSettings(data) {
     }
   }
   return { status: 'ok' };
+}
+
+/**
+ * サービスマスタに1件追加（6-G フェーズ2 新設）
+ *
+ * 仕様：
+ *   - data.name（必須・1-30文字）/ data.taxRate（必須・0/8/10）を受け取る
+ *   - 既存 serviceList を読み込み、masterQuota.serviceMasterQuota との比較で枠超過チェック
+ *   - 枠超過時は { status:'error', code:'quota_exceeded', message } を返す
+ *   - 通過時は id=sv001〜 を採番（既存 id と衝突しない最小番号）
+ *   - serviceList に追記して B3 に保存
+ *
+ * 設計根拠：00_原則.md §6-6 末尾「枠数超過は層1で警告表示するだけでなく、
+ * 層2ユーザーアプリの追加UIでも上限制御する必要がある」
+ *
+ * 注意：sv001〜のID採番はサーバ側で行う（フロント側で空き番号探索しない）。
+ * 並列追加時の衝突を回避するため。
+ */
+function addServiceItem(data) {
+  data = data || {};
+  var name = String(data.name || '').trim();
+  var taxRate = Number(data.taxRate);
+  if (!name) return { status: 'error', message: 'サービス名が空です' };
+  if (name.length > 30) return { status: 'error', message: 'サービス名は30文字以内で入力してください' };
+  if ([0, 8, 10].indexOf(taxRate) < 0) return { status: 'error', message: '税率は 0 / 8 / 10 のいずれかを指定してください' };
+
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('settings');
+  if (!sheet) return { status: 'error', message: 'settingsシートが見つかりません' };
+
+  // 既存 serviceList 取得
+  var json = sheet.getRange('B3').getValue();
+  var list = [];
+  try { if (json) list = JSON.parse(json); } catch(e) {}
+  if (!Array.isArray(list)) list = [];
+
+  // 枠数チェック
+  var quotaRaw = sheet.getRange('B17').getValue();
+  var quota = null;
+  try {
+    if (quotaRaw) {
+      var p = (typeof quotaRaw === 'string') ? JSON.parse(quotaRaw) : quotaRaw;
+      if (p && typeof p === 'object' && typeof p.serviceMasterQuota === 'number') {
+        quota = Math.max(1, Math.floor(p.serviceMasterQuota));
+      }
+    }
+  } catch(e) {}
+  // quota が null（既存ユーザーで B17 未投入）は無制限扱い（フォールバック）
+  if (quota !== null && list.length >= quota) {
+    return {
+      status: 'error',
+      code: 'quota_exceeded',
+      message: '件数枠の上限（' + quota + '件）に達しています。追加するにはターゲット社にご相談ください。',
+      currentCount: list.length,
+      quota: quota
+    };
+  }
+
+  // id 採番（sv001〜・既存と衝突しない最小番号）
+  var usedIds = {};
+  list.forEach(function(it) {
+    if (it && it.id) usedIds[String(it.id)] = true;
+  });
+  var newId = '';
+  for (var n = 1; n <= 999; n++) {
+    var candidate = 'sv' + ('000' + n).slice(-3);
+    if (!usedIds[candidate]) { newId = candidate; break; }
+  }
+  if (!newId) return { status: 'error', message: 'サービスID の採番に失敗しました（sv999 まで埋まっています）' };
+
+  var newItem = { id: newId, name: name, taxRate: taxRate };
+  list.push(newItem);
+  sheet.getRange('A3').setValue('serviceList');
+  sheet.getRange('B3').setValue(JSON.stringify(list));
+
+  return { status: 'ok', item: newItem, serviceList: list };
+}
+
+/**
+ * 仕入原価マスタに1件追加（6-G フェーズ2 新設）
+ *
+ * 仕様：
+ *   - data.name（必須・1-30文字）/ data.defaultTaxRate（必須・0/8/10）を受け取る
+ *   - 既存 purchaseMasterList を読み込み、masterQuota.purchaseMasterQuota との比較で枠超過チェック
+ *   - 枠超過時は { status:'error', code:'quota_exceeded', message } を返す
+ *   - 通過時は id=p001〜 を採番（既存 id と衝突しない最小番号）
+ *   - purchaseMasterList に追記して B5 に保存
+ *
+ * フィールド名規約：03_データ仕様.md §1-3 に従い defaultTaxRate を使用
+ * （販管費マスタは taxRate、サービスマスタは taxRate、仕入マスタは defaultTaxRate）
+ */
+function addPurchaseItem(data) {
+  data = data || {};
+  var name = String(data.name || '').trim();
+  // フロントが taxRate を送ってきた場合の互換受け取り
+  var rate = (data.defaultTaxRate !== undefined) ? Number(data.defaultTaxRate) : Number(data.taxRate);
+  if (!name) return { status: 'error', message: '科目名が空です' };
+  if (name.length > 30) return { status: 'error', message: '科目名は30文字以内で入力してください' };
+  if ([0, 8, 10].indexOf(rate) < 0) return { status: 'error', message: '税率は 0 / 8 / 10 のいずれかを指定してください' };
+
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('settings');
+  if (!sheet) return { status: 'error', message: 'settingsシートが見つかりません' };
+
+  var json = sheet.getRange('B5').getValue();
+  var list = [];
+  try { if (json) list = JSON.parse(json); } catch(e) {}
+  if (!Array.isArray(list)) list = [];
+
+  var quotaRaw = sheet.getRange('B17').getValue();
+  var quota = null;
+  try {
+    if (quotaRaw) {
+      var p = (typeof quotaRaw === 'string') ? JSON.parse(quotaRaw) : quotaRaw;
+      if (p && typeof p === 'object' && typeof p.purchaseMasterQuota === 'number') {
+        quota = Math.max(1, Math.floor(p.purchaseMasterQuota));
+      }
+    }
+  } catch(e) {}
+  if (quota !== null && list.length >= quota) {
+    return {
+      status: 'error',
+      code: 'quota_exceeded',
+      message: '件数枠の上限（' + quota + '件）に達しています。追加するにはターゲット社にご相談ください。',
+      currentCount: list.length,
+      quota: quota
+    };
+  }
+
+  var usedIds = {};
+  list.forEach(function(it) {
+    if (it && it.id) usedIds[String(it.id)] = true;
+  });
+  var newId = '';
+  for (var n = 1; n <= 999; n++) {
+    var candidate = 'p' + ('000' + n).slice(-3);
+    if (!usedIds[candidate]) { newId = candidate; break; }
+  }
+  if (!newId) return { status: 'error', message: '仕入科目ID の採番に失敗しました（p999 まで埋まっています）' };
+
+  var newItem = { id: newId, name: name, defaultTaxRate: rate };
+  list.push(newItem);
+  sheet.getRange('A5').setValue('purchaseMasterList');
+  sheet.getRange('B5').setValue(JSON.stringify(list));
+
+  return { status: 'ok', item: newItem, purchaseMasterList: list };
+}
+
+/**
+ * サービスマスタの1件削除（6-G フェーズ2 新設）
+ *
+ * 仕様：
+ *   - data.id を受け取り、serviceList から該当要素を除去
+ *   - 該当なしならエラー
+ *   - 履歴データ（売上シート）には影響しない（serviceList から除去するだけ）
+ *
+ * 注意：既存項目の名称変更は履歴整合性の観点から推奨されない（01_商品体系.md §4-3 設計思想）
+ * が、削除は履歴データ自体には影響しない（過去の売上行は serviceCode 文字列のまま残る）
+ */
+function deleteServiceItem(data) {
+  data = data || {};
+  var id = String(data.id || '');
+  if (!id) return { status: 'error', message: 'id が指定されていません' };
+
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('settings');
+  if (!sheet) return { status: 'error', message: 'settingsシートが見つかりません' };
+
+  var json = sheet.getRange('B3').getValue();
+  var list = [];
+  try { if (json) list = JSON.parse(json); } catch(e) {}
+  if (!Array.isArray(list)) list = [];
+
+  var filtered = list.filter(function(it) { return String(it && it.id) !== id; });
+  if (filtered.length === list.length) {
+    return { status: 'error', message: '指定された id のサービスが見つかりません: ' + id };
+  }
+  sheet.getRange('A3').setValue('serviceList');
+  sheet.getRange('B3').setValue(JSON.stringify(filtered));
+  return { status: 'ok', serviceList: filtered };
+}
+
+/**
+ * 仕入原価マスタの1件削除（6-G フェーズ2 新設）
+ *
+ * 仕様：
+ *   - data.id を受け取り、purchaseMasterList から該当要素を除去
+ *   - 該当なしならエラー
+ *   - 履歴データ（コストシート）には影響しない
+ */
+function deletePurchaseItem(data) {
+  data = data || {};
+  var id = String(data.id || '');
+  if (!id) return { status: 'error', message: 'id が指定されていません' };
+
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('settings');
+  if (!sheet) return { status: 'error', message: 'settingsシートが見つかりません' };
+
+  var json = sheet.getRange('B5').getValue();
+  var list = [];
+  try { if (json) list = JSON.parse(json); } catch(e) {}
+  if (!Array.isArray(list)) list = [];
+
+  var filtered = list.filter(function(it) { return String(it && it.id) !== id; });
+  if (filtered.length === list.length) {
+    return { status: 'error', message: '指定された id の仕入科目が見つかりません: ' + id };
+  }
+  sheet.getRange('A5').setValue('purchaseMasterList');
+  sheet.getRange('B5').setValue(JSON.stringify(filtered));
+  return { status: 'ok', purchaseMasterList: filtered };
+}
+
+/**
+ * サービスマスタの1件更新（6-G フェーズ2 新設）
+ *
+ * 仕様：
+ *   - data.id / data.name / data.taxRate を受け取り、該当要素を更新
+ *   - id は変更しない
+ */
+function updateServiceItem(data) {
+  data = data || {};
+  var id = String(data.id || '');
+  var name = (data.name !== undefined) ? String(data.name).trim() : undefined;
+  var taxRate = (data.taxRate !== undefined) ? Number(data.taxRate) : undefined;
+  if (!id) return { status: 'error', message: 'id が指定されていません' };
+  if (name !== undefined && (name === '' || name.length > 30)) {
+    return { status: 'error', message: 'サービス名は 1〜30 文字で入力してください' };
+  }
+  if (taxRate !== undefined && [0, 8, 10].indexOf(taxRate) < 0) {
+    return { status: 'error', message: '税率は 0 / 8 / 10 のいずれかを指定してください' };
+  }
+
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('settings');
+  if (!sheet) return { status: 'error', message: 'settingsシートが見つかりません' };
+
+  var json = sheet.getRange('B3').getValue();
+  var list = [];
+  try { if (json) list = JSON.parse(json); } catch(e) {}
+  if (!Array.isArray(list)) list = [];
+
+  var found = false;
+  list = list.map(function(it) {
+    if (it && String(it.id) === id) {
+      found = true;
+      if (name !== undefined) it.name = name;
+      if (taxRate !== undefined) it.taxRate = taxRate;
+    }
+    return it;
+  });
+  if (!found) return { status: 'error', message: '指定された id のサービスが見つかりません: ' + id };
+
+  sheet.getRange('A3').setValue('serviceList');
+  sheet.getRange('B3').setValue(JSON.stringify(list));
+  return { status: 'ok', serviceList: list };
+}
+
+/**
+ * 仕入原価マスタの1件更新（6-G フェーズ2 新設）
+ */
+function updatePurchaseItem(data) {
+  data = data || {};
+  var id = String(data.id || '');
+  var name = (data.name !== undefined) ? String(data.name).trim() : undefined;
+  // 受口フィールド名は defaultTaxRate（taxRate でも受け取る）
+  var rate;
+  if (data.defaultTaxRate !== undefined) rate = Number(data.defaultTaxRate);
+  else if (data.taxRate !== undefined) rate = Number(data.taxRate);
+  if (!id) return { status: 'error', message: 'id が指定されていません' };
+  if (name !== undefined && (name === '' || name.length > 30)) {
+    return { status: 'error', message: '科目名は 1〜30 文字で入力してください' };
+  }
+  if (rate !== undefined && [0, 8, 10].indexOf(rate) < 0) {
+    return { status: 'error', message: '税率は 0 / 8 / 10 のいずれかを指定してください' };
+  }
+
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('settings');
+  if (!sheet) return { status: 'error', message: 'settingsシートが見つかりません' };
+
+  var json = sheet.getRange('B5').getValue();
+  var list = [];
+  try { if (json) list = JSON.parse(json); } catch(e) {}
+  if (!Array.isArray(list)) list = [];
+
+  var found = false;
+  list = list.map(function(it) {
+    if (it && String(it.id) === id) {
+      found = true;
+      if (name !== undefined) it.name = name;
+      if (rate !== undefined) it.defaultTaxRate = rate;
+    }
+    return it;
+  });
+  if (!found) return { status: 'error', message: '指定された id の仕入科目が見つかりません: ' + id };
+
+  sheet.getRange('A5').setValue('purchaseMasterList');
+  sheet.getRange('B5').setValue(JSON.stringify(list));
+  return { status: 'ok', purchaseMasterList: list };
 }
 
 /**

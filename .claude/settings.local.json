@@ -33,7 +33,13 @@
       "Bash(node --check pc/js/pc-transactions.js)",
       "Bash(node --check pc/js/pc-settings.js)",
       "Bash(node --check gas/attendance_v3.gs)",
-      "Bash(node -c pc/js/pc-monthly.js)"
+      "Bash(node -c pc/js/pc-monthly.js)",
+      "Bash(node --check \"C:\\\\Users\\\\金光俊明\\\\OneDrive - 株式会社ターゲット\\\\ultrazaimu\\\\ultra_zaimu_pwa\\\\js\\\\app.js\")",
+      "Bash(node --check \"C:\\\\Users\\\\金光俊明\\\\OneDrive - 株式会社ターゲット\\\\ultrazaimu\\\\ultra_zaimu_pwa\\\\js\\\\settings.js\")",
+      "Bash(node --check \"C:\\\\Users\\\\金光俊明\\\\OneDrive - 株式会社ターゲット\\\\ultrazaimu\\\\ultra_zaimu_pwa\\\\js\\\\staff-clockin.js\")",
+      "Bash(node --check \"C:\\\\Users\\\\金光俊明\\\\OneDrive - 株式会社ターゲット\\\\ultrazaimu\\\\ultra_zaimu_pwa\\\\js\\\\cost.js\")",
+      "Bash(node --check \"C:\\\\Users\\\\金光俊明\\\\OneDrive - 株式会社ターゲット\\\\ultrazaimu\\\\ultra_zaimu_pwa\\\\js\\\\home.js\")",
+      "Bash(git *)"
     ]
   }
 }

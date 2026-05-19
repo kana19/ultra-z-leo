@@ -105,7 +105,7 @@
     <!-- ③ サービスマスタ -->
     <section class="settings-section" aria-labelledby="sec-service">
       <button class="settings-accordion-btn" type="button" aria-expanded="true" aria-controls="sec-service-body" onclick="toggleSettingsAccordion(this)">
-        <span id="sec-service">サービスマスタ（売上区分）</span>
+        <span id="sec-service">サービスマスタ（売上区分）<span id="service-count-badge" class="settings-count-badge" hidden></span></span>
         <span class="settings-accordion-chevron" aria-hidden="true">›</span>
       </button>
       <div class="settings-section__body" id="sec-service-body">
@@ -117,7 +117,6 @@
         <p id="service-limit-hint"
            hidden
            style="padding:10px 16px 4px;font-size:12px;color:var(--uz-muted);">
-          最大3種まで登録済みです。削除してから追加してください。
         </p>
         <!-- サービス追加フォーム -->
         <div id="service-add-row" class="staff-add-row" style="align-items:center;flex-wrap:wrap;gap:8px;">
@@ -126,7 +125,7 @@
                  class="staff-add-input"
                  style="flex:2;min-width:120px;"
                  placeholder="サービス名（例：店内売上）"
-                 maxlength="20"
+                 maxlength="30"
                  autocomplete="off"
                  aria-label="追加するサービス名">
           <select id="service-add-tax"
@@ -142,9 +141,56 @@
                   type="button">追加</button>
         </div>
         <div style="padding:6px 16px 14px;">
-          <p style="font-size:12px;color:var(--uz-muted);line-height:1.6;">
+          <p style="font-size:12px;color:var(--uz-muted);line-height:1.6;" id="service-help-text">
             事業単位で登録してください（例：店内売上・テイクアウト・ケータリング）。<br>
-            最大3種まで。「諸口」は自動で表示されます。
+            「諸口」は自動で表示されます。
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ③-A 仕入原価マスタ（6-G フェーズ2 新設） -->
+    <section class="settings-section" aria-labelledby="sec-purchase">
+      <button class="settings-accordion-btn" type="button" aria-expanded="true" aria-controls="sec-purchase-body" onclick="toggleSettingsAccordion(this)">
+        <span id="sec-purchase">仕入原価マスタ<span id="purchase-count-badge" class="settings-count-badge" hidden></span></span>
+        <span class="settings-accordion-chevron" aria-hidden="true">›</span>
+      </button>
+      <div class="settings-section__body" id="sec-purchase-body">
+        <!-- 仕入マスタ一覧 -->
+        <div id="purchase-list-container" role="list" aria-label="登録仕入原価科目一覧">
+          <!-- settings.js が描画 -->
+        </div>
+        <!-- 上限到達メッセージ -->
+        <p id="purchase-limit-hint"
+           hidden
+           style="padding:10px 16px 4px;font-size:12px;color:var(--uz-muted);">
+        </p>
+        <!-- 仕入科目追加フォーム -->
+        <div id="purchase-add-row" class="staff-add-row" style="align-items:center;flex-wrap:wrap;gap:8px;">
+          <input type="text"
+                 id="purchase-add-name"
+                 class="staff-add-input"
+                 style="flex:2;min-width:120px;"
+                 placeholder="仕入科目名（例：食材費）"
+                 maxlength="30"
+                 autocomplete="off"
+                 aria-label="追加する仕入科目名">
+          <select id="purchase-add-tax"
+                  class="form-select"
+                  style="flex:1;min-width:80px;height:40px;"
+                  aria-label="税率">
+            <option value="10">10%</option>
+            <option value="8">8%（軽減）</option>
+            <option value="0">0%（非課税）</option>
+          </select>
+          <button id="purchase-add-btn"
+                  class="staff-add-btn"
+                  type="button">追加</button>
+        </div>
+        <div style="padding:6px 16px 14px;">
+          <p style="font-size:12px;color:var(--uz-muted);line-height:1.6;" id="purchase-help-text">
+            仕入原価の科目を登録してください（例：食材費・酒類仕入・薬剤費）。<br>
+            「諸口」は自動で表示されます。
           </p>
         </div>
       </div>

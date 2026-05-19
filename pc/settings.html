@@ -20,26 +20,57 @@
       </div>
 
       <div class="pc-card">
-        <div class="pc-section-title">サービスマスタ</div>
+        <div class="pc-section-title">サービスマスタ <span id="svc-count-badge" class="pc-count-badge" hidden></span></div>
         <table class="pc-table" id="svc-table">
-          <thead><tr><th>コード</th><th>サービス名</th><th>税率</th></tr></thead>
+          <thead><tr><th style="width:90px;">コード</th><th>サービス名</th><th style="width:90px;">税率</th><th style="width:90px;">操作</th></tr></thead>
           <tbody id="svc-body"></tbody>
         </table>
+        <div id="svc-add-row" class="pc-form-row" style="margin-top:10px;align-items:center;gap:8px;flex-wrap:wrap;">
+          <input type="text" id="svc-add-name" class="pc-input" placeholder="サービス名（例：店内売上）" maxlength="30" style="flex:2;min-width:160px;">
+          <select id="svc-add-tax" class="pc-select" style="width:120px;">
+            <option value="10">10%</option>
+            <option value="8">8%（軽減）</option>
+            <option value="0">0%（非課税）</option>
+          </select>
+          <button id="svc-add-btn" class="pc-btn" type="button">＋ 追加</button>
+        </div>
+        <p id="svc-limit-hint" class="pc-note" style="margin-top:6px;color:var(--uz-muted);" hidden></p>
       </div>
 
       <div class="pc-card">
-        <div class="pc-section-title">科目マスタ</div>
+        <div class="pc-section-title">仕入原価マスタ <span id="pur-count-badge" class="pc-count-badge" hidden></span></div>
+        <table class="pc-table" id="pur-table">
+          <thead><tr><th style="width:90px;">コード</th><th>仕入科目名</th><th style="width:90px;">税率</th><th style="width:90px;">操作</th></tr></thead>
+          <tbody id="pur-body"></tbody>
+        </table>
+        <div id="pur-add-row" class="pc-form-row" style="margin-top:10px;align-items:center;gap:8px;flex-wrap:wrap;">
+          <input type="text" id="pur-add-name" class="pc-input" placeholder="仕入科目名（例：食材費）" maxlength="30" style="flex:2;min-width:160px;">
+          <select id="pur-add-tax" class="pc-select" style="width:120px;">
+            <option value="10">10%</option>
+            <option value="8">8%（軽減）</option>
+            <option value="0">0%（非課税）</option>
+          </select>
+          <button id="pur-add-btn" class="pc-btn" type="button">＋ 追加</button>
+        </div>
+        <p id="pur-limit-hint" class="pc-note" style="margin-top:6px;color:var(--uz-muted);" hidden></p>
+      </div>
+
+      <div class="pc-card">
+        <div class="pc-section-title">販管費マスタ（科目マスタ）</div>
         <table class="pc-table" id="cm-table">
           <thead><tr>
             <th style="width:80px;">コード</th>
-            <th style="width:80px;">区分</th>
             <th>科目名</th>
             <th style="width:80px;">税率</th>
             <th style="width:80px;">種別</th>
           </tr></thead>
           <tbody id="cm-body"></tbody>
         </table>
-        <div style="margin-top:10px;"><button id="btn-save-cm" class="pc-btn">科目マスタを保存</button></div>
+        <div style="margin-top:10px;"><button id="btn-save-cm" class="pc-btn">販管費マスタを保存</button></div>
+        <p class="pc-note" style="margin-top:8px;color:var(--uz-muted);">
+          コード26〜30 は青色申告書の任意枠です（5マス固定・拡張販売対象外）。<br>
+          固定科目（コード8〜25・31）の名称は青色申告書整合のため変更できません。
+        </p>
       </div>
 
       <div class="pc-card">
