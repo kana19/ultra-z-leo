@@ -1,3 +1,12 @@
+// ============================================================
+// ユーザーGAS テンプレート本体（ultra-z-leo / gas/main.gs）
+// SPREADSHEET_ID は prepareUserGasCode（マスタGAS）が各店舗の値に置換する。
+// スタンドアロン Apps Script として手動デプロイされるため、
+// getActiveSpreadsheet() は使えず openById(SPREADSHEET_ID) で開く。
+// ============================================================
+const SPREADSHEET_ID = '__SPREADSHEET_ID__';
+function _ss_() { return SpreadsheetApp.openById(SPREADSHEET_ID); }
+
 function doGet(e) {
   const action = e.parameter.action;
   const data = JSON.parse(e.parameter.data || '{}');
@@ -113,7 +122,7 @@ function generateSalesRowId(date) {
     var d = new Date();
     ymd = Utilities.formatDate(d, 'Asia/Tokyo', 'yyyyMMdd');
   }
-  var sheet = SpreadsheetApp.getActive().getSheetByName('売上');
+  var sheet = _ss_().getSheetByName('売上');
   if (!sheet) return 's-' + ymd + '0001';
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return 's-' + ymd + '0001';
@@ -138,7 +147,7 @@ function generateSalesRowId(date) {
  * getTransactionsHierarchy 冒頭から呼び出される（実行毎の追加コストは行カウントに比例）
  */
 function migrateSalesRowIds() {
-  var sheet = SpreadsheetApp.getActive().getSheetByName('売上');
+  var sheet = _ss_().getSheetByName('売上');
   if (!sheet) return;
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return;
@@ -243,7 +252,7 @@ function addCost(data) {
   if (staffId && PAYROLL_CODES.indexOf(itemCode) >= 0) {
     try {
       // staffListから雇用形態を引く
-      var ss = SpreadsheetApp.getActiveSpreadsheet();
+      var ss = _ss_();
       var settingsSheet = ss.getSheetByName('settings');
       var employmentType = '';
       if (settingsSheet) {
@@ -278,7 +287,7 @@ function addCost(data) {
 
 function updateSales(data) {
   if (!data.rowIndex) return { status: 'error', message: 'rowIndexが必要です' };
-  var ss    = SpreadsheetApp.getActiveSpreadsheet();
+  var ss    = _ss_();
   var sheet = ss.getSheetByName('売上');
   if (!sheet) return { status: 'error', message: '売上シートが見つかりません' };
   var row   = Number(data.rowIndex);
@@ -312,7 +321,7 @@ function updateSales(data) {
  */
 function updateCost(data) {
   if (!data.rowIndex) return { status: 'error', message: 'rowIndexが必要です' };
-  var ss    = SpreadsheetApp.getActiveSpreadsheet();
+  var ss    = _ss_();
   var sheet = ss.getSheetByName('コスト');
   if (!sheet) return { status: 'error', message: 'コストシートが見つかりません' };
   var row   = Number(data.rowIndex);
@@ -351,7 +360,7 @@ function updateCost(data) {
 
 function updateAttendance(data) {
   if (!data.rowIndex) return { status: 'error', message: 'rowIndexが必要です' };
-  var ss    = SpreadsheetApp.getActiveSpreadsheet();
+  var ss    = _ss_();
   var sheet = ss.getSheetByName('attendance');
   if (!sheet) return { status: 'error', message: 'attendanceシートが見つかりません' };
   var row = Number(data.rowIndex);
@@ -365,7 +374,7 @@ function updateAttendance(data) {
 }
 
 function getSummary(month) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = _ss_();
   var parts = (month || '').split('-');
   var year = Number(parts[0]);
   var mon  = Number(parts[1]);
@@ -398,7 +407,7 @@ function getSummary(month) {
 }
 
 function getUnpaid() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = _ss_();
   var result = [];
   var tz = Session.getScriptTimeZone();
   function toDateStr(val) {
@@ -441,7 +450,7 @@ function getUnpaid() {
 }
 
 function reconcile(data) {
-  var ss    = SpreadsheetApp.getActiveSpreadsheet();
+  var ss    = _ss_();
   var sheet = ss.getSheetByName(data.sheetName);
   if (!sheet) return { status: 'error', message: 'シートが見つかりません' };
   var rowIndex = Number(data.rowIndex);
@@ -453,7 +462,7 @@ function reconcile(data) {
 }
 
 function clearUnpaid(data) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = _ss_();
   var sheetName = data.sheetName || (data.type === '未収' ? '売上' : 'コスト');
   var sheet = ss.getSheetByName(sheetName);
   if (!sheet) return { status: 'error', message: 'シートが見つかりません' };
@@ -467,7 +476,7 @@ function clearUnpaid(data) {
 }
 
 function getHistory(month) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = _ss_();
   var results = [];
   var tz = Session.getScriptTimeZone();
   function toDateStr(val) {
@@ -540,7 +549,7 @@ function getHistory(month) {
  *  GAS は列番号アクセスのためヘッダ文字列の差は機能に影響しない
  */
 function getOrCreateSheet(name) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = _ss_();
   var sheet = ss.getSheetByName(name);
   if (!sheet) {
     sheet = ss.insertSheet(name);
@@ -572,7 +581,7 @@ function getOrCreateSheet(name) {
  *     （00_原則.md §6-6 の上限制御は枠数取得不能時はフォールバック動作）
  */
 function getSettings() {
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('settings');
+  var sheet = _ss_().getSheetByName('settings');
   if (!sheet) return { status: 'error', message: 'settingsシートが見つかりません' };
   var storeName            = sheet.getRange('B1').getValue();
   var staffJson            = sheet.getRange('B2').getValue();
@@ -663,7 +672,7 @@ function getSettings() {
  *   - スマホ・PC 設定画面のサービスマスタ／仕入マスタ／販管費マスタ編集で使用
  */
 function saveSettings(data) {
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('settings');
+  var sheet = _ss_().getSheetByName('settings');
   if (!sheet) return { status: 'error', message: 'settingsシートが見つかりません' };
   var staffList = (data.staffList || []).map(function(s) {
     s.employmentType = _normalizeEmploymentType_(s.employmentType);
@@ -734,7 +743,7 @@ function addServiceItem(data) {
   if (name.length > 30) return { status: 'error', message: 'サービス名は30文字以内で入力してください' };
   if ([0, 8, 10].indexOf(taxRate) < 0) return { status: 'error', message: '税率は 0 / 8 / 10 のいずれかを指定してください' };
 
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('settings');
+  var sheet = _ss_().getSheetByName('settings');
   if (!sheet) return { status: 'error', message: 'settingsシートが見つかりません' };
 
   // 既存 serviceList 取得
@@ -807,7 +816,7 @@ function addPurchaseItem(data) {
   if (name.length > 30) return { status: 'error', message: '科目名は30文字以内で入力してください' };
   if ([0, 8, 10].indexOf(rate) < 0) return { status: 'error', message: '税率は 0 / 8 / 10 のいずれかを指定してください' };
 
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('settings');
+  var sheet = _ss_().getSheetByName('settings');
   if (!sheet) return { status: 'error', message: 'settingsシートが見つかりません' };
 
   var json = sheet.getRange('B5').getValue();
@@ -870,7 +879,7 @@ function deleteServiceItem(data) {
   var id = String(data.id || '');
   if (!id) return { status: 'error', message: 'id が指定されていません' };
 
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('settings');
+  var sheet = _ss_().getSheetByName('settings');
   if (!sheet) return { status: 'error', message: 'settingsシートが見つかりません' };
 
   var json = sheet.getRange('B3').getValue();
@@ -900,7 +909,7 @@ function deletePurchaseItem(data) {
   var id = String(data.id || '');
   if (!id) return { status: 'error', message: 'id が指定されていません' };
 
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('settings');
+  var sheet = _ss_().getSheetByName('settings');
   if (!sheet) return { status: 'error', message: 'settingsシートが見つかりません' };
 
   var json = sheet.getRange('B5').getValue();
@@ -937,7 +946,7 @@ function updateServiceItem(data) {
     return { status: 'error', message: '税率は 0 / 8 / 10 のいずれかを指定してください' };
   }
 
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('settings');
+  var sheet = _ss_().getSheetByName('settings');
   if (!sheet) return { status: 'error', message: 'settingsシートが見つかりません' };
 
   var json = sheet.getRange('B3').getValue();
@@ -980,7 +989,7 @@ function updatePurchaseItem(data) {
     return { status: 'error', message: '税率は 0 / 8 / 10 のいずれかを指定してください' };
   }
 
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('settings');
+  var sheet = _ss_().getSheetByName('settings');
   if (!sheet) return { status: 'error', message: 'settingsシートが見つかりません' };
 
   var json = sheet.getRange('B5').getValue();
@@ -1033,7 +1042,7 @@ function updatePurchaseItem(data) {
  * 0 のままだとPC給与計算で「時給0円で算出」してしまうため意図的に null を維持。
  */
 function saveStaffList(staffList) {
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('settings');
+  var sheet = _ss_().getSheetByName('settings');
   if (!sheet) return { status: 'error', message: 'settingsシートが見つかりません' };
 
   // --- 既存staffListを読み込んでマージ用辞書化 ---
@@ -1148,7 +1157,7 @@ function clockOut(data) {
   if (!staffId || !clockOutTime) {
     return { status: 'error', message: 'パラメータ不足' };
   }
-  var ss    = SpreadsheetApp.getActiveSpreadsheet();
+  var ss    = _ss_();
   var sheet = ss.getSheetByName('attendance');
   if (!sheet) return { status: 'error', message: 'attendanceシートが存在しません' };
   var colMap = getAttendanceColMap_(sheet);
@@ -1185,7 +1194,7 @@ function getAttendanceColMap_(sheet) {
 }
 
 function getAttendance(data) {
-  var ss    = SpreadsheetApp.getActiveSpreadsheet();
+  var ss    = _ss_();
   var sheet = ss.getSheetByName('attendance');
   if (!sheet) return { status: 'ok', data: { attendance: [], hasUnrecordedClockOut: false } };
   var colMap = getAttendanceColMap_(sheet);
@@ -1229,7 +1238,7 @@ function getAttendance(data) {
 
 function getAttendanceByMonth(month) {
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = _ss_();
     var sheet = ss.getSheetByName('attendance');
     if (!sheet) return { status: 'ok', data: [] };
     var colMap = getAttendanceColMap_(sheet);
@@ -1263,7 +1272,7 @@ function getAttendanceByMonth(month) {
 }
 
 function getOrCreateSheet_(name, headers) {
-  var ss    = SpreadsheetApp.getActiveSpreadsheet();
+  var ss    = _ss_();
   var sheet = ss.getSheetByName(name);
   if (!sheet) {
     sheet = ss.insertSheet(name);
@@ -1304,7 +1313,7 @@ var DEFAULT_COST_MASTER_GAS = [
 
 function getCostMasterGAS() {
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = _ss_();
     var sheet = ss.getSheetByName('settings');
     if (!sheet) return DEFAULT_COST_MASTER_GAS;
     var val = sheet.getRange('B4').getValue();
@@ -1326,7 +1335,7 @@ function getCostMasterGAS() {
 
 function saveCostMasterGAS(list) {
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = _ss_();
     var sheet = ss.getSheetByName('settings');
     if (!sheet) {
       sheet = ss.insertSheet('settings');
@@ -1344,7 +1353,7 @@ function saveCostMasterGAS(list) {
 
 function initCostMaster() {
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = _ss_();
     var sheet = ss.getSheetByName('settings');
     if (!sheet) {
       sheet = ss.insertSheet('settings');
@@ -1371,7 +1380,7 @@ function initCostMaster() {
 // =============================================================
 
 function setupPhaseA() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = _ss_();
 
   var settings = ss.getSheetByName('settings');
   if (!settings) {
@@ -1430,7 +1439,7 @@ function setupPhaseA() {
  * A-9-X：源泉徴収はスタッフ個別の withholdingMode で判定するため、storeType 初期化は撤廃。
  */
 function setupWithholdingAndClientId() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = _ss_();
 
   // --- コストシート T列・U列 追加 ---
   var cost = ss.getSheetByName('コスト');
@@ -1483,7 +1492,7 @@ function setupWithholdingAndClientId() {
  * - 既存スタッフリストに passwordHash=''・passwordUpdatedAt='' を補完
  */
 function setupTemplateAndPassword() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = _ss_();
   var settings = ss.getSheetByName('settings');
   if (!settings) {
     settings = ss.insertSheet('settings');
@@ -1604,7 +1613,7 @@ function linkTransactions(data) {
     return { status: 'error', message: 'items[] が空です' };
   }
 
-  var ss = SpreadsheetApp.getActive();
+  var ss = _ss_();
   var costSheet = ss.getSheetByName('コスト');
   if (!costSheet) return { status: 'error', message: 'コストシートが見つかりません' };
   var costLastRow = costSheet.getLastRow();
@@ -1736,7 +1745,7 @@ function getTransactionsHierarchy(data) {
     targetYM = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM');
   }
 
-  var ss = SpreadsheetApp.getActive();
+  var ss = _ss_();
   var salesSheet = ss.getSheetByName('売上');
   var costSheet = ss.getSheetByName('コスト');
 
@@ -1886,7 +1895,7 @@ function _getLinkCandidatesSalesToCost_(data) {
   var fromStr = _fmtDateStr_(fromDate);
   var toStr   = salesDateStr;
 
-  var costSheet = SpreadsheetApp.getActive().getSheetByName('コスト');
+  var costSheet = _ss_().getSheetByName('コスト');
   if (!costSheet) return { status: 'ok', data: { direction: 'sales-to-cost', candidates: [] } };
   var lastRow = costSheet.getLastRow();
   if (lastRow < 2) return { status: 'ok', data: { direction: 'sales-to-cost', candidates: [] } };
@@ -1930,7 +1939,7 @@ function _getLinkCandidatesCostToSales_(data) {
   var fromStr = costDateStr;
   var toStr   = _fmtDateStr_(toDate);
 
-  var salesSheet = SpreadsheetApp.getActive().getSheetByName('売上');
+  var salesSheet = _ss_().getSheetByName('売上');
   if (!salesSheet) return { status: 'ok', data: { direction: 'cost-to-sales', candidates: [] } };
   var lastRow = salesSheet.getLastRow();
   if (lastRow < 2) return { status: 'ok', data: { direction: 'cost-to-sales', candidates: [] } };
@@ -1981,7 +1990,7 @@ function markAsProject(data) {
   if (!rowIndex || rowIndex < 2) {
     return { status: 'error', message: 'invalid rowIndex' };
   }
-  var sheet = SpreadsheetApp.getActive().getSheetByName('売上');
+  var sheet = _ss_().getSheetByName('売上');
   if (!sheet) return { status: 'error', message: '売上シートが見つかりません' };
   if (rowIndex > sheet.getLastRow()) {
     return { status: 'error', message: 'rowIndex out of range' };
@@ -2011,7 +2020,7 @@ function unmarkAsProject(data) {
   if (!rowIndex || rowIndex < 2) {
     return { status: 'error', message: 'invalid rowIndex' };
   }
-  var sheet = SpreadsheetApp.getActive().getSheetByName('売上');
+  var sheet = _ss_().getSheetByName('売上');
   if (!sheet) return { status: 'error', message: '売上シートが見つかりません' };
   if (rowIndex > sheet.getLastRow()) {
     return { status: 'error', message: 'rowIndex out of range' };
@@ -2037,7 +2046,7 @@ function getProjectSummary(data) {
     targetYM = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM');
   }
 
-  var ss = SpreadsheetApp.getActive();
+  var ss = _ss_();
   var salesSheet = ss.getSheetByName('売上');
   var costSheet = ss.getSheetByName('コスト');
 
@@ -2127,7 +2136,7 @@ function updateRow(data) {
     return { status: 'error', message: 'invalid rowIndex' };
   }
 
-  var sheet = SpreadsheetApp.getActive().getSheetByName(sheetName);
+  var sheet = _ss_().getSheetByName(sheetName);
   if (!sheet) return { status: 'error', message: sheetName + 'シートが見つかりません' };
   if (rowIndex > sheet.getLastRow()) {
     return { status: 'error', message: 'rowIndex out of range' };
@@ -2227,7 +2236,7 @@ function requestUnlock(data) {
     return { status: 'error', message: 'invalid rowIndex' };
   }
 
-  var ss = SpreadsheetApp.getActive();
+  var ss = _ss_();
   var sheet = ss.getSheetByName('_unlock_requests');
   if (!sheet) {
     sheet = ss.insertSheet('_unlock_requests');
@@ -2266,7 +2275,7 @@ function deleteRow(data) {
       return { status: 'error', message: 'rowIndexが不正です' };
     }
 
-    var ss = SpreadsheetApp.getActive();
+    var ss = _ss_();
     var sheet = ss.getSheetByName(sheetName);
     if (!sheet) {
       return { status: 'error', message: 'シートが見つかりません: ' + sheetName };
@@ -2359,7 +2368,7 @@ function confirmPayroll(data) {
     return { status: 'error', message: 'targetsが空です' };
   }
 
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = _ss_();
   var updated = 0;
   var skipped = [];
 
@@ -2454,7 +2463,7 @@ function getAttendanceForStaff(data) {
   if (!staffId) {
     return { status: 'error', message: 'staffId が必要です' };
   }
-  var ss    = SpreadsheetApp.getActiveSpreadsheet();
+  var ss    = _ss_();
   var sheet = ss.getSheetByName('attendance');
   if (!sheet) {
     return { status: 'ok', data: { myRecord: null, todayList: [], myMonthly: [] } };
