@@ -313,7 +313,9 @@ async function saveCM() {
     if (costMaster[i]) costMaster[i].taxRate = Number(sel.value);
   });
   saveCostMasterToStorage(costMaster);
-  const res = await callGAS('saveCostMaster', { costMasterList: costMaster }).catch(() => null);
+  // costMasterList は販管費専用（→ 03_データ仕様.md §1-2）。仕入原価を正本に書き戻さない。
+  const sanitized = costMaster.filter(row => !row.divisionCode || row.divisionCode === '2');
+  const res = await callGAS('saveCostMaster', { costMasterList: sanitized }).catch(() => null);
   if (res && res.status === 'ok') {
     showToast('販管費マスタを保存しました', 'success');
   } else {

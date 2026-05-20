@@ -888,10 +888,12 @@ function bindCostMasterSave() {
       return { ...item, name, taxRate };
     });
 
-    saveCostMasterToStorage(updated);
+    // costMasterList は販管費専用（→ 03_データ仕様.md §1-2）。仕入原価を正本に書き戻さない。
+    const sanitized = updated.filter(item => !item.divisionCode || item.divisionCode === '2');
+    saveCostMasterToStorage(sanitized);
     showToast('科目マスタを保存しました ✓', 'success');
     renderCostMaster();
-    saveCostMasterToGAS(updated);
+    saveCostMasterToGAS(sanitized);
   });
 }
 

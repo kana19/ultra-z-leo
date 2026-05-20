@@ -596,12 +596,17 @@ function getSettings() {
   try { if (serviceJson)          serviceList          = JSON.parse(serviceJson);        } catch(e) {}
   try { if (costMasterJson)       costMasterList       = JSON.parse(costMasterJson);     } catch(e) {}
   try { if (purchaseMasterJson)   purchaseMasterList   = JSON.parse(purchaseMasterJson); } catch(e) {}
-  // costMasterList は smartphoneVisible キーを保証（販管費マスタのみ搭載・戦略思想§3-5）
+  // costMasterList は販管費専用（→ 03_データ仕様.md §1-2）。仕入原価（divisionCode='1'）は含めない。
+  // smartphoneVisible キーを保証（販管費マスタのみ搭載・戦略思想§3-5）
   if (Array.isArray(costMasterList)) {
-    costMasterList = costMasterList.map(function(item) {
-      item.smartphoneVisible = item.smartphoneVisible !== false;
-      return item;
-    });
+    costMasterList = costMasterList
+      .filter(function(item) {
+        return !item || !item.divisionCode || String(item.divisionCode) === '2';
+      })
+      .map(function(item) {
+        item.smartphoneVisible = item.smartphoneVisible !== false;
+        return item;
+      });
   } else {
     costMasterList = [];
   }
@@ -1286,10 +1291,9 @@ function getOrCreateSheet_(name, headers) {
 // 科目マスタ関連（costmaster_additions）
 // =============================================================
 
+// costMasterList は販管費専用（→ 03_データ仕様.md §1-2）。仕入原価は purchaseMasterList（B5）で別管理。
+// このマスタには divisionCode:"1"（仕入原価）を含めない。
 var DEFAULT_COST_MASTER_GAS = [
-  { code: "C1", taxRow: null, name: "仕入(酒類・食材)", taxRate: 8,  type: "fixed", divisionCode: "1", smartphoneVisible: true },
-  { code: "C2", taxRow: null, name: "仕入(消耗品)",     taxRate: 10, type: "fixed", divisionCode: "1", smartphoneVisible: true },
-  { code: "C3", taxRow: null, name: "仕入(その他)",     taxRate: 10, type: "fixed", divisionCode: "1", smartphoneVisible: true },
   { code: "8",  taxRow: 8,  name: "租税公課",       taxRate: 0,  type: "fixed", divisionCode: "2", smartphoneVisible: true },
   { code: "9",  taxRow: 9,  name: "荷造運賃",       taxRate: 10, type: "fixed", divisionCode: "2", smartphoneVisible: true },
   { code: "10", taxRow: 10, name: "水道光熱費",     taxRate: 10, type: "fixed", divisionCode: "2", smartphoneVisible: true },
@@ -1320,6 +1324,12 @@ function getCostMasterGAS() {
     if (!val || val === '') return DEFAULT_COST_MASTER_GAS;
     var parsed = JSON.parse(val);
     if (!Array.isArray(parsed)) return DEFAULT_COST_MASTER_GAS;
+    // costMasterList は販管費専用（→ 03_データ仕様.md §1-2）。
+    // 旧データに仕入原価（divisionCode='1'）が残っていても応答に含めない。
+    // divisionCode 未設定の旧データは販管費扱い（後方互換）。
+    parsed = parsed.filter(function(item) {
+      return !item || !item.divisionCode || String(item.divisionCode) === '2';
+    });
     // smartphoneVisible キーを保証(後方互換性)
     // 戦略思想§3-5・システム仕様書§15-2 準拠
     // 未定義 or true → true / false のみ false
@@ -1344,7 +1354,13 @@ function saveCostMasterGAS(list) {
       sheet.getRange('A3').setValue('serviceList');
       sheet.getRange('A4').setValue('costMasterList');
     }
-    sheet.getRange('B4').setValue(JSON.stringify(list));
+    // costMasterList は販管費専用（→ 03_データ仕様.md §1-2）。
+    // フロント経由で仕入原価（divisionCode='1'）が混入しても正本に書き込まない。
+    // divisionCode 未設定の旧データは販管費扱い（後方互換）。
+    var sanitized = (Array.isArray(list) ? list : []).filter(function(item) {
+      return !item || !item.divisionCode || String(item.divisionCode) === '2';
+    });
+    sheet.getRange('B4').setValue(JSON.stringify(sanitized));
   } catch (e) {
     Logger.log('saveCostMasterGAS error: ' + e);
     throw e;
