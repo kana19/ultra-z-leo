@@ -133,6 +133,25 @@ body {
   text-align: center;
 }
 
+/* ── ブランド表示（店舗ロゴ画像／店舗名テキストのフォールバック） ──────
+   課題1：app.js の uzRenderBrand が data-uz-brand 要素へ
+   <img class="uz-brand-logo"> または <span class="uz-brand-text"> を描画する。
+   ロゴ推奨サイズ 240×60px。height 基準で原寸比を保持しつつ枠内に収める。 */
+.uz-brand-logo {
+  display: inline-block;
+  height: 40px;
+  max-width: 240px;
+  width: auto;
+  object-fit: contain;
+  vertical-align: middle;
+}
+.uz-brand-text {
+  font: inherit;
+  color: inherit;
+}
+/* スマホ上部ヘッダーのロゴはやや大きめに（タップ領域中央） */
+.app-header__store .uz-brand-logo { height: 48px; max-width: 260px; }
+
 /* ── ホームsticky固定エリア（ヘッダー〜タブを一体固定） ──── */
 .home-sticky-top {
   position: sticky;
@@ -857,6 +876,12 @@ body.is-ipad {
     letter-spacing: 0.05em;
     border-bottom: 1px solid var(--uz-border);
   }
+  /* 課題1：iPad はサイドバー左上ロゴを主表示とし、中央の店名ヘッダーは隠す */
+  .nav-sidebar__logo .uz-brand-logo {
+    height: 36px;
+    max-width: 168px;
+  }
+  .app-header__store { display: none; }
 
   .sidebar-item {
     display: flex;

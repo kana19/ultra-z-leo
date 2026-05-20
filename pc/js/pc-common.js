@@ -29,10 +29,16 @@ function pcRenderSidebar(activeHref) {
     }).join('');
 
   // 店名ロゴ（クリックで損益概観 index.html へ遷移）
+  // 課題1：店舗ロゴ画像（無ければ店舗名）を app.js の uzRenderBrand が描画する。
+  // PC版は icons/ が1階層上のため iconBase='../icons/'。
   const html = `
     <aside class="pc-sidebar">
       <a href="index.html" class="pc-sidebar-logo">
-        <span class="pc-sidebar-logo-text">ウルトラZAIMUくん</span>
+        <span class="pc-sidebar-logo-brand"
+              data-uz-brand
+              data-uz-icon-base="../icons/"
+              data-uz-fallback="店舗名未設定"
+              data-uz-logo-class="uz-brand-logo pc-sidebar-logo-img"></span>
         <span class="pc-sidebar-logo-sub">LEO</span>
       </a>
       <nav class="pc-nav">${navHtml}</nav>
@@ -84,6 +90,9 @@ function pcBootstrap(activeHref, title) {
   const main = document.getElementById('pc-main');
   if (main) main.insertAdjacentHTML('afterbegin', pcRenderHeader(title));
   pcStartClock();
+  // 課題1：サイドバー/ヘッダー挿入後にブランド（店舗ロゴ／店舗名）を描画。
+  // app.js の DOMContentLoaded 描画より後に DOM 挿入されるため明示的に呼ぶ。
+  if (typeof uzRenderAllBrands === 'function') uzRenderAllBrands();
 }
 
 /* ──────────────────────────────────────────────────────────

@@ -58,6 +58,13 @@ async function syncSettingsAtStartup() {
 
     const d = res.data;
 
+    // storeName 同期（課題1：ヘッダー/サイドバーの店舗名・ロゴフォールバック表示で使用）
+    // テンプレ ultra-z-leo の見本店舗名（HTML ハードコード）を上書きするため、
+    // getSettings の storeName を localStorage に保持し各ヘッダーが参照する。
+    if (typeof d.storeName === 'string' && d.storeName.trim()) {
+      localStorage.setItem('uz_store_name', d.storeName.trim());
+    }
+
     // staffList 同期（A-2-X-1：コスト入力のスタッフプルダウンで使用）
     if (Array.isArray(d.staffList)) {
       localStorage.setItem('uz_staff_list', JSON.stringify(d.staffList));
@@ -84,6 +91,91 @@ async function syncSettingsAtStartup() {
 document.addEventListener('DOMContentLoaded', function() {
   syncSettingsAtStartup();
 });
+
+/* ── ブランド表示（店舗ロゴ／店舗名フォールバック）共通ヘルパー ──────
+ * 課題1：生成アプリのヘッダー/サイドバーが複製元 ultra-z-leo の見本
+ * （店舗名ハードコード・固定ロゴ）のまま表示される不具合への対処。
+ *
+ * 仕様：
+ *   - リポジトリ内の icons/store-logo.png を <img> で表示する
+ *   - 画像が存在しない（未アップロード）店舗では <img> の onerror で
+ *     店舗名テキスト（uz_store_name → fallbackText）に自動差し替え
+ *   - 店舗ロゴは settings ではなくリポジトリ内ファイルのため src 直参照
+ *   - 基準パスは iconBase で吸収（ルート='icons/'・PC版='../icons/'）
+ *
+ * スマホ・iPad・PC の3デバイスが本ヘルパーを共有し挙動を統一する。
+ *
+ * @param {HTMLElement} targetEl 描画先要素（中身を置き換える）
+ * @param {Object} opts
+ *   - iconBase   {string} アイコンディレクトリの相対パス（既定 'icons/'）
+ *   - fallbackText {string} 店舗名が取れない場合の最終フォールバック文字列
+ *   - logoClass  {string} <img> に付与するクラス（既定 'uz-brand-logo'）
+ *   - textClass  {string} テキスト時のクラス（既定 'uz-brand-text'）
+ */
+function uzGetStoreName(fallbackText) {
+  try {
+    const v = localStorage.getItem('uz_store_name');
+    if (v && v.trim()) return v.trim();
+  } catch (e) { /* localStorage 不可環境は無視 */ }
+  return fallbackText || '';
+}
+
+function uzRenderBrand(targetEl, opts) {
+  if (!targetEl) return;
+  opts = opts || {};
+  const iconBase = (typeof opts.iconBase === 'string') ? opts.iconBase : 'icons/';
+  const logoClass = opts.logoClass || 'uz-brand-logo';
+  const textClass = opts.textClass || 'uz-brand-text';
+  const storeName = uzGetStoreName(opts.fallbackText || '');
+
+  // テキストフォールバック用ノード（textContent で安全に設定・XSS回避）
+  const makeTextNode = function () {
+    const span = document.createElement('span');
+    span.className = textClass;
+    span.textContent = storeName;
+    return span;
+  };
+
+  // 中身をクリア
+  targetEl.textContent = '';
+
+  // store-logo.png を試行（キャッシュバスター付与）
+  const img = document.createElement('img');
+  img.className = logoClass;
+  img.alt = storeName || '店舗ロゴ';
+  img.decoding = 'async';
+  img.addEventListener('error', function () {
+    // 画像が無い（未アップロード）→ 店舗名テキストへ差し替え
+    if (img.parentNode === targetEl) {
+      targetEl.replaceChild(makeTextNode(), img);
+    } else {
+      targetEl.textContent = '';
+      targetEl.appendChild(makeTextNode());
+    }
+  });
+  const buster = (Date.now ? Date.now() : new Date().getTime());
+  img.src = iconBase + 'store-logo.png?v=' + buster;
+  targetEl.appendChild(img);
+}
+
+// settings 同期完了で店舗名が遅れて届いた場合、ブランド表示を再描画する。
+// 各ページは data-uz-brand 属性に iconBase / fallback を持たせるだけでよい。
+function uzRenderAllBrands() {
+  const nodes = document.querySelectorAll('[data-uz-brand]');
+  nodes.forEach(function (el) {
+    uzRenderBrand(el, {
+      iconBase: el.getAttribute('data-uz-icon-base') || 'icons/',
+      fallbackText: el.getAttribute('data-uz-fallback') || '',
+      logoClass: el.getAttribute('data-uz-logo-class') || 'uz-brand-logo',
+      textClass: el.getAttribute('data-uz-text-class') || 'uz-brand-text'
+    });
+  });
+}
+
+// 初回ロード時に描画（store-logo.png があれば即表示・無ければ店舗名）。
+document.addEventListener('DOMContentLoaded', uzRenderAllBrands);
+// settings 同期で storeName が確定したら再描画（テキストフォールバック更新）。
+document.addEventListener('uz:settings-synced', uzRenderAllBrands);
 
 /* ── UI用語（A-9-X：業態固定概念撤廃後・「出勤／退勤」表記に静的統一） ─
  * 業態判定ロジックは撤廃し、deriveUILabels() は固定ラベルを返すスタブとして残す。
