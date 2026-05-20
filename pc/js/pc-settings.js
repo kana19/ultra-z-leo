@@ -60,6 +60,71 @@ async function loadAll() {
   renderPurchases();
   renderCM();
   renderStaff();
+  renderBasicInfo();
+}
+
+/* ── 基本情報セクション（読み取り専用・スマホ版と表記統一） ── */
+function renderBasicInfo() {
+  // 店舗名
+  const storeEl = document.getElementById('info-store-name');
+  if (storeEl) {
+    const name = settings?.storeName || localStorage.getItem('uz_store_name') || '';
+    storeEl.textContent = name || '—';
+  }
+
+  // 営業時間（businessHours があれば「19:00 〜 翌03:00」形式・無ければ行ごと非表示）
+  const row = document.getElementById('info-business-hours-row');
+  const val = document.getElementById('info-business-hours');
+  if (row && val) {
+    let formatted = null;
+    try {
+      const bh = settings?.businessHours;
+      if (bh && bh.open && bh.close && typeof formatBusinessHours === 'function') {
+        formatted = formatBusinessHours(bh);
+      } else if (typeof getBusinessHours === 'function' && typeof formatBusinessHours === 'function') {
+        formatted = formatBusinessHours(getBusinessHours());
+      }
+    } catch { formatted = null; }
+    if (formatted) {
+      val.textContent = formatted;
+      row.hidden = false;
+    } else {
+      row.hidden = true;
+    }
+  }
+
+  bindVersionTapDebug();
+}
+
+/* ── バージョン5タップで GAS接続情報を展開（隠しコマンド・スマホ版と統一） ── */
+function bindVersionTapDebug() {
+  const ver = document.getElementById('info-version');
+  const dbg = document.getElementById('info-debug');
+  if (!ver || !dbg || ver.dataset.tapBound === '1') return;
+  ver.dataset.tapBound = '1';
+
+  let count = 0;
+  let timer = null;
+  ver.addEventListener('click', () => {
+    count++;
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(() => { count = 0; }, 1200);
+    if (count >= 5) {
+      count = 0;
+      dbg.hidden = !dbg.hidden;
+      if (!dbg.hidden) {
+        const statusEl = document.getElementById('gas-status-val');
+        if (statusEl) {
+          statusEl.textContent = '接続済み ✓';
+          statusEl.style.color = 'var(--uz-green)';
+        }
+        const urlEl = document.getElementById('gas-url-val');
+        try {
+          if (urlEl && typeof GAS_URL === 'string') urlEl.textContent = GAS_URL;
+        } catch { /* ignore */ }
+      }
+    }
+  });
 }
 
 function renderStore() {
