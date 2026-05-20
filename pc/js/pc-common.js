@@ -39,7 +39,6 @@ function pcRenderSidebar(activeHref) {
               data-uz-icon-base="../icons/"
               data-uz-fallback="店舗名未設定"
               data-uz-logo-class="uz-brand-logo pc-sidebar-logo-img"></span>
-        <span class="pc-sidebar-logo-sub">LEO</span>
       </a>
       <nav class="pc-nav">${navHtml}</nav>
     </aside>
@@ -49,7 +48,7 @@ function pcRenderSidebar(activeHref) {
 
 function pcRenderHeader(title) {
   const now = new Date();
-  const storeName = (typeof localStorage !== 'undefined' && localStorage.getItem('uz_store_name')) || 'LEO';
+  const storeName = (typeof localStorage !== 'undefined' && localStorage.getItem('uz_store_name')) || '';
   return `
     <header class="pc-header">
       <div class="pc-header__title">${title}</div>
