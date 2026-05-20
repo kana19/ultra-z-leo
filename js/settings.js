@@ -819,8 +819,7 @@ function renderCostMaster() {
     return `<select id="${id}" class="form-select" style="width:120px;height:36px;font-size:13px;">${opts}</select>`;
   }
 
-  // 仕入原価
-  const costItems   = master.filter(i => i.divisionCode === '1');
+  // costMasterList は販管費専用（→ 03_データ仕様.md §1-2）。仕入原価は仕入原価マスタで別管理。
   // 販管費 固定
   const fixedItems  = master.filter(i => i.divisionCode === '2' && i.type === 'fixed');
   // 販管費 任意（科目番号26〜30）
@@ -855,10 +854,7 @@ function renderCostMaster() {
 
   let html = '';
 
-  html += `<div style="padding:8px 16px 4px;font-size:12px;font-weight:700;color:var(--uz-muted);">▸ 仕入原価</div>`;
-  html += costItems.map(fixedRow).join('');
-
-  html += `<div style="padding:12px 16px 4px;font-size:12px;font-weight:700;color:var(--uz-muted);">▸ 販管費（固定科目）</div>`;
+  html += `<div style="padding:8px 16px 4px;font-size:12px;font-weight:700;color:var(--uz-muted);">▸ 販管費（固定科目）</div>`;
   html += fixedItems.map(fixedRow).join('');
 
   html += `<div style="padding:12px 16px 4px;font-size:12px;font-weight:700;color:var(--uz-muted);">▸ 販管費（任意科目 番号26〜30）</div>`;

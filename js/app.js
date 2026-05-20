@@ -569,12 +569,12 @@ function navigate(url) {
 /* ── コスト科目マスタ ─────────────────────────────────────── */
 const COST_MASTER_KEY = 'uz_cost_master';
 
-/** デフォルト科目マスタ（確定申告行番号対応） */
+/**
+ * デフォルト販管費科目マスタ（青色申告決算書 完全整合・販管費専用）
+ * 仕入原価（purchaseMasterList・settings.B5）とは独立したマスタ。
+ * このマスタには divisionCode:'1'（仕入原価）を含めない。
+ */
 const DEFAULT_COST_MASTER = [
-  // ── 仕入原価（divisionCode:"1"） ──
-  { code: 'C1', taxRow: null, name: '仕入(酒類・食材)', taxRate: 8,  type: 'fixed',  divisionCode: '1' },
-  { code: 'C2', taxRow: null, name: '仕入(消耗品)',     taxRate: 10, type: 'fixed',  divisionCode: '1' },
-  { code: 'C3', taxRow: null, name: '仕入(その他)',     taxRate: 10, type: 'fixed',  divisionCode: '1' },
   // ── 販管費（divisionCode:"2"）固定科目 ──
   { code: '8',  taxRow: 8,  name: '租税公課',       taxRate: 0,  type: 'fixed',  divisionCode: '2' },
   { code: '9',  taxRow: 9,  name: '荷造運賃',       taxRate: 10, type: 'fixed',  divisionCode: '2' },
@@ -693,12 +693,17 @@ async function downloadTaxCSVByRange(fromMonth, toMonth, btnEl) {
       )
     );
 
-    // コスト科目マスタ（確定申告行番号対応）
+    // 販管費科目マスタ（確定申告行番号対応・costMasterList・販管費専用）
     const master = typeof getCostMaster === 'function' ? getCostMaster() : [];
 
-    // 仕入原価科目（divisionCode:"1"）
-    const cogsSubjects = master
-      .filter(item => item.divisionCode === '1' && item.name)
+    // 仕入原価科目は purchaseMasterList（settings.B5）が正本（→ 03_データ仕様.md §1-3 / §5-7）
+    let purchaseList = [];
+    try {
+      const rawP = localStorage.getItem('uz_purchase_master');
+      if (rawP) purchaseList = JSON.parse(rawP);
+    } catch { purchaseList = []; }
+    const cogsSubjects = (Array.isArray(purchaseList) ? purchaseList : [])
+      .filter(item => item && item.name)
       .map(item => ({ name: item.name, row: '-', key: null, div: 'cogs' }));
 
     // 販管費科目（divisionCode:"2"）
