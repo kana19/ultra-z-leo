@@ -344,12 +344,6 @@ function renderStaffList() {
                 aria-label="${escHtml(s.name)}を編集">
           編集
         </button>
-        <button class="staff-delete-btn"
-                type="button"
-                onclick="deleteStaff(${s.id})"
-                aria-label="${escHtml(s.name)}を削除">
-          削除
-        </button>
       </div>
     `;
   }).join('');
@@ -388,51 +382,90 @@ function editStaff(id) {
   const row = document.getElementById(`staff-row-${id}`);
   if (!row) return;
 
-  const empType = _normalizeEmpType(staff.employmentType);
+  const empType  = _normalizeEmpType(staff.employmentType);
+  const costCat  = _normalizeCostCategory(staff.costCategory);
+  const costDisabled = empType !== 'contractor';
+  row.classList.add('staff-row--editing');
   row.innerHTML = `
-    <input type="text"
-           id="staff-edit-name-${id}"
-           class="settings-input"
-           style="flex:1;min-width:80px;height:40px;font-size:14px;"
-           value="${escHtml(staff.name)}"
-           maxlength="20"
-           autocomplete="off"
-           aria-label="スタッフ名">
-    <select id="staff-edit-emp-${id}"
-            class="form-select"
-            style="height:40px;font-size:13px;flex-shrink:0;"
-            aria-label="雇用形態">
-      <option value="employed_full"${empType === 'employed_full' ? ' selected' : ''}>常勤雇用（社員）</option>
-      <option value="employed_temp"${empType === 'employed_temp' ? ' selected' : ''}>臨時アルバイト</option>
-      <option value="contractor"${empType === 'contractor' ? ' selected' : ''}>委託・外注</option>
-    </select>
-    <input type="text"
-           id="staff-edit-password-${id}"
-           class="settings-input"
-           style="flex:1;min-width:120px;height:40px;font-size:14px;"
-           placeholder="パスワード変更（任意・5桁英数字）"
-           maxlength="5"
-           autocomplete="off"
-           aria-label="パスワード変更">
-    <button class="staff-save-btn"
-            type="button"
-            onclick="saveEditStaff(${id})"
-            aria-label="保存">
-      保存
-    </button>
-    <button class="staff-cancel-btn"
-            type="button"
-            onclick="renderStaffList()"
-            aria-label="キャンセル">
-      キャンセル
-    </button>
+    <div class="staff-edit">
+      <div class="staff-edit__line">
+        <input type="text"
+               id="staff-edit-name-${id}"
+               class="settings-input staff-edit__name"
+               value="${escHtml(staff.name)}"
+               maxlength="20"
+               autocomplete="off"
+               placeholder="スタッフ名"
+               aria-label="スタッフ名">
+        <select id="staff-edit-emp-${id}"
+                class="form-select staff-edit__emp"
+                onchange="_onEditEmpChange(${id})"
+                aria-label="雇用形態">
+          <option value="employed_full"${empType === 'employed_full' ? ' selected' : ''}>常勤雇用（社員）</option>
+          <option value="employed_temp"${empType === 'employed_temp' ? ' selected' : ''}>臨時アルバイト</option>
+          <option value="contractor"${empType === 'contractor' ? ' selected' : ''}>委託・外注</option>
+        </select>
+      </div>
+      <div class="staff-edit__line">
+        <select id="staff-edit-cost-${id}"
+                class="form-select staff-edit__cost"
+                aria-label="コスト科目"${costDisabled ? ' disabled' : ''}>
+          <option value="21"${costCat === '21' ? ' selected' : ''}>21：外注工賃</option>
+          <option value="25"${costCat === '25' ? ' selected' : ''}>25：税理士等の報酬</option>
+        </select>
+        <input type="text"
+               id="staff-edit-password-${id}"
+               class="settings-input staff-edit__pw"
+               placeholder="パスワード変更（任意・5桁英数字）"
+               maxlength="5"
+               autocomplete="off"
+               aria-label="パスワード変更">
+      </div>
+      <div class="staff-edit__line staff-edit__actions">
+        <button class="staff-save-btn"
+                type="button"
+                onclick="saveEditStaff(${id})"
+                aria-label="保存">保存</button>
+        <button class="staff-cancel-btn"
+                type="button"
+                onclick="renderStaffList()"
+                aria-label="キャンセル">キャンセル</button>
+        <span class="staff-edit__spacer"></span>
+        <button class="staff-delete-btn"
+                type="button"
+                onclick="deleteStaff(${id})"
+                aria-label="${escHtml(staff.name)}を削除">削除</button>
+      </div>
+    </div>
   `;
   document.getElementById(`staff-edit-name-${id}`)?.focus();
+}
+
+/**
+ * costCategory 正規化（PC版 pc-settings.js と統一）
+ *   contractor時のコスト科目：'21'（外注工賃）/ '25'（税理士等の報酬）
+ *   未設定・不正値は '21' にフォールバック
+ */
+function _normalizeCostCategory(value) {
+  if (value === '21' || value === '25') return value;
+  return '21';
+}
+
+/**
+ * 編集モード内：雇用形態変更時にコスト科目セレクトの活性を切り替える
+ * （委託・外注のときのみコスト科目を選べる）
+ */
+function _onEditEmpChange(id) {
+  const empEl  = document.getElementById(`staff-edit-emp-${id}`);
+  const costEl = document.getElementById(`staff-edit-cost-${id}`);
+  if (!empEl || !costEl) return;
+  costEl.disabled = (_normalizeEmpType(empEl.value) !== 'contractor');
 }
 
 async function saveEditStaff(id) {
   const nameEl = document.getElementById(`staff-edit-name-${id}`);
   const empEl  = document.getElementById(`staff-edit-emp-${id}`);
+  const costEl = document.getElementById(`staff-edit-cost-${id}`);
   const pwEl   = document.getElementById(`staff-edit-password-${id}`);
   if (!nameEl || !empEl) return;
 
@@ -458,9 +491,13 @@ async function saveEditStaff(id) {
     };
   }
 
+  const empType  = _normalizeEmpType(empEl.value);
+  // コスト科目は委託・外注のときのみ意味を持つ（それ以外は '21' に正規化して保持）
+  const costCategory = _normalizeCostCategory(costEl ? costEl.value : '21');
+
   const newList = list.map(s =>
     s.id === id
-      ? { ...s, name, employmentType: _normalizeEmpType(empEl.value), ...(passwordUpdate || {}) }
+      ? { ...s, name, employmentType: empType, costCategory, ...(passwordUpdate || {}) }
       : s
   );
   _saveStaffList(newList);

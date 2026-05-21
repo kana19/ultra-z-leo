@@ -136,6 +136,17 @@
     .staff-delete-btn { background: var(--uz-red-bg); color: var(--uz-red); border-color: rgba(224,80,80,0.3); }
     .staff-cancel-btn { background: none; color: var(--uz-muted); }
 
+    /* ── スタッフ編集モード（2段組） ── */
+    .staff-row--editing { display: block; padding: 12px 16px; }
+    .staff-edit { display: flex; flex-direction: column; gap: 8px; }
+    .staff-edit__line { display: flex; align-items: center; gap: 8px; }
+    .staff-edit__name { flex: 1; min-width: 0; }
+    .staff-edit__emp { width: 150px; flex-shrink: 0; }
+    .staff-edit__cost { width: 150px; flex-shrink: 0; }
+    .staff-edit__pw { flex: 1; min-width: 0; }
+    .staff-edit__actions { gap: 8px; }
+    .staff-edit__spacer { flex: 1; }
+
     /* ── 追加フォーム行 ── */
     .settings-add-row {
       display: flex;
