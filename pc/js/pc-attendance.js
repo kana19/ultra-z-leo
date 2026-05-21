@@ -36,7 +36,7 @@
 
   /* ---------- 初期化 ---------- */
   document.addEventListener('DOMContentLoaded', async () => {
-    if (typeof pcBootstrap === 'function') pcBootstrap('attendance.html', '出勤管理');
+    if (typeof pcBootstrap === 'function') pcBootstrap('pc-attendance.html', '出勤管理');
     _bindMonthNav();
     _bindFilter();
     _bindConfirmDialog();

@@ -4,10 +4,10 @@
 // PC版サイドバーメニュー定義（戦略思想メモ§3-9-3 確定の4項目構造）
 // 順序・href・ラベルはここで一元管理する
 const PC_NAV = [
-  { href: 'monthly.html',    label: '月次管理',  icon: '○' },
-  { href: 'projects.html',   label: '案件管理',  icon: '★' },
-  { href: 'attendance.html', label: '出勤管理',  icon: '👤', visibilityKey: 'attendance_menu' },
-  { href: 'settings.html',   label: '設定',      icon: '⚙' }
+  { href: 'pc-monthly.html',    label: '月次管理',  icon: '○' },
+  { href: 'pc-projects.html',   label: '案件管理',  icon: '★' },
+  { href: 'pc-attendance.html', label: '出勤管理',  icon: '👤', visibilityKey: 'attendance_menu' },
+  { href: 'pc-settings.html',   label: '設定',      icon: '⚙' }
 ];
 
 function pcRenderSidebar(activeHref) {

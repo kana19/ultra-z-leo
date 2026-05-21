@@ -15,7 +15,7 @@ let purchaseList = [];
 let masterQuota = { serviceMasterQuota: 5, purchaseMasterQuota: 3, costOptionalQuota: 5 };
 
 document.addEventListener('DOMContentLoaded', async () => {
-  pcBootstrap('settings.html', '設定');
+  pcBootstrap('pc-settings.html', '設定');
   await loadAll();
   document.getElementById('btn-save-store').addEventListener('click', saveStore);
   document.getElementById('btn-save-cm').addEventListener('click', saveCM);

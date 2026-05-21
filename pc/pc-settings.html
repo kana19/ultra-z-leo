@@ -90,6 +90,60 @@
         </p>
       </div>
 
+      <div class="pc-card">
+        <div class="pc-section-title">基本情報</div>
+        <style>
+          #pc-app .info-row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 4px;border-bottom:1px solid var(--uz-border,#e5e7eb);}
+          #pc-app .info-row:last-of-type{border-bottom:none;}
+          #pc-app .info-row__key{color:var(--uz-muted,#6b7280);font-size:13px;}
+          #pc-app .info-row__val{font-weight:700;font-size:14px;text-align:right;}
+          #pc-app .info-row__url{font-size:11px;color:var(--uz-muted,#6b7280);word-break:break-all;}
+        </style>
+        <div class="info-row">
+          <span class="info-row__key">店舗名</span>
+          <span id="info-store-name" class="info-row__val">—</span>
+        </div>
+        <div class="info-row" id="info-business-hours-row" hidden>
+          <span class="info-row__key">営業時間</span>
+          <span id="info-business-hours" class="info-row__val">—</span>
+        </div>
+        <div class="info-row">
+          <span class="info-row__key">プラン</span>
+          <span class="info-row__val">レオ</span>
+        </div>
+        <div class="info-row">
+          <span class="info-row__key">提供元</span>
+          <span class="info-row__val">株式会社ターゲット</span>
+        </div>
+        <div class="info-row">
+          <span class="info-row__key">バージョン</span>
+          <span id="info-version" class="info-row__val" style="cursor:pointer;user-select:none;" title="サポート用情報">1.0.0</span>
+        </div>
+
+        <!-- GAS接続情報（既定非表示・バージョンを5回タップで展開） -->
+        <div id="info-debug" hidden>
+          <div class="info-row" style="margin-top:8px;border-top:1px dashed var(--uz-border);padding-top:10px;">
+            <span class="info-row__key">GAS接続状態</span>
+            <span id="gas-status-val" class="info-row__val" style="color:var(--uz-muted);">確認中...</span>
+          </div>
+          <div class="info-row" style="flex-direction:column;align-items:flex-start;gap:4px;">
+            <span class="info-row__key">WebアプリURL</span>
+            <span id="gas-url-val" class="info-row__url" title="GAS WebアプリURL"></span>
+          </div>
+        </div>
+
+        <p class="pc-note" style="margin-top:8px;color:var(--uz-muted);">
+          店舗情報は株式会社ターゲットが管理します。<br>
+          変更が必要な場合はサポートにご連絡ください。
+        </p>
+      </div>
+
+      <div class="settings-footer" style="text-align:center;color:var(--uz-muted);font-size:12px;padding:16px 0 24px;">
+        ウルトラZAIMUくん LEO版<br>
+        © 2026 株式会社ターゲット<br>
+        <span style="font-size:10px;">AI提案の自動確定は行いません。すべての操作はユーザーが確定してください。</span>
+      </div>
+
     </div>
   </main>
 </div>

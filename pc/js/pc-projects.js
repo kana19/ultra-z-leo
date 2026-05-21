@@ -45,7 +45,7 @@ function _classifyCostType(divisionCode, itemCode) {
 document.addEventListener('DOMContentLoaded', initProjects);
 
 async function initProjects() {
-  pcBootstrap('projects.html', '案件管理');
+  pcBootstrap('pc-projects.html', '案件管理');
   initMonthSelect();
   bindModalEvents();
   document.getElementById('btn-new-project')?.addEventListener('click', onNewProject);

@@ -69,7 +69,7 @@ function _isLinkableCost(row) {
 document.addEventListener('DOMContentLoaded', initMonthly);
 
 async function initMonthly() {
-  pcBootstrap('monthly.html', '月次管理');
+  pcBootstrap('pc-monthly.html', '月次管理');
   bindAddButtons();
   bindModalEvents();
   bindColFilterButtons();
