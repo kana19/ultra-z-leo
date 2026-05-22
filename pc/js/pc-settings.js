@@ -339,10 +339,12 @@ function renderCM() {
     const nameCell = fixed
       ? `<input type="text" class="pc-input cm-name" value="${escHtml(row.name||'')}" data-i="${i}" disabled style="width:100%;opacity:0.6;">`
       : `<input type="text" class="pc-input cm-name" value="${escHtml(row.name||'')}" data-i="${i}" placeholder="任意科目名" style="width:100%;">`;
+    const visChecked = (row.smartphoneVisible === false) ? '' : ' checked';
     return `<tr>
       <td>${escHtml(row.code||'')}</td>
       <td>${nameCell}</td>
       <td><select class="pc-select cm-tax" data-i="${i}">${taxOpts}</select></td>
+      <td style="text-align:center;"><input type="checkbox" class="cm-vis" data-i="${i}" style="width:18px;height:18px;accent-color:var(--uz-gold,#b8860b);cursor:pointer;"${visChecked}></td>
       <td>${fixed ? '固定' : '任意'}</td>
     </tr>`;
   }).join('');
@@ -356,6 +358,10 @@ async function saveCM() {
   document.querySelectorAll('.cm-tax').forEach(sel => {
     const i = Number(sel.dataset.i);
     if (costMaster[i]) costMaster[i].taxRate = Number(sel.value);
+  });
+  document.querySelectorAll('.cm-vis').forEach(chk => {
+    const i = Number(chk.dataset.i);
+    if (costMaster[i]) costMaster[i].smartphoneVisible = chk.checked;
   });
   saveCostMasterToStorage(costMaster);
   // costMasterList は販管費専用（→ 03_データ仕様.md §1-2）。仕入原価を正本に書き戻さない。

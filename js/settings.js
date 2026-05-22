@@ -879,14 +879,24 @@ function renderCostMaster() {
   // 販管費 任意（科目番号26〜30）
   const customItems = master.filter(i => i.divisionCode === '2' && i.type === 'custom');
 
+  function visToggle(id, current) {
+    const checked = (current === false) ? '' : ' checked';
+    return `
+      <label style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--uz-muted);cursor:pointer;white-space:nowrap;">
+        <input type="checkbox" id="${id}" style="width:16px;height:16px;accent-color:var(--uz-gold,#b8860b);"${checked}>
+        表示
+      </label>`;
+  }
+
   function fixedRow(item) {
     const rowLabel = item.taxRow ? `${item.taxRow}　` : '';
     return `
       <div class="staff-row" style="align-items:center;gap:8px;flex-wrap:wrap;">
-        <span class="staff-row__name" style="flex:1;min-width:120px;font-size:13px;">
+        <span class="staff-row__name" style="flex:1;min-width:110px;font-size:13px;">
           ${rowLabel}${escHtml(item.name)}
         </span>
         ${taxSelect(`cm-tax-${item.code}`, item.taxRate)}
+        ${visToggle(`cm-vis-${item.code}`, item.smartphoneVisible)}
       </div>`;
   }
 
@@ -897,12 +907,13 @@ function renderCostMaster() {
         <input type="text"
                id="cm-name-${item.code}"
                class="settings-input"
-               style="flex:1;min-width:100px;height:36px;font-size:13px;"
+               style="flex:1;min-width:90px;height:36px;font-size:13px;"
                placeholder="任意科目名（空欄で非表示）"
                maxlength="20"
                autocomplete="off"
                value="${escHtml(item.name)}">
         ${taxSelect(`cm-tax-${item.code}`, item.taxRate)}
+        ${visToggle(`cm-vis-${item.code}`, item.smartphoneVisible)}
       </div>`;
   }
 
@@ -919,6 +930,7 @@ function renderCostMaster() {
       <p style="font-size:12px;color:var(--uz-muted);line-height:1.6;">
         固定科目は名称変更不可・税率のみ変更可。<br>
         任意科目は科目名を入力すると有効になります。<br>
+        「表示」のチェックを外した科目はスマホ・iPadのコスト入力に表示されません（PC版は全科目入力可）。<br>
         科目番号は確定申告書（収支内訳書）の科目番号に対応しています。
       </p>
     </div>`;
@@ -933,13 +945,15 @@ function bindCostMasterSave() {
     const updated = master.map(item => {
       const taxEl  = document.getElementById(`cm-tax-${item.code}`);
       const nameEl = document.getElementById(`cm-name-${item.code}`);
+      const visEl  = document.getElementById(`cm-vis-${item.code}`);
 
       const taxRate = taxEl ? parseInt(taxEl.value) : item.taxRate;
       const name    = item.type === 'custom' && nameEl
         ? nameEl.value.trim()
         : item.name;
+      const smartphoneVisible = visEl ? visEl.checked : (item.smartphoneVisible !== false);
 
-      return { ...item, name, taxRate };
+      return { ...item, name, taxRate, smartphoneVisible };
     });
 
     // costMasterList は販管費専用（→ 03_データ仕様.md §1-2）。仕入原価を正本に書き戻さない。
