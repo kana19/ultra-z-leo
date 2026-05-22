@@ -125,7 +125,7 @@ function renderItemCards(divCode) {
   const container = document.getElementById('item-cards');
   if (!container) return;
 
-  const items = getDivisionItems(divCode);
+  const items = getDivisionItems(divCode, { filterBySmartphoneVisible: true });
 
   container.innerHTML = items.map(item => `
     <div class="radio-card"
@@ -143,7 +143,7 @@ function renderItemCards(divCode) {
 
 /* ── 科目選択 ────────────────────────────────────────────── */
 function selectItem(code) {
-  const items = getDivisionItems(selectedDivisionCode);
+  const items = getDivisionItems(selectedDivisionCode, { filterBySmartphoneVisible: true });
   const item  = items.find(i => i.code === code);
   if (!item) return;
 
@@ -228,7 +228,7 @@ async function handleSubmit() {
   const miscName = document.getElementById('misc-name-input')?.value.trim() || '';
   const unpaid   = document.getElementById('unpaid-toggle')?.checked ?? false;
 
-  const items = getDivisionItems(selectedDivisionCode);
+  const items = getDivisionItems(selectedDivisionCode, { filterBySmartphoneVisible: true });
   const item  = items.find(i => i.code === selectedItemCode);
 
   if (!date)       return showToast('日付を入力してください', 'error');

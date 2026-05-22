@@ -579,8 +579,8 @@ function renderCostDivisionTabs(draft) {
  * コストドラフト用 区分連動科目プルダウン（§1：技術仕様§9-4 §13-3）
  *  - 区分未選択：disabled・「先に区分を選択してください」
  *  - 区分=1（仕入原価）：costMaster の divisionCode='1' のみ＋諸口
- *  - 区分=2（販管費）  ：costMaster の divisionCode!='1' のみ＋諸口
- *  PC版は smartphoneVisible フラグ無視（全科目表示・技術仕様§3-3 §13-3）
+ *  - 区分=2（販管費）  ：costMaster の divisionCode!='1' のうち smartphoneVisible≠false のみ＋諸口
+ *  販管費科目のアプリ表示フラグ（smartphoneVisible）は全デバイス共通で参照する（OFF科目はコスト入力に出さない・既定全ON）
  */
 function renderCostSubjectSelectFiltered(draft) {
   const div = String(draft.divisionCode || '');
@@ -594,6 +594,12 @@ function renderCostSubjectSelectFiltered(draft) {
     .filter(it => {
       const itDiv = String(it.divisionCode || '');
       return div === '1' ? itDiv === '1' : itDiv !== '1';
+    })
+    .filter(it => {
+      // 販管費（div='2'）のみ smartphoneVisible を参照。仕入原価はフラグ非搭載のため対象外。
+      // smartphoneVisible キーが無い既存データは表示扱い（後方互換）。
+      if (div === '1') return true;
+      return it.smartphoneVisible !== false;
     });
   // 諸口を末尾に追加（divisionCode に紐付く）
   items.push({
