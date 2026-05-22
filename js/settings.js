@@ -442,18 +442,19 @@ function editStaff(id) {
 }
 
 /**
- * costCategory 正規化（PC版 pc-settings.js と統一）
- *   contractor時のコスト科目：'21'（外注工賃）/ '25'（税理士等の報酬）
- *   未設定・不正値は '21' にフォールバック
+ * costCategory 正規化（委託・外注スタッフのコスト計上先科目）
+ *   委託・外注のみ意味を持つ：'25'（税理士等の報酬）/ それ以外は '21'（外注工賃）
+ *   雇用系スタッフは給与計算側（pc-attendance.js _getStaffCostCode）で
+ *   costCategory を参照せず常に20（給料賃金）に計上される
  */
 function _normalizeCostCategory(value) {
-  if (value === '21' || value === '25') return value;
-  return '21';
+  return (value === '25') ? '25' : '21';
 }
 
 /**
- * 編集モード内：雇用形態変更時にコスト科目セレクトの活性を切り替える
- * （委託・外注のときのみコスト科目を選べる）
+ * 編集モード内：雇用形態に応じてコスト科目セレクトの活性を切り替える
+ *   委託・外注のときのみコスト科目（21/25）を選択可。雇用系は20固定のため非活性
+ *   （給与計算正本・PC版 pc-settings.js と統一）
  */
 function _onEditEmpChange(id) {
   const empEl  = document.getElementById(`staff-edit-emp-${id}`);
@@ -492,8 +493,10 @@ async function saveEditStaff(id) {
   }
 
   const empType  = _normalizeEmpType(empEl.value);
-  // コスト科目は委託・外注のときのみ意味を持つ（それ以外は '21' に正規化して保持）
-  const costCategory = _normalizeCostCategory(costEl ? costEl.value : '21');
+  // コスト科目は委託・外注のときのみ意味を持つ（雇用系は給与計算側で20固定）
+  const costCategory = (empType === 'contractor')
+    ? _normalizeCostCategory(costEl ? costEl.value : '21')
+    : '21';
 
   const newList = list.map(s =>
     s.id === id
@@ -527,8 +530,16 @@ function bindStaffAdd() {
   const btn       = document.getElementById('staff-add-btn');
   const input     = document.getElementById('staff-add-input');
   const empSelect = document.getElementById('staff-add-emp');
+  const costSelect= document.getElementById('staff-add-cost');
   const pwInput   = document.getElementById('staff-add-password');
   if (!btn || !input) return;
+
+  // 追加フォームにコスト科目セレクトがある場合：雇用形態に応じて活性切替（委託のみ活性）
+  if (empSelect && costSelect) {
+    empSelect.addEventListener('change', () => {
+      costSelect.disabled = (_normalizeEmpType(empSelect.value) !== 'contractor');
+    });
+  }
 
   const doAdd = async () => {
     const name = input.value.trim();
@@ -549,12 +560,17 @@ function bindStaffAdd() {
     const maxId         = list.length > 0 ? Math.max(...list.map(s => s.id)) : 0;
     const newId         = maxId + 1;
     const employmentType = _normalizeEmpType(empSelect ? empSelect.value : '');
+    // コスト科目は委託・外注のときのみ意味を持つ（雇用系は給与計算側で20固定）
+    const costCategory  = (employmentType === 'contractor')
+      ? _normalizeCostCategory(costSelect ? costSelect.value : '21')
+      : '21';
     const passwordHash  = await hashStaffPassword(newId, password);
     const passwordUpdatedAt = new Date().toISOString();
     const newList       = [...list, {
       id: newId,
       name,
       employmentType,
+      costCategory,
       passwordHash,
       passwordUpdatedAt,
     }];
@@ -562,6 +578,7 @@ function bindStaffAdd() {
 
     input.value = '';
     if (empSelect) empSelect.value = 'employed_full';
+    if (costSelect) { costSelect.value = '21'; costSelect.disabled = true; }
     if (pwInput) pwInput.value = '';
     renderStaffList();
     showToast(`${name}を追加しました ✓`, 'success');

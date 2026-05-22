@@ -17,7 +17,6 @@ let masterQuota = { serviceMasterQuota: 5, purchaseMasterQuota: 3, costOptionalQ
 document.addEventListener('DOMContentLoaded', async () => {
   pcBootstrap('pc-settings.html', '設定');
   await loadAll();
-  document.getElementById('btn-save-store').addEventListener('click', saveStore);
   document.getElementById('btn-save-cm').addEventListener('click', saveCM);
   document.getElementById('svc-add-btn').addEventListener('click', addService);
   document.getElementById('pur-add-btn').addEventListener('click', addPurchase);
@@ -25,6 +24,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (svcNameInput) svcNameInput.addEventListener('keydown', e => { if (e.key === 'Enter') addService(); });
   const purNameInput = document.getElementById('pur-add-name');
   if (purNameInput) purNameInput.addEventListener('keydown', e => { if (e.key === 'Enter') addPurchase(); });
+  bindStaffAdd();
 });
 
 async function loadAll() {
@@ -55,7 +55,6 @@ async function loadAll() {
   } else {
     costMaster = getCostMaster();
   }
-  renderStore();
   renderServices();
   renderPurchases();
   renderCM();
@@ -125,25 +124,6 @@ function bindVersionTapDebug() {
       }
     }
   });
-}
-
-function renderStore() {
-  const name = settings?.storeName || localStorage.getItem('uz_store_name') || '';
-  const owner = settings?.ownerName || '';
-  document.getElementById('s-store').value = name;
-  document.getElementById('s-owner').value = owner;
-}
-
-async function saveStore() {
-  const storeName = document.getElementById('s-store').value.trim();
-  const ownerName = document.getElementById('s-owner').value.trim();
-  localStorage.setItem('uz_store_name', storeName);
-  const res = await callGAS('saveSettings', { storeName, ownerName }).catch(() => null);
-  if (res && res.status === 'ok') {
-    showToast('店舗情報を保存しました', 'success');
-  } else {
-    showToast('保存失敗（ローカルには保存）', 'error');
-  }
 }
 
 /* ── サービスマスタ ─────────────────────────────────────── */
@@ -388,155 +368,238 @@ async function saveCM() {
   }
 }
 
-/**
- * employmentType 正規化（3種化対応・サイクルA）
- *   旧 'employed' および未設定はすべて 'employed_full' に寄せる
- */
+
+/* ══════════════════════════════════════════════════════════════
+   スタッフマスタ（追加・編集・削除・パスワード対応）
+   - スタッフマスタ登録者＝月次給与計算対象（出勤管理→確定で計上）
+   - コスト科目は会計上の計上先：委託・外注のみ 21/25、雇用系は20固定
+     （給与計算正本 pc-attendance.js _getStaffCostCode と一致）
+   - 給与単価（hourlyWage/dailyWage/monthlyWage）・源泉区分（withholdingMode）
+     ・経営メモ（managerMemo）はPC版出勤管理で設定する領域。
+     ここでの編集・追加時はスプレッドで既存値を必ず保持し、消さない。
+   ══════════════════════════════════════════════════════════════ */
+const STAFF_PW_PATTERN = /^[A-Za-z0-9]{5}$/;
+function validateStaffPassword(pw) { return typeof pw === 'string' && STAFF_PW_PATTERN.test(pw); }
+async function hashStaffPassword(staffId, password) {
+  const salted  = `staff:${staffId}:${password}`;
+  const encoded = new TextEncoder().encode(salted);
+  const buf     = await crypto.subtle.digest('SHA-256', encoded);
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 function normalizeEmpType(value) {
   if (value === 'employed_full' || value === 'employed_temp' || value === 'contractor') return value;
+  if (value === 'employed') return 'employed_full';
   return 'employed_full';
 }
 
-/**
- * costCategory 正規化
- *   contractor時のコスト科目：'21'（外注工賃）/ '25'（税理士等の報酬）
- *   未設定・不正値は '21' にフォールバック
- */
+/* コスト科目：委託・外注のみ 21/25。雇用系は給与計算側で20固定のため参照されない */
 function normalizeCostCategory(value) {
-  if (value === '21' || value === '25') return value;
-  return '21';
+  return (value === '25') ? '25' : '21';
 }
 
-function renderStaff() {
+function empTypeLabel(empType) {
+  if (empType === 'contractor') return '委託・外注';
+  if (empType === 'employed_temp') return '臨時アルバイト';
+  return '常勤雇用';
+}
+
+function getStaffArray() {
   let staff = settings?.staffList ?? settings?.staff ?? [];
   if (typeof staff === 'string') { try { staff = JSON.parse(staff); } catch { staff = []; } }
   if (!Array.isArray(staff)) staff = [];
+  return staff;
+}
+
+function renderStaff() {
+  const staff = getStaffArray();
   const body = document.getElementById('staff-body');
+  if (!body) return;
   if (staff.length === 0) {
     body.innerHTML = `<tr><td colspan="5" class="text-muted" style="text-align:center;padding:20px;">登録なし</td></tr>`;
     return;
   }
   body.innerHTML = staff.map(s => {
     const empType = normalizeEmpType(s.employmentType);
-    const costCat = normalizeCostCategory(s.costCategory);
     const sid = escHtml(String(s.id || ''));
-    const empOpts = [
-      ['employed_full', '常勤雇用(社員)'],
-      ['employed_temp', '臨時アルバイト'],
-      ['contractor',    '委託・外注']
-    ].map(([v, label]) =>
-      `<option value="${v}"${v === empType ? ' selected' : ''}>${label}</option>`
-    ).join('');
-    const costOpts = [
-      ['21', '21:外注工賃'],
-      ['25', '25:税理士等の報酬']
-    ].map(([v, label]) =>
-      `<option value="${v}"${v === costCat ? ' selected' : ''}>${label}</option>`
-    ).join('');
-    const costSelectDisabled = empType !== 'contractor';
-    return `<tr>
+    const isContractor = empType === 'contractor';
+    const costLabel = isContractor
+      ? ((normalizeCostCategory(s.costCategory) === '25') ? '25：税理士等の報酬' : '21：外注工賃')
+      : '20：給料賃金';
+    return `<tr id="staff-row-${sid}">
       <td>${sid}</td>
-      <td>${escHtml(s.name||'')}</td>
-      <td>
-        <select class="pc-select staff-emp-select" data-staff-id="${sid}" style="width:180px;">
-          ${empOpts}
-        </select>
-      </td>
-      <td>
-        <select class="pc-select staff-cost-select" data-staff-id="${sid}" style="width:180px;"${costSelectDisabled ? ' disabled' : ''}>
-          ${costOpts}
-        </select>
-      </td>
-      <td>${escHtml(s.note||'')}</td>
+      <td>${escHtml(s.name || '')}</td>
+      <td>${empTypeLabel(empType)}</td>
+      <td>${costLabel}</td>
+      <td><button class="pc-btn pc-btn--ghost" type="button" onclick="editStaff('${sid}')">編集</button></td>
     </tr>`;
   }).join('');
-
-  // 雇用形態セレクトに変更ハンドラを束ねる(インライン保存)
-  body.querySelectorAll('.staff-emp-select').forEach(sel => {
-    sel.addEventListener('change', () => saveStaffEmpType(sel));
-  });
-  // コスト科目セレクトに変更ハンドラを束ねる(インライン保存)
-  body.querySelectorAll('.staff-cost-select').forEach(sel => {
-    sel.addEventListener('change', () => saveStaffCostCategory(sel));
-  });
 }
 
-/**
- * 雇用形態セレクトを変更したらその場でGASに保存する
- *  - 全員分の最新 staffList を再構築して saveStaffList で送信
- *  - 楽観的に settings.staffList を更新
- *  - 委託・外注以外に変更時はコスト科目セレクトを非活性化
- */
-async function saveStaffEmpType(selectEl) {
-  const targetId = selectEl.dataset.staffId;
-  const newType = normalizeEmpType(selectEl.value);
-  let list = settings?.staffList ?? settings?.staff ?? [];
-  if (typeof list === 'string') { try { list = JSON.parse(list); } catch { list = []; } }
-  if (!Array.isArray(list)) list = [];
+function editStaff(id) {
+  const staff = getStaffArray().find(s => String(s.id) === String(id));
+  if (!staff) return;
+  const row = document.getElementById(`staff-row-${id}`);
+  if (!row) return;
+  const empType = normalizeEmpType(staff.employmentType);
+  const costCat = normalizeCostCategory(staff.costCategory);
+  const costDisabled = empType !== 'contractor';
+  row.innerHTML = `
+    <td colspan="5">
+      <div class="staff-edit-cell">
+        <div class="staff-edit-line">
+          <input type="text" id="staff-edit-name-${id}" class="pc-input" style="flex:1;min-width:140px;" value="${escHtml(staff.name || '')}" maxlength="20" placeholder="スタッフ名">
+          <select id="staff-edit-emp-${id}" class="pc-select" style="width:160px;" onchange="onEditEmpChange('${id}')">
+            <option value="employed_full"${empType === 'employed_full' ? ' selected' : ''}>常勤雇用（社員）</option>
+            <option value="employed_temp"${empType === 'employed_temp' ? ' selected' : ''}>臨時アルバイト</option>
+            <option value="contractor"${empType === 'contractor' ? ' selected' : ''}>委託・外注</option>
+          </select>
+          <select id="staff-edit-cost-${id}" class="pc-select" style="width:170px;"${costDisabled ? ' disabled' : ''}>
+            <option value="21"${costCat === '21' ? ' selected' : ''}>21：外注工賃</option>
+            <option value="25"${costCat === '25' ? ' selected' : ''}>25：税理士等の報酬</option>
+          </select>
+        </div>
+        <div class="staff-edit-line">
+          <input type="text" id="staff-edit-password-${id}" class="pc-input" style="flex:1;min-width:200px;" placeholder="パスワード変更（任意・5桁英数字）" maxlength="5" autocomplete="off">
+          <button class="pc-btn" type="button" onclick="saveEditStaff('${id}')">保存</button>
+          <button class="pc-btn pc-btn--ghost" type="button" onclick="renderStaff()">キャンセル</button>
+          <button class="pc-btn pc-btn--danger" type="button" onclick="deleteStaff('${id}')">削除</button>
+        </div>
+        <p class="pc-note" style="margin:2px 0 0;color:var(--uz-muted);font-size:11px;">給与単価・源泉区分・経営メモは出勤管理で設定します（ここでの編集では変更されません）。</p>
+      </div>
+    </td>`;
+  document.getElementById(`staff-edit-name-${id}`)?.focus();
+}
 
-  const updated = list.map(s => {
-    if (String(s.id) === String(targetId)) {
-      return { ...s, employmentType: newType };
-    }
-    return s;
-  });
+/* 編集モード：雇用形態に応じてコスト科目セレクトの活性を切替（委託・外注のみ活性） */
+function onEditEmpChange(id) {
+  const empEl  = document.getElementById(`staff-edit-emp-${id}`);
+  const costEl = document.getElementById(`staff-edit-cost-${id}`);
+  if (!empEl || !costEl) return;
+  costEl.disabled = (normalizeEmpType(empEl.value) !== 'contractor');
+}
 
-  selectEl.disabled = true;
-  let res;
-  try {
-    res = await callGAS('saveStaffList', { staffList: updated });
-  } catch (e) {
-    selectEl.disabled = false;
-    showToast('通信エラー：' + (e.message || 'unknown'), 'error');
-    return;
+async function saveEditStaff(id) {
+  const nameEl = document.getElementById(`staff-edit-name-${id}`);
+  const empEl  = document.getElementById(`staff-edit-emp-${id}`);
+  const costEl = document.getElementById(`staff-edit-cost-${id}`);
+  const pwEl   = document.getElementById(`staff-edit-password-${id}`);
+  if (!nameEl || !empEl) return;
+
+  const name = nameEl.value.trim();
+  if (!name) return showToast('スタッフ名を入力してください', 'error');
+
+  const list = getStaffArray();
+  if (list.some(s => String(s.id) !== String(id) && s.name === name)) {
+    return showToast('同じ名前のスタッフが既に登録されています', 'error');
   }
-  selectEl.disabled = false;
 
+  const pwInput = pwEl ? pwEl.value.trim() : '';
+  let passwordUpdate = null;
+  if (pwInput) {
+    if (!validateStaffPassword(pwInput)) {
+      return showToast('パスワードは5桁の半角英数字で入力してください', 'error');
+    }
+    passwordUpdate = {
+      passwordHash: await hashStaffPassword(id, pwInput),
+      passwordUpdatedAt: new Date().toISOString(),
+    };
+  }
+
+  const empType = normalizeEmpType(empEl.value);
+  const costCategory = (empType === 'contractor') ? normalizeCostCategory(costEl ? costEl.value : '21') : '21';
+
+  // 既存フィールド（給与単価・源泉区分・経営メモ等）は ...s で必ず保持
+  const updated = list.map(s =>
+    String(s.id) === String(id)
+      ? { ...s, name, employmentType: empType, costCategory, ...(passwordUpdate || {}) }
+      : s
+  );
+
+  const res = await callGAS('saveStaffList', { staffList: updated }).catch(() => null);
   if (res && res.status === 'ok') {
     settings.staffList = updated;
-    // 同じ行のコスト科目セレクトの活性状態を更新
-    const costSel = document.querySelector(`.staff-cost-select[data-staff-id="${targetId}"]`);
-    if (costSel) costSel.disabled = (newType !== 'contractor');
-    showToast('雇用形態を保存しました', 'success');
+    renderStaff();
+    showToast(passwordUpdate ? `${name}を更新しました（パスワード変更含む）` : `${name}を更新しました`, 'success');
   } else {
     showToast('保存失敗：' + (res && res.message || '不明なエラー'), 'error');
   }
 }
 
-/**
- * コスト科目セレクトを変更したらその場でGASに保存する
- *  - contractor のスタッフのみ意味を持つ
- *  - 21:外注工賃 / 25:税理士等の報酬
- */
-async function saveStaffCostCategory(selectEl) {
-  const targetId = selectEl.dataset.staffId;
-  const newCat = normalizeCostCategory(selectEl.value);
-  let list = settings?.staffList ?? settings?.staff ?? [];
-  if (typeof list === 'string') { try { list = JSON.parse(list); } catch { list = []; } }
-  if (!Array.isArray(list)) list = [];
-
-  const updated = list.map(s => {
-    if (String(s.id) === String(targetId)) {
-      return { ...s, costCategory: newCat };
-    }
-    return s;
-  });
-
-  selectEl.disabled = true;
-  let res;
-  try {
-    res = await callGAS('saveStaffList', { staffList: updated });
-  } catch (e) {
-    selectEl.disabled = false;
-    showToast('通信エラー：' + (e.message || 'unknown'), 'error');
-    return;
-  }
-  selectEl.disabled = false;
-
+async function deleteStaff(id) {
+  const list = getStaffArray();
+  const target = list.find(s => String(s.id) === String(id));
+  if (!target) return;
+  if (!confirm(`「${target.name}」を削除しますか？\n出退勤の記録済みデータには影響しません。`)) return;
+  const updated = list.filter(s => String(s.id) !== String(id));
+  const res = await callGAS('saveStaffList', { staffList: updated }).catch(() => null);
   if (res && res.status === 'ok') {
     settings.staffList = updated;
-    showToast('コスト科目を保存しました', 'success');
+    renderStaff();
+    showToast(`${target.name}を削除しました`, 'success');
   } else {
-    showToast('保存失敗：' + (res && res.message || '不明なエラー'), 'error');
+    showToast('削除失敗：' + (res && res.message || '不明なエラー'), 'error');
   }
+}
+
+function bindStaffAdd() {
+  const btn       = document.getElementById('staff-add-btn');
+  const nameInput = document.getElementById('staff-add-name');
+  const empSelect = document.getElementById('staff-add-emp');
+  const costSelect= document.getElementById('staff-add-cost');
+  const pwInput   = document.getElementById('staff-add-password');
+  if (!btn || !nameInput) return;
+
+  if (empSelect && costSelect) {
+    empSelect.addEventListener('change', () => {
+      costSelect.disabled = (normalizeEmpType(empSelect.value) !== 'contractor');
+    });
+  }
+
+  const doAdd = async () => {
+    const name = nameInput.value.trim();
+    if (!name) return showToast('スタッフ名を入力してください', 'error');
+
+    const password = pwInput ? pwInput.value.trim() : '';
+    if (!validateStaffPassword(password)) {
+      return showToast('パスワードは5桁の半角英数字で入力してください', 'error');
+    }
+
+    const list = getStaffArray();
+    if (list.some(s => s.name === name)) {
+      return showToast('同じ名前のスタッフが既に登録されています', 'error');
+    }
+
+    const maxId = list.length > 0 ? Math.max(...list.map(s => Number(s.id) || 0)) : 0;
+    const newId = maxId + 1;
+    const empType = normalizeEmpType(empSelect ? empSelect.value : '');
+    const costCategory = (empType === 'contractor') ? normalizeCostCategory(costSelect ? costSelect.value : '21') : '21';
+    const passwordHash = await hashStaffPassword(newId, password);
+
+    // 給与単価・源泉区分は出勤管理で設定する領域。新規追加時は既定値で初期化
+    const updated = [...list, {
+      id: newId, name, employmentType: empType, costCategory,
+      withholdingMode: 'off', hourlyWage: 0, dailyWage: 0, monthlyWage: 0, managerMemo: '',
+      passwordHash, passwordUpdatedAt: new Date().toISOString(),
+    }];
+
+    btn.disabled = true;
+    const res = await callGAS('saveStaffList', { staffList: updated }).catch(() => null);
+    btn.disabled = false;
+    if (res && res.status === 'ok') {
+      settings.staffList = updated;
+      nameInput.value = '';
+      if (empSelect) empSelect.value = 'employed_full';
+      if (costSelect) { costSelect.value = '21'; costSelect.disabled = true; }
+      if (pwInput) pwInput.value = '';
+      renderStaff();
+      showToast(`${name}を追加しました`, 'success');
+    } else {
+      showToast('追加失敗：' + (res && res.message || '不明なエラー'), 'error');
+    }
+  };
+
+  btn.addEventListener('click', doAdd);
+  nameInput.addEventListener('keydown', e => { if (e.key === 'Enter') doAdd(); });
+  if (pwInput) pwInput.addEventListener('keydown', e => { if (e.key === 'Enter') doAdd(); });
 }
