@@ -73,8 +73,12 @@ async function loadCostMasterFromGAS() {
   try {
     const res = await callGAS('getCostMaster', {});
     if (res && res.status === 'ok' && Array.isArray(res.data)) {
-      saveCostMasterToStorage(res.data);
-      costMaster = res.data;
+      // GAS生データは type/divisionCode が欠落しうるため正規化してから保存・使用（→ app.js）
+      const normalized = (typeof normalizeCostMasterList === 'function')
+        ? normalizeCostMasterList(res.data)
+        : res.data;
+      saveCostMasterToStorage(normalized);
+      costMaster = normalized;
       renderItemCards(selectedDivisionCode);
     }
   } catch { /* サイレントフェイル */ }

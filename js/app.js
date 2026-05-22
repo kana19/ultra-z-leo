@@ -605,15 +605,63 @@ const DEFAULT_COST_MASTER = [
 ];
 
 /**
- * コスト科目マスタをlocalStorageから取得（なければデフォルト）
+ * コスト科目マスタの1行を正規化する。
+ * 保存データに type / divisionCode / taxRow が欠けていても code から確定的に補完する。
+ * 販管費マスタ（costMasterList）は青色申告固定構造（→ 03_データ仕様.md §1-2）であり、
+ * code から fixed/custom が一意に決まる（8〜25・31=fixed / 26〜30=custom）。divisionCode は常に '2'。
+ * smartphoneVisible はデータ側の値を尊重し、未設定（undefined）のみ true（表示）扱い。
+ * @param {Object} item
+ * @returns {Object}
+ */
+function normalizeCostMasterItem(item) {
+  const codeNum = parseInt(item.code, 10);
+  const isCustom = codeNum >= 26 && codeNum <= 30;
+  const def = DEFAULT_COST_MASTER.find(d => String(d.code) === String(item.code));
+  return {
+    ...item,
+    code:         String(item.code),
+    taxRow:       (item.taxRow != null) ? item.taxRow : (def ? def.taxRow : codeNum),
+    type:         isCustom ? 'custom' : 'fixed',
+    divisionCode: '2',
+    taxRate:      (item.taxRate != null) ? item.taxRate : (def ? def.taxRate : 10),
+    smartphoneVisible: (item.smartphoneVisible === false) ? false : true,
+  };
+}
+
+/**
+ * コスト科目マスタ配列を正規化する。
+ * 仕入原価行（divisionCode='1'）が混入していても除外し、販管費のみ返す。
+ * 既定24件のうち保存データに存在しない code は DEFAULT から補完する（欠損行の自己修復）。
+ * @param {Array} list
+ * @returns {Array}
+ */
+function normalizeCostMasterList(list) {
+  const arr = Array.isArray(list) ? list : [];
+  // 仕入原価（divisionCode='1'）は販管費マスタに含めない
+  const savedByCode = {};
+  arr.forEach(it => {
+    if (it && String(it.divisionCode) === '1') return;
+    if (it && it.code != null) savedByCode[String(it.code)] = it;
+  });
+  // DEFAULT の24件順を基準に、保存値があればそれを正規化、無ければ DEFAULT を採用
+  return DEFAULT_COST_MASTER.map(def => {
+    const saved = savedByCode[String(def.code)];
+    return normalizeCostMasterItem(saved ? saved : def);
+  });
+}
+
+/**
+ * コスト科目マスタをlocalStorageから取得（なければデフォルト）。
+ * 取得値は必ず正規化して返す（type/divisionCode 欠落データの自己修復）。
  * @returns {Array}
  */
 function getCostMaster() {
   try {
     const saved = localStorage.getItem(COST_MASTER_KEY);
-    return saved ? JSON.parse(saved) : JSON.parse(JSON.stringify(DEFAULT_COST_MASTER));
+    const base  = saved ? JSON.parse(saved) : DEFAULT_COST_MASTER;
+    return normalizeCostMasterList(base);
   } catch {
-    return JSON.parse(JSON.stringify(DEFAULT_COST_MASTER));
+    return normalizeCostMasterList(DEFAULT_COST_MASTER);
   }
 }
 

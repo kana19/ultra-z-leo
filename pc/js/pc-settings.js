@@ -48,13 +48,19 @@ async function loadAll() {
     purchaseList = [];
   }
   // 販管費マスタは既存通り getCostMaster 経由（getSettings の costMasterList より優先）
+  // GAS生データは type/divisionCode が欠落しうるため normalizeCostMasterList で正規化する（→ app.js）
+  let cmRaw;
   if (cmRes && cmRes.status === 'ok' && Array.isArray(cmRes.data) && cmRes.data.length > 0) {
-    costMaster = cmRes.data;
+    cmRaw = cmRes.data;
   } else if (Array.isArray(settings.costMasterList) && settings.costMasterList.length > 0) {
-    costMaster = settings.costMasterList;
+    cmRaw = settings.costMasterList;
   } else {
-    costMaster = getCostMaster();
+    cmRaw = getCostMaster();
   }
+  costMaster = (typeof normalizeCostMasterList === 'function')
+    ? normalizeCostMasterList(cmRaw)
+    : cmRaw;
+  saveCostMasterToStorage(costMaster);
   renderServices();
   renderPurchases();
   renderCM();

@@ -107,7 +107,10 @@ async function loadMonthlyData(month) {
 
     _settings.costMaster = (typeof getCostMaster === 'function') ? getCostMaster() : [];
     if (settings.costMasterList && Array.isArray(settings.costMasterList) && settings.costMasterList.length) {
-      _settings.costMaster = settings.costMasterList;
+      // GAS生データは type/divisionCode が欠落しうるため正規化してから使う（→ app.js）
+      _settings.costMaster = (typeof normalizeCostMasterList === 'function')
+        ? normalizeCostMasterList(settings.costMasterList)
+        : settings.costMasterList;
     }
     _settings.serviceList = Array.isArray(settings.serviceList) ? settings.serviceList : [];
 
