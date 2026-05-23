@@ -271,16 +271,6 @@
               <tr class="row-profit"><td>経常利益</td><td class="ipad-td-r" id="ipad-pl-profit">¥—</td></tr>
             </tbody>
           </table>
-          <!-- 税理士・銀行提出用CSV（常時表示） -->
-          <div class="ipad-tax-dl-panel">
-            <div class="ipad-tax-dl-label">税理士・銀行提出用CSV</div>
-            <div class="ipad-tax-dl-row">
-              <select id="ipad-tax-from" class="ipad-tax-select" aria-label="開始月"></select>
-              <span class="ipad-tax-sep">〜</span>
-              <select id="ipad-tax-to" class="ipad-tax-select" aria-label="終了月"></select>
-            </div>
-            <button id="ipad-tax-dl-exec" class="ipad-tax-dl-btn" type="button">ダウンロード実行</button>
-          </div>
         </div>
 
         <!-- ② 月次推移グラフ -->
@@ -292,6 +282,17 @@
             <div class="ipad-chart-loading" id="ipad-chart-loading">読み込み中...</div>
             <canvas id="ipad-pl-chart"></canvas>
           </div>
+        </div>
+
+        <!-- 税理士・銀行提出用CSV（左カラム最下部・常時表示） -->
+        <div class="ipad-tax-dl-panel">
+          <div class="ipad-tax-dl-label">税理士・銀行提出用CSV</div>
+          <div class="ipad-tax-dl-row">
+            <select id="ipad-tax-from" class="ipad-tax-select" aria-label="開始月"></select>
+            <span class="ipad-tax-sep">〜</span>
+            <select id="ipad-tax-to" class="ipad-tax-select" aria-label="終了月"></select>
+          </div>
+          <button id="ipad-tax-dl-exec" class="ipad-tax-dl-btn" type="button">ダウンロード実行</button>
         </div>
 
         <!-- 確定申告タイマー（期間中のみ） -->

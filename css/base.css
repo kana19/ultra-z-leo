@@ -1283,7 +1283,8 @@ body.is-ipad .ipad-dash-section {
   border-bottom: 1px solid var(--uz-border);
 }
 body.is-ipad .ipad-home-left .ipad-dash-section:last-child,
-body.is-ipad .ipad-home-right .ipad-dash-section:last-child {
+body.is-ipad .ipad-home-right .ipad-dash-section:last-child,
+body.is-ipad .ipad-dash-section:has(+ .ipad-tax-dl-panel) {
   border-bottom: none;
   margin-bottom: 0;
   padding-bottom: 0;
