@@ -916,6 +916,27 @@ body.is-ipad {
     border-color: var(--uz-danger);
     animation: sidebar-dot-blink 0.8s ease-in-out infinite;
   }
+  /* サイドバー日時（カラータイマー直下・中央寄せ・リアルタイム） */
+  .sidebar-datetime {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    width: 100%;
+  }
+  .sidebar-datetime__date {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--uz-text2);
+    letter-spacing: 0.02em;
+  }
+  .sidebar-datetime__time {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--uz-text);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.04em;
+  }
   /* 課題1：中央の店名ヘッダーは隠す（サイドバーロゴを主表示とする） */
   .app-header__store { display: none; }
 
@@ -1258,7 +1279,7 @@ body.is-ipad .ipad-home-left {
   justify-content: space-between;
   gap: 0;
   border-right: 1px solid var(--uz-border);
-  padding: 28px 24px;
+  padding: 28px 24px 32px;
   box-sizing: border-box;
   overflow: hidden;
 }
@@ -1495,10 +1516,12 @@ body.is-ipad #ipad-tax-timer-right {
 /* ── iPad 税理士・銀行提出用CSV DLパネル（常時表示） ──────── */
 body.is-ipad .ipad-tax-dl-panel {
   margin-top: 4px;
+  margin-bottom: 4px;
   padding: 12px 14px;
   background: var(--uz-surface2);
   border: none;
   border-radius: 8px;
+  flex-shrink: 0;
 }
 body.is-ipad .ipad-tax-dl-label {
   font-size: 11px;
@@ -1506,6 +1529,7 @@ body.is-ipad .ipad-tax-dl-label {
   color: var(--uz-text2);
   letter-spacing: 0.04em;
   margin-bottom: 8px;
+  text-align: center;
 }
 
 body.is-ipad .ipad-tax-dl-row {

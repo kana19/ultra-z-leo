@@ -214,6 +214,23 @@ function uzRenderBrand(targetEl, opts) {
     return span;
   };
 
+  // デモ時フォールバック：実販売時はロゴ表示がスタンダードになるため、
+  // 複製元(デモ)でもロゴ実寸(240×60)でカラータイマー・日時とのバランスを確認できるよう
+  // ダミーロゴSVG(透過背景・データURI・外部ファイル不要)を表示する。実店舗は store-logo.png を使用。
+  const DEMO_LOGO_SVG =
+    'data:image/svg+xml;utf8,' + encodeURIComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="240" height="60" viewBox="0 0 240 60">' +
+      '<rect width="240" height="60" fill="none"/>' +
+      '<text x="120" y="40" text-anchor="middle" font-family="Georgia, \'Times New Roman\', serif" ' +
+      'font-size="34" font-weight="700" fill="#1a1a1a">Sample Bar</text></svg>');
+  const makeDemoLogoNode = function () {
+    const di = document.createElement('img');
+    di.className = logoClass;
+    di.alt = storeName || 'サンプル店舗（デモ）';
+    di.src = DEMO_LOGO_SVG;
+    return di;
+  };
+
   // 中身をクリア
   targetEl.textContent = '';
 
@@ -223,12 +240,14 @@ function uzRenderBrand(targetEl, opts) {
   img.alt = storeName || '店舗ロゴ';
   img.decoding = 'async';
   img.addEventListener('error', function () {
-    // 画像が無い（未アップロード）→ 店舗名テキストへ差し替え
+    // 画像が無い（未アップロード）→ デモ時はダミーロゴ／実店舗は店舗名テキスト
+    const fallbackNode = (typeof UZ_DEMO !== 'undefined' && UZ_DEMO)
+      ? makeDemoLogoNode() : makeTextNode();
     if (img.parentNode === targetEl) {
-      targetEl.replaceChild(makeTextNode(), img);
+      targetEl.replaceChild(fallbackNode, img);
     } else {
       targetEl.textContent = '';
-      targetEl.appendChild(makeTextNode());
+      targetEl.appendChild(fallbackNode);
     }
   });
   const buster = (Date.now ? Date.now() : new Date().getTime());
@@ -301,7 +320,41 @@ async function uzLoadSidebarTimer() {
   } catch { /* GAS失敗時は消灯のまま */ }
 }
 
+/* ── サイドバー日時表示（iPad全画面共通） ──────────────────
+ * カラータイマーの直下に現在日時をリアルタイム表示（スマホ版ホームと同テイスト）。
+ * timer-dot を内包する .nav-sidebar__brand 直下に動的挿入し、HTMLを各画面で編集せず一括適用。 */
+function uzInitSidebarDateTime() {
+  const dot = document.getElementById('sidebar-timer-dot');
+  if (!dot) return;
+  const brand = dot.closest('.nav-sidebar__brand') || dot.parentElement;
+  if (!brand || document.getElementById('sidebar-datetime')) return;
+
+  const box = document.createElement('div');
+  box.id = 'sidebar-datetime';
+  box.className = 'sidebar-datetime';
+  box.innerHTML =
+    '<span id="sidebar-date" class="sidebar-datetime__date"></span>' +
+    '<span id="sidebar-time" class="sidebar-datetime__time"></span>';
+  brand.appendChild(box);
+
+  const tick = () => {
+    const now = new Date();
+    const w = ['日','月','火','水','木','金','土'][now.getDay()];
+    const dateEl = document.getElementById('sidebar-date');
+    const timeEl = document.getElementById('sidebar-time');
+    if (dateEl) dateEl.textContent =
+      `${now.getFullYear()}年${now.getMonth()+1}月${now.getDate()}日（${w}）`;
+    if (timeEl) timeEl.textContent =
+      `${String(now.getHours()).padStart(2,'0')}:` +
+      `${String(now.getMinutes()).padStart(2,'0')}:` +
+      `${String(now.getSeconds()).padStart(2,'0')}`;
+  };
+  tick();
+  setInterval(tick, 1000);
+}
+
 document.addEventListener('DOMContentLoaded', uzLoadSidebarTimer);
+document.addEventListener('DOMContentLoaded', uzInitSidebarDateTime);
 
 /* ── UI用語（A-9-X：業態固定概念撤廃後・「出勤／退勤」表記に静的統一） ─
  * 業態判定ロジックは撤廃し、deriveUILabels() は固定ラベルを返すスタブとして残す。
