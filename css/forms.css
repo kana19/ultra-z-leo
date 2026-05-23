@@ -514,9 +514,9 @@
 }
 
 .submit-btn--red {
-  background: var(--uz-red-bg);
-  border: 0.5px solid rgba(224,80,80,0.3);
-  color: var(--uz-red);
+  background: var(--uz-amber-bg);
+  border: 0.5px solid var(--uz-border2);
+  color: var(--uz-gold);
 }
 
 /* ── 個別管理行（タブ1・タブ2共通） ─────────────────────── */

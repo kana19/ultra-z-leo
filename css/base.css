@@ -18,14 +18,14 @@
   --uz-blue:     #333333;   /* 後方互換用 */
   --uz-amber:    #888888;   /* 警告・未収（ライトでの代替） */
 
-  /* ステータスカラー（赤/緑のみ色付き） */
-  --uz-red:      #C0392B;
-  --uz-green:    #27AE60;
-  --uz-info:     #2980B9;   /* 情報・比較表示 */
+  /* ステータスカラー（モノトーン化・色相は持たない／00_原則.md §5-9） */
+  --uz-red:      #1A1A1A;   /* 旧コスト赤 → 濃グレー（文字強調） */
+  --uz-green:    #1A1A1A;   /* 旧利益緑 → 濃グレー（文字強調） */
+  --uz-info:     #666666;   /* 情報・比較表示 → 中グレー */
 
-  /* ステータス別の短縮名（JS参照用） */
-  --uz-danger:   #C0392B;
-  --uz-success:  #27AE60;
+  /* ステータス別の短縮名（JS参照用・モノトーン） */
+  --uz-danger:   #1A1A1A;
+  --uz-success:  #1A1A1A;
 
   /* テキスト */
   --uz-text:     #1A1A1A;
@@ -41,25 +41,31 @@
   --uz-border:   rgba(0,0,0,0.10);
   --uz-border2:  rgba(0,0,0,0.20);
 
-  /* 背景色変種 */
-  --uz-green-bg:   rgba(39,174,96,0.08);
-  --uz-red-bg:     rgba(192,57,43,0.08);
+  /* 背景色変種（モノトーン濃淡／00_原則.md §5-9） */
+  --uz-green-bg:   rgba(0,0,0,0.05);   /* 旧薄緑 → 淡グレー（損益強調行） */
+  --uz-red-bg:     rgba(0,0,0,0.05);   /* 旧薄赤 → 淡グレー */
   --uz-amber-bg:   rgba(0,0,0,0.05);
-  --uz-info-bg:    rgba(41,128,185,0.08);
+  --uz-info-bg:    rgba(0,0,0,0.04);
 
   /* アラートドット縁 */
   --uz-silver:   #5A5A5A;
+
+  /* ── カラータイマー専用色（モノトーン例外・ウルトラマン胸の装飾／00_原則.md §5-9） ── */
+  /* 売掛・買掛のお知らせドットのみ状態色を使用する。UI一般には使わない。 */
+  --uz-timer-blue:    #4A90D9;
+  --uz-timer-red:     #C0392B;
+  --uz-timer-red-glow: rgba(192,57,43,0.2);
 
   /* 入店中マーカー専用（モノトーン基調の例外・ウルトラマン世界観の黄色●点滅） */
   /* §6 入店中マーカー仕様（02_画面仕様_md.md）に基づく金色 */
   --uz-marker-active: #E5B939;
   --uz-marker-active-bg: rgba(229,185,57,0.14);
 
-  /* 損益カラー（後方互換） */
-  --uz-sales:    #333333;
-  --uz-cost:     #C0392B;
-  --uz-profit:   #27AE60;
-  --uz-loss:     #C0392B;
+  /* 損益カラー（後方互換・モノトーン／00_原則.md §5-9） */
+  --uz-sales:    #1A1A1A;
+  --uz-cost:     #1A1A1A;
+  --uz-profit:   #1A1A1A;
+  --uz-loss:     #1A1A1A;
 
   /* 角丸 */
   --radius-sm:   8px;
@@ -308,7 +314,7 @@ body.is-ipad .home-sticky-top {
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  background: var(--uz-red);
+  background: var(--uz-timer-red);
   animation: fillblink 1s ease-in-out infinite;
 }
 
@@ -361,9 +367,9 @@ body.is-ipad .home-sticky-top {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: var(--uz-green);
+  background: var(--uz-marker-active);
   flex-shrink: 0;
-  box-shadow: 0 0 6px var(--uz-green);
+  box-shadow: 0 0 6px var(--uz-marker-active);
 }
 
 .staff-dot--off {
@@ -531,18 +537,18 @@ body.is-ipad .home-sticky-top {
   display: block;
 }
 .home-timer-dot--blue {
-  background: #4A90D9;
-  border-color: #4A90D9;
+  background: var(--uz-timer-blue);
+  border-color: var(--uz-timer-blue);
   box-shadow: 0 0 0 2px rgba(74,144,217,0.2);
 }
 .home-timer-dot--red {
-  background: var(--uz-danger);
-  border-color: var(--uz-danger);
-  box-shadow: 0 0 0 2px rgba(192,57,43,0.2);
+  background: var(--uz-timer-red);
+  border-color: var(--uz-timer-red);
+  box-shadow: 0 0 0 2px var(--uz-timer-red-glow);
 }
 .home-timer-dot--blink {
-  background: var(--uz-danger);
-  border-color: var(--uz-danger);
+  background: var(--uz-timer-red);
+  border-color: var(--uz-timer-red);
   animation: home-dot-blink 0.8s ease-in-out infinite;
 }
 @keyframes home-dot-blink {
@@ -801,19 +807,19 @@ body.is-ipad .home-sticky-top {
 
 /* ── 確定申告タイマー ─────────────────────────────────────── */
 .tax-timer-blue {
-  background: var(--uz-info-bg);
-  border: 0.5px solid rgba(106,159,212,0.3);
+  background: var(--uz-amber-bg);
+  border: 0.5px solid var(--uz-border2);
   border-radius: 8px;
   padding: 8px 14px;
   font-size: 12px;
-  color: var(--uz-info);
+  color: var(--uz-text2);
   text-align: center;
   margin-bottom: 12px;
 }
 
 .tax-timer-red {
-  background: var(--uz-red-bg);
-  border: 0.5px solid rgba(224,80,80,0.3);
+  background: var(--uz-amber-bg);
+  border: 0.5px solid var(--uz-border2);
   border-radius: 8px;
   padding: 8px 14px;
   font-size: 12px;
@@ -902,18 +908,18 @@ body.is-ipad {
     flex-shrink: 0;
   }
   .sidebar-timer-dot--blue {
-    background: #4A90D9;
-    border-color: #4A90D9;
+    background: var(--uz-timer-blue);
+    border-color: var(--uz-timer-blue);
     box-shadow: 0 0 0 3px rgba(74,144,217,0.22);
   }
   .sidebar-timer-dot--red {
-    background: var(--uz-danger);
-    border-color: var(--uz-danger);
+    background: var(--uz-timer-red);
+    border-color: var(--uz-timer-red);
     box-shadow: 0 0 0 3px rgba(192,57,43,0.22);
   }
   .sidebar-timer-dot--blink {
-    background: var(--uz-danger);
-    border-color: var(--uz-danger);
+    background: var(--uz-timer-red);
+    border-color: var(--uz-timer-red);
     animation: sidebar-dot-blink 0.8s ease-in-out infinite;
   }
   /* サイドバー日時（カラータイマー直下・中央寄せ・リアルタイム） */
@@ -1209,11 +1215,11 @@ body.is-ipad .ipad-hist-row {
 }
 
 body.is-ipad .ipad-hist-row:hover {
-  background: rgba(212,175,55,0.06);
+  background: var(--uz-surface);
 }
 
 body.is-ipad .ipad-hist-row--selected {
-  background: rgba(212,175,55,0.12) !important;
+  background: var(--uz-surface2) !important;
 }
 
 /* ── iPad 右パネル内修正フォーム ──────────────────────────── */
@@ -1404,11 +1410,12 @@ body.is-ipad .ipad-dash-table tr:last-child td { border-bottom: none; }
 
 body.is-ipad .ipad-dash-table .row-gross,
 body.is-ipad .ipad-dash-table .row-profit {
-  background: var(--uz-green-bg);
+  background: var(--uz-surface);
 }
 
 body.is-ipad .ipad-dash-table .row-profit td:last-child {
-  color: var(--uz-green);
+  color: var(--uz-text);
+  font-weight: 700;
 }
 
 /* 直近入力テーブル固有 */
@@ -1418,8 +1425,8 @@ body.is-ipad .ipad-recent-table td:last-child {
   font-variant-numeric: tabular-nums;
 }
 
-body.is-ipad .ipad-recent-table .recent-sales { color: var(--uz-gold); }
-body.is-ipad .ipad-recent-table .recent-cost  { color: var(--uz-red); }
+body.is-ipad .ipad-recent-table .recent-sales { color: var(--uz-text); }
+body.is-ipad .ipad-recent-table .recent-cost  { color: var(--uz-text2); }
 
 body.is-ipad .ipad-dash-empty {
   padding: 24px 14px;
@@ -1620,7 +1627,7 @@ body.is-ipad .ipad-summary-card {
 }
 
 body.is-ipad .ipad-summary-card--amber {
-  border-color: rgba(212,175,55,0.5);
+  border-color: var(--uz-border2);
 }
 
 body.is-ipad .ipad-summary-card__label {
@@ -1733,11 +1740,11 @@ body.is-ipad .ipad-list-badge {
 body.is-ipad .ipad-list-badge--unpaid {
   background: var(--uz-amber-bg);
   color: var(--uz-gold);
-  border: 1px solid rgba(212,175,55,0.3);
+  border: 1px solid var(--uz-border2);
 }
 
 body.is-ipad .ipad-list-badge--locked {
-  background: rgba(160,144,112,0.12);
+  background: var(--uz-amber-bg);
   color: var(--uz-text2);
 }
 
@@ -1978,11 +1985,11 @@ body.is-ipad[data-page="clockin"] .ipad-clockin-panel {
 .ipad-staff-card__badge--active {
   background: var(--uz-green-bg);
   color: var(--uz-green);
-  border: 0.5px solid rgba(76,175,128,0.3);
+  border: 0.5px solid var(--uz-border2);
 }
 
 .ipad-staff-card__badge--inactive {
-  background: rgba(160,144,112,0.15);
+  background: var(--uz-amber-bg);
   color: var(--uz-text2);
   border: 0.5px solid var(--uz-border);
 }
@@ -2135,13 +2142,13 @@ body.is-ipad[data-page="clockin"] .ipad-clockin-panel {
 .ipad-right-action-btn--approve {
   background: var(--uz-green-bg);
   color: var(--uz-green);
-  border: 0.5px solid rgba(76,175,128,0.3);
+  border: 0.5px solid var(--uz-border2);
 }
 
 .ipad-right-action-btn--reject {
   background: var(--uz-red-bg);
   color: var(--uz-red);
-  border: 0.5px solid rgba(224,80,80,0.3);
+  border: 0.5px solid var(--uz-border2);
 }
 
 .ipad-locked-note {
