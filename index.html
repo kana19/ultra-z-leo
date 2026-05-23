@@ -259,8 +259,12 @@
         <!-- ① 損益（CSVパレット常時表示） -->
         <div class="ipad-dash-section ipad-dash-section--pl">
           <div class="ipad-dash-header">
-            <span class="ipad-dash-header__title">月次損益</span>
+            <div class="ipad-pl-tabs" id="ipad-pl-tabs">
+              <button type="button" class="ipad-pl-tab active" id="ipad-pl-tab-monthly" onclick="switchIpadPLTab('monthly')">月次損益</button>
+              <button type="button" class="ipad-pl-tab" id="ipad-pl-tab-ytd" onclick="switchIpadPLTab('ytd')">年度累計</button>
+            </div>
             <select id="ipad-month-select" class="ipad-month-select" aria-label="表示月"></select>
+            <select id="ipad-year-select" class="ipad-month-select" aria-label="表示年度" style="display:none"></select>
           </div>
           <table class="ipad-dash-table" id="ipad-pl-table">
             <tbody>

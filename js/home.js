@@ -443,6 +443,12 @@ async function initIpadHome() {
   // 月選択プルダウン初期化
   _initMonthSelect(currentMonth);
 
+  // 年度選択プルダウン初期化（年度累計タブ用）
+  _initYearSelect(now.getFullYear());
+
+  // 損益タブ初期状態（月次）
+  _ipadPLTab = 'monthly';
+
   // 確定申告タイマー
   _renderIpadTaxTimer();
 
@@ -495,6 +501,83 @@ function _initMonthSelect(currentMonth) {
     const res = await callGAS('getSummary', { month: sel.value }).catch(() => null);
     if (res && res.status === 'ok' && res.data) _renderIpadPLRows(res.data);
   });
+}
+
+/* ── 年度累計タブ ──────────────────────────────────────────
+ * pl.js の aggregateYear / renderYTD と同一の暦年(1〜12月)集計を移植。
+ * 当年は1〜当月まで、過去年は1〜12月を月別 getSummary で並行fetchして合算。
+ */
+let _ipadPLTab = 'monthly';
+const _IPAD_MIN_YEAR = 2025;
+
+function _initYearSelect(currentYear) {
+  const sel = document.getElementById('ipad-year-select');
+  if (!sel) return;
+  const thisYear = new Date().getFullYear();
+  for (let y = thisYear; y >= _IPAD_MIN_YEAR; y--) {
+    const opt = document.createElement('option');
+    opt.value = String(y);
+    opt.textContent = `${y}年（年度累計）`;
+    sel.appendChild(opt);
+  }
+  sel.value = String(currentYear);
+  sel.addEventListener('change', () => {
+    _renderIpadYTD(Number(sel.value));
+  });
+}
+
+/* 損益タブ切替（月次 / 年度累計） */
+function switchIpadPLTab(tab) {
+  _ipadPLTab = tab;
+  const tMonthly = document.getElementById('ipad-pl-tab-monthly');
+  const tYtd     = document.getElementById('ipad-pl-tab-ytd');
+  const monthSel = document.getElementById('ipad-month-select');
+  const yearSel  = document.getElementById('ipad-year-select');
+
+  if (tMonthly) tMonthly.classList.toggle('active', tab === 'monthly');
+  if (tYtd)     tYtd.classList.toggle('active',     tab === 'ytd');
+  if (monthSel) monthSel.style.display = (tab === 'monthly') ? '' : 'none';
+  if (yearSel)  yearSel.style.display  = (tab === 'ytd')     ? '' : 'none';
+
+  if (tab === 'monthly') {
+    const m = monthSel?.value;
+    if (m) {
+      callGAS('getSummary', { month: m }).catch(() => null).then(res => {
+        if (res && res.status === 'ok' && res.data) _renderIpadPLRows(res.data);
+      });
+    }
+  } else {
+    _renderIpadYTD(Number(yearSel?.value) || new Date().getFullYear());
+  }
+}
+
+/* 年度累計を集計して①損益テーブルに描画 */
+async function _renderIpadYTD(year) {
+  const now      = new Date();
+  const thisYear = now.getFullYear();
+  const maxMonth = (year === thisYear) ? (now.getMonth() + 1) : 12;
+
+  const monthKeys = [];
+  for (let mm = 1; mm <= maxMonth; mm++) {
+    monthKeys.push(`${year}-${String(mm).padStart(2, '0')}`);
+  }
+
+  const results = await Promise.all(
+    monthKeys.map(k => callGAS('getSummary', { month: k }).catch(() => null))
+  );
+
+  let sales = 0, cogs = 0, sga = 0;
+  results.forEach(r => {
+    if (!r || r.status !== 'ok' || !r.data) return;
+    const d = r.data;
+    sales += d.sales ?? 0;
+    cogs  += d.cogs  ?? 0;
+    sga   += d.sga   ?? 0;
+  });
+
+  const gross  = sales - cogs;
+  const profit = gross - sga;
+  _renderIpadPLRows({ sales, cogs, sga, grossProfit: gross, operatingProfit: profit });
 }
 
 function _renderIpadPLRows(d) {

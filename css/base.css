@@ -1318,6 +1318,32 @@ body.is-ipad .ipad-dash-header__title {
   text-transform: uppercase;
 }
 
+/* ①損益：月次/年度累計タブ */
+body.is-ipad .ipad-pl-tabs {
+  display: flex;
+  gap: 4px;
+}
+body.is-ipad .ipad-pl-tab {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 2px 2px 6px;
+  margin-right: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: inherit;
+  letter-spacing: 0.04em;
+  color: var(--uz-text3);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+body.is-ipad .ipad-pl-tab:active { opacity: 0.75; }
+body.is-ipad .ipad-pl-tab.active {
+  color: var(--uz-text);
+  border-bottom: 2px solid var(--uz-text);
+}
+
 body.is-ipad .ipad-month-select {
   background: var(--uz-bg);
   color: var(--uz-text);
