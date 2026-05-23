@@ -1247,16 +1247,20 @@ body.is-ipad .ipad-home-dashboard {
   padding: 0;
   box-sizing: border-box;
   align-items: stretch;
-  min-height: calc(100dvh - 52px);
+  height: calc(100dvh - 52px);
+  overflow: hidden;
 }
 
-/* 左カラム：①損益＋②グラフを縦積み（縦線で右と区切る） */
+/* 左カラム：①損益＋②グラフ＋CSVを縦積み（上詰め・右カラム見出しと高さを揃える） */
 body.is-ipad .ipad-home-left {
   display: flex;
   flex-direction: column;
+  justify-content: space-between;
   gap: 0;
   border-right: 1px solid var(--uz-border);
-  padding: 20px 24px;
+  padding: 28px 24px;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 /* 右カラム：③直近入力（全高） */
@@ -1264,13 +1268,17 @@ body.is-ipad .ipad-home-right {
   display: flex;
   flex-direction: column;
   gap: 0;
-  padding: 20px 24px;
+  padding: 28px 24px;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 body.is-ipad .ipad-dash-section--full {
   flex: 1;
   display: flex;
   flex-direction: column;
+  min-height: 0;
 }
+body.is-ipad .ipad-dash-section--full .ipad-recent-table { flex-shrink: 0; }
 
 /* ── ダッシュボード共通セクション（枠線撤廃・横線と余白のみ） ─── */
 body.is-ipad .ipad-dash-section {
@@ -1416,7 +1424,7 @@ body.is-ipad .ipad-dash-staff {
 /* 月次グラフ */
 body.is-ipad .ipad-chart-wrap {
   padding: 4px 14px 8px;
-  height: 280px;
+  height: 220px;
   position: relative;
 }
 /* グラフ独自凡例（見出し行に右寄せ・月次推移と同じ高さ） */
