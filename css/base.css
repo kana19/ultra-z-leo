@@ -1285,11 +1285,14 @@ body.is-ipad .ipad-dash-section {
 body.is-ipad .ipad-home-left .ipad-dash-section:last-child,
 body.is-ipad .ipad-home-right .ipad-dash-section:last-child,
 body.is-ipad .ipad-dash-section--chart,
+body.is-ipad .ipad-dash-section--pl,
 body.is-ipad .ipad-dash-section:has(+ .ipad-tax-dl-panel) {
   border-bottom: none;
   margin-bottom: 0;
   padding-bottom: 0;
 }
+/* ①損益と②グラフの間は余白のみで区切る（線なし） */
+body.is-ipad .ipad-dash-section--pl { margin-bottom: 20px; }
 
 body.is-ipad .ipad-dash-header {
   display: flex;
@@ -1413,7 +1416,7 @@ body.is-ipad .ipad-dash-staff {
 /* 月次グラフ */
 body.is-ipad .ipad-chart-wrap {
   padding: 4px 14px 8px;
-  height: 200px;
+  height: 240px;
   position: relative;
 }
 

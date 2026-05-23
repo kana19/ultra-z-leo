@@ -682,7 +682,11 @@ async function _renderIpadMonthlyChart(year) {
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
-        legend: { labels: { color: _cMuted, font: { size: 11 } } },
+        legend: {
+          position: 'top',
+          align: 'end',
+          labels: { color: _cMuted, font: { size: 11 }, boxWidth: 14, padding: 12 },
+        },
       },
       scales: {
         x: {
