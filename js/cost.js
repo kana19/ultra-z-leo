@@ -300,10 +300,13 @@ async function initIpadCostPanel() {
   const wrap = document.getElementById('ipad-sc-wrap');
   if (!wrap) return;
 
-  // form-body を「コストを追加」タブに移動
-  const tabAdd   = document.getElementById('ipad-tab-add');
-  const formBody = document.querySelector('.form-body');
-  if (tabAdd && formBody) tabAdd.appendChild(formBody);
+  // iPad は静的 form-body を使わず、スマホ実装（モーダル版フォーム）を
+  // ipad-tab-add に注入してロジックを共有する（MD §6-3-B 入力正本1本化）。
+  const tabAdd = document.getElementById('ipad-tab-add');
+  if (tabAdd) {
+    tabAdd.innerHTML = _smCostBuildFormBodyHTML();
+    _smCostInitFormInModal();
+  }
 
   // タブ切替バインド
   document.querySelectorAll('.ipad-tab').forEach(btn => {
@@ -895,18 +898,12 @@ function _smCostValidate() {
     return { ok: false, errorTarget: cards, errorMsg: '科目を選択してください' };
   }
 
-  // 諸口選択時は科目名必須（スマホ版なのでsmartphoneVisibleフィルタ適用）
-  const items = getDivisionItems(_smCostSelectedDivisionCode, { filterBySmartphoneVisible: true });
-  const selectedItem = items.find(it => it.code === _smCostSelectedItemCode);
-  if (selectedItem && selectedItem.type === 'misc') {
-    const miscInput = document.getElementById('sm-cost-misc-name');
-    const miscName  = miscInput ? miscInput.value.trim() : '';
-    if (!miscName) {
-      return { ok: false, errorTarget: miscInput, errorMsg: '科目名を入力してください' };
-    }
-  }
+  // 諸口の科目名は任意入力（空でも登録可・全経路で対称／前会話確定）。
+  // マスタ未登録の受け皿のため、詳細はメモ運用で足りる。
 
   // A-2-X-1：給与系3科目選択時はスタッフ選択必須
+  const items = getDivisionItems(_smCostSelectedDivisionCode, { filterBySmartphoneVisible: true });
+  const selectedItem = items.find(it => it.code === _smCostSelectedItemCode);
   if (selectedItem && PAYROLL_ITEM_CODES.includes(selectedItem.code)) {
     if (!_smCostSelectedStaffId) {
       const staffSelect = document.getElementById('sm-cost-staff-select');
@@ -1022,8 +1019,16 @@ async function _smCostHandleSubmit() {
     if (typeof showToast === 'function') {
       showToast('コストを登録しました ✓', 'success');
     }
-    SheetModal.close();
-    if (typeof loadAll === 'function') loadAll();
+
+    if (document.body.classList.contains('is-ipad')) {
+      // iPad：パネルを保持したままフォームをリセットし、左の一覧を再描画
+      _smCostInitFormInModal();
+      const m = document.getElementById('ipad-filter-month')?.value;
+      if (typeof _loadIpadCostData === 'function') await _loadIpadCostData(m);
+    } else {
+      SheetModal.close();
+      if (typeof loadAll === 'function') loadAll();
+    }
 
   } catch (err) {
     console.error('[cost SheetModal] addCost error:', err);

@@ -16,6 +16,9 @@
   <link rel="stylesheet" href="css/base.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.9.0/dist/tabler-icons.min.css">
   <link rel="stylesheet" href="css/forms.css">
+  <link rel="stylesheet" href="css/sheet-modal.css">
+  <link rel="stylesheet" href="css/sales-modal.css">
+  <link rel="stylesheet" href="css/ipad-input.css">
 </head>
 <body data-page="sales">
 
@@ -83,99 +86,8 @@
 
   <!-- 入力フォーム（iPad右カラム / モバイルはメイン） -->
   <div class="form-body">
-
-    <!-- ① 発生日（sticky固定） -->
-    <div class="form-section form-section--sticky">
-      <label class="form-section__label" for="date-input">発生日</label>
-      <input type="date" id="date-input" class="date-input" aria-label="発生日">
-    </div>
-
-    <!-- ② サービス選択 -->
-    <div class="form-section">
-      <span class="form-section__label">サービス</span>
-      <div id="service-cards"
-           class="radio-card-group radio-card-group--last-full"
-           role="radiogroup" aria-label="サービス選択">
-        <!-- sales.js が描画 -->
-      </div>
-    </div>
-
-    <!-- ③ 諸口品目名（諸口選択時のみ） -->
-    <div class="form-section" id="misc-section" hidden>
-      <label class="form-section__label" for="misc-name-input">品目名</label>
-      <input type="text" id="misc-name-input" class="text-input"
-             placeholder="品目名を入力（例：手土産代）" maxlength="50" autocomplete="off">
-      <p class="form-hint">マスタ未登録の品目を記録する場合に入力してください。</p>
-    </div>
-
-    <!-- ④ 税率 -->
-    <div class="form-section">
-      <span class="form-section__label">税率</span>
-      <div class="tax-toggle" role="group" aria-label="税率選択">
-        <button class="tax-btn" data-rate="0"  type="button" aria-pressed="false"> 0%</button>
-        <button class="tax-btn" data-rate="8"  type="button" aria-pressed="false"> 8%</button>
-        <button class="tax-btn" data-rate="10" type="button" aria-pressed="false">10%</button>
-      </div>
-      <p class="form-hint">サービスのデフォルト税率が自動セットされます。変更は例外時のみ。</p>
-    </div>
-
-    <!-- ⑤ 金額入力 -->
-    <div class="form-section">
-      <span class="form-section__label">売上入力（税込み）</span>
-      <div class="amount-wrap amount-wrap--blue">
-        <span class="amount-prefix" aria-hidden="true">¥</span>
-        <input type="text" id="amount-input" class="amount-input"
-               inputmode="numeric" pattern="[0-9]*" placeholder="0"
-               maxlength="10" autocomplete="off" aria-label="税込金額">
-      </div>
-      <div class="tax-display" aria-live="polite">
-        <div class="tax-display-item">
-          <div class="tax-display-item__label">税抜金額</div>
-          <div id="tax-excluded" class="tax-display-item__value tax-display-item__value--blue">¥—</div>
-        </div>
-        <div class="tax-display-item">
-          <div class="tax-display-item__label">消費税</div>
-          <div id="tax-amount" class="tax-display-item__value tax-display-item__value--blue">¥—</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ⑥ 売掛チェック -->
-    <div class="form-section">
-      <label class="uncollected-check-row">
-        <input type="checkbox" id="uncollected-toggle" class="uncollected-check">
-        <span class="uncollected-check-label">□ 売掛（未入金）として登録</span>
-      </label>
-    </div>
-
-    <!-- ⑦ メモ -->
-    <div class="form-section">
-      <label class="form-section__label" for="memo-input">メモ（任意）</label>
-      <input type="text" id="memo-input" class="text-input"
-             placeholder="例：3名来店、ボトル持参" maxlength="100" autocomplete="off">
-    </div>
-
-    <!-- ⑧ 個別管理アコーディオン（上級者向け） -->
-    <div class="accordion-section">
-      <button class="accordion-header" type="button"
-              id="indiv-accordion-btn"
-              onclick="toggleAccordion()"
-              aria-expanded="false"
-              aria-controls="indiv-accordion-body">
-        <span>⚙ 個別管理（上級者向け）</span>
-        <span class="accordion-chevron" aria-hidden="true">›</span>
-      </button>
-      <div class="accordion-body" id="indiv-accordion-body" hidden>
-        <p id="indiv-accordion-hint" class="form-hint" style="margin-bottom:14px;">
-          ⚠ 個別管理分は売上入力とは別に追加登録されます。売上入力時に個別分を差し引いて入力してください。
-        </p>
-        <div id="indiv-rows"></div>
-        <button type="button" class="indiv-add-btn" onclick="addIndividualRow()">
-          ＋ 行を追加
-        </button>
-      </div>
-    </div>
-
+    <!-- 静的フォームは撤去（iPadはJSが #ipad-tab-add にモーダル版フォームを動的注入／スマホはモーダル入力）。
+         入力正本はモーダル版（_build*FormBodyHTML + _sm*HandleSubmit）に1本化・MD §6-3-B。 -->
   </div><!-- /form-body -->
 
   </div><!-- /ipad-form-wrap -->

@@ -445,6 +445,13 @@ function _buildSalesFormBodyHTML() {
         </div>
       </div>
 
+      <!-- 諸口品目名（諸口選択時のみ表示・任意入力） -->
+      <div class="sales-sm-section" id="sm-sales-misc-section" hidden>
+        <label class="sales-sm-label" for="sm-sales-misc-name">品目名<span class="sales-sm-optional">任意</span></label>
+        <input type="text" id="sm-sales-misc-name" class="sales-sm-memo"
+               maxlength="50" autocomplete="off" placeholder="例：手土産代">
+      </div>
+
       <div class="sales-sm-section">
         <label class="sales-sm-label">金額（税込）</label>
         <div class="sales-sm-amount-wrap">
@@ -622,6 +629,18 @@ function _smHandleCardTap(e) {
   const code = card.dataset.code;
   _smSelectedServiceCode = code;
 
+  // 諸口（S099）選択時のみ品目名欄を表示（任意入力）
+  const miscSection = document.getElementById('sm-sales-misc-section');
+  if (miscSection) {
+    if (code === 'S099') {
+      miscSection.hidden = false;
+    } else {
+      miscSection.hidden = true;
+      const mi = document.getElementById('sm-sales-misc-name');
+      if (mi) mi.value = '';
+    }
+  }
+
   // 諸口（S099）はマスタ taxRate に関わらず未選択スタート
   // 通常サービスはマスタ値（10/8/0）をデフォルト選択
   const svc = getServiceMaster().find(s => s.code === code);
@@ -669,6 +688,11 @@ async function _smHandleSalesSubmit() {
   const taxRate = _smSelectedTaxRate;
   const { taxExcluded, tax } = calcTax(amount, taxRate);
 
+  // 諸口（S099）選択時のみ品目名を送信（任意・空可）
+  const miscName = (selectedCard.dataset.code === 'S099')
+    ? (document.getElementById('sm-sales-misc-name')?.value.trim() || '')
+    : '';
+
   btn.disabled = true;
   btn.textContent = '送信中...';
   try {
@@ -676,21 +700,28 @@ async function _smHandleSalesSubmit() {
       date,
       serviceCode:  selectedCard.dataset.code,
       serviceName:  svc ? svc.name : '',
-      miscItemName: '',
+      miscItemName: miscName,
       amountExTax:  taxExcluded,
       taxRate,
       tax,
       amountInTax:  amount,
       memo,
-      uncollected:  0,
+      uncollected:  document.getElementById('uncollected-toggle')?.checked ? 1 : 0,
     });
 
     if (result?.status !== 'ok') throw new Error(result?.message || '登録エラー');
 
     showToast('売上を登録しました ✓', 'success');
-    SheetModal.close();
 
-    if (typeof loadAll === 'function') loadAll();
+    if (document.body.classList.contains('is-ipad')) {
+      // iPad：パネルを保持したままフォームをリセットし、左の一覧を再描画
+      await _initSalesFormInModal();
+      const m = document.getElementById('ipad-filter-month')?.value;
+      if (typeof _loadIpadSalesData === 'function') await _loadIpadSalesData(m);
+    } else {
+      SheetModal.close();
+      if (typeof loadAll === 'function') loadAll();
+    }
 
     _refreshSalesRankingInBackground();
 
@@ -756,10 +787,14 @@ async function initIpadSalesPanel() {
   const wrap = document.getElementById('ipad-sc-wrap');
   if (!wrap) return;
 
-  // form-body を「売上を追加」タブに移動
-  const tabAdd   = document.getElementById('ipad-tab-add');
-  const formBody = document.querySelector('.form-body');
-  if (tabAdd && formBody) tabAdd.appendChild(formBody);
+  // iPad は静的 form-body を使わず、スマホ実装（モーダル版フォーム）を
+  // ipad-tab-add に注入してロジックを共有する（MD §6-3-B 入力正本1本化）。
+  // 個別管理アコーディオンは含まれない＝PC集約。
+  const tabAdd = document.getElementById('ipad-tab-add');
+  if (tabAdd) {
+    tabAdd.innerHTML = _buildSalesFormBodyHTML();
+    await _initSalesFormInModal();
+  }
 
   // タブ切替バインド
   document.querySelectorAll('.ipad-tab').forEach(btn => {
