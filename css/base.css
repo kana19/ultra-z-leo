@@ -1284,6 +1284,7 @@ body.is-ipad .ipad-dash-section {
 }
 body.is-ipad .ipad-home-left .ipad-dash-section:last-child,
 body.is-ipad .ipad-home-right .ipad-dash-section:last-child,
+body.is-ipad .ipad-dash-section--chart,
 body.is-ipad .ipad-dash-section:has(+ .ipad-tax-dl-panel) {
   border-bottom: none;
   margin-bottom: 0;
@@ -1411,7 +1412,7 @@ body.is-ipad .ipad-dash-staff {
 
 /* 月次グラフ */
 body.is-ipad .ipad-chart-wrap {
-  padding: 12px 14px;
+  padding: 4px 14px 8px;
   height: 200px;
   position: relative;
 }
@@ -1433,7 +1434,7 @@ body.is-ipad #ipad-tax-timer-right {
 
 /* ── iPad 税理士・銀行提出用CSV DLパネル（常時表示） ──────── */
 body.is-ipad .ipad-tax-dl-panel {
-  margin-top: 14px;
+  margin-top: 4px;
   padding: 12px 14px;
   background: var(--uz-surface2);
   border: none;
