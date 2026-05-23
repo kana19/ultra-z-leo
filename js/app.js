@@ -177,6 +177,54 @@ document.addEventListener('DOMContentLoaded', uzRenderAllBrands);
 // settings 同期で storeName が確定したら再描画（テキストフォールバック更新）。
 document.addEventListener('uz:settings-synced', uzRenderAllBrands);
 
+/* ── サイドバー カラータイマー（全画面共通・ウルトラマンの胸のシンボル） ──
+   店名の真下中央に1個表示。売掛・買掛の最緊急状態を代表表示する（お知らせ機能・リンクなし）。
+   状態：①該当0件=消灯（シルバー縁のみ）／②売掛 or 買掛 1件以上=青／
+        ③その月末まで3営業日以内=赤／④その月末まで1営業日以内=赤点滅。
+   集約ロジック：売掛・買掛いずれかが④なら④、いずれかが③なら③、いずれか残件あれば②、全0なら①。
+   月末営業日は土日のみ除外（祝日は考慮しない・home.js _getTimerState と同一）。 */
+function uzTimerStateFromBizDays() {
+  const now  = new Date();
+  const last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  let bizDays = 0;
+  const cur = new Date(now); cur.setHours(0,0,0,0);
+  const end = new Date(last); end.setHours(0,0,0,0);
+  while (cur <= end) {
+    const dow = cur.getDay();
+    if (dow !== 0 && dow !== 6) bizDays++;
+    cur.setDate(cur.getDate() + 1);
+  }
+  if (bizDays <= 1) return 'blink';
+  if (bizDays <= 3) return 'red';
+  return 'blue';
+}
+
+function uzApplySidebarTimer(hasUncollected, hasPayable) {
+  const dot = document.getElementById('sidebar-timer-dot');
+  if (!dot) return;
+  dot.classList.remove('sidebar-timer-dot--blue','sidebar-timer-dot--red','sidebar-timer-dot--blink');
+  if (!hasUncollected && !hasPayable) return; // 消灯（シルバー縁のみ）
+  // 売掛・買掛のいずれか1件でもあれば、月末営業日に基づく最緊急状態を1個に表示
+  const state = uzTimerStateFromBizDays();
+  if (state === 'blue')  dot.classList.add('sidebar-timer-dot--blue');
+  if (state === 'red')   dot.classList.add('sidebar-timer-dot--red');
+  if (state === 'blink') dot.classList.add('sidebar-timer-dot--blink');
+}
+
+async function uzLoadSidebarTimer() {
+  if (!document.getElementById('sidebar-timer-dot')) return;
+  try {
+    const res = await callGAS('getUncollected', {});
+    if (res && res.status === 'ok' && Array.isArray(res.data)) {
+      const hasUncollected = res.data.some(r => r.type === 'uncollected');
+      const hasPayable     = res.data.some(r => r.type === 'payable');
+      uzApplySidebarTimer(hasUncollected, hasPayable);
+    }
+  } catch { /* GAS失敗時は消灯のまま */ }
+}
+
+document.addEventListener('DOMContentLoaded', uzLoadSidebarTimer);
+
 /* ── UI用語（A-9-X：業態固定概念撤廃後・「出勤／退勤」表記に静的統一） ─
  * 業態判定ロジックは撤廃し、deriveUILabels() は固定ラベルを返すスタブとして残す。
  * 既存呼び出し側（history.js / home.js / pc-common.js）が ReferenceError にならないための
@@ -605,63 +653,15 @@ const DEFAULT_COST_MASTER = [
 ];
 
 /**
- * コスト科目マスタの1行を正規化する。
- * 保存データに type / divisionCode / taxRow が欠けていても code から確定的に補完する。
- * 販管費マスタ（costMasterList）は青色申告固定構造（→ 03_データ仕様.md §1-2）であり、
- * code から fixed/custom が一意に決まる（8〜25・31=fixed / 26〜30=custom）。divisionCode は常に '2'。
- * smartphoneVisible はデータ側の値を尊重し、未設定（undefined）のみ true（表示）扱い。
- * @param {Object} item
- * @returns {Object}
- */
-function normalizeCostMasterItem(item) {
-  const codeNum = parseInt(item.code, 10);
-  const isCustom = codeNum >= 26 && codeNum <= 30;
-  const def = DEFAULT_COST_MASTER.find(d => String(d.code) === String(item.code));
-  return {
-    ...item,
-    code:         String(item.code),
-    taxRow:       (item.taxRow != null) ? item.taxRow : (def ? def.taxRow : codeNum),
-    type:         isCustom ? 'custom' : 'fixed',
-    divisionCode: '2',
-    taxRate:      (item.taxRate != null) ? item.taxRate : (def ? def.taxRate : 10),
-    smartphoneVisible: (item.smartphoneVisible === false) ? false : true,
-  };
-}
-
-/**
- * コスト科目マスタ配列を正規化する。
- * 仕入原価行（divisionCode='1'）が混入していても除外し、販管費のみ返す。
- * 既定24件のうち保存データに存在しない code は DEFAULT から補完する（欠損行の自己修復）。
- * @param {Array} list
- * @returns {Array}
- */
-function normalizeCostMasterList(list) {
-  const arr = Array.isArray(list) ? list : [];
-  // 仕入原価（divisionCode='1'）は販管費マスタに含めない
-  const savedByCode = {};
-  arr.forEach(it => {
-    if (it && String(it.divisionCode) === '1') return;
-    if (it && it.code != null) savedByCode[String(it.code)] = it;
-  });
-  // DEFAULT の24件順を基準に、保存値があればそれを正規化、無ければ DEFAULT を採用
-  return DEFAULT_COST_MASTER.map(def => {
-    const saved = savedByCode[String(def.code)];
-    return normalizeCostMasterItem(saved ? saved : def);
-  });
-}
-
-/**
- * コスト科目マスタをlocalStorageから取得（なければデフォルト）。
- * 取得値は必ず正規化して返す（type/divisionCode 欠落データの自己修復）。
+ * コスト科目マスタをlocalStorageから取得（なければデフォルト）
  * @returns {Array}
  */
 function getCostMaster() {
   try {
     const saved = localStorage.getItem(COST_MASTER_KEY);
-    const base  = saved ? JSON.parse(saved) : DEFAULT_COST_MASTER;
-    return normalizeCostMasterList(base);
+    return saved ? JSON.parse(saved) : JSON.parse(JSON.stringify(DEFAULT_COST_MASTER));
   } catch {
-    return normalizeCostMasterList(DEFAULT_COST_MASTER);
+    return JSON.parse(JSON.stringify(DEFAULT_COST_MASTER));
   }
 }
 

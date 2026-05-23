@@ -549,6 +549,10 @@ body.is-ipad .home-sticky-top {
   0%, 100% { opacity: 1;    box-shadow: 0 0 0 2px rgba(192,57,43,0.3); }
   50%      { opacity: 0.15; box-shadow: 0 0 0 2px rgba(192,57,43,0); }
 }
+@keyframes sidebar-dot-blink {
+  0%, 100% { opacity: 1;    box-shadow: 0 0 0 3px rgba(192,57,43,0.32); }
+  50%      { opacity: 0.15; box-shadow: 0 0 0 3px rgba(192,57,43,0); }
+}
 
 .action-btn__main-label {
   font-size: 26px;
@@ -868,19 +872,51 @@ body.is-ipad {
     overflow-y: auto;
   }
 
+  .nav-sidebar__brand {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 20px 16px 18px;
+  }
   .nav-sidebar__logo {
-    padding: 20px 16px 16px;
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 700;
     color: var(--uz-gold);
     letter-spacing: 0.05em;
-    border-bottom: 1px solid var(--uz-border);
+    text-align: center;
   }
-  /* 課題1：iPad はサイドバー左上ロゴを主表示とし、中央の店名ヘッダーは隠す */
   .nav-sidebar__logo .uz-brand-logo {
-    height: 36px;
+    height: 40px;
     max-width: 168px;
   }
+  /* サイドバー カラータイマー（ウルトラマンの胸のシンボル・店名の真下中央）
+     スマホ/履歴の home-timer-dot(10px) より少し大きめ（16px）。消灯時はシルバー縁のみ。 */
+  .sidebar-timer-dot {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 2.5px solid var(--uz-silver);
+    background: var(--uz-surface2);
+    display: block;
+    flex-shrink: 0;
+  }
+  .sidebar-timer-dot--blue {
+    background: #4A90D9;
+    border-color: #4A90D9;
+    box-shadow: 0 0 0 3px rgba(74,144,217,0.22);
+  }
+  .sidebar-timer-dot--red {
+    background: var(--uz-danger);
+    border-color: var(--uz-danger);
+    box-shadow: 0 0 0 3px rgba(192,57,43,0.22);
+  }
+  .sidebar-timer-dot--blink {
+    background: var(--uz-danger);
+    border-color: var(--uz-danger);
+    animation: sidebar-dot-blink 0.8s ease-in-out infinite;
+  }
+  /* 課題1：中央の店名ヘッダーは隠す（サイドバーロゴを主表示とする） */
   .app-header__store { display: none; }
 
   .sidebar-item {
@@ -898,7 +934,7 @@ body.is-ipad {
 
   .sidebar-item:hover { background: var(--uz-surface2); }
   .sidebar-item--active { color: var(--uz-gold); }
-  .sidebar-item__icon { font-size: 20px; line-height: 1; flex-shrink: 0; }
+  .sidebar-item__icon { font-size: 20px; line-height: 1; flex-shrink: 0; width: 22px; text-align: center; }
 
   /* ── ボトムナビ非表示 ─────────────────────────────────── */
   .bottom-nav { display: none !important; }
