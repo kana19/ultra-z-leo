@@ -253,10 +253,10 @@
     <!-- ── iPad ホームダッシュボード（iPad のみ表示） ─── -->
     <div class="ipad-home-dashboard" id="ipad-home-dashboard">
 
-      <!-- 左カラム（1/2幅）：損益テーブル＋出勤状況 -->
+      <!-- 左カラム：①損益（上）＋②グラフ（下） -->
       <div class="ipad-home-left">
 
-        <!-- 損益テーブル -->
+        <!-- ① 損益（CSVパレット常時表示） -->
         <div class="ipad-dash-section">
           <div class="ipad-dash-header">
             <span class="ipad-dash-header__title">月次損益</span>
@@ -271,13 +271,9 @@
               <tr class="row-profit"><td>経常利益</td><td class="ipad-td-r" id="ipad-pl-profit">¥—</td></tr>
             </tbody>
           </table>
-          <div class="ipad-dash-actions">
-            <button class="ipad-btn-ghost" id="ipad-btn-copy" type="button">📋 コピー</button>
-            <button class="ipad-btn-ghost" id="ipad-btn-dl" type="button">⬇️ CSV</button>
-            <a href="pl.html" class="ipad-btn-ghost">📊 詳細</a>
-          </div>
-          <!-- 税理士用CSV DLパネル（DLボタン押下で表示） -->
-          <div class="ipad-tax-dl-panel" id="ipad-tax-dl-panel" hidden>
+          <!-- 税理士・銀行提出用CSV（常時表示） -->
+          <div class="ipad-tax-dl-panel">
+            <div class="ipad-tax-dl-label">税理士・銀行提出用CSV</div>
             <div class="ipad-tax-dl-row">
               <select id="ipad-tax-from" class="ipad-tax-select" aria-label="開始月"></select>
               <span class="ipad-tax-sep">〜</span>
@@ -287,7 +283,7 @@
           </div>
         </div>
 
-        <!-- 月次損益グラフ -->
+        <!-- ② 月次推移グラフ -->
         <div class="ipad-dash-section">
           <div class="ipad-dash-header">
             <span class="ipad-dash-header__title">月次推移</span>
@@ -298,25 +294,14 @@
           </div>
         </div>
 
-        <!-- 出勤状況 -->
-        <div class="ipad-dash-section">
-          <div class="ipad-dash-header">
-            <span class="ipad-dash-header__title">出勤状況</span>
-          </div>
-          <div id="ipad-staff-list" class="ipad-dash-staff">
-            <!-- home.js が描画 -->
-          </div>
-        </div>
-
         <!-- 確定申告タイマー（期間中のみ） -->
         <div id="ipad-tax-timer-right"></div>
 
       </div><!-- /ipad-home-left -->
 
-      <!-- 右カラム（1/2幅）：直近入力 -->
+      <!-- ③ 右カラム：直近入力／出勤状況（全高） -->
       <div class="ipad-home-right">
-
-        <div class="ipad-dash-section">
+        <div class="ipad-dash-section ipad-dash-section--full">
           <div class="ipad-dash-header">
             <span class="ipad-dash-header__title">直近の入力</span>
           </div>
@@ -335,13 +320,8 @@
           </table>
           <div class="ipad-dash-empty" id="ipad-recent-empty" hidden>今月の記録はありません</div>
         </div>
-
-        <!-- 未収・買掛けリンク -->
-        <div class="ipad-dash-section">
-          <a href="uncollected.html" class="ipad-btn-link">📋 未収・買掛けを確認する ›</a>
-        </div>
-
       </div><!-- /ipad-home-right -->
+
 
     </div><!-- /ipad-home-dashboard -->
 

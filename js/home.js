@@ -446,9 +446,14 @@ async function initIpadHome() {
   // 確定申告タイマー
   _renderIpadTaxTimer();
 
-  // DL・コピーボタン
-  document.getElementById('ipad-btn-copy')?.addEventListener('click', _ipadCopyPL);
-  document.getElementById('ipad-btn-dl')?.addEventListener('click', _ipadToggleTaxDLPanel);
+  // 税理士・銀行提出用CSV：プルダウンを常時表示で初期化
+  const fromSel = document.getElementById('ipad-tax-from');
+  const toSel   = document.getElementById('ipad-tax-to');
+  if (fromSel && !fromSel.options.length) {
+    const fromDefault = `${Math.max(now.getFullYear(), 2025)}-01`;
+    buildMonthOptions(fromSel, fromDefault);
+    buildMonthOptions(toSel,   currentMonth);
+  }
 
   // 税理士用CSV DL実行ボタン
   document.getElementById('ipad-tax-dl-exec')?.addEventListener('click', () => {
