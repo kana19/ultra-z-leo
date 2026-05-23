@@ -638,8 +638,11 @@ async function _renderIpadMonthlyChart(year) {
   if (loading) loading.style.display = 'none';
 
   const labels     = results.map((_, i) => `${i + 1}月`);
-  const salesData  = results.map(r =>
-    (r && r.status === 'ok' && r.data) ? (r.data.sales ?? 0) : 0
+  const cogsData = results.map(r =>
+    (r && r.status === 'ok' && r.data) ? (r.data.cogs ?? 0) : 0
+  );
+  const sgaData = results.map(r =>
+    (r && r.status === 'ok' && r.data) ? (r.data.sga ?? 0) : 0
   );
   const profitData = results.map(r => {
     if (!r || r.status !== 'ok' || !r.data) return 0;
@@ -650,50 +653,47 @@ async function _renderIpadMonthlyChart(year) {
   if (_ipadChart) { _ipadChart.destroy(); _ipadChart = null; }
 
   const _cs = getComputedStyle(document.documentElement);
-  const _cSales   = _cs.getPropertyValue('--uz-sales').trim()   || '#333333';
-  const _cProfit  = _cs.getPropertyValue('--uz-profit').trim()  || '#27AE60';
-  const _cMuted   = _cs.getPropertyValue('--uz-text2').trim()   || '#666666';
-  const _cGrid    = _cs.getPropertyValue('--uz-border').trim()  || 'rgba(0,0,0,0.10)';
+  const _cMuted = _cs.getPropertyValue('--uz-text2').trim() || '#666666';
+  const _cGrid  = _cs.getPropertyValue('--uz-border').trim() || 'rgba(0,0,0,0.10)';
+  // 案1 積み上げ：仕入原価＋販管費＋経常利益＝売上高。経常利益を青で主役化。
+  const C_COGS   = '#C9CDD2';
+  const C_SGA    = '#8A929B';
+  const C_PROFIT = '#4A90D9';
 
   _ipadChart = new Chart(canvas, {
     type: 'bar',
     data: {
       labels,
       datasets: [
-        {
-          label: '売上',
-          data: salesData,
-          backgroundColor: _cSales + 'B3',
-          borderColor: _cSales,
-          borderWidth: 1,
-          borderRadius: 3,
-        },
-        {
-          label: '経常利益',
-          data: profitData,
-          backgroundColor: _cProfit + 'B3',
-          borderColor: _cProfit,
-          borderWidth: 1,
-          borderRadius: 3,
-        },
+        { label: '仕入原価', data: cogsData,   backgroundColor: C_COGS,   borderWidth: 0, stack: 's' },
+        { label: '販管費',   data: sgaData,    backgroundColor: C_SGA,    borderWidth: 0, stack: 's' },
+        { label: '経常利益', data: profitData, backgroundColor: C_PROFIT, borderWidth: 0, stack: 's',
+          borderRadius: { topLeft: 3, topRight: 3 } },
       ],
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
-        legend: {
-          position: 'top',
-          align: 'end',
-          labels: { color: _cMuted, font: { size: 11 }, boxWidth: 14, padding: 12 },
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => `${ctx.dataset.label}: ${formatYen(ctx.parsed.y)}`,
+            footer: (items) => {
+              const total = items.reduce((s, it) => s + (it.parsed.y || 0), 0);
+              return `売上: ${formatYen(total)}`;
+            },
+          },
         },
       },
       scales: {
         x: {
+          stacked: true,
           ticks: { color: _cMuted, font: { size: 10 } },
           grid:  { color: _cGrid },
         },
         y: {
+          stacked: true,
           ticks: {
             color: _cMuted,
             font:  { size: 10 },

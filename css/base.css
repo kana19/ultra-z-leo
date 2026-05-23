@@ -1416,9 +1416,32 @@ body.is-ipad .ipad-dash-staff {
 /* 月次グラフ */
 body.is-ipad .ipad-chart-wrap {
   padding: 4px 14px 8px;
-  height: 240px;
+  height: 280px;
   position: relative;
 }
+/* グラフ独自凡例（見出し行に右寄せ・月次推移と同じ高さ） */
+body.is-ipad .ipad-chart-legend {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+body.is-ipad .ipad-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--uz-text2);
+  font-weight: 600;
+}
+body.is-ipad .ipad-legend-dot {
+  width: 11px;
+  height: 11px;
+  border-radius: 2px;
+  display: inline-block;
+}
+body.is-ipad .ipad-legend-dot[data-c="cogs"]   { background: #C9CDD2; }
+body.is-ipad .ipad-legend-dot[data-c="sga"]    { background: #8A929B; }
+body.is-ipad .ipad-legend-dot[data-c="profit"] { background: #4A90D9; }
 
 body.is-ipad .ipad-chart-loading {
   position: absolute;
