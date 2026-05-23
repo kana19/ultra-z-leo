@@ -31,17 +31,95 @@ document.addEventListener('DOMContentLoaded', function() {
 /* ── GAS設定 ─────────────────────────────────────────────── */
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbwBDHj9-p6ZT6ExXrxF1Q-XwiEkNMPwDc0aAuk7zptivRhWhepvaCDsjaIJd7WHh_h9-A/exec';
 
+/* ── デモモード（複製元 ultra-z-leo・UI確認用） ───────────────
+   複製元はテンプレGASの SPREADSHEET_ID が __SPREADSHEET_ID__ のままで、
+   getSettings 等が {status:'error', message:'...__SPREADSHEET_ID__'} を返す。
+   これを検知したらデモモードに入り、以後 callGAS をダミー応答に差し替える。
+   目的：店舗を生成せず複製元だけで店名・カラータイマー・損益・直近入力・グラフ等の
+   UIを実データ込みで検証できるようにする（→ 06_環境.md §5-0 複製元＝UI確認用ツール）。
+   生成店舗では SPREADSHEET_ID が実IDに置換されエラーが出ないため、デモは発動しない。 */
+let UZ_DEMO = false;
+
+const UZ_DEMO_DATA = {
+  getSettings: {
+    storeName: 'サンプル店舗（デモ）',
+    businessHours: { open: '09:00', close: '21:00', closeNextDay: false },
+    serviceList: [
+      { code: 'sv001', name: '店内売上', taxRate: 10 },
+      { code: 'sv002', name: 'テイクアウト', taxRate: 8 }
+    ],
+    purchaseList: [
+      { code: 'p001', name: '食材', taxRate: 8 }
+    ],
+    staffList: [
+      { id: 1, name: 'デモ太郎', employmentType: 'employed_full' },
+      { id: 2, name: 'デモ花子', employmentType: 'employed_temp' }
+    ],
+    costMasterList: []
+  },
+  getSummary: {
+    sales: 1200000, cogs: 300000, grossProfit: 900000,
+    sga: 250000, operatingProfit: 650000
+  },
+  getUncollected: [
+    { type: 'uncollected', date: '2026-05-20', name: '店内売上', amount: 80000 },
+    { type: 'payable',     date: '2026-05-18', name: '食材',     amount: 45000 }
+  ],
+  getHistory: [
+    { date: '2026-05-23', type: 'sales', name: '店内売上', amount: 120000, taxRate: 10 },
+    { date: '2026-05-23', type: 'cost',  name: '食材',     amount: 30000,  taxRate: 8, divisionCode: '1' },
+    { date: '2026-05-22', type: 'sales', name: 'テイクアウト', amount: 45000, taxRate: 8 },
+    { date: '2026-05-21', type: 'cost',  name: '広告宣伝費', amount: 22000, taxRate: 10, divisionCode: '2' }
+  ],
+  getAttendance: [],
+  getLinkCandidates: [],
+  getTransactionsHierarchy: { months: [] }
+};
+
+/* デモ用：月次推移グラフが13ヶ月ぶんを要求する getSummary の月別ダミー */
+function uzDemoSummaryForMonth(month) {
+  // 当月のみ値あり・他月は0（複製元のグラフ描画確認用に最小限）
+  const now = new Date();
+  const cur = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  if (month === cur) return UZ_DEMO_DATA.getSummary;
+  return { sales: 0, cogs: 0, grossProfit: 0, sga: 0, operatingProfit: 0 };
+}
+
+function uzDemoResponse(action, data) {
+  if (action === 'getSummary') {
+    return { status: 'ok', data: uzDemoSummaryForMonth(data && data.month) };
+  }
+  if (action === 'getCostMaster') {
+    // 正規化前の素のデフォルト（getCostMaster側で正規化される）
+    return { status: 'ok', data: (typeof DEFAULT_COST_MASTER !== 'undefined') ? DEFAULT_COST_MASTER : [] };
+  }
+  if (Object.prototype.hasOwnProperty.call(UZ_DEMO_DATA, action)) {
+    return { status: 'ok', data: UZ_DEMO_DATA[action] };
+  }
+  // 書き込み系（addSales/saveCostMaster等）はデモでは成功を装って何もしない
+  return { status: 'ok', data: null, demo: true };
+}
+
 /**
- * GASにGETリクエストを送る（CORS回避のためクエリパラメータで送信）
+ * GASにGETリクエストを送る（CORS回避のためクエリパラメータで送信）。
+ * デモモード時はダミー応答を返す。
  * @param {string} action
  * @param {Object} data
  * @returns {Promise<Object>}
  */
 async function callGAS(action, data = {}) {
+  if (UZ_DEMO) return uzDemoResponse(action, data);
   const params = new URLSearchParams({ action, data: JSON.stringify(data) });
   const res = await fetch(`${GAS_URL}?${params}`, { method: 'GET' });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return await res.json();
+  const json = await res.json();
+  // 複製元シグナル検知：SPREADSHEET_ID 未置換ならデモモードへ移行し、ダミーを返す
+  if (json && json.status === 'error' && typeof json.message === 'string'
+      && json.message.indexOf('__SPREADSHEET_ID__') !== -1) {
+    UZ_DEMO = true;
+    return uzDemoResponse(action, data);
+  }
+  return json;
 }
 
 /**
