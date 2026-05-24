@@ -13,27 +13,6 @@
 let _moHistory = [];          // 売上・コスト統合（正規化済み）
 let _moCurrentMonth = '';
 
-/* ── submit後フックの差し替え ───────────────────────────────
-   sales.js/cost.js のモーダル submit は is-ipad 時に
-   _loadIpadSalesData(m) / _loadIpadCostData(m) を呼ぶ。
-   monthly ページではこれらを統合再読込に上書きして横取りする。 */
-if (document.body && document.body.dataset.page === 'monthly') {
-  window._loadIpadSalesData = function () { moRelabelSubmit(); return moLoadMonthly(); };
-  window._loadIpadCostData  = function () { moRelabelSubmit(); return moLoadMonthly(); };
-}
-
-/* submit 後に sales/cost が「登録する」へ戻したボタンラベルを発生日入りへ再同期 */
-function moRelabelSubmit() {
-  const pairs = [['#sm-sales-date', '#sm-sales-submit'], ['#sm-cost-date', '#sm-cost-submit']];
-  pairs.forEach(([dSel, bSel]) => {
-    const d = document.querySelector(dSel), b = document.querySelector(bSel);
-    if (d && b) {
-      const v = (d.value || '').replace(/-/g, '/');
-      b.textContent = v ? `発生日 ${v}　登録する` : '登録する';
-    }
-  });
-}
-
 document.addEventListener('DOMContentLoaded', () => {
   if (document.body.dataset.page !== 'monthly') return;
   if (!document.body.classList.contains('is-ipad')) return; // 月次管理はiPad専用UI
@@ -44,157 +23,360 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   if (typeof loadCostMasterFromGAS === 'function') loadCostMasterFromGAS();
 
-  moMountForms();
+  moBuildForms();
   moBindTabs();
   moInitMonthFilter();
   moBindListFilters();
   moLoadMonthly();
 });
 
-/* ── 右カラム：両フォームを各コンテナへ注入＋初期化 ───────── */
-async function moMountForms() {
-  const salesBox = document.getElementById('mo-form-sales');
-  if (salesBox && typeof _buildSalesFormBodyHTML === 'function') {
-    salesBox.innerHTML = _buildSalesFormBodyHTML();
-    if (typeof _initSalesFormInModal === 'function') await _initSalesFormInModal();
-  }
-  const costBox = document.getElementById('mo-form-cost');
-  if (costBox && typeof _smCostBuildFormBodyHTML === 'function') {
-    costBox.innerHTML = _smCostBuildFormBodyHTML();
-    if (typeof _smCostInitFormInModal === 'function') _smCostInitFormInModal();
-  }
+/* ════════════════════════════════════════════════════════════
+   monthly 専用 自作入力フォーム（iPad）
+   ------------------------------------------------------------
+   sales.js / cost.js のフォーム生成は使わず、monthly.js が自前で描画する。
+   OSキーボード・OSカレンダーを一切呼ばない（発生日＝自作カレンダー／金額＝自作テンキー）。
+   選んだ項目は上部に確定ブロックで積層・タップで個別再編集。
+   税計算は calcTax、送信は callGAS('addSales'/'addCost') を流用（入力正本は送信ロジックで共通）。
+   ════════════════════════════════════════════════════════════ */
 
-  // iPad最適化：入力した部品が確定ブロックとして上部に積層していく「積層ステッパー」方式。
-  // 選んだものがそのまま上に残り、確定ブロックをタップするとその項目だけ再編集できる。
-  // 操作UI・税計算・登録は sales.js / cost.js を流用（入力正本1本・MD §6-3-B）。
-  moSetupStepper('sales');
-  moSetupStepper('cost');
+const _moForm = {
+  sales: { date: '', svcCode: '', svcName: '', taxRate: null, miscName: '', amount: '', memo: '', unpaid: false, editing: 'item' },
+  cost:  { date: '', divCode: '2', itemCode: '', itemName: '', taxRate: null, miscName: '', amount: '', memo: '', unpaid: false, editing: 'item' },
+};
 
-  // 登録ボタンを「発生日 YYYY/MM/DD 登録する」ラベルに統一。
-  moSyncSubmitLabel('#sm-sales-date', '#sm-sales-submit');
-  moSyncSubmitLabel('#sm-cost-date',  '#sm-cost-submit');
+function moBuildForms() {
+  moInitFormState('sales');
+  moInitFormState('cost');
+  moRenderForm('sales');
+  moRenderForm('cost');
 }
 
-/* 発生日入力の値を登録ボタンのラベルへ反映する。 */
-function moSyncSubmitLabel(dateSel, btnSel) {
-  const dateEl = document.querySelector(dateSel);
-  const btn    = document.querySelector(btnSel);
-  if (!dateEl || !btn) return;
-  const update = () => {
-    const v = (dateEl.value || '').replace(/-/g, '/');
-    btn.textContent = v ? `発生日 ${v}　登録する` : '登録する';
-  };
-  dateEl.addEventListener('change', update);
-  dateEl.addEventListener('input', update);
-  update();
+function moInitFormState(kind) {
+  const f = _moForm[kind];
+  f.date = (typeof todayStr === 'function') ? todayStr() : new Date().toISOString().slice(0,10);
+  f.amount = '';
+  f.memo = '';
+  f.unpaid = false;
+  f.miscName = '';
+  f.editing = 'item';
+  if (kind === 'sales') { f.svcCode = ''; f.svcName = ''; f.taxRate = null; }
+  else { f.divCode = '2'; f.itemCode = ''; f.itemName = ''; f.taxRate = null; }
 }
 
-/* ── 積層ステッパー ──────────────────────────────────────
-   各入力ステップを「未確定＝操作UI表示／確定＝1行ブロックで上部に残す」に切替。
-   確定ブロックをタップするとその項目だけ操作UIに戻る（個別再編集）。 */
-function moStepDefs(kind) {
+/* マスタ取得（売上＝サービス／コスト＝区分内科目） */
+function moGetItems(kind) {
   if (kind === 'sales') {
-    return [
-      { key: 'date',  label: '発生日', sectionSel: '#mo-form-sales .sm-sticky-header',
-        value: () => { const v = document.getElementById('sm-sales-date')?.value; return v ? v.replace(/-/g,'/') : ''; } },
-      { key: 'item',  label: '区分',   sectionSel: '#mo-form-sales .sales-sm-section:nth-of-type(1)',
-        value: () => {
-          const c = document.querySelector('#sm-sales-cards .radio-card.radio-card--checked-blue .radio-card__label');
-          const t = document.querySelector('#mo-form-sales .sm-taxrate-chip.is-active');
-          return c ? c.textContent.trim() + (t ? `（${t.textContent.trim()}）` : '') : '';
-        } },
-      { key: 'amount', label: '金額',  sectionSel: '#mo-form-sales .sales-sm-section:nth-of-type(3)',
-        value: () => { const a = document.getElementById('sm-sales-amount')?.value; return a ? moFmtAmt(a) : ''; } },
-    ];
+    try { return (typeof getServiceMaster === 'function') ? getServiceMaster() : []; }
+    catch { return []; }
   }
-  return [
-    { key: 'date',  label: '発生日', sectionSel: '#mo-form-cost .sm-sticky-header',
-      value: () => { const v = document.getElementById('sm-cost-date')?.value; return v ? v.replace(/-/g,'/') : ''; } },
-    { key: 'item',  label: '科目',   sectionSel: '#mo-form-cost .cost-sm-section:nth-of-type(1)',
-      value: () => {
-        const div = document.querySelector('#mo-form-cost .division-btn--active');
-        const c   = document.querySelector('#sm-cost-item-cards .cost-sm-card.cost-sm-card--active .cost-sm-card__label');
-        const t   = document.querySelector('#mo-form-cost .sm-taxrate-chip.is-active');
-        if (!c) return '';
-        return (div ? div.textContent.trim() + '／' : '') + c.textContent.trim() + (t ? `（${t.textContent.trim()}）` : '');
-      } },
-    { key: 'amount', label: '金額',  sectionSel: '#mo-form-cost .cost-sm-section:nth-of-type(3)',
-      value: () => { const a = document.getElementById('sm-cost-amount')?.value; return a ? moFmtAmt(a) : ''; } },
-  ];
+  try { return (typeof getDivisionItems === 'function')
+    ? getDivisionItems(_moForm.cost.divCode, { filterBySmartphoneVisible: true }) : []; }
+  catch { return []; }
 }
 
-function moSetupStepper(kind) {
-  const formBox = document.getElementById(kind === 'sales' ? 'mo-form-sales' : 'mo-form-cost');
-  if (!formBox) return;
+function moIsMisc(kind, code) {
+  return /MISC/i.test(String(code || ''));
+}
 
-  // 確定ブロックの積層コンテナをフォーム先頭に作る
-  const stack = document.createElement('div');
-  stack.className = 'mo-stack';
-  formBox.insertBefore(stack, formBox.firstChild);
+/* ── フォーム全体を描画 ───────────────────────────────── */
+function moRenderForm(kind) {
+  const box = document.getElementById(kind === 'sales' ? 'mo-form-sales' : 'mo-form-cost');
+  if (!box) return;
+  const f = _moForm[kind];
 
-  const defs = moStepDefs(kind);
-  // 各ステップの「確定済み」状態
-  const confirmed = {};
+  const itemLabel = kind === 'sales'
+    ? (f.svcName ? f.svcName + (f.miscName ? `（${f.miscName}）` : '') : '')
+    : (f.itemName ? `${moCostDivLabel(f.divCode)}／${f.itemName}` + (f.miscName ? `（${f.miscName}）` : '') : '');
 
-  const render = () => {
-    // 確定ブロックを描画
-    stack.innerHTML = defs.map(d => {
-      if (!confirmed[d.key]) return '';
-      const val = d.value();
-      return `<button type="button" class="mo-chip" data-step="${d.key}">
-        <span class="mo-chip-k">${d.label}</span>
-        <span class="mo-chip-v">${_moEsc(val || '未入力')}</span>
-        <span class="mo-chip-edit">変更</span>
-      </button>`;
-    }).join('');
+  const blocks = [];
+  // 確定ブロック：発生日（常に確定済みとして上に表示）
+  blocks.push(moBlock('date', '発生日', moFmtDate(f.date)));
+  // 確定ブロック：科目（選択済みのとき）
+  if (moItemResolved(kind)) {
+    const taxTxt = f.taxRate != null ? `（${f.taxRate === 0 ? '非課税' : f.taxRate + '%'}）` : '';
+    blocks.push(moBlock('item', kind === 'sales' ? '区分' : '科目', itemLabel + taxTxt));
+  }
+  // 確定ブロック：金額（入力済みのとき）
+  if (f.amount && parseInt(f.amount, 10) > 0) {
+    blocks.push(moBlock('amount', '金額', moFmtAmt(f.amount)));
+  }
 
-    // 各セクションの表示制御：確定済みは隠す・未確定は表示
-    defs.forEach(d => {
-      const sec = document.querySelector(d.sectionSel);
-      if (sec) sec.style.display = confirmed[d.key] ? 'none' : '';
-    });
-  };
+  // 編集エリア（現在の editing ステップの操作UI）
+  let editor = '';
+  if (f.editing === 'date')   editor = moEditorDate(kind);
+  else if (f.editing === 'item') editor = moEditorItem(kind);
+  else if (f.editing === 'amount') editor = moEditorAmount(kind);
 
-  // 確定ブロックのタップ＝そのステップを再編集（確定解除して操作UI再表示）
-  stack.addEventListener('click', (e) => {
-    const chip = e.target.closest('.mo-chip');
-    if (!chip) return;
-    confirmed[chip.dataset.step] = false;
-    render();
+  // 状況トグル＋メモ＋登録（科目・金額が揃ったら表示）
+  const ready = moItemResolved(kind) && f.amount && parseInt(f.amount, 10) > 0;
+  const tail = ready ? moEditorTail(kind) : '';
+
+  box.innerHTML =
+    `<div class="mo-stack">${blocks.join('')}</div>` +
+    `<div class="mo-editor">${editor}</div>` +
+    tail;
+
+  moBindForm(kind);
+}
+
+function moItemResolved(kind) {
+  const f = _moForm[kind];
+  return kind === 'sales' ? !!f.svcCode : !!f.itemCode;
+}
+
+function moBlock(step, label, value) {
+  return `<button type="button" class="mo-chip" data-step="${step}">
+    <span class="mo-chip-k">${label}</span>
+    <span class="mo-chip-v">${_moEsc(value || '未入力')}</span>
+    <span class="mo-chip-edit">変更</span>
+  </button>`;
+}
+
+function moCostDivLabel(code) { return code === '1' ? '仕入原価' : '販管費'; }
+
+/* ── 各エディタUI ─────────────────────────────────────── */
+function moEditorDate(kind) {
+  return `<div class="mo-ed-head">発生日を選択</div>
+    <div class="mo-cal" id="mo-cal-${kind}"></div>`;
+}
+
+function moEditorItem(kind) {
+  const f = _moForm[kind];
+  let divTabs = '';
+  if (kind === 'cost') {
+    divTabs = `<div class="mo-divtabs">
+      <button type="button" class="mo-divtab ${f.divCode==='1'?'is-active':''}" data-div="1">仕入原価</button>
+      <button type="button" class="mo-divtab ${f.divCode==='2'?'is-active':''}" data-div="2">販管費</button>
+    </div>`;
+  }
+  const items = moGetItems(kind);
+  const sel = kind === 'sales' ? f.svcCode : f.itemCode;
+  const cards = items.map(it => `
+    <button type="button" class="mo-card ${it.code===sel?'is-active':''}" data-code="${_moEsc(it.code)}" data-name="${_moEsc(it.name)}" data-tax="${it.taxRate ?? 10}">
+      ${_moEsc(it.name)}
+    </button>`).join('');
+  // 諸口名称（諸口選択時）
+  const miscBox = (sel && moIsMisc(kind, sel))
+    ? `<div class="mo-misc"><label class="mo-misc-label">品目名（任意）</label>
+        <input type="text" class="mo-misc-input" id="mo-misc-${kind}" maxlength="50" value="${_moEsc(f.miscName)}" placeholder="例：手土産代"></div>`
+    : '';
+  // 税率チップ（科目選択後）
+  const taxChips = sel
+    ? `<div class="mo-ed-sub">税率</div>
+       <div class="mo-taxchips">
+         ${[10,8,0].map(r => `<button type="button" class="mo-taxchip ${f.taxRate===r?'is-active':''}" data-rate="${r}">${r===0?'非課税':r+'%'}</button>`).join('')}
+       </div>` : '';
+  return `${divTabs}
+    <div class="mo-ed-head">${kind==='sales'?'サービスを選択':'科目を選択'}</div>
+    <div class="mo-cards">${cards}</div>
+    ${miscBox}
+    ${taxChips}`;
+}
+
+function moEditorAmount(kind) {
+  const f = _moForm[kind];
+  const disp = f.amount ? moFmtAmt(f.amount) : '¥0';
+  const tax = (f.taxRate != null && f.amount) ? calcTax(parseInt(f.amount,10), f.taxRate).tax : 0;
+  const keys = ['7','8','9','4','5','6','1','2','3','00','0','del'];
+  const keyHtml = keys.map(k => {
+    if (k === 'del') return `<button type="button" class="mo-key mo-key--del" data-key="del">←</button>`;
+    return `<button type="button" class="mo-key" data-key="${k}">${k}</button>`;
+  }).join('');
+  return `<div class="mo-ed-head">金額（税込）</div>
+    <div class="mo-amount-disp">${disp}<span class="mo-amount-yen">円</span></div>
+    <div class="mo-amount-tax">内消費税 ${tax.toLocaleString('ja-JP')} 円</div>
+    <div class="mo-keypad">${keyHtml}
+      <button type="button" class="mo-key mo-key--clear" data-key="clear">クリア</button>
+    </div>`;
+}
+
+function moEditorTail(kind) {
+  const f = _moForm[kind];
+  const stateLabel = kind === 'sales' ? '売掛（未入金）として登録' : '買掛（未払い）として登録';
+  const btnLabel = `発生日 ${moFmtDate(f.date)}　登録する`;
+  return `<div class="mo-tail">
+    <label class="mo-toggle">
+      <input type="checkbox" class="mo-unpaid" ${f.unpaid?'checked':''}>
+      <span>${stateLabel}</span>
+    </label>
+    <label class="mo-memo-label">メモ（任意）</label>
+    <textarea class="mo-memo" rows="2" placeholder="">${_moEsc(f.memo)}</textarea>
+    <button type="button" class="mo-submit" data-kind="${kind}">${btnLabel}</button>
+  </div>`;
+}
+
+/* ── イベント結線 ─────────────────────────────────────── */
+function moBindForm(kind) {
+  const box = document.getElementById(kind === 'sales' ? 'mo-form-sales' : 'mo-form-cost');
+  if (!box) return;
+  const f = _moForm[kind];
+
+  // 確定ブロックタップ＝そのステップを編集
+  box.querySelectorAll('.mo-chip').forEach(chip => {
+    chip.addEventListener('click', () => { f.editing = chip.dataset.step; moRenderForm(kind); });
   });
 
-  // 各ステップの操作が起きたら確定して積む。ただし金額など自由入力は自動確定しない
-  // （入力途中で操作UIが消えるのを防ぐ）。自動確定するのは単発タップで決まるステップのみ。
-  const autoConfirmKeys = defs.filter(d => d.key !== 'amount').map(d => d.key);
-  const checkConfirm = () => {
-    defs.forEach(d => {
-      if (confirmed[d.key]) return;
-      if (!autoConfirmKeys.includes(d.key)) return; // 金額は自動確定しない
-      const v = d.value();
-      if (v) confirmed[d.key] = true;
+  // 発生日カレンダー描画
+  if (f.editing === 'date') moRenderCalendar(kind);
+
+  // 区分タブ（コスト）
+  box.querySelectorAll('.mo-divtab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      f.divCode = tab.dataset.div;
+      f.itemCode = ''; f.itemName = ''; f.taxRate = null; f.miscName = '';
+      moRenderForm(kind);
     });
-    render();
-  };
-  formBox.addEventListener('click', () => setTimeout(checkConfirm, 0));
-  formBox.addEventListener('input', () => setTimeout(checkConfirm, 0));
-  const mo = new MutationObserver(() => setTimeout(checkConfirm, 0));
-  mo.observe(formBox, { subtree: true, attributes: true, attributeFilter: ['class', 'value'] });
+  });
 
-  render();
+  // 科目カード
+  box.querySelectorAll('.mo-card').forEach(card => {
+    card.addEventListener('click', () => {
+      if (kind === 'sales') { f.svcCode = card.dataset.code; f.svcName = card.dataset.name; }
+      else { f.itemCode = card.dataset.code; f.itemName = card.dataset.name; }
+      f.taxRate = parseInt(card.dataset.tax, 10);
+      if (!moIsMisc(kind, card.dataset.code)) f.miscName = '';
+      moRenderForm(kind);
+    });
+  });
+
+  // 諸口名称
+  const misc = box.querySelector('.mo-misc-input');
+  if (misc) misc.addEventListener('input', () => { f.miscName = misc.value; });
+
+  // 税率チップ
+  box.querySelectorAll('.mo-taxchip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      f.taxRate = parseInt(chip.dataset.rate, 10);
+      // 科目・税率が決まったら金額入力へ自動で進める
+      f.editing = 'amount';
+      moRenderForm(kind);
+    });
+  });
+
+  // テンキー
+  box.querySelectorAll('.mo-key').forEach(key => {
+    key.addEventListener('click', () => {
+      const k = key.dataset.key;
+      let cur = String(f.amount || '');
+      if (k === 'clear') cur = '';
+      else if (k === 'del') cur = cur.slice(0, -1);
+      else cur = (cur + k).replace(/^0+(?=\d)/, '');
+      if (cur.length > 10) cur = cur.slice(0, 10);
+      f.amount = cur;
+      moRenderForm(kind);
+    });
+  });
+
+  // 状況トグル
+  const unpaid = box.querySelector('.mo-unpaid');
+  if (unpaid) unpaid.addEventListener('change', () => { f.unpaid = unpaid.checked; });
+
+  // メモ
+  const memo = box.querySelector('.mo-memo');
+  if (memo) memo.addEventListener('input', () => { f.memo = memo.value; });
+
+  // 登録
+  const submit = box.querySelector('.mo-submit');
+  if (submit) submit.addEventListener('click', () => moSubmitForm(kind));
 }
 
-function moFmtAmt(v) {
-  const n = parseInt(String(v ?? '').replace(/[^0-9]/g, ''), 10);
-  return '¥' + (isNaN(n) ? 0 : n).toLocaleString('ja-JP');
+/* ── 自作カレンダー ───────────────────────────────────── */
+const _moCalView = { sales: null, cost: null };
+function moRenderCalendar(kind) {
+  const host = document.getElementById('mo-cal-' + kind);
+  if (!host) return;
+  const f = _moForm[kind];
+  const base = _moCalView[kind] || (f.date ? new Date(f.date) : new Date());
+  _moCalView[kind] = base;
+  const y = base.getFullYear(), m = base.getMonth();
+  const first = new Date(y, m, 1);
+  const startDow = first.getDay();
+  const daysInMonth = new Date(y, m + 1, 0).getDate();
+  const sel = f.date ? new Date(f.date) : null;
+
+  let cells = '';
+  const dows = ['日','月','火','水','木','金','土'];
+  cells += dows.map(d => `<div class="mo-cal-dow">${d}</div>`).join('');
+  for (let i = 0; i < startDow; i++) cells += `<div class="mo-cal-cell mo-cal-empty"></div>`;
+  for (let d = 1; d <= daysInMonth; d++) {
+    const isSel = sel && sel.getFullYear()===y && sel.getMonth()===m && sel.getDate()===d;
+    cells += `<button type="button" class="mo-cal-cell ${isSel?'is-sel':''}" data-day="${d}">${d}</button>`;
+  }
+  host.innerHTML = `
+    <div class="mo-cal-bar">
+      <button type="button" class="mo-cal-nav" data-nav="-1">‹</button>
+      <span class="mo-cal-title">${y}年${m+1}月</span>
+      <button type="button" class="mo-cal-nav" data-nav="1">›</button>
+    </div>
+    <div class="mo-cal-grid">${cells}</div>`;
+
+  host.querySelectorAll('.mo-cal-nav').forEach(b => b.addEventListener('click', () => {
+    _moCalView[kind] = new Date(y, m + parseInt(b.dataset.nav,10), 1);
+    moRenderCalendar(kind);
+  }));
+  host.querySelectorAll('.mo-cal-cell[data-day]').forEach(c => c.addEventListener('click', () => {
+    const dd = parseInt(c.dataset.day, 10);
+    f.date = `${y}-${String(m+1).padStart(2,'0')}-${String(dd).padStart(2,'0')}`;
+    f.editing = moItemResolved(kind) ? (f.amount ? null : 'amount') : 'item';
+    moRenderForm(kind);
+  }));
 }
 
-/* ── 売上／コスト 大タブ切替 ────────────────────────────── */
+/* ── 登録 ─────────────────────────────────────────────── */
+async function moSubmitForm(kind) {
+  const f = _moForm[kind];
+  const amount = parseInt(f.amount || '0', 10);
+  if (!moItemResolved(kind)) { moToast('科目を選択してください'); return; }
+  if (!amount || amount <= 0) { moToast('金額を入力してください'); return; }
+  if (f.taxRate == null) { moToast('税率を選択してください'); return; }
+
+  const { taxExcluded, tax } = calcTax(amount, f.taxRate);
+  const btn = document.querySelector(`#mo-form-${kind} .mo-submit`);
+  if (btn) { btn.disabled = true; btn.textContent = '登録中...'; }
+
+  try {
+    let result;
+    if (kind === 'sales') {
+      result = await callGAS('addSales', {
+        date: f.date, serviceCode: f.svcCode, serviceName: f.svcName,
+        miscItemName: moIsMisc('sales', f.svcCode) ? f.miscName : '',
+        amountExTax: taxExcluded, taxRate: f.taxRate, tax, amountInTax: amount,
+        memo: f.memo, uncollected: f.unpaid ? 1 : 0,
+      });
+    } else {
+      result = await callGAS('addCost', {
+        date: f.date, divisionCode: f.divCode, divisionName: moCostDivLabel(f.divCode),
+        itemCode: f.itemCode, itemName: f.itemName,
+        miscItemName: moIsMisc('cost', f.itemCode) ? f.miscName : '',
+        taxExcluded, taxRate: f.taxRate, tax, taxIncluded: amount,
+        memo: f.memo, unpaid: f.unpaid ? 1 : 0, staffId: '', staffName: '', clientId: '',
+      });
+    }
+    if (result?.status !== 'ok') throw new Error(result?.message || '登録エラー');
+    moToast(kind === 'sales' ? '売上を登録しました ✓' : 'コストを登録しました ✓');
+    moInitFormState(kind);
+    moRenderForm(kind);
+    moLoadMonthly();
+  } catch (e) {
+    moToast('登録に失敗しました：' + (e?.message || '通信エラー'));
+    if (btn) { btn.disabled = false; btn.textContent = `発生日 ${moFmtDate(f.date)}　登録する`; }
+  }
+}
+
+function moToast(msg) {
+  if (typeof showToast === 'function') { showToast(msg, 'info'); return; }
+  let t = document.getElementById('mo-toast');
+  if (!t) { t = document.createElement('div'); t.id = 'mo-toast'; t.className = 'mo-toast'; document.body.appendChild(t); }
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+/* ── 大タブ切替 ───────────────────────────────────────── */
 function moBindTabs() {
   document.querySelectorAll('.ipad-input-tabs .ipad-tab[data-motab]').forEach(btn => {
     btn.addEventListener('click', () => moSwitchTab(btn.dataset.motab));
   });
 }
-
 function moSwitchTab(tab) {
   document.querySelectorAll('.ipad-input-tabs .ipad-tab[data-motab]').forEach(btn => {
     btn.classList.toggle('ipad-tab--active', btn.dataset.motab === tab);
@@ -204,6 +386,12 @@ function moSwitchTab(tab) {
   if (salesBox) salesBox.style.display = tab === 'sales' ? '' : 'none';
   if (costBox)  costBox.style.display  = tab === 'cost'  ? '' : 'none';
 }
+
+function moFmtAmt(v) {
+  const n = parseInt(String(v ?? '').replace(/[^0-9]/g, ''), 10);
+  return '¥' + (isNaN(n) ? 0 : n).toLocaleString('ja-JP');
+}
+function moFmtDate(s) { return s ? String(s).replace(/-/g, '/') : ''; }
 
 /* ── 月フィルタ（直近12ヶ月） ──────────────────────────── */
 function moInitMonthFilter() {
