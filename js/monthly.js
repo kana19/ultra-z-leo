@@ -18,8 +18,20 @@ let _moCurrentMonth = '';
    _loadIpadSalesData(m) / _loadIpadCostData(m) を呼ぶ。
    monthly ページではこれらを統合再読込に上書きして横取りする。 */
 if (document.body && document.body.dataset.page === 'monthly') {
-  window._loadIpadSalesData = function () { return moLoadMonthly(); };
-  window._loadIpadCostData  = function () { return moLoadMonthly(); };
+  window._loadIpadSalesData = function () { moRelabelSubmit(); return moLoadMonthly(); };
+  window._loadIpadCostData  = function () { moRelabelSubmit(); return moLoadMonthly(); };
+}
+
+/* submit 後に sales/cost が「登録する」へ戻したボタンラベルを発生日入りへ再同期 */
+function moRelabelSubmit() {
+  const pairs = [['#sm-sales-date', '#sm-sales-submit'], ['#sm-cost-date', '#sm-cost-submit']];
+  pairs.forEach(([dSel, bSel]) => {
+    const d = document.querySelector(dSel), b = document.querySelector(bSel);
+    if (d && b) {
+      const v = (d.value || '').replace(/-/g, '/');
+      b.textContent = v ? `発生日 ${v}　登録する` : '登録する';
+    }
+  });
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -51,6 +63,73 @@ async function moMountForms() {
     costBox.innerHTML = _smCostBuildFormBodyHTML();
     if (typeof _smCostInitFormInModal === 'function') _smCostInitFormInModal();
   }
+
+  // iPad最適化：科目選択時に「選択した1枚だけ上部固定・残りは畳む」挙動を後付け。
+  // sales.js / cost.js のロジックには触れず、選択クラスの付与を監視して反映する。
+  moSetupPickCollapse('#mo-form-sales #sm-sales-cards', '.radio-card', 'radio-card--checked-blue');
+  moSetupPickCollapse('#mo-form-cost  #sm-cost-item-cards', '.cost-sm-card', 'cost-sm-card--active');
+
+  // 登録ボタンを「発生日 YYYY/MM/DD 登録する」ラベルに統一（スマホ同様・重複表示の解消）。
+  moSyncSubmitLabel('#sm-sales-date', '#sm-sales-submit');
+  moSyncSubmitLabel('#sm-cost-date',  '#sm-cost-submit');
+}
+
+/* 発生日入力の値を登録ボタンのラベルへ反映する。 */
+function moSyncSubmitLabel(dateSel, btnSel) {
+  const dateEl = document.querySelector(dateSel);
+  const btn    = document.querySelector(btnSel);
+  if (!dateEl || !btn) return;
+  const update = () => {
+    const v = (dateEl.value || '').replace(/-/g, '/');
+    btn.textContent = v ? `発生日 ${v}　登録する` : '登録する';
+  };
+  dateEl.addEventListener('change', update);
+  dateEl.addEventListener('input', update);
+  update();
+}
+
+/* 科目カードグリッドを監視し、選択時にグリッドへ mo-picked、
+   選択カードへ mo-pinned を付与する。CSS が畳んだ見た目を作る。
+   畳んだ状態でグリッドをタップすると再展開（科目変更）できる。 */
+function moSetupPickCollapse(gridSel, cardSel, activeCls) {
+  const grid = document.querySelector(gridSel);
+  if (!grid) return;
+
+  const apply = () => {
+    const cards = grid.querySelectorAll(cardSel);
+    let picked = null;
+    cards.forEach(c => {
+      const on = c.classList.contains(activeCls);
+      c.classList.toggle('mo-pinned', on);
+      if (on) picked = c;
+    });
+    grid.classList.toggle('mo-picked', !!picked);
+  };
+
+  // 選択クラスの変化を監視（sales/cost 側がクラスを付け替える）
+  const mo = new MutationObserver(() => {
+    // 再展開中フラグが立っているときは畳まない（科目変更のため一時展開）
+    if (grid.dataset.moReopen === '1') return;
+    apply();
+  });
+  mo.observe(grid, { subtree: true, attributes: true, attributeFilter: ['class'] });
+
+  // 畳んだ状態で選択中カードをタップしたら一時展開（科目を選び直せる）。
+  // 別カードを選ぶと選択クラスが移り、再び畳まれる。
+  grid.addEventListener('click', (e) => {
+    const card = e.target.closest(cardSel);
+    if (!card) return;
+    if (grid.classList.contains('mo-picked') && card.classList.contains('mo-pinned')) {
+      // 一時展開：畳みを外す。次の選択（別カード）で apply が再度畳む。
+      grid.dataset.moReopen = '1';
+      grid.classList.remove('mo-picked');
+      grid.querySelectorAll(cardSel).forEach(c => c.classList.remove('mo-pinned'));
+      // 同フレームの選択処理が走った後に監視を再開
+      setTimeout(() => { grid.dataset.moReopen = '0'; apply(); }, 300);
+    }
+  });
+
+  apply();
 }
 
 /* ── 売上／コスト 大タブ切替 ────────────────────────────── */
@@ -115,7 +194,6 @@ async function moLoadMonthly() {
       ...costRows.map(r  => moNormalize(r, 'cost')),
     ].sort((a, b) => String(b.date).localeCompare(String(a.date)));
 
-    moRenderSummary(salesRows, costRows);
     moRenderBreakdown();
     moRenderList();
   } catch {
@@ -156,15 +234,6 @@ function moNormalize(r, src) {
     state: (r.unpaid || r.uncollected) ? '買掛' : '',
     locked: !!r.locked, raw: r,
   };
-}
-
-/* ── サマリーカード ───────────────────────────────────── */
-function moRenderSummary(salesRows, costRows) {
-  const sum = (arr) => arr.reduce((s, r) => s + (r.taxIncluded ?? r.amount ?? 0), 0);
-  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
-  set('mo-total-sales', formatYen(sum(salesRows)));
-  set('mo-total-cost',  formatYen(sum(costRows)));
-  set('mo-entry-count', (salesRows.length + costRows.length) + '件');
 }
 
 /* ── 科目別集計＋区分トータル ─────────────────────────── */
