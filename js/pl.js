@@ -13,64 +13,12 @@
 
 'use strict';
 
-/* ── GASレスポンスキャッシュ ─────────────────────────────── */
-const gasCache       = {};   // 月別 getSummary キャッシュ
-const breakdownCache = {};   // 月別 getHistory→内訳 キャッシュ
-
-async function fetchSummary(monthStr) {
-  if (gasCache[monthStr] !== undefined) return gasCache[monthStr];
-  try {
-    const res = await callGAS('getSummary', { month: monthStr });
-    const data = (res && res.status === 'ok' && res.data) ? res.data : null;
-    gasCache[monthStr] = data;
-    return data;
-  } catch (e) {
-    gasCache[monthStr] = null;
-    return null;
-  }
-}
-
-/**
- * 月別の内訳データを取得する。
- * home.js _loadBreakdown と同じロジック：getHistoryから自前集計。
- * 返却形式: { sales: [{name, amt}, ...], cogs: [...], sga: [...] }
- */
-async function fetchBreakdown(monthStr) {
-  if (breakdownCache[monthStr] !== undefined) return breakdownCache[monthStr];
-  try {
-    const res = await callGAS('getHistory', { month: monthStr }).catch(() => null);
-    const data = (res?.status === 'ok' && Array.isArray(res.data)) ? res.data : [];
-
-    const salesMap = {}, cogsMap = {}, sgaMap = {};
-
-    data.forEach(r => {
-      if (r.type === 'sales') {
-        const name = r.itemName || '売上';
-        salesMap[name] = (salesMap[name] || 0) + (Number(r.amount) || 0);
-      } else if (r.type === 'cost') {
-        const name = r.itemName || '経費';
-        const amt  = Number(r.amount) || 0;
-        if (String(r.divisionCode) === '1') {
-          cogsMap[name] = (cogsMap[name] || 0) + amt;
-        } else {
-          sgaMap[name] = (sgaMap[name] || 0) + amt;
-        }
-      }
-    });
-
-    const toArr = map => Object.entries(map)
-      .map(([name, amt]) => ({ name, amt }))
-      .sort((a, b) => b.amt - a.amt);
-
-    const result = { sales: toArr(salesMap), cogs: toArr(cogsMap), sga: toArr(sgaMap) };
-    breakdownCache[monthStr] = result;
-    return result;
-  } catch {
-    const empty = { sales: [], cogs: [], sga: [] };
-    breakdownCache[monthStr] = empty;
-    return empty;
-  }
-}
+/* ── データ取得：集計・キャッシュは app.js データ層に集約済み ──────
+   fetchSummary / fetchBreakdown は uzFetchSummary / uzFetchBreakdown の
+   別名（既存呼び出し名を維持するための薄いラッパ）。
+   自前集計・独自キャッシュは廃止（集計の正本は app.js uzFetchBreakdown）。 */
+const fetchSummary   = (monthStr) => uzFetchSummary(monthStr);
+const fetchBreakdown = (monthStr) => uzFetchBreakdown(monthStr);
 
 /* ── 定数 ────────────────────────────────────────────────── */
 const _now       = new Date();

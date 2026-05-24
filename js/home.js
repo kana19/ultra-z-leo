@@ -215,7 +215,7 @@ async function loadAlerts() {
 
 /* ── 損益サマリー描画 ────────────────────────────────────── */
 
-/* 科目別内訳キャッシュ */
+/* 科目別内訳（アコーディオン開閉時に参照・データ層 uzFetchBreakdown が供給） */
 let _plBreakdown = { sales: [], cogs: [], sga: [] };
 
 function _renderPLValues(pl) {
@@ -254,41 +254,9 @@ function _renderPLError() {
   });
 }
 
-/* 科目別内訳を getHistory から集計してキャッシュ */
+/* 科目別内訳をデータ層から取得して保持（集計の正本は app.js uzFetchBreakdown） */
 async function _loadBreakdown(month) {
-  try {
-    /* getHistoryは売上・コスト混在で返す。typeフィールドで分離する */
-    const res = await callGAS('getHistory', { month }).catch(() => null);
-    const data = (res?.status === 'ok' && Array.isArray(res.data)) ? res.data : [];
-
-    const salesMap = {}, cogsMap = {}, sgaMap = {};
-
-    data.forEach(r => {
-      if (r.type === 'sales') {
-        /* 売上：itemName（GASフィールド名）でサービス別集計 */
-        const name = r.itemName || '売上';
-        salesMap[name] = (salesMap[name] || 0) + (Number(r.amount) || 0);
-
-      } else if (r.type === 'cost') {
-        /* コスト：divisionCode '1'=仕入原価 / それ以外=販管費 */
-        const name = r.itemName || '経費';
-        const amt  = Number(r.amount) || 0;
-        if (String(r.divisionCode) === '1') {
-          cogsMap[name] = (cogsMap[name] || 0) + amt;
-        } else {
-          sgaMap[name] = (sgaMap[name] || 0) + amt;
-        }
-      }
-    });
-
-    const toArr = map => Object.entries(map)
-      .map(([name, amt]) => ({ name, amt }))
-      .sort((a, b) => b.amt - a.amt);
-
-    _plBreakdown = { sales: toArr(salesMap), cogs: toArr(cogsMap), sga: toArr(sgaMap) };
-  } catch {
-    _plBreakdown = { sales: [], cogs: [], sga: [] };
-  }
+  _plBreakdown = await uzFetchBreakdown(month);
 }
 
 /* アコーディオン開閉 */
@@ -330,12 +298,12 @@ async function loadPL() {
   const monthStr = `${year}-${month}`;
 
   try {
-    const [res] = await Promise.all([
-      callGAS('getSummary', { month: monthStr }),
-      _loadBreakdown(monthStr),   /* 内訳を並行取得 */
+    const [summary] = await Promise.all([
+      uzFetchSummary(monthStr),
+      _loadBreakdown(monthStr),   /* 内訳を並行取得（データ層） */
     ]);
-    if (res && res.status === 'ok' && res.data) {
-      _renderPLValues(res.data);
+    if (summary) {
+      _renderPLValues(summary);
     } else {
       _renderPLError();
     }

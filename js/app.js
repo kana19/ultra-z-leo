@@ -178,6 +178,113 @@ async function callGAS(action, data = {}) {
   return json;
 }
 
+/* ══════════════════════════════════════════════════════════
+   データ層（共通）
+   GAS取得・科目別集計・キャッシュを1箇所に集約する。
+   home.js / pl.js / monthly統合先 / その他画面はここを呼び、
+   各自で getHistory を叩いて集計する重複を作らない。
+
+   getHistory の正本データ構造（GAS応答1行）：
+     { type:'sales'|'cost', rowIndex, date, amount,
+       itemName, divisionCode('1'=仕入原価 / その他=販管費),
+       memo, state, ... }
+   ══════════════════════════════════════════════════════════ */
+
+/* 月別キャッシュ（getHistory生データ・getSummary・内訳） */
+const _uzHistoryCache   = {};   // month -> 正規化済み配列
+const _uzSummaryCache   = {};   // month -> summaryデータ | null
+const _uzBreakdownCache = {};   // month -> { sales, cogs, sga }
+
+/**
+ * 指定月のキャッシュを破棄する。入力（addSales/addCost）・編集・削除の後に呼ぶ。
+ * 引数省略で全月破棄。
+ */
+function uzInvalidateMonth(month) {
+  if (month) {
+    delete _uzHistoryCache[month];
+    delete _uzSummaryCache[month];
+    delete _uzBreakdownCache[month];
+  } else {
+    for (const k in _uzHistoryCache)   delete _uzHistoryCache[k];
+    for (const k in _uzSummaryCache)   delete _uzSummaryCache[k];
+    for (const k in _uzBreakdownCache) delete _uzBreakdownCache[k];
+  }
+}
+
+/**
+ * getSummary（損益5値）を取得＋キャッシュ。
+ * @returns summaryデータ（{ sales, cogs, grossProfit, sga, operatingProfit, ... }）| null
+ */
+async function uzFetchSummary(month) {
+  if (_uzSummaryCache[month] !== undefined) return _uzSummaryCache[month];
+  try {
+    const res  = await callGAS('getSummary', { month });
+    const data = (res && res.status === 'ok' && res.data) ? res.data : null;
+    _uzSummaryCache[month] = data;
+    return data;
+  } catch {
+    _uzSummaryCache[month] = null;
+    return null;
+  }
+}
+
+/**
+ * getHistory（売上コスト混在）を取得＋キャッシュ。
+ * rowIndex を保持したまま正規化して返す（編集・削除に必須）。
+ * @returns Array<{ type, rowIndex, date, amount, itemName, divisionCode, memo, state, raw }>
+ */
+async function uzFetchHistory(month) {
+  if (_uzHistoryCache[month] !== undefined) return _uzHistoryCache[month];
+  try {
+    const res  = await callGAS('getHistory', { month }).catch(() => null);
+    const data = (res?.status === 'ok' && Array.isArray(res.data)) ? res.data : [];
+    const norm = data.map(r => ({
+      type:         r.type,
+      rowIndex:     r.rowIndex,
+      date:         r.date,
+      amount:       Number(r.amount) || 0,
+      itemName:     r.itemName || (r.type === 'sales' ? '売上' : '経費'),
+      divisionCode: r.divisionCode != null ? String(r.divisionCode) : '',
+      memo:         r.memo || '',
+      state:        r.state || '',
+      raw:          r,
+    }));
+    _uzHistoryCache[month] = norm;
+    return norm;
+  } catch {
+    _uzHistoryCache[month] = [];
+    return [];
+  }
+}
+
+/**
+ * 科目別内訳を集計＋キャッシュ。集計の唯一の正本。
+ * uzFetchHistory を元に売上＝サービス別／仕入原価／販管費へ振り分ける。
+ * @returns { sales:[{name,amt}], cogs:[{name,amt}], sga:[{name,amt}] }（金額降順）
+ */
+async function uzFetchBreakdown(month) {
+  if (_uzBreakdownCache[month] !== undefined) return _uzBreakdownCache[month];
+  const rows = await uzFetchHistory(month);
+  const salesMap = {}, cogsMap = {}, sgaMap = {};
+  rows.forEach(r => {
+    if (r.type === 'sales') {
+      salesMap[r.itemName] = (salesMap[r.itemName] || 0) + r.amount;
+    } else if (r.type === 'cost') {
+      if (r.divisionCode === '1') {
+        cogsMap[r.itemName] = (cogsMap[r.itemName] || 0) + r.amount;
+      } else {
+        sgaMap[r.itemName] = (sgaMap[r.itemName] || 0) + r.amount;
+      }
+    }
+  });
+  const toArr = map => Object.entries(map)
+    .map(([name, amt]) => ({ name, amt }))
+    .sort((a, b) => b.amt - a.amt);
+  const result = { sales: toArr(salesMap), cogs: toArr(cogsMap), sga: toArr(sgaMap) };
+  _uzBreakdownCache[month] = result;
+  return result;
+}
+
 /**
  * アプリ起動時にGASからsettings（staffList・businessHours等）を取得して
  * localStorageに同期する。通信失敗時は既存キャッシュを維持。

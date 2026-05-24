@@ -111,9 +111,14 @@ function moRenderForm(kind) {
   const ready = moItemResolved(kind) && f.amount && parseInt(f.amount, 10) > 0;
   const tail = ready ? moEditorTail(kind) : '';
 
+  // 入力途中の取消（科目か金額が入っていれば表示）
+  const canReset = moItemResolved(kind) || (f.amount && parseInt(f.amount, 10) > 0);
+  const resetBtn = canReset ? `<button type="button" class="mo-reset" data-kind="${kind}">入力をリセット</button>` : '';
+
   box.innerHTML =
     `<div class="mo-stack">${blocks.join('')}</div>` +
     `<div class="mo-editor">${editor}</div>` +
+    resetBtn +
     tail;
 
   moBindForm(kind);
@@ -278,6 +283,14 @@ function moBindForm(kind) {
   // 登録
   const submit = box.querySelector('.mo-submit');
   if (submit) submit.addEventListener('click', () => moSubmitForm(kind));
+
+  // リセット（入力途中の取消）
+  const reset = box.querySelector('.mo-reset');
+  if (reset) reset.addEventListener('click', () => {
+    moInitFormState(kind);
+    _moCalView[kind] = null;
+    moRenderForm(kind);
+  });
 }
 
 /* ── 自作カレンダー ───────────────────────────────────── */
