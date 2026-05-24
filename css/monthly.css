@@ -200,6 +200,49 @@ body.is-ipad[data-page="monthly"] .ipad-tab-content {
   padding: 0;
 }
 
+/* ── 積層ステッパー：確定した項目を上部にブロックで積む ──
+   選んだものがそのまま上に残り、タップでその項目だけ再編集できる。 */
+body.is-ipad[data-page="monthly"] .mo-stack {
+  position: sticky;
+  top: 0;
+  z-index: 7;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--uz-border);
+}
+body.is-ipad[data-page="monthly"] .mo-stack:empty { display: none; }
+body.is-ipad[data-page="monthly"] .mo-chip {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 24px;
+  background: var(--uz-text);
+  color: var(--uz-on-accent, #fff);
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+}
+body.is-ipad[data-page="monthly"] .mo-chip-k {
+  font-size: 11px;
+  opacity: .65;
+  flex: 0 0 56px;
+}
+body.is-ipad[data-page="monthly"] .mo-chip-v {
+  flex: 1;
+  font-size: 15px;
+  font-weight: 600;
+}
+body.is-ipad[data-page="monthly"] .mo-chip-edit {
+  font-size: 12px;
+  opacity: .8;
+  border: 1px solid rgba(255,255,255,.4);
+  border-radius: 8px;
+  padding: 4px 12px;
+}
+
 body.is-ipad[data-page="monthly"] .sales-sm-body,
 body.is-ipad[data-page="monthly"] .cost-sm-body {
   max-width: none;
@@ -268,41 +311,8 @@ body.is-ipad[data-page="monthly"] .cost-sm-card.cost-sm-card--active .cost-sm-ca
   color: var(--uz-on-accent, #fff);
 }
 
-/* 科目選択後の畳み込み（選択1枚のみ・変更ボタンで再選択） */
-body.is-ipad[data-page="monthly"] .sales-sm-cards.mo-picked,
-body.is-ipad[data-page="monthly"] #sm-cost-item-cards.mo-picked {
-  position: sticky;
-  top: 0;
-  z-index: 4;
-  grid-template-columns: 1fr !important;
-  background: var(--uz-surface);
-  padding-bottom: 4px;
-}
-body.is-ipad[data-page="monthly"] .sales-sm-cards.mo-picked .radio-card:not(.mo-pinned),
-body.is-ipad[data-page="monthly"] #sm-cost-item-cards.mo-picked .cost-sm-card:not(.mo-pinned) {
-  display: none;
-}
-body.is-ipad[data-page="monthly"] .sales-sm-cards.mo-picked .radio-card.mo-pinned,
-body.is-ipad[data-page="monthly"] #sm-cost-item-cards.mo-picked .cost-sm-card.mo-pinned {
-  position: relative;
-  min-height: 48px;
-  justify-content: flex-start;
-  padding-left: 16px;
-}
-/* 「変更」実ボタン（CSS擬似要素ではなく押下可能なDOM） */
-body.is-ipad[data-page="monthly"] .mo-change-btn {
-  position: absolute;
-  right: 10px;
-  top: 50%;
-  transform: translateY(-50%);
-  padding: 6px 14px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--uz-text);
-  background: var(--uz-bg);
-  border: 1px solid var(--uz-border);
-  border-radius: 8px;
-}
+/* 科目カードは畳まず常時2列表示（一望性最優先）。
+   入力中の全項目はフォーム上部の入力サマリーで常に確認できる。 */
 
 body.is-ipad[data-page="monthly"] .sm-taxrate-chips { gap: 10px; margin: 4px 0; }
 body.is-ipad[data-page="monthly"] .sm-taxrate-chip {

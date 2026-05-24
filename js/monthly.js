@@ -64,12 +64,13 @@ async function moMountForms() {
     if (typeof _smCostInitFormInModal === 'function') _smCostInitFormInModal();
   }
 
-  // iPad最適化：科目選択時に「選択した1枚だけ上部固定・残りは畳む」挙動を後付け。
-  // sales.js / cost.js のロジックには触れず、選択クラスの付与を監視して反映する。
-  moSetupPickCollapse('#mo-form-sales #sm-sales-cards', '.radio-card', 'radio-card--checked-blue');
-  moSetupPickCollapse('#mo-form-cost  #sm-cost-item-cards', '.cost-sm-card', 'cost-sm-card--active');
+  // iPad最適化：入力した部品が確定ブロックとして上部に積層していく「積層ステッパー」方式。
+  // 選んだものがそのまま上に残り、確定ブロックをタップするとその項目だけ再編集できる。
+  // 操作UI・税計算・登録は sales.js / cost.js を流用（入力正本1本・MD §6-3-B）。
+  moSetupStepper('sales');
+  moSetupStepper('cost');
 
-  // 登録ボタンを「発生日 YYYY/MM/DD 登録する」ラベルに統一（スマホ同様・重複表示の解消）。
+  // 登録ボタンを「発生日 YYYY/MM/DD 登録する」ラベルに統一。
   moSyncSubmitLabel('#sm-sales-date', '#sm-sales-submit');
   moSyncSubmitLabel('#sm-cost-date',  '#sm-cost-submit');
 }
@@ -88,68 +89,103 @@ function moSyncSubmitLabel(dateSel, btnSel) {
   update();
 }
 
-/* 科目カードグリッドを監視し、選択時にグリッドへ mo-picked、
-   選択カードへ mo-pinned を付与する。CSS が畳んだ見た目を作る。
-   畳んだチップ内の「変更」ボタンを押すと展開し、別の科目を選べる。
-   別カードを選ぶと再び畳む（自動）。 */
-function moSetupPickCollapse(gridSel, cardSel, activeCls) {
-  const grid = document.querySelector(gridSel);
-  if (!grid) return;
-
-  // 展開中（変更操作中）フラグ。true の間は畳まない。
-  let expanding = false;
-
-  const collapse = () => {
-    const cards = grid.querySelectorAll(cardSel);
-    let picked = null;
-    cards.forEach(c => {
-      const on = c.classList.contains(activeCls);
-      c.classList.toggle('mo-pinned', on);
-      if (on) picked = c;
-    });
-    grid.classList.toggle('mo-picked', !!picked);
-    expanding = false;
-    if (picked) moEnsureChangeBtn(grid, cardSel);
-  };
-
-  // 選択クラスの変化を監視。展開中でなければ畳む。
-  const mo = new MutationObserver(() => {
-    if (expanding) {
-      // 変更操作中に新しい選択が確定したら、その確定を反映して畳む
-      const hasActive = !!grid.querySelector(cardSel + '.' + activeCls);
-      if (hasActive) collapse();
-      return;
-    }
-    collapse();
-  });
-  mo.observe(grid, { subtree: true, attributes: true, attributeFilter: ['class'] });
-
-  // 「変更」ボタン（畳んだチップ内・CSSの ::after ではなく実ボタン）を押したら展開
-  grid.addEventListener('click', (e) => {
-    const changeBtn = e.target.closest('.mo-change-btn');
-    if (changeBtn) {
-      e.preventDefault();
-      e.stopPropagation();
-      expanding = true;
-      grid.classList.remove('mo-picked');
-      grid.querySelectorAll(cardSel).forEach(c => c.classList.remove('mo-pinned'));
-      return;
-    }
-  }, true);
-
-  collapse();
+/* ── 積層ステッパー ──────────────────────────────────────
+   各入力ステップを「未確定＝操作UI表示／確定＝1行ブロックで上部に残す」に切替。
+   確定ブロックをタップするとその項目だけ操作UIに戻る（個別再編集）。 */
+function moStepDefs(kind) {
+  if (kind === 'sales') {
+    return [
+      { key: 'date',  label: '発生日', sectionSel: '#mo-form-sales .sm-sticky-header',
+        value: () => { const v = document.getElementById('sm-sales-date')?.value; return v ? v.replace(/-/g,'/') : ''; } },
+      { key: 'item',  label: '区分',   sectionSel: '#mo-form-sales .sales-sm-section:nth-of-type(1)',
+        value: () => {
+          const c = document.querySelector('#sm-sales-cards .radio-card.radio-card--checked-blue .radio-card__label');
+          const t = document.querySelector('#mo-form-sales .sm-taxrate-chip.is-active');
+          return c ? c.textContent.trim() + (t ? `（${t.textContent.trim()}）` : '') : '';
+        } },
+      { key: 'amount', label: '金額',  sectionSel: '#mo-form-sales .sales-sm-section:nth-of-type(3)',
+        value: () => { const a = document.getElementById('sm-sales-amount')?.value; return a ? moFmtAmt(a) : ''; } },
+    ];
+  }
+  return [
+    { key: 'date',  label: '発生日', sectionSel: '#mo-form-cost .sm-sticky-header',
+      value: () => { const v = document.getElementById('sm-cost-date')?.value; return v ? v.replace(/-/g,'/') : ''; } },
+    { key: 'item',  label: '科目',   sectionSel: '#mo-form-cost .cost-sm-section:nth-of-type(1)',
+      value: () => {
+        const div = document.querySelector('#mo-form-cost .division-btn--active');
+        const c   = document.querySelector('#sm-cost-item-cards .cost-sm-card.cost-sm-card--active .cost-sm-card__label');
+        const t   = document.querySelector('#mo-form-cost .sm-taxrate-chip.is-active');
+        if (!c) return '';
+        return (div ? div.textContent.trim() + '／' : '') + c.textContent.trim() + (t ? `（${t.textContent.trim()}）` : '');
+      } },
+    { key: 'amount', label: '金額',  sectionSel: '#mo-form-cost .cost-sm-section:nth-of-type(3)',
+      value: () => { const a = document.getElementById('sm-cost-amount')?.value; return a ? moFmtAmt(a) : ''; } },
+  ];
 }
 
-/* 畳んだ選択カードに「変更」ボタンを差し込む（CSS擬似要素では押下できないため実DOM）。
-   collapse 後に mo-pinned が付いたカードへ一度だけ挿入する。 */
-function moEnsureChangeBtn(grid, cardSel) {
-  const pinned = grid.querySelector(cardSel + '.mo-pinned');
-  if (!pinned) return;
-  if (pinned.querySelector('.mo-change-btn')) return;
-  const btn = document.createElement('span');
-  btn.className = 'mo-change-btn';
-  btn.textContent = '変更';
-  pinned.appendChild(btn);
+function moSetupStepper(kind) {
+  const formBox = document.getElementById(kind === 'sales' ? 'mo-form-sales' : 'mo-form-cost');
+  if (!formBox) return;
+
+  // 確定ブロックの積層コンテナをフォーム先頭に作る
+  const stack = document.createElement('div');
+  stack.className = 'mo-stack';
+  formBox.insertBefore(stack, formBox.firstChild);
+
+  const defs = moStepDefs(kind);
+  // 各ステップの「確定済み」状態
+  const confirmed = {};
+
+  const render = () => {
+    // 確定ブロックを描画
+    stack.innerHTML = defs.map(d => {
+      if (!confirmed[d.key]) return '';
+      const val = d.value();
+      return `<button type="button" class="mo-chip" data-step="${d.key}">
+        <span class="mo-chip-k">${d.label}</span>
+        <span class="mo-chip-v">${_moEsc(val || '未入力')}</span>
+        <span class="mo-chip-edit">変更</span>
+      </button>`;
+    }).join('');
+
+    // 各セクションの表示制御：確定済みは隠す・未確定は表示
+    defs.forEach(d => {
+      const sec = document.querySelector(d.sectionSel);
+      if (sec) sec.style.display = confirmed[d.key] ? 'none' : '';
+    });
+  };
+
+  // 確定ブロックのタップ＝そのステップを再編集（確定解除して操作UI再表示）
+  stack.addEventListener('click', (e) => {
+    const chip = e.target.closest('.mo-chip');
+    if (!chip) return;
+    confirmed[chip.dataset.step] = false;
+    render();
+  });
+
+  // 各ステップの操作が起きたら確定して積む。ただし金額など自由入力は自動確定しない
+  // （入力途中で操作UIが消えるのを防ぐ）。自動確定するのは単発タップで決まるステップのみ。
+  const autoConfirmKeys = defs.filter(d => d.key !== 'amount').map(d => d.key);
+  const checkConfirm = () => {
+    defs.forEach(d => {
+      if (confirmed[d.key]) return;
+      if (!autoConfirmKeys.includes(d.key)) return; // 金額は自動確定しない
+      const v = d.value();
+      if (v) confirmed[d.key] = true;
+    });
+    render();
+  };
+  formBox.addEventListener('click', () => setTimeout(checkConfirm, 0));
+  formBox.addEventListener('input', () => setTimeout(checkConfirm, 0));
+  const mo = new MutationObserver(() => setTimeout(checkConfirm, 0));
+  mo.observe(formBox, { subtree: true, attributes: true, attributeFilter: ['class', 'value'] });
+
+  render();
+}
+
+function moFmtAmt(v) {
+  const n = parseInt(String(v ?? '').replace(/[^0-9]/g, ''), 10);
+  return '¥' + (isNaN(n) ? 0 : n).toLocaleString('ja-JP');
 }
 
 /* ── 売上／コスト 大タブ切替 ────────────────────────────── */
