@@ -230,27 +230,24 @@ async function uzFetchSummary(month) {
 
 /**
  * getHistory（売上コスト混在）を取得＋キャッシュ。
- * rowIndex を保持したまま正規化して返す（編集・削除に必須）。
- * @returns Array<{ type, rowIndex, date, amount, itemName, divisionCode, memo, state, raw }>
+ * GAS getHistory(month) の応答をそのまま保持する（type='sales'/'cost' 混在・rowIndex付き）。
+ * getHistory は type パラメータを解釈せず常に全件返すため、month のみで取得する。
+ *
+ * 正本フィールド（main.gs getHistory 準拠）：
+ *   共通  : type, sheetName, rowIndex, date, amount(税込), taxRate, taxAmount, memo, itemName, isLocked
+ *   売上固有: serviceCode, uncollected(売掛=1), salesRowId, isProject
+ *   コスト固有: divisionCode('1'=仕入原価/その他=販管費), divisionName, itemCode,
+ *             miscItemName, unpaid(買掛=1), withholdingAmount, linkedSalesRowId
+ *
+ * @returns Array<該当行オブジェクト>（GAS応答のまま・date降順）
  */
 async function uzFetchHistory(month) {
   if (_uzHistoryCache[month] !== undefined) return _uzHistoryCache[month];
   try {
     const res  = await callGAS('getHistory', { month }).catch(() => null);
     const data = (res?.status === 'ok' && Array.isArray(res.data)) ? res.data : [];
-    const norm = data.map(r => ({
-      type:         r.type,
-      rowIndex:     r.rowIndex,
-      date:         r.date,
-      amount:       Number(r.amount) || 0,
-      itemName:     r.itemName || (r.type === 'sales' ? '売上' : '経費'),
-      divisionCode: r.divisionCode != null ? String(r.divisionCode) : '',
-      memo:         r.memo || '',
-      state:        r.state || '',
-      raw:          r,
-    }));
-    _uzHistoryCache[month] = norm;
-    return norm;
+    _uzHistoryCache[month] = data;
+    return data;
   } catch {
     _uzHistoryCache[month] = [];
     return [];
@@ -267,13 +264,16 @@ async function uzFetchBreakdown(month) {
   const rows = await uzFetchHistory(month);
   const salesMap = {}, cogsMap = {}, sgaMap = {};
   rows.forEach(r => {
+    const amt = Number(r.amount) || 0;
     if (r.type === 'sales') {
-      salesMap[r.itemName] = (salesMap[r.itemName] || 0) + r.amount;
+      const name = r.itemName || '売上';
+      salesMap[name] = (salesMap[name] || 0) + amt;
     } else if (r.type === 'cost') {
-      if (r.divisionCode === '1') {
-        cogsMap[r.itemName] = (cogsMap[r.itemName] || 0) + r.amount;
+      const name = r.itemName || '経費';
+      if (String(r.divisionCode) === '1') {
+        cogsMap[name] = (cogsMap[name] || 0) + amt;
       } else {
-        sgaMap[r.itemName] = (sgaMap[r.itemName] || 0) + r.amount;
+        sgaMap[name] = (sgaMap[name] || 0) + amt;
       }
     }
   });

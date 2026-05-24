@@ -172,14 +172,12 @@ async function loadAll() {
 
   try {
     const [histResult, attendResult] = await Promise.allSettled([
-      callGAS('getHistory',           { month: monthParam }),
+      uzFetchHistory(monthParam),
       callGAS('getAttendanceByMonth', { month: monthParam }),
     ]);
 
-    if (histResult.status === 'fulfilled' &&
-        histResult.value?.status === 'ok' &&
-        Array.isArray(histResult.value.data)) {
-      renderSalesCost(histResult.value.data);
+    if (histResult.status === 'fulfilled' && Array.isArray(histResult.value)) {
+      renderSalesCost(histResult.value);
     } else {
       renderSalesCostError();
     }
@@ -952,6 +950,9 @@ async function saveEdit() {
 
     closeEditForm();
     showToast('修正を保存しました ✓', 'success');
+    if (typeof uzInvalidateMonth === 'function') {
+      uzInvalidateMonth(`${currentYear}-${String(currentMonth).padStart(2, '0')}`);
+    }
     await loadAll(); // 一覧をリロード
 
   } catch (e) {
