@@ -1027,6 +1027,53 @@ const DEFAULT_COST_MASTER = [
 ];
 
 /**
+ * コスト科目マスタ（販管費）を正規化する。
+ * GAS getCostMaster / settings B4 の生データは divisionCode / type / taxRow が
+ * 欠落・汚染しうる（複製元が保存可能だった時代のノイズ等）。
+ * DEFAULT_COST_MASTER を code 辞書として正規構造に矯正する。
+ *
+ * 方針（02_画面仕様.md PC設定・04_運営ポータル.md §6 準拠）：
+ *  - 固定枠（code 8〜25・31）：名称は readonly のため正規名で矯正（ノイズ名を排除）。
+ *    税率・smartphoneVisible は保存値を尊重。divisionCode/type/taxRow は正規定義で補完。
+ *  - 任意枠（code 26〜30）：名称は編集可のため保存値を尊重。divisionCode='2'/type='custom' を保証。
+ *  - 正規 code に無い不正項目（複製元ノイズ等）は破棄する。
+ *  - GAS に欠落した正規 code は DEFAULT から補完し、24件構造を常に保証する。
+ *
+ * @param {Array} raw GAS/B4 由来の生配列
+ * @returns {Array} 正規化済み（DEFAULT と同じ code 順・24件）
+ */
+function normalizeCostMasterList(raw) {
+  const rawByCode = {};
+  if (Array.isArray(raw)) {
+    raw.forEach(it => {
+      if (it && it.code != null) rawByCode[String(it.code)] = it;
+    });
+  }
+  return DEFAULT_COST_MASTER.map(def => {
+    const r = rawByCode[def.code];
+    const isCustom = def.type === 'custom';
+    // 名称：固定枠は正規名で矯正、任意枠は保存値（空可）を尊重
+    const name = isCustom
+      ? (r && typeof r.name === 'string' ? r.name : '')
+      : def.name;
+    // 税率：保存値があれば尊重、なければ正規デフォルト
+    const taxRate = (r && r.taxRate != null && !isNaN(Number(r.taxRate)))
+      ? Number(r.taxRate) : def.taxRate;
+    // 表示：保存値を尊重（未定義 or true → true / false のみ false）
+    const smartphoneVisible = r ? (r.smartphoneVisible !== false) : true;
+    return {
+      code:        def.code,
+      taxRow:      def.taxRow,
+      name:        name,
+      taxRate:     taxRate,
+      type:        def.type,
+      divisionCode: '2',          // 販管費マスタは常に '2'
+      smartphoneVisible: smartphoneVisible,
+    };
+  });
+}
+
+/**
  * コスト科目マスタをlocalStorageから取得（なければデフォルト）
  * @returns {Array}
  */
