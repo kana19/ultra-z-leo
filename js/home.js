@@ -259,37 +259,7 @@ async function _loadBreakdown(month) {
   _plBreakdown = await uzFetchBreakdown(month);
 }
 
-/* アコーディオン開閉 */
-function togglePlAccordion(key) {
-  const detail = document.getElementById(`pl-detail-${key}`);
-  const chev   = document.getElementById(`pl-chev-${key}`);
-  const btn    = detail?.previousElementSibling;
-  if (!detail) return;
-
-  const isOpen = !detail.hidden;
-
-  if (isOpen) {
-    detail.hidden = true;
-    chev?.classList.remove('pl-chevron--open');
-    btn?.setAttribute('aria-expanded', 'false');
-  } else {
-    /* 内訳を描画してから展開 */
-    const items = _plBreakdown[key] || [];
-    if (items.length === 0) {
-      detail.innerHTML = '<div class="pl-detail-row" style="color:var(--uz-text3);font-size:12px;padding:4px 0;">内訳データなし</div>';
-    } else {
-      detail.innerHTML = items.map(it =>
-        `<div class="pl-detail-row">
-          <span class="pl-detail-row__name">${escapeHtml(it.name)}</span>
-          <span class="pl-detail-row__val">${formatYen(it.amt)}</span>
-        </div>`
-      ).join('');
-    }
-    detail.hidden = false;
-    chev?.classList.add('pl-chevron--open');
-    btn?.setAttribute('aria-expanded', 'true');
-  }
-}
+/* アコーディオン開閉は app.js 共通 togglePlAccordion を使用（内訳は _plBreakdown を参照） */
 
 async function loadPL() {
   const now   = new Date();
@@ -347,11 +317,7 @@ async function handleClockOut(staffId) {
 
 /* ── XSSエスケープ ───────────────────────────────────────── */
 function escapeHtml(str) {
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+  return uzEscHtml(str);
 }
 
 /* ── 確定申告タイマー ────────────────────────────────────── */

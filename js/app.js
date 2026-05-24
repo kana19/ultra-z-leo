@@ -285,6 +285,59 @@ async function uzFetchBreakdown(month) {
   return result;
 }
 
+/* ══════════════════════════════════════════════════════════
+   描画層（共通）
+   全画面共通のHTMLエスケープ・損益内訳アコーディオン。
+   home.js / pl.js が各自で持っていた escapeHtml/escHtml・
+   togglePlAccordion の重複をここに1本化する。
+   ══════════════════════════════════════════════════════════ */
+
+/* HTMLエスケープ（共通）。各画面の escapeHtml/escHtml はこれに委譲する。 */
+function uzEscHtml(str) {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/* 損益内訳アコーディオンの開閉（共通）。
+   ホーム（index.html）・損益サマリー（pl.html）の onclick から呼ばれる。
+   内訳データは画面側のグローバル _plBreakdown[key]（{name,amt}配列）を参照する。
+   HTML契約：トグル対象 #pl-detail-${key}・chevron #pl-chev-${key}・
+            直前要素がボタン（aria-expanded を持つ）。 */
+function togglePlAccordion(key) {
+  const detail = document.getElementById(`pl-detail-${key}`);
+  const chev   = document.getElementById(`pl-chev-${key}`);
+  const btn    = detail?.previousElementSibling;
+  if (!detail) return;
+
+  const isOpen = !detail.hidden;
+  if (isOpen) {
+    detail.hidden = true;
+    chev?.classList.remove('pl-chevron--open');
+    btn?.setAttribute('aria-expanded', 'false');
+    return;
+  }
+
+  const items = (typeof _plBreakdown !== 'undefined' && _plBreakdown[key]) || [];
+  if (items.length === 0) {
+    detail.innerHTML =
+      '<div class="pl-detail-row" style="color:var(--uz-text3);font-size:12px;padding:4px 0;">内訳データなし</div>';
+  } else {
+    detail.innerHTML = items.map(it =>
+      `<div class="pl-detail-row">
+        <span class="pl-detail-row__name">${uzEscHtml(it.name)}</span>
+        <span class="pl-detail-row__val">${formatYen(it.amt)}</span>
+      </div>`
+    ).join('');
+  }
+  detail.hidden = false;
+  chev?.classList.add('pl-chevron--open');
+  btn?.setAttribute('aria-expanded', 'true');
+}
+
 /**
  * アプリ起動時にGASからsettings（staffList・businessHours等）を取得して
  * localStorageに同期する。通信失敗時は既存キャッシュを維持。
