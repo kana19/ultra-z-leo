@@ -96,36 +96,63 @@ const GAS_URL = 'https://script.google.com/macros/s/AKfycbwBDHj9-p6ZT6ExXrxF1Q-X
    生成店舗では SPREADSHEET_ID が実IDに置換されエラーが出ないため、デモは発動しない。 */
 let UZ_DEMO = false;
 
+/* デモ用：当月（YYYY-MM）を動的に得る。ダミー履歴を常に当月に乗せUI確認を成立させる */
+function _uzDemoMonth() {
+  const n = new Date();
+  return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`;
+}
+function _uzDemoDate(day) {
+  return `${_uzDemoMonth()}-${String(day).padStart(2, '0')}`;
+}
+
 const UZ_DEMO_DATA = {
   getSettings: {
     storeName: 'サンプル店舗（デモ）',
     businessHours: { open: '09:00', close: '21:00', closeNextDay: false },
     serviceList: [
-      { code: 'sv001', name: '店内売上', taxRate: 10 },
-      { code: 'sv002', name: 'テイクアウト', taxRate: 8 }
+      { code: 'sv001', name: '店内売上',     taxRate: 10 },
+      { code: 'sv002', name: 'テイクアウト', taxRate: 8  },
+      { code: 'sv003', name: '物販',         taxRate: 10 }
     ],
     purchaseList: [
-      { code: 'p001', name: '食材', taxRate: 8 }
+      { code: 'p001', name: '食材',   taxRate: 8  },
+      { code: 'p002', name: '酒類',   taxRate: 10 },
+      { code: 'p003', name: '消耗品', taxRate: 10 }
     ],
     staffList: [
       { id: 1, name: 'デモ太郎', employmentType: 'employed_full' },
       { id: 2, name: 'デモ花子', employmentType: 'employed_temp' }
     ],
-    costMasterList: []
+    /* 販管費マスタ（主要科目・smartphoneVisible 付き／GAS DEFAULT_COST_MASTER 準拠） */
+    costMasterList: [
+      { code: '10', name: '水道光熱費', taxRate: 10, divisionCode: '2', smartphoneVisible: true },
+      { code: '12', name: '通信費',     taxRate: 10, divisionCode: '2', smartphoneVisible: true },
+      { code: '13', name: '広告宣伝費', taxRate: 10, divisionCode: '2', smartphoneVisible: true },
+      { code: '17', name: '消耗品費',   taxRate: 10, divisionCode: '2', smartphoneVisible: true },
+      { code: '23', name: '地代家賃',   taxRate: 10, divisionCode: '2', smartphoneVisible: true },
+      { code: '31', name: '雑費',       taxRate: 10, divisionCode: '2', smartphoneVisible: true }
+    ]
   },
   getSummary: {
-    sales: 1200000, cogs: 300000, grossProfit: 900000,
-    sga: 250000, operatingProfit: 650000
+    sales: 600000, cogs: 180000, grossProfit: 420000,
+    sga: 220000, operatingProfit: 200000
   },
   getUncollected: [
-    { type: 'uncollected', date: '2026-05-20', name: '店内売上', amount: 80000 },
-    { type: 'payable',     date: '2026-05-18', name: '食材',     amount: 45000 }
+    { type: 'uncollected', date: _uzDemoDate(20), name: '店内売上', amount: 80000 },
+    { type: 'payable',     date: _uzDemoDate(18), name: '酒類',     amount: 45000 }
   ],
+  /* getHistory：GAS正本フィールド準拠（itemName / rowIndex / uncollected|unpaid /
+     serviceCode|divisionCode・itemCode）。科目名入りで一覧・集計・売掛買掛ドットを確認可能にする。
+     合計は getSummary と一致：売上600,000 / 仕入原価180,000 / 販管費220,000。 */
   getHistory: [
-    { date: '2026-05-23', type: 'sales', name: '店内売上', amount: 120000, taxRate: 10 },
-    { date: '2026-05-23', type: 'cost',  name: '食材',     amount: 30000,  taxRate: 8, divisionCode: '1' },
-    { date: '2026-05-22', type: 'sales', name: 'テイクアウト', amount: 45000, taxRate: 8 },
-    { date: '2026-05-21', type: 'cost',  name: '広告宣伝費', amount: 22000, taxRate: 10, divisionCode: '2' }
+    { type:'sales', rowIndex:2, date:_uzDemoDate(23), itemName:'店内売上',     serviceCode:'sv001', amount:350000, taxRate:10, memo:'',           uncollected:0 },
+    { type:'sales', rowIndex:3, date:_uzDemoDate(23), itemName:'物販',         serviceCode:'sv003', amount:50000,  taxRate:10, memo:'グッズ',     uncollected:0 },
+    { type:'cost',  rowIndex:2, date:_uzDemoDate(23), itemName:'食材',         divisionCode:'1', itemCode:'p001', amount:100000, taxRate:8,  memo:'',         unpaid:0 },
+    { type:'sales', rowIndex:4, date:_uzDemoDate(22), itemName:'テイクアウト', serviceCode:'sv002', amount:200000, taxRate:8,  memo:'',           uncollected:1 },
+    { type:'cost',  rowIndex:3, date:_uzDemoDate(22), itemName:'酒類',         divisionCode:'1', itemCode:'p002', amount:80000,  taxRate:10, memo:'仕入',     unpaid:1 },
+    { type:'cost',  rowIndex:4, date:_uzDemoDate(21), itemName:'広告宣伝費',   divisionCode:'2', itemCode:'13',   amount:35000,  taxRate:10, memo:'SNS広告', unpaid:0 },
+    { type:'cost',  rowIndex:5, date:_uzDemoDate(20), itemName:'水道光熱費',   divisionCode:'2', itemCode:'10',   amount:25000,  taxRate:10, memo:'',         unpaid:0 },
+    { type:'cost',  rowIndex:6, date:_uzDemoDate(19), itemName:'地代家賃',     divisionCode:'2', itemCode:'23',   amount:160000, taxRate:10, memo:'当月分',   unpaid:0 }
   ],
   getAttendance: [],
   getLinkCandidates: [],
