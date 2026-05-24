@@ -39,7 +39,7 @@ document.addEventListener('DOMContentLoaded', function() {
    先に実行する必要があるため、最優先の DOMContentLoaded リスナとして本関数を最初に登録する。 */
 const UZ_SIDEBAR_ITEMS = [
   { key: 'home',       href: 'index.html',            icon: 'ti-planet',   label: 'ホーム'   },
-  { key: 'monthly',    href: 'sales.html',            icon: 'ti-moon',     label: '月次管理' },
+  { key: 'monthly',    href: 'monthly.html',          icon: 'ti-moon',     label: '月次管理' },
   { key: 'attendance', href: 'history.html#attendance', icon: 'ti-clock',  label: '勤怠管理' },
   { key: 'settings',   href: 'settings.html',         icon: 'ti-settings', label: '設定'     }
 ];

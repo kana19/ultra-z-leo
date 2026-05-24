@@ -55,6 +55,7 @@ function divisionLabel(code) {
 
 /* ── 初期化 ──────────────────────────────────────────────── */
 document.addEventListener('DOMContentLoaded', () => {
+  if (document.body.dataset.page !== 'cost') return; // cost.html 専用（monthly では monthly.js が起動）
   costMaster = getCostMaster();   // app.js の共通関数
   loadCostMasterFromGAS();        // バックグラウンドで最新取得
 

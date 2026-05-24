@@ -1588,12 +1588,14 @@ body.is-ipad .ipad-tax-dl-btn:active { opacity: 0.75; }
 .ipad-sc-wrap { display: none; }
 
 /* iPad時：既存ipad-form-wrapを非表示 */
-body.is-ipad[data-page="sales"] .ipad-form-wrap,
-body.is-ipad[data-page="cost"]  .ipad-form-wrap  { display: none !important; }
+body.is-ipad[data-page="sales"]   .ipad-form-wrap,
+body.is-ipad[data-page="cost"]    .ipad-form-wrap,
+body.is-ipad[data-page="monthly"] .ipad-form-wrap { display: none !important; }
 
 /* iPad時：新パネルを2カラムグリッドで表示 */
-body.is-ipad[data-page="sales"] .ipad-sc-wrap,
-body.is-ipad[data-page="cost"]  .ipad-sc-wrap {
+body.is-ipad[data-page="sales"]   .ipad-sc-wrap,
+body.is-ipad[data-page="cost"]    .ipad-sc-wrap,
+body.is-ipad[data-page="monthly"] .ipad-sc-wrap {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0;
