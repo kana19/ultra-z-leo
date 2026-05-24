@@ -90,12 +90,16 @@ function moSyncSubmitLabel(dateSel, btnSel) {
 
 /* 科目カードグリッドを監視し、選択時にグリッドへ mo-picked、
    選択カードへ mo-pinned を付与する。CSS が畳んだ見た目を作る。
-   畳んだ状態でグリッドをタップすると再展開（科目変更）できる。 */
+   畳んだチップ内の「変更」ボタンを押すと展開し、別の科目を選べる。
+   別カードを選ぶと再び畳む（自動）。 */
 function moSetupPickCollapse(gridSel, cardSel, activeCls) {
   const grid = document.querySelector(gridSel);
   if (!grid) return;
 
-  const apply = () => {
+  // 展開中（変更操作中）フラグ。true の間は畳まない。
+  let expanding = false;
+
+  const collapse = () => {
     const cards = grid.querySelectorAll(cardSel);
     let picked = null;
     cards.forEach(c => {
@@ -104,32 +108,48 @@ function moSetupPickCollapse(gridSel, cardSel, activeCls) {
       if (on) picked = c;
     });
     grid.classList.toggle('mo-picked', !!picked);
+    expanding = false;
+    if (picked) moEnsureChangeBtn(grid, cardSel);
   };
 
-  // 選択クラスの変化を監視（sales/cost 側がクラスを付け替える）
+  // 選択クラスの変化を監視。展開中でなければ畳む。
   const mo = new MutationObserver(() => {
-    // 再展開中フラグが立っているときは畳まない（科目変更のため一時展開）
-    if (grid.dataset.moReopen === '1') return;
-    apply();
+    if (expanding) {
+      // 変更操作中に新しい選択が確定したら、その確定を反映して畳む
+      const hasActive = !!grid.querySelector(cardSel + '.' + activeCls);
+      if (hasActive) collapse();
+      return;
+    }
+    collapse();
   });
   mo.observe(grid, { subtree: true, attributes: true, attributeFilter: ['class'] });
 
-  // 畳んだ状態で選択中カードをタップしたら一時展開（科目を選び直せる）。
-  // 別カードを選ぶと選択クラスが移り、再び畳まれる。
+  // 「変更」ボタン（畳んだチップ内・CSSの ::after ではなく実ボタン）を押したら展開
   grid.addEventListener('click', (e) => {
-    const card = e.target.closest(cardSel);
-    if (!card) return;
-    if (grid.classList.contains('mo-picked') && card.classList.contains('mo-pinned')) {
-      // 一時展開：畳みを外す。次の選択（別カード）で apply が再度畳む。
-      grid.dataset.moReopen = '1';
+    const changeBtn = e.target.closest('.mo-change-btn');
+    if (changeBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      expanding = true;
       grid.classList.remove('mo-picked');
       grid.querySelectorAll(cardSel).forEach(c => c.classList.remove('mo-pinned'));
-      // 同フレームの選択処理が走った後に監視を再開
-      setTimeout(() => { grid.dataset.moReopen = '0'; apply(); }, 300);
+      return;
     }
-  });
+  }, true);
 
-  apply();
+  collapse();
+}
+
+/* 畳んだ選択カードに「変更」ボタンを差し込む（CSS擬似要素では押下できないため実DOM）。
+   collapse 後に mo-pinned が付いたカードへ一度だけ挿入する。 */
+function moEnsureChangeBtn(grid, cardSel) {
+  const pinned = grid.querySelector(cardSel + '.mo-pinned');
+  if (!pinned) return;
+  if (pinned.querySelector('.mo-change-btn')) return;
+  const btn = document.createElement('span');
+  btn.className = 'mo-change-btn';
+  btn.textContent = '変更';
+  pinned.appendChild(btn);
 }
 
 /* ── 売上／コスト 大タブ切替 ────────────────────────────── */
@@ -236,7 +256,7 @@ function moNormalize(r, src) {
   };
 }
 
-/* ── 科目別集計＋区分トータル ─────────────────────────── */
+/* ── 科目別集計＋区分トータル（▼で内訳をアコーディオン展開） ─ */
 function moRenderBreakdown() {
   const box = document.getElementById('mo-breakdown');
   if (!box) return;
@@ -250,19 +270,33 @@ function moRenderBreakdown() {
 
   const block = (label, kind) => {
     const items = Object.entries(groups[kind]).sort((a, b) => b[1] - a[1]);
-    if (items.length === 0) return '';
+    const hasItems = items.length > 0;
     const rows = items.map(([name, amt]) =>
       `<div class="mo-bd-row"><span class="mo-bd-name">${_moEsc(name)}</span>` +
       `<span class="mo-bd-amt">${formatYen(amt)}</span></div>`
     ).join('');
-    return `<div class="mo-bd-group">
-      <div class="mo-bd-head"><span>${label}</span><span class="mo-bd-total">${formatYen(totals[kind])}</span></div>
-      ${rows}
+    return `<div class="mo-bd-group" data-kind="${kind}">
+      <button type="button" class="mo-bd-head" ${hasItems ? '' : 'disabled'} aria-expanded="false">
+        <span class="mo-bd-caret" aria-hidden="true">▶</span>
+        <span class="mo-bd-label">${label}</span>
+        <span class="mo-bd-total">${formatYen(totals[kind])}</span>
+      </button>
+      <div class="mo-bd-body" hidden>${rows || '<div class="mo-bd-row mo-bd-row--empty">内訳なし</div>'}</div>
     </div>`;
   };
 
-  const html = block('売上', 'sales') + block('仕入原価', 'purchase') + block('販管費', 'sga');
-  box.innerHTML = html || '<div class="mo-empty">当月のデータはありません</div>';
+  box.innerHTML = block('売上', 'sales') + block('仕入原価', 'purchase') + block('販管費', 'sga');
+
+  box.querySelectorAll('.mo-bd-head').forEach(head => {
+    head.addEventListener('click', () => {
+      if (head.hasAttribute('disabled')) return;
+      const body = head.parentElement.querySelector('.mo-bd-body');
+      const open = head.getAttribute('aria-expanded') === 'true';
+      head.setAttribute('aria-expanded', open ? 'false' : 'true');
+      head.querySelector('.mo-bd-caret').textContent = open ? '▶' : '▼';
+      if (body) body.hidden = open;
+    });
+  });
 }
 
 /* ── 統合一覧テーブル ─────────────────────────────────── */
