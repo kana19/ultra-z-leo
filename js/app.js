@@ -28,6 +28,62 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 });
 
+/* ── サイドバー共通生成（iPad全画面共通・4項目） ─────────────
+   各HTMLは <nav class="nav-sidebar" id="nav-sidebar" data-active="…"></nav> の
+   空プレースホルダのみを置き、中身はこの関数が一括生成する。
+   4項目：ホーム（土星 ti-planet）／月次管理（月 ti-moon・売上入力とコスト入力を統合）／
+          勤怠管理（ti-clock）／設定（ti-settings）。MD 00_原則.md §6-3-B・02_画面仕様.md §2-2。
+   data-active は当該ページのキー（home/monthly/attendance/settings）。
+   data-page="sales" / "cost" は月次管理に統合されたため active="monthly" を渡す。
+   後続の uzRenderAllBrands / uzLoadSidebarTimer / uzInitSidebarDateTime より
+   先に実行する必要があるため、最優先の DOMContentLoaded リスナとして本関数を最初に登録する。 */
+const UZ_SIDEBAR_ITEMS = [
+  { key: 'home',       href: 'index.html',            icon: 'ti-planet',   label: 'ホーム'   },
+  { key: 'monthly',    href: 'sales.html',            icon: 'ti-moon',     label: '月次管理' },
+  { key: 'attendance', href: 'history.html#attendance', icon: 'ti-clock',  label: '勤怠管理' },
+  { key: 'settings',   href: 'settings.html',         icon: 'ti-settings', label: '設定'     }
+];
+
+function uzRenderSidebar() {
+  const nav = document.getElementById('nav-sidebar');
+  if (!nav || nav.dataset.uzRendered === '1') return;
+
+  const active = nav.getAttribute('data-active') || '';
+
+  const itemsHtml = UZ_SIDEBAR_ITEMS.map(function (it) {
+    const isActive = it.key === active;
+    return (
+      '<a href="' + it.href + '" class="sidebar-item' +
+        (isActive ? ' sidebar-item--active' : '') + '"' +
+        (isActive ? ' aria-current="page"' : '') + '>' +
+        '<i class="ti ' + it.icon + ' sidebar-item__icon" aria-hidden="true"></i>' +
+        '<span>' + it.label + '</span>' +
+      '</a>'
+    );
+  }).join('');
+
+  nav.innerHTML =
+    '<div class="nav-sidebar__brand">' +
+      '<div class="nav-sidebar__logo" data-uz-brand data-uz-icon-base="icons/" data-uz-fallback="ウルトラZAIMUくん"></div>' +
+      '<span id="sidebar-timer-dot" class="sidebar-timer-dot" aria-hidden="true" title="売掛・買掛のお知らせ"></span>' +
+    '</div>' +
+    itemsHtml;
+
+  // ホーム画面の「最近の入力」ブロック（#sidebar-recent）は nav 内に温存する。
+  // 生成前に存在すれば退避し、項目の後ろへ戻す（着手順3でタブUIへ作り替え）。
+  if (!nav.querySelector('#sidebar-recent') && nav.dataset.hasRecent === '1') {
+    const recent = document.createElement('div');
+    recent.className = 'sidebar-recent';
+    recent.id = 'sidebar-recent';
+    nav.appendChild(recent);
+  }
+
+  nav.dataset.uzRendered = '1';
+}
+
+// 最優先で登録（brand描画・timer・日時表示より先に DOM を確定させる）。
+document.addEventListener('DOMContentLoaded', uzRenderSidebar);
+
 /* ── GAS設定 ─────────────────────────────────────────────── */
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbwBDHj9-p6ZT6ExXrxF1Q-XwiEkNMPwDc0aAuk7zptivRhWhepvaCDsjaIJd7WHh_h9-A/exec';
 

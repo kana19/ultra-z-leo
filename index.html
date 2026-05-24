@@ -157,36 +157,8 @@
 </head>
 <body data-page="home">
 
-<!-- iPad サイドバーナビ（スマホでは非表示） -->
-<nav class="nav-sidebar" aria-label="メインナビゲーション">
-  <div class="nav-sidebar__brand">
-    <div class="nav-sidebar__logo" data-uz-brand data-uz-icon-base="icons/" data-uz-fallback="ウルトラZAIMUくん"></div>
-    <span id="sidebar-timer-dot" class="sidebar-timer-dot" aria-hidden="true" title="売掛・買掛のお知らせ"></span>
-  </div>
-  <a href="index.html" class="sidebar-item sidebar-item--active" aria-current="page">
-    <i class="ti ti-home sidebar-item__icon" aria-hidden="true"></i>
-    <span>ホーム</span>
-  </a>
-  <a href="sales.html" class="sidebar-item">
-    <i class="ti ti-cash sidebar-item__icon" aria-hidden="true"></i>
-    <span>売上入力</span>
-  </a>
-  <a href="cost.html" class="sidebar-item">
-    <i class="ti ti-credit-card sidebar-item__icon" aria-hidden="true"></i>
-    <span>コスト入力</span>
-  </a>
-  <a href="history.html" class="sidebar-item">
-    <i class="ti ti-history sidebar-item__icon" aria-hidden="true"></i>
-    <span>履歴・修正</span>
-  </a>
-  <a href="settings.html" class="sidebar-item">
-    <i class="ti ti-settings sidebar-item__icon" aria-hidden="true"></i>
-    <span>設定</span>
-  </a>
-
-  <!-- 最近の入力（iPad ホームのみ） -->
-  <div class="sidebar-recent" id="sidebar-recent"></div>
-</nav>
+<!-- iPad サイドバーナビ（スマホでは非表示／中身は app.js uzRenderSidebar が生成・#sidebar-recent を温存） -->
+<nav class="nav-sidebar" id="nav-sidebar" data-active="home" data-has-recent="1" aria-label="メインナビゲーション"></nav>
 
 <div class="page-wrapper">
 
