@@ -615,13 +615,6 @@ function renderServiceList() {
     `;
   }).join('');
 
-  html += `
-    <div class="staff-row" style="opacity:0.5;">
-      <span class="staff-row__name">諸口</span>
-      <span class="service-tax-badge">税率 10%</span>
-      <span style="font-size:12px;color:var(--uz-muted);padding:0 4px;">固定</span>
-    </div>`;
-
   container.innerHTML = html;
 
   // 件数バッジ表示（運営付与枠 vs 現使用件数）
@@ -747,13 +740,6 @@ function renderPurchaseList() {
       </div>
     `;
   }).join('');
-
-  html += `
-    <div class="staff-row" style="opacity:0.5;">
-      <span class="staff-row__name">諸口</span>
-      <span class="service-tax-badge">税率 10%</span>
-      <span style="font-size:12px;color:var(--uz-muted);padding:0 4px;">固定</span>
-    </div>`;
 
   container.innerHTML = html;
 

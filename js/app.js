@@ -170,10 +170,9 @@ const UZ_DEMO_DATA = {
       { code: 'sv002', name: 'テイクアウト', taxRate: 8  },
       { code: 'sv003', name: '物販',         taxRate: 10 }
     ],
-    purchaseList: [
-      { code: 'p001', name: '食材',   taxRate: 8  },
-      { code: 'p002', name: '酒類',   taxRate: 10 },
-      { code: 'p003', name: '消耗品', taxRate: 10 }
+    purchaseMasterList: [
+      { id: 'p001', name: '食材', defaultTaxRate: 8  },
+      { id: 'p002', name: '酒類', defaultTaxRate: 10 }
     ],
     staffList: [
       { id: 1, name: 'デモ太郎', employmentType: 'employed_full' },
