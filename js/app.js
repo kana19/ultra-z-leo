@@ -33,7 +33,7 @@ const MASTER_CACHE_KEYS = [
   SERVICE_MASTER_KEY,   // uz_service_master
   COST_MASTER_KEY,      // uz_cost_master
   PURCHASE_MASTER_KEY,  // uz_purchase_master
-  'uz_staff_list',
+  STAFF_MASTER_KEY,     // uz_staff_master（settings.js/sales.js/history.js が読む正本）
   'uz_store_name',
   'uz_business_hours',
 ];
@@ -444,9 +444,9 @@ async function syncSettingsAtStartup() {
       localStorage.setItem('uz_store_name', d.storeName.trim());
     }
 
-    // staffList 同期（A-2-X-1：コスト入力のスタッフプルダウンで使用）
+    // staffList 同期（settings.js/sales.js/history.js が読む STAFF_MASTER_KEY に統一）
     if (Array.isArray(d.staffList)) {
-      localStorage.setItem('uz_staff_list', JSON.stringify(d.staffList));
+      localStorage.setItem(STAFF_MASTER_KEY, JSON.stringify(d.staffList));
     }
 
     // serviceList 同期（売上品目マスタ・settings.B3 が正本 → sales.js が参照）

@@ -1133,15 +1133,8 @@ function _smCostBindUnpaidToggle() {
  */
 function _smCostGetStaffList() {
   try {
-    const raw = localStorage.getItem('uz_staff_list');
+    const raw = localStorage.getItem(STAFF_MASTER_KEY);
     if (raw) return JSON.parse(raw);
-    // settings同期で保存されるキーがuz_staff_listでない場合のフォールバック
-    // settingsのstaffListを直接確認
-    const settingsRaw = localStorage.getItem('uz_settings_cache');
-    if (settingsRaw) {
-      const settings = JSON.parse(settingsRaw);
-      if (Array.isArray(settings.staffList)) return settings.staffList;
-    }
   } catch (e) {
     console.warn('[cost.js] staffList取得失敗:', e);
   }

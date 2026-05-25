@@ -90,7 +90,7 @@ function _refreshClockOutHourSelect(ciHId, coHId) {
 
 function _getStaffFromStorage() {
   try {
-    const saved = localStorage.getItem('uz_staff_master');
+    const saved = localStorage.getItem(STAFF_MASTER_KEY);
     return saved ? JSON.parse(saved) : [];
   } catch { return []; }
 }
