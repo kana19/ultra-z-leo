@@ -104,7 +104,7 @@ function renderServiceCards() {
          tabindex="0"
          onclick="selectService('${svc.code}')"
          onkeydown="if(event.key==='Enter'||event.key===' ')selectService('${svc.code}')">
-      <div class="radio-card__label">${escHtml(svc.name)}</div>
+      <div class="radio-card__label">${uzEscHtml(svc.name)}</div>
       <div class="radio-card__sub">税率 ${svc.taxRate}%</div>
     </div>
   `).join('');
@@ -210,7 +210,7 @@ function toggleAccordion() {
 function buildCustomerOptions() {
   const staffList = getStaffMaster();
   const opts = staffList.map(s =>
-    `<option value="${escHtml(s.name)}">${escHtml(s.name)}</option>`
+    `<option value="${uzEscHtml(s.name)}">${uzEscHtml(s.name)}</option>`
   ).join('');
   return `<option value="">顧客を選択</option>` +
          opts +
@@ -426,13 +426,7 @@ function setSubmitLoading(loading) {
     : buildSubmitBtnText();
 }
 
-function escHtml(str) {
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
+// escHtml は app.js の uzEscHtml に委譲（重複定義を解消）
 
 /* ════════════════════════════════════════════════════════════
    SheetModal 版 売上入力（S3g-3 D案）
@@ -576,8 +570,8 @@ async function _renderSalesCards() {
   const services = _getServiceMasterSorted(ranking);
 
   container.innerHTML = services.map(svc => `
-    <div class="radio-card" data-code="${escHtml(svc.code)}">
-      <div class="radio-card__label">${escHtml(svc.name)}</div>
+    <div class="radio-card" data-code="${uzEscHtml(svc.code)}">
+      <div class="radio-card__label">${uzEscHtml(svc.name)}</div>
     </div>
   `).join('');
 }

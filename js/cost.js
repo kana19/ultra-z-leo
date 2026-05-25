@@ -88,12 +88,12 @@ document.addEventListener('DOMContentLoaded', () => {
     : getCostMaster();
   loadCostMasterFromGAS();        // バックグラウンドで最新取得
 
-  initDate();
+  costInitDate();
   bindDivisionButtons();
-  bindAmountInput();
-  bindTaxButtons();
+  costBindAmountInput();
+  costBindTaxButtons();
   bindUnpaidToggle();
-  bindSubmit();
+  costBindSubmit();
   selectDivision('1');
   if (document.body.classList.contains('is-ipad')) initIpadCostPanel();
 });
@@ -115,24 +115,24 @@ async function loadCostMasterFromGAS() {
 }
 
 /* ── 日付初期化 ──────────────────────────────────────────── */
-function initDate() {
+function costInitDate() {
   const el = document.getElementById('date-input');
   if (el) {
     el.value = todayStr();
     el.addEventListener('change', updateSubmitBtnDate);
   }
-  updateSubmitBtnDate();
+  costUpdateSubmitBtnDate();
 }
 
-function buildSubmitBtnText() {
+function costBuildSubmitBtnText() {
   const dateVal = document.getElementById('date-input')?.value || todayStr();
   return `発生日 ${dateVal.replace(/-/g, '/')}　登録する`;
 }
 
-function updateSubmitBtnDate() {
+function costUpdateSubmitBtnDate() {
   const btn = document.getElementById('submit-btn');
   if (!btn || btn.disabled) return;
-  btn.innerHTML = buildSubmitBtnText();
+  btn.innerHTML = costBuildSubmitBtnText();
 }
 
 /* ── 区分ボタン ──────────────────────────────────────────── */
@@ -151,7 +151,7 @@ function selectDivision(code) {
   });
 
   renderItemCards(code);
-  recalcTax();
+  costRecalcTax();
 }
 
 /* ── 科目カード描画 ──────────────────────────────────────── */
@@ -163,13 +163,13 @@ function renderItemCards(divCode) {
 
   container.innerHTML = items.map(item => `
     <div class="radio-card"
-         data-code="${escHtml(item.code)}"
+         data-code="${uzEscHtml(item.code)}"
          role="radio"
          aria-checked="false"
          tabindex="0"
-         onclick="selectItem('${escHtml(item.code)}')"
-         onkeydown="if(event.key==='Enter'||event.key===' ')selectItem('${escHtml(item.code)}')">
-      <div class="radio-card__label">${escHtml(item.name)}</div>
+         onclick="selectItem('${uzEscHtml(item.code)}')"
+         onkeydown="if(event.key==='Enter'||event.key===' ')selectItem('${uzEscHtml(item.code)}')">
+      <div class="radio-card__label">${uzEscHtml(item.name)}</div>
       <div class="radio-card__sub">${item.taxRow ? `行${item.taxRow}　` : ''}税率 ${item.taxRate}%</div>
     </div>
   `).join('');
@@ -189,7 +189,7 @@ function selectItem(code) {
     card.setAttribute('aria-checked', String(checked));
   });
 
-  setTaxRate(item.taxRate);
+  costSetTaxRate(item.taxRate);
 
   const miscSection = document.getElementById('misc-section');
   if (miscSection) {
@@ -203,7 +203,7 @@ function selectItem(code) {
 }
 
 /* ── 税率セット ──────────────────────────────────────────── */
-function setTaxRate(rate) {
+function costSetTaxRate(rate) {
   _costCurrentTaxRate = rate;
 
   document.querySelectorAll('.tax-btn').forEach(btn => {
@@ -211,11 +211,11 @@ function setTaxRate(rate) {
     btn.classList.toggle('tax-btn--active-red', active);
   });
 
-  recalcTax();
+  costRecalcTax();
 }
 
 /* ── 税計算・表示更新 ────────────────────────────────────── */
-function recalcTax() {
+function costRecalcTax() {
   const amountInput = document.getElementById('amount-input');
   const raw         = amountInput ? amountInput.value.replace(/,/g, '') : '0';
   const taxIncluded = parseInt(raw) || 0;
@@ -228,19 +228,19 @@ function recalcTax() {
 }
 
 /* ── 金額入力バインド ────────────────────────────────────── */
-function bindAmountInput() {
+function costBindAmountInput() {
   const el = document.getElementById('amount-input');
   if (!el) return;
   el.addEventListener('input', () => {
     el.value = el.value.replace(/[^0-9]/g, '');
-    recalcTax();
+    costRecalcTax();
   });
 }
 
 /* ── 税率ボタンバインド ──────────────────────────────────── */
-function bindTaxButtons() {
+function costBindTaxButtons() {
   document.querySelectorAll('.tax-btn').forEach(btn => {
-    btn.addEventListener('click', () => setTaxRate(parseInt(btn.dataset.rate)));
+    btn.addEventListener('click', () => costSetTaxRate(parseInt(btn.dataset.rate)));
   });
 }
 
@@ -248,11 +248,11 @@ function bindTaxButtons() {
 function bindUnpaidToggle() { /* submit時に読み取り */ }
 
 /* ── 送信処理 ────────────────────────────────────────────── */
-function bindSubmit() {
+function costBindSubmit() {
   document.getElementById('submit-btn')?.addEventListener('click', handleSubmit);
 }
 
-async function handleSubmit() {
+async function costHandleSubmit() {
   if (_costIsSubmitting) return;
 
   const date     = document.getElementById('date-input')?.value || '';
@@ -289,16 +289,16 @@ async function handleSubmit() {
   };
 
   _costIsSubmitting = true;
-  setSubmitLoading(true);
+  costSetSubmitLoading(true);
 
   try {
     const result = await callGAS('addCost', payload);
     if (result.status !== 'ok') throw new Error(result.message || '登録エラー');
-    setSubmitLoading(false);
+    costSetSubmitLoading(false);
     showToast('コストを登録しました ✓', 'success');
     setTimeout(() => navigate('index.html'), 1200);
   } catch (e) {
-    setSubmitLoading(false);
+    costSetSubmitLoading(false);
     showToast('登録に失敗しました：' + e.message, 'error');
   } finally {
     _costIsSubmitting = false;
@@ -306,22 +306,16 @@ async function handleSubmit() {
 }
 
 /* ── ヘルパー ────────────────────────────────────────────── */
-function setSubmitLoading(loading) {
+function costSetSubmitLoading(loading) {
   const btn = document.getElementById('submit-btn');
   if (!btn) return;
   btn.disabled  = loading;
   btn.innerHTML = loading
     ? '<span class="spinner" style="width:20px;height:20px;border-top-color:var(--uz-gold);"></span>'
-    : buildSubmitBtnText();
+    : costBuildSubmitBtnText();
 }
 
-function escHtml(str) {
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
+// escHtml は app.js の uzEscHtml に委譲（重複定義を解消）
 
 /* ── iPad コスト入力パネル ─────────────────────────────────── */
 let _ipadCostHistory = [];
@@ -772,8 +766,8 @@ function _smCostRenderItemCards(divisionCode) {
     return `
       <button type="button"
               class="cost-sm-card${isActive ? ' cost-sm-card--active' : ''}"
-              data-item-code="${escHtml(item.code)}">
-        <span class="cost-sm-card__label">${escHtml(item.name)}</span>
+              data-item-code="${uzEscHtml(item.code)}">
+        <span class="cost-sm-card__label">${uzEscHtml(item.name)}</span>
       </button>
     `;
   }).join('');
