@@ -434,14 +434,6 @@ function buildTimerDotHTML(item) {
   return `<span class="hist-row__timer"><span class="hist-timer-dot ${cls}"></span></span>`;
 }
 
-/* ── 日付ヘッダー ────────────────────────────────────────── */
-function buildDateHeader(dateStr) {
-  const [y, m, d] = dateStr.split('-').map(Number);
-  const days = ['日','月','火','水','木','金','土'];
-  const dow = new Date(y, m - 1, d).getDay();
-  return `<div class="hist-date-header">${y}年${m}月${d}日（${days[dow]}）</div>`;
-}
-
 /* ── 売上・コスト行HTML（行型・列順：科目名→金額→ドット→編集） */
 function buildSalesCostItemHTML(item, idx) {
   const isSales = item.type === 'sales';
