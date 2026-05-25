@@ -9,10 +9,9 @@
 'use strict';
 
 /* ── ストレージキー ──────────────────────────────────────── */
+// STAFF_MASTER_KEY / SERVICE_MASTER_KEY / PURCHASE_MASTER_KEY / COST_MASTER_KEY は
+// app.js 冒頭で集約定義済み（SSOT・app.js が先に読み込まれる前提）。ここでは再定義しない。
 const STORE_NAME_KEY        = 'uz_store_name';
-const STAFF_MASTER_KEY      = 'uz_staff_master';
-const SERVICE_MASTER_KEY    = 'uz_service_master';
-const PURCHASE_MASTER_KEY   = 'uz_purchase_master';     // 6-G フェーズ2 新設
 const MASTER_QUOTA_KEY      = 'uz_master_quota';        // 6-G フェーズ2 新設
 
 /* ── デフォルト値 ────────────────────────────────────────── */

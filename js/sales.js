@@ -6,8 +6,7 @@
 'use strict';
 
 /* ── マスタキー ──────────────────────────────────────────── */
-// SERVICE_MASTER_KEY は app.js 冒頭で集約定義済み（SSOT）。ここでは再定義しない。
-const STAFF_MASTER_KEY   = 'uz_staff_master';
+// SERVICE_MASTER_KEY / STAFF_MASTER_KEY は app.js 冒頭で集約定義済み（SSOT）。
 
 // 諸口（売上マスタには存在しない・UIの受け皿として末尾固定）。
 // F列は misc 扱い。code は内部固定値。

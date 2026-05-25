@@ -10,10 +10,12 @@
  * sales.js / cost.js は再定義せずこの定数を参照する。
  *  - SERVICE_MASTER_KEY  : 売上品目マスタ（serviceList・settings.B3）
  *  - COST_MASTER_KEY     : 販管費マスタ（costMasterList・settings.B4）
- *  - PURCHASE_MASTER_KEY : 仕入原価マスタ（purchaseMasterList・settings.B5） */
+ *  - PURCHASE_MASTER_KEY : 仕入原価マスタ（purchaseMasterList・settings.B5）
+ *  - STAFF_MASTER_KEY    : スタッフマスタ（staffList・settings.B2） */
 const SERVICE_MASTER_KEY  = 'uz_service_master';
 const COST_MASTER_KEY     = 'uz_cost_master';
 const PURCHASE_MASTER_KEY = 'uz_purchase_master';
+const STAFF_MASTER_KEY    = 'uz_staff_master';
 
 // デバイス判定・bodyクラス付与（即時実行）
 (function() {
