@@ -11,3 +11,4 @@ claude_code_prompt_phase*.md
 
 # 開発ドキュメント（本番GitHub Pages には不要）
 docs/
+_trash/
