@@ -6,20 +6,36 @@
 'use strict';
 
 /* ── マスタキー ──────────────────────────────────────────── */
-const SERVICE_MASTER_KEY = 'uz_service_master';
+// SERVICE_MASTER_KEY は app.js 冒頭で集約定義済み（SSOT）。ここでは再定義しない。
 const STAFF_MASTER_KEY   = 'uz_staff_master';
 
+// 諸口（売上マスタには存在しない・UIの受け皿として末尾固定）。
+// F列は misc 扱い。code は内部固定値。
 const MISC_SERVICE = { code: 'S099', name: '諸口', taxRate: 10 };
+// 複製元 ultra-z-leo のデモ表示用サンプル（実店舗では serviceList で上書きされる）。
 const DEFAULT_SERVICES = [
   { code: 'S001', name: '店内売上',     taxRate: 10 },
   { code: 'S002', name: 'テイクアウト', taxRate:  8 },
 ];
 
+/**
+ * 売上品目マスタを返す（末尾に諸口を付与）。
+ * 正本は localStorage の serviceList（settings.B3・app.js が同期）。
+ * GAS応答は {id:'sv001', name, taxRate} 形式のため、UI内部で使う code に
+ * id を写像して正規化する（id 欠落時のみ既存 code を尊重）。
+ * これにより selectService(code) の照合と税率自動選択が成立する。
+ */
 function getServiceMaster() {
   try {
     const saved = localStorage.getItem(SERVICE_MASTER_KEY);
-    const list  = saved ? JSON.parse(saved) : DEFAULT_SERVICES;
-    return [...list, MISC_SERVICE];
+    const parsed = saved ? JSON.parse(saved) : null;
+    const list = Array.isArray(parsed) ? parsed : DEFAULT_SERVICES;
+    const normalized = list.map(s => ({
+      code:    s.code != null ? s.code : s.id,   // GAS は id:'sv001'〜
+      name:    s.name,
+      taxRate: (s.taxRate != null && !isNaN(Number(s.taxRate))) ? Number(s.taxRate) : 10,
+    }));
+    return [...normalized, MISC_SERVICE];
   } catch {
     return [...DEFAULT_SERVICES, MISC_SERVICE];
   }

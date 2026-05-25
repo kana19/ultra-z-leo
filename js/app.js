@@ -5,6 +5,16 @@
 
 'use strict';
 
+/* ── マスタ localStorage キー（全ファイル共通・SSOT） ──────────
+ * app.js が共通基盤として最初に読み込まれる前提でここに集約定義する。
+ * sales.js / cost.js は再定義せずこの定数を参照する。
+ *  - SERVICE_MASTER_KEY  : 売上品目マスタ（serviceList・settings.B3）
+ *  - COST_MASTER_KEY     : 販管費マスタ（costMasterList・settings.B4）
+ *  - PURCHASE_MASTER_KEY : 仕入原価マスタ（purchaseMasterList・settings.B5） */
+const SERVICE_MASTER_KEY  = 'uz_service_master';
+const COST_MASTER_KEY     = 'uz_cost_master';
+const PURCHASE_MASTER_KEY = 'uz_purchase_master';
+
 // デバイス判定・bodyクラス付与（即時実行）
 (function() {
   const ua = navigator.userAgent;
@@ -374,6 +384,11 @@ function togglePlAccordion(key) {
  */
 async function syncSettingsAtStartup() {
   try {
+    // 店舗分離：別 clientId のアプリを開いた場合、前店舗のマスタ系 localStorage を
+    // 破棄してから同期する。localStorage はブラウザ単位で共有されるため、これを
+    // しないと前店舗のサービス・科目・販管費が一瞬表示される（幽霊データ）。
+    purgeMasterCacheOnClientChange();
+
     const res = await callGAS('getSettings', {});
     if (!res || res.status !== 'ok' || !res.data) return;
 
@@ -391,6 +406,27 @@ async function syncSettingsAtStartup() {
       localStorage.setItem('uz_staff_list', JSON.stringify(d.staffList));
     }
 
+    // serviceList 同期（売上品目マスタ・settings.B3 が正本 → sales.js が参照）
+    // id:'sv001'〜（03_データ仕様.md §1-1）。GAS正本で localStorage を常に上書きする。
+    if (Array.isArray(d.serviceList)) {
+      localStorage.setItem(SERVICE_MASTER_KEY, JSON.stringify(d.serviceList));
+    }
+
+    // costMasterList 同期（販管費マスタ・settings.B4 が正本 → cost.js が参照）
+    // GAS生データは正規化を通してから保存する（03_データ仕様.md §1-2 正規化）。
+    if (Array.isArray(d.costMasterList)) {
+      const normalizedCost = (typeof normalizeCostMasterList === 'function')
+        ? normalizeCostMasterList(d.costMasterList)
+        : d.costMasterList;
+      localStorage.setItem(COST_MASTER_KEY, JSON.stringify(normalizedCost));
+    }
+
+    // purchaseMasterList 同期（仕入原価マスタ・settings.B5 が正本 → cost.js 仕入原価タブが参照）
+    // id:'p001'〜（03_データ仕様.md §1-3）。登録＝表示固定で smartphoneVisible は持たない。
+    if (Array.isArray(d.purchaseMasterList)) {
+      localStorage.setItem(PURCHASE_MASTER_KEY, JSON.stringify(d.purchaseMasterList));
+    }
+
     // businessHours 同期（A-9：出勤履歴の打刻忘れ判定・設定画面表示で使用）
     // 形式：{open:"HH:MM", close:"HH:MM", closeNextDay:boolean}
     if (d.businessHours && typeof d.businessHours === 'object' && d.businessHours.open && d.businessHours.close) {
@@ -406,6 +442,42 @@ async function syncSettingsAtStartup() {
   } catch (e) {
     console.warn('[app.js] settings起動時同期失敗（キャッシュ値を使用）:', e);
   }
+}
+
+/* ── 店舗分離（clientId ベースのマスタキャッシュ破棄） ──────────
+ * localStorage はブラウザ単位で共有されるため、別店舗（別 clientId）の
+ * アプリを同一ブラウザで開くと、前店舗のサービス・販管費・仕入・スタッフ等が
+ * 起動直後に一瞬表示される。GAS正本での上書き前にこれらを破棄し、
+ * 「幽霊データ」を構造的に断つ。clientId は URL パス
+ * （kana19.github.io/{clientId}/）から抽出する。 */
+const ACTIVE_CLIENT_KEY = 'uz_active_client';
+const MASTER_CACHE_KEYS = [
+  SERVICE_MASTER_KEY,   // uz_service_master
+  COST_MASTER_KEY,      // uz_cost_master
+  PURCHASE_MASTER_KEY,  // uz_purchase_master
+  'uz_staff_list',
+  'uz_store_name',
+  'uz_business_hours',
+];
+
+function detectClientId() {
+  try {
+    // パス先頭セグメントが uz-XXXXXXXX なら clientId。複製元 ultra-z-leo 等は null。
+    const seg = (location.pathname || '').split('/').filter(Boolean)[0] || '';
+    return /^uz-[0-9a-z]{8}$/i.test(seg) ? seg : null;
+  } catch (e) { return null; }
+}
+
+function purgeMasterCacheOnClientChange() {
+  try {
+    const current = detectClientId();
+    if (!current) return; // clientId 不明（複製元等）では破棄しない
+    const prev = localStorage.getItem(ACTIVE_CLIENT_KEY);
+    if (prev !== current) {
+      MASTER_CACHE_KEYS.forEach(k => localStorage.removeItem(k));
+      localStorage.setItem(ACTIVE_CLIENT_KEY, current);
+    }
+  } catch (e) { /* localStorage 不可環境は無視 */ }
 }
 
 // 起動時にバックグラウンドで settings を同期（UIブロックなし）
@@ -989,7 +1061,7 @@ function navigate(url) {
 }
 
 /* ── コスト科目マスタ ─────────────────────────────────────── */
-const COST_MASTER_KEY = 'uz_cost_master';
+// COST_MASTER_KEY は冒頭で集約定義済み（SSOT）
 
 /**
  * デフォルト販管費科目マスタ（青色申告決算書 完全整合・販管費専用）
@@ -1092,6 +1164,20 @@ function getCostMaster() {
  */
 function saveCostMasterToStorage(list) {
   localStorage.setItem(COST_MASTER_KEY, JSON.stringify(list));
+}
+
+/* ── 仕入原価マスタ（purchaseMasterList・settings.B5） ──────────
+ * 販管費マスタ（costMasterList・B4）とは独立。id:'p001'〜。
+ * 登録＝表示固定で smartphoneVisible は持たない（03_データ仕様.md §1-3 / §6-5）。
+ * GAS正本は syncSettingsAtStartup が PURCHASE_MASTER_KEY に同期する。 */
+function getPurchaseMaster() {
+  try {
+    const saved = localStorage.getItem(PURCHASE_MASTER_KEY);
+    const list = saved ? JSON.parse(saved) : [];
+    return Array.isArray(list) ? list : [];
+  } catch {
+    return [];
+  }
 }
 
 /* ── 税理士用CSV DL（共通ユーティリティ） ─────────────────── */

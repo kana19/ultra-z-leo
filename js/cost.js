@@ -15,27 +15,52 @@ let _costIsSubmitting         = false;
 /* ── 区分ごとの選択可能科目リスト ────────────────────────── */
 /**
  * 指定区分の科目リストを返す（空のcustom除外・末尾に諸口追加）
+ *
+ * 科目の出所は区分で2系統に分かれる（02_画面仕様.md §2-1 / 03_データ仕様.md §1-2・§1-3）：
+ *  - divCode '1'（仕入原価）：purchaseMasterList（settings.B5・id:'p001'〜）全件。
+ *    登録＝表示固定のため smartphoneVisible フィルタは適用しない。
+ *  - divCode '2'（販管費）：costMasterList（settings.B4・code:8〜31）。
+ *    smartphoneVisible=false の科目はスマホ/iPadで非表示。
+ *
  * @param {string} divCode
  * @param {Object} [options]
  * @param {boolean} [options.filterBySmartphoneVisible=false]
- *   true の場合、smartphoneVisible: false の科目を除外する
- *   （スマホ版モーダルから業態テンプレート連動で外注工賃・給料賃金等を非表示にするため）
- *   iPad版・PC版では false（既存科目すべて表示）
- *   詳細：3デバイス統合仕様.md §6-3・§12 / システム仕様書.md §8-5
+ *   true の場合、販管費のみ smartphoneVisible:false の科目を除外する。
+ *   仕入原価は登録＝表示固定のため本オプションの影響を受けない。
  * @returns {Array}
  */
 function getDivisionItems(divCode, options) {
   const opts = options || {};
   const filterSm = opts.filterBySmartphoneVisible === true;
 
-  const items = costMaster
-    .filter(i => i.divisionCode === divCode)
-    .filter(i => i.name && i.name.trim() !== '')
-    .filter(i => {
-      if (!filterSm) return true;
-      // smartphoneVisible キーが存在しない既存データは true（表示）として扱う（後方互換性）
-      return i.smartphoneVisible !== false;
-    });
+  let items;
+  if (divCode === '1') {
+    // 仕入原価：purchaseMasterList（B5）を正本とする。
+    // GAS応答 {id:'p001', name, defaultTaxRate} を内部統一形へマップする。
+    const purchase = (typeof getPurchaseMaster === 'function') ? getPurchaseMaster() : [];
+    items = purchase
+      .filter(p => p && p.name && String(p.name).trim() !== '')
+      .map(p => ({
+        code:         p.id,                              // F列に格納（'p001'〜）
+        taxRow:       null,                              // 仕入原価は青色申告行番号を持たない
+        name:         p.name,
+        taxRate:      (p.defaultTaxRate != null && !isNaN(Number(p.defaultTaxRate)))
+                        ? Number(p.defaultTaxRate)
+                        : (p.taxRate != null ? Number(p.taxRate) : 10),
+        type:         'purchase',
+        divisionCode: '1',
+      }));
+  } else {
+    // 販管費：costMasterList（B4）を正本とする。
+    items = costMaster
+      .filter(i => i.divisionCode === divCode)
+      .filter(i => i.name && i.name.trim() !== '')
+      .filter(i => {
+        if (!filterSm) return true;
+        // smartphoneVisible キーが存在しない既存データは true（表示）として扱う（後方互換性）
+        return i.smartphoneVisible !== false;
+      });
+  }
 
   items.push({
     code:         `MISC_${divCode}`,
@@ -56,7 +81,11 @@ function divisionLabel(code) {
 /* ── 初期化 ──────────────────────────────────────────────── */
 document.addEventListener('DOMContentLoaded', () => {
   if (document.body.dataset.page !== 'cost') return; // cost.html 専用（monthly では monthly.js が起動）
-  costMaster = getCostMaster();   // app.js の共通関数
+  // 起動時 localStorage 値も正規化を通す（divisionCode/type 欠落の旧データ矯正・03§1-2）。
+  // これをしないと getDivisionItems の divisionCode 厳密一致で販管費が諸口のみになる。
+  costMaster = (typeof normalizeCostMasterList === 'function')
+    ? normalizeCostMasterList(getCostMaster())
+    : getCostMaster();
   loadCostMasterFromGAS();        // バックグラウンドで最新取得
 
   initDate();
