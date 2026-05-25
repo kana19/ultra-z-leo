@@ -11,11 +11,10 @@
 // 諸口（売上マスタには存在しない・UIの受け皿として末尾固定）。
 // F列は misc 扱い。code は内部固定値。
 const MISC_SERVICE = { code: 'S099', name: '諸口', taxRate: 10 };
-// 複製元 ultra-z-leo のデモ表示用サンプル（実店舗では serviceList で上書きされる）。
-const DEFAULT_SERVICES = [
-  { code: 'S001', name: '店内売上',     taxRate: 10 },
-  { code: 'S002', name: 'テイクアウト', taxRate:  8 },
-];
+// 実データフォールバックは空（生成店舗は getSettings 同期で serviceList が入るまで
+// 諸口のみ表示が正。複製元デモは app.js の UZ_DEMO_DATA が serviceList を供給する）。
+// サンプル値を持たせると店舗分離パージ直後の同期前に偽サービスが一瞬描画される。
+const DEFAULT_SERVICES = [];
 
 /**
  * 売上品目マスタを返す（末尾に諸口を付与）。

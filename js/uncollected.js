@@ -219,9 +219,6 @@ function formatDate(dateStr) {
 
 /* ── XSSエスケープ ───────────────────────────────────────── */
 function escHtml(str) {
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+  // app.js の uzEscHtml に委譲（重複定義を解消・SSOT）
+  return uzEscHtml(str);
 }

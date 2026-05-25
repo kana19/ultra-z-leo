@@ -145,7 +145,7 @@ async function renderMonthly() {
   if (prevBtn) prevBtn.disabled = isMin;
   if (nextBtn) nextBtn.disabled = isMax;
 
-  showLoading('pl-table');
+  plShowLoading('pl-table');
 
   /* getSummary と getHistory(内訳) を並行取得 */
   const [data, breakdown] = await Promise.all([
@@ -208,7 +208,7 @@ async function renderYTD() {
   if (ytdPrev) ytdPrev.disabled = currentYear <= MIN_YEAR;
   if (ytdNext) ytdNext.disabled = currentYear >= THIS_YEAR;
 
-  showLoading('ytd-pl-table');
+  plShowLoading('ytd-pl-table');
 
   const [current, previous] = await Promise.all([
     aggregateYear(currentYear),
@@ -426,7 +426,7 @@ function hideSection(id) {
   if (el) el.hidden = true;
 }
 
-function showLoading(tableId) {
+function plShowLoading(tableId) {
   const el = document.getElementById(tableId);
   if (el) el.innerHTML = '<div class="pl-empty">読み込み中...</div>';
 }

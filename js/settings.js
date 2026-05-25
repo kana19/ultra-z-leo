@@ -15,20 +15,14 @@ const STORE_NAME_KEY        = 'uz_store_name';
 const MASTER_QUOTA_KEY      = 'uz_master_quota';        // 6-G フェーズ2 新設
 
 /* ── デフォルト値 ────────────────────────────────────────── */
-const DEFAULT_STORE_NAME = 'スナック LEO';
-// 雇用形態は3種化（戦略思想§3-9-3 サイクルA）：
-//   employed_full / employed_temp / contractor
-const DEFAULT_STAFF = [
-  { id: 1, name: 'さくら', employmentType: 'employed_full' },
-  { id: 2, name: 'あかね', employmentType: 'employed_full' },
-  { id: 3, name: 'みか',   employmentType: 'employed_full' },
-  { id: 4, name: 'ゆき',   employmentType: 'employed_full' },
-];
+const DEFAULT_STORE_NAME = '';
+// スタッフ・サービスの実データフォールバックは空（生成店舗は getSettings 同期で
+// 実データが入るまで空表示が正。複製元デモは app.js の UZ_DEMO_DATA が供給する）。
+// サンプル値（さくら等・スナックLEO等）を持たせると、店舗分離パージ直後の同期前に
+// 偽データが一瞬描画される（幽霊データ）ため空にする。
+const DEFAULT_STAFF = [];
 // 既存ユーザーのフォールバック用デフォルト（id 採番方式は sv001〜・01_商品体系.md §4-3-1）
-const DEFAULT_SERVICES = [
-  { id: 'sv001', name: '店内売上',     taxRate: 10 },
-  { id: 'sv002', name: 'テイクアウト', taxRate:  8 },
-];
+const DEFAULT_SERVICES = [];
 const DEFAULT_PURCHASES = [];  // 業種固有・ターゲット社が納品時に投入する想定（フォールバックは空）
 // 既存ユーザーで masterQuota 未投入時のフォールバック（01_商品体系.md §4-3）
 const DEFAULT_MASTER_QUOTA = { serviceMasterQuota: 5, purchaseMasterQuota: 3, costOptionalQuota: 5 };
@@ -970,11 +964,8 @@ function bindCostMasterSave() {
 
 /* ── XSSエスケープ ───────────────────────────────────────── */
 function escHtml(str) {
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+  // app.js の uzEscHtml に委譲（重複定義を解消・SSOT）
+  return uzEscHtml(str);
 }
 
 /* ══════════════════════════════════════════════════════════
