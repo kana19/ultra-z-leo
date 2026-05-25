@@ -17,6 +17,50 @@ const COST_MASTER_KEY     = 'uz_cost_master';
 const PURCHASE_MASTER_KEY = 'uz_purchase_master';
 const STAFF_MASTER_KEY    = 'uz_staff_master';
 
+/* ── 店舗分離（clientId ベースのマスタキャッシュ破棄・トップレベル同期実行） ──
+ * localStorage はブラウザ単位で共有されるため、別店舗（別 clientId）のアプリを
+ * 同一ブラウザで開くと、前店舗のサービス・販管費・仕入・スタッフ等が起動直後に
+ * 一瞬表示される（幽霊データ）。
+ *
+ * 根治設計：各画面（cost.js / sales.js / settings.js / home.js）は DOMContentLoaded で
+ * 「localStorage 即時描画 → loadXxxFromGAS で上書き」の二段構えで起動する。よって
+ * パージを各画面の描画より前＝app.js 読込直後のトップレベルで同期実行すれば、どの画面の
+ * 即時描画時点でも前店舗キャッシュは既に消えており、空を描画 → GAS 実データで埋まる、
+ * という正しい流れになる。clientId は URL パス（kana19.github.io/{clientId}/）から抽出する。
+ * 複製元 ultra-z-leo 等 clientId を取れない URL では破棄しない（デモ表示を壊さない）。 */
+const ACTIVE_CLIENT_KEY = 'uz_active_client';
+const MASTER_CACHE_KEYS = [
+  SERVICE_MASTER_KEY,   // uz_service_master
+  COST_MASTER_KEY,      // uz_cost_master
+  PURCHASE_MASTER_KEY,  // uz_purchase_master
+  'uz_staff_list',
+  'uz_store_name',
+  'uz_business_hours',
+];
+
+function detectClientId() {
+  try {
+    // パス先頭セグメントが uz-XXXXXXXX なら clientId。複製元 ultra-z-leo 等は null。
+    const seg = (location.pathname || '').split('/').filter(Boolean)[0] || '';
+    return /^uz-[0-9a-z]{8}$/i.test(seg) ? seg : null;
+  } catch (e) { return null; }
+}
+
+function purgeMasterCacheOnClientChange() {
+  try {
+    const current = detectClientId();
+    if (!current) return; // clientId 不明（複製元等）では破棄しない
+    const prev = localStorage.getItem(ACTIVE_CLIENT_KEY);
+    if (prev !== current) {
+      MASTER_CACHE_KEYS.forEach(k => localStorage.removeItem(k));
+      localStorage.setItem(ACTIVE_CLIENT_KEY, current);
+    }
+  } catch (e) { /* localStorage 不可環境は無視 */ }
+}
+
+// 全 DOMContentLoaded リスナー（各画面の即時描画）より前に同期実行する。
+purgeMasterCacheOnClientChange();
+
 // デバイス判定・bodyクラス付与（即時実行）
 (function() {
   const ua = navigator.userAgent;
@@ -386,11 +430,8 @@ function togglePlAccordion(key) {
  */
 async function syncSettingsAtStartup() {
   try {
-    // 店舗分離：別 clientId のアプリを開いた場合、前店舗のマスタ系 localStorage を
-    // 破棄してから同期する。localStorage はブラウザ単位で共有されるため、これを
-    // しないと前店舗のサービス・科目・販管費が一瞬表示される（幽霊データ）。
-    purgeMasterCacheOnClientChange();
-
+    // 店舗分離（clientId 不一致時のマスタキャッシュ破棄）は app.js 冒頭の
+    // トップレベルで同期実行済み（各画面の即時描画より前に幽霊データを断つ）。
     const res = await callGAS('getSettings', {});
     if (!res || res.status !== 'ok' || !res.data) return;
 
@@ -446,41 +487,9 @@ async function syncSettingsAtStartup() {
   }
 }
 
-/* ── 店舗分離（clientId ベースのマスタキャッシュ破棄） ──────────
- * localStorage はブラウザ単位で共有されるため、別店舗（別 clientId）の
- * アプリを同一ブラウザで開くと、前店舗のサービス・販管費・仕入・スタッフ等が
- * 起動直後に一瞬表示される。GAS正本での上書き前にこれらを破棄し、
- * 「幽霊データ」を構造的に断つ。clientId は URL パス
- * （kana19.github.io/{clientId}/）から抽出する。 */
-const ACTIVE_CLIENT_KEY = 'uz_active_client';
-const MASTER_CACHE_KEYS = [
-  SERVICE_MASTER_KEY,   // uz_service_master
-  COST_MASTER_KEY,      // uz_cost_master
-  PURCHASE_MASTER_KEY,  // uz_purchase_master
-  'uz_staff_list',
-  'uz_store_name',
-  'uz_business_hours',
-];
-
-function detectClientId() {
-  try {
-    // パス先頭セグメントが uz-XXXXXXXX なら clientId。複製元 ultra-z-leo 等は null。
-    const seg = (location.pathname || '').split('/').filter(Boolean)[0] || '';
-    return /^uz-[0-9a-z]{8}$/i.test(seg) ? seg : null;
-  } catch (e) { return null; }
-}
-
-function purgeMasterCacheOnClientChange() {
-  try {
-    const current = detectClientId();
-    if (!current) return; // clientId 不明（複製元等）では破棄しない
-    const prev = localStorage.getItem(ACTIVE_CLIENT_KEY);
-    if (prev !== current) {
-      MASTER_CACHE_KEYS.forEach(k => localStorage.removeItem(k));
-      localStorage.setItem(ACTIVE_CLIENT_KEY, current);
-    }
-  } catch (e) { /* localStorage 不可環境は無視 */ }
-}
+/* ── 店舗分離のマスタキャッシュ破棄は app.js 冒頭でトップレベル同期実行済み
+ *    （detectClientId / purgeMasterCacheOnClientChange / ACTIVE_CLIENT_KEY /
+ *      MASTER_CACHE_KEYS の定義と即時呼び出しは冒頭にある）。 */
 
 // 起動時にバックグラウンドで settings を同期（UIブロックなし）
 document.addEventListener('DOMContentLoaded', function() {
