@@ -8,16 +8,13 @@
 /* ── マスタキー ──────────────────────────────────────────── */
 // SERVICE_MASTER_KEY / STAFF_MASTER_KEY は app.js 冒頭で集約定義済み（SSOT）。
 
-// 諸口（売上マスタには存在しない・UIの受け皿として末尾固定）。
-// F列は misc 扱い。code は内部固定値。
-const MISC_SERVICE = { code: 'S099', name: '諸口', taxRate: 10 };
 // 実データフォールバックは空（生成店舗は getSettings 同期で serviceList が入るまで
 // 諸口のみ表示が正。複製元デモは app.js の UZ_DEMO_DATA が serviceList を供給する）。
 // サンプル値を持たせると店舗分離パージ直後の同期前に偽サービスが一瞬描画される。
 const DEFAULT_SERVICES = [];
 
 /**
- * 売上品目マスタを返す（末尾に諸口を付与）。
+ * 売上品目マスタを返す。
  * 正本は localStorage の serviceList（settings.B3・app.js が同期）。
  * GAS応答は {id:'sv001', name, taxRate} 形式のため、UI内部で使う code に
  * id を写像して正規化する（id 欠落時のみ既存 code を尊重）。
@@ -33,9 +30,9 @@ function getServiceMaster() {
       name:    s.name,
       taxRate: (s.taxRate != null && !isNaN(Number(s.taxRate))) ? Number(s.taxRate) : 10,
     }));
-    return [...normalized, MISC_SERVICE];
+    return normalized;
   } catch {
-    return [...DEFAULT_SERVICES, MISC_SERVICE];
+    return [...DEFAULT_SERVICES];
   }
 }
 
@@ -123,14 +120,6 @@ function selectService(code) {
 
   setTaxRate(svc.taxRate);
 
-  const miscSection = document.getElementById('misc-section');
-  if (miscSection) {
-    miscSection.hidden = code !== 'S099';
-    if (code !== 'S099') {
-      const miscInput = document.getElementById('misc-name-input');
-      if (miscInput) miscInput.value = '';
-    }
-  }
 }
 
 /* ── 税率セット ──────────────────────────────────────────── */
@@ -329,7 +318,6 @@ async function handleSubmit() {
   const rawAmt   = (document.getElementById('amount-input')?.value || '0').replace(/,/g, '');
   const amount   = parseInt(rawAmt) || 0;
   const memo     = document.getElementById('memo-input')?.value.trim() || '';
-  const miscName = document.getElementById('misc-name-input')?.value.trim() || '';
   const svc      = getServiceMaster().find(s => s.code === selectedServiceCode);
   const mainUC   = document.getElementById('uncollected-toggle')?.checked ?? false;
 
@@ -341,7 +329,6 @@ async function handleSubmit() {
 
   if (!indivOnlyMode) {
     if (amount <= 0) return showToast('金額を入力してください', 'error');
-    if (svc.code === 'S099' && !miscName) return showToast('品目名を入力してください', 'error');
   }
 
   // アコーディオンが開いている場合のみ個別行を処理
@@ -370,7 +357,7 @@ async function handleSubmit() {
         date,
         serviceCode:  svc.code,
         serviceName:  svc.name,
-        miscItemName: miscName,
+        miscItemName: '',
         amountExTax:  taxExcluded,
         taxRate:      currentTaxRate,
         tax,
@@ -451,13 +438,6 @@ function _buildSalesFormBodyHTML() {
           <button type="button" class="sm-taxrate-chip" data-rate="8">8%</button>
           <button type="button" class="sm-taxrate-chip" data-rate="0">非課税</button>
         </div>
-      </div>
-
-      <!-- 諸口品目名（諸口選択時のみ表示・任意入力） -->
-      <div class="sales-sm-section" id="sm-sales-misc-section" hidden>
-        <label class="sales-sm-label" for="sm-sales-misc-name">品目名<span class="sales-sm-optional">任意</span></label>
-        <input type="text" id="sm-sales-misc-name" class="sales-sm-memo"
-               maxlength="50" autocomplete="off" placeholder="例：手土産代">
       </div>
 
       <div class="sales-sm-section">
@@ -637,22 +617,9 @@ function _smHandleCardTap(e) {
   const code = card.dataset.code;
   _smSelectedServiceCode = code;
 
-  // 諸口（S099）選択時のみ品目名欄を表示（任意入力）
-  const miscSection = document.getElementById('sm-sales-misc-section');
-  if (miscSection) {
-    if (code === 'S099') {
-      miscSection.hidden = false;
-    } else {
-      miscSection.hidden = true;
-      const mi = document.getElementById('sm-sales-misc-name');
-      if (mi) mi.value = '';
-    }
-  }
-
-  // 諸口（S099）はマスタ taxRate に関わらず未選択スタート
-  // 通常サービスはマスタ値（10/8/0）をデフォルト選択
+  // サービスはマスタ値（10/8/0）をデフォルト選択
   const svc = getServiceMaster().find(s => s.code === code);
-  if (code !== 'S099' && svc && (svc.taxRate === 10 || svc.taxRate === 8 || svc.taxRate === 0)) {
+  if (svc && (svc.taxRate === 10 || svc.taxRate === 8 || svc.taxRate === 0)) {
     _smSelectedTaxRate = svc.taxRate;
   } else {
     _smSelectedTaxRate = null;
@@ -696,10 +663,6 @@ async function _smHandleSalesSubmit() {
   const taxRate = _smSelectedTaxRate;
   const { taxExcluded, tax } = calcTax(amount, taxRate);
 
-  // 諸口（S099）選択時のみ品目名を送信（任意・空可）
-  const miscName = (selectedCard.dataset.code === 'S099')
-    ? (document.getElementById('sm-sales-misc-name')?.value.trim() || '')
-    : '';
 
   btn.disabled = true;
   btn.textContent = '送信中...';
@@ -708,7 +671,7 @@ async function _smHandleSalesSubmit() {
       date,
       serviceCode:  selectedCard.dataset.code,
       serviceName:  svc ? svc.name : '',
-      miscItemName: miscName,
+      miscItemName: '',
       amountExTax:  taxExcluded,
       taxRate,
       tax,

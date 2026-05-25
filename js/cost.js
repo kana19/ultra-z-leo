@@ -14,7 +14,7 @@ let _costIsSubmitting         = false;
 
 /* ── 区分ごとの選択可能科目リスト ────────────────────────── */
 /**
- * 指定区分の科目リストを返す（空のcustom除外・末尾に諸口追加）
+ * 指定区分の科目リストを返す（空のcustom除外）
  *
  * 科目の出所は区分で2系統に分かれる（02_画面仕様.md §2-1 / 03_データ仕様.md §1-2・§1-3）：
  *  - divCode '1'（仕入原価）：purchaseMasterList（settings.B5・id:'p001'〜）全件。
@@ -61,15 +61,6 @@ function getDivisionItems(divCode, options) {
         return i.smartphoneVisible !== false;
       });
   }
-
-  items.push({
-    code:         `MISC_${divCode}`,
-    taxRow:       null,
-    name:         '諸口',
-    taxRate:      10,
-    type:         'misc',
-    divisionCode: divCode,
-  });
 
   return items;
 }
@@ -191,15 +182,6 @@ function selectItem(code) {
 
   costSetTaxRate(item.taxRate);
 
-  const miscSection = document.getElementById('misc-section');
-  if (miscSection) {
-    const isMisc = item.type === 'misc';
-    miscSection.hidden = !isMisc;
-    if (!isMisc) {
-      const miscInput = document.getElementById('misc-name-input');
-      if (miscInput) miscInput.value = '';
-    }
-  }
 }
 
 /* ── 税率セット ──────────────────────────────────────────── */
@@ -259,7 +241,6 @@ async function costHandleSubmit() {
   const rawAmt   = (document.getElementById('amount-input')?.value || '0').replace(/,/g, '');
   const amount   = parseInt(rawAmt) || 0;
   const memo     = document.getElementById('memo-input')?.value.trim() || '';
-  const miscName = document.getElementById('misc-name-input')?.value.trim() || '';
   const unpaid   = document.getElementById('unpaid-toggle')?.checked ?? false;
 
   const items = getDivisionItems(selectedDivisionCode, { filterBySmartphoneVisible: true });
@@ -268,7 +249,6 @@ async function costHandleSubmit() {
   if (!date)       return showToast('日付を入力してください', 'error');
   if (!item)       return showToast('科目を選択してください', 'error');
   if (amount <= 0) return showToast('金額を入力してください', 'error');
-  if (item.type === 'misc' && !miscName) return showToast('科目名を入力してください', 'error');
 
   const { taxExcluded, tax } = calcTax(amount, _costCurrentTaxRate);
 
@@ -279,7 +259,7 @@ async function costHandleSubmit() {
     itemCode:     item.code,
     itemName:     item.name,
     taxRow:       item.taxRow ?? null,
-    miscItemName: miscName,
+    miscItemName: '',
     taxExcluded,
     taxRate:      _costCurrentTaxRate,
     tax,
@@ -515,7 +495,6 @@ let _smCostSelectedDivisionCode = '2';   // 初期値 = 販管費
 let _smCostSelectedItemCode     = null;
 let _smCostSelectedTaxRate      = null;
 // 諸口・買掛
-let _smCostMiscName             = '';
 let _smCostUnpaid               = false;
 // A-2-X-1：スタッフプルダウン（給与系3科目: 20/21/25 選択時）
 let _smCostSelectedStaffId      = null;   // staffList内スタッフのID or '_free_' or null
@@ -557,7 +536,6 @@ function _smCostResetState() {
   _smCostSelectedDivisionCode = '2';   // 初期値 = 販管費
   _smCostSelectedItemCode     = null;
   _smCostSelectedTaxRate      = null;
-  _smCostMiscName             = '';
   _smCostUnpaid               = false;
   _smCostSelectedStaffId      = null;
   _smCostFreeStaffName        = '';
@@ -587,17 +565,6 @@ function _smCostBuildFormBodyHTML() {
       <section class="cost-sm-section">
         <label class="cost-sm-label">科目を選択</label>
         <div id="sm-cost-item-cards" class="cost-sm-cards"></div>
-      </section>
-
-      <!-- 諸口科目名（諸口選択時のみ表示） -->
-      <section class="cost-sm-section" id="sm-cost-misc-section" hidden>
-        <label class="cost-sm-label" for="sm-cost-misc-name">科目名</label>
-        <input type="text"
-               id="sm-cost-misc-name"
-               class="cost-sm-memo"
-               maxlength="40"
-               autocomplete="off"
-               placeholder="例：備品購入">
       </section>
 
       <!-- A-2-X-1：スタッフプルダウン（給与系3科目選択時のみ表示） -->
@@ -683,7 +650,6 @@ function _smCostInitFormInModal() {
   _smCostSelectedDivisionCode = '2';
   _smCostSelectedItemCode     = null;
   _smCostSelectedTaxRate      = null;
-  _smCostMiscName             = '';
   _smCostUnpaid               = false;
 
   // 2. 科目カードの初期レンダリング（販管費＝divisionCode:'2'）
@@ -696,7 +662,6 @@ function _smCostInitFormInModal() {
   _smCostBindSubmit();
   _smCostBindMemoInput();
   _smCostBindDateInput();
-  _smCostBindMiscNameInput();
   _smCostBindUnpaidToggle();
   _smCostBindStaffSelect();    // A-2-X-1
 
@@ -739,13 +704,6 @@ function _smCostSelectDivision(divisionCode) {
   document.querySelectorAll('.sm-taxrate-chip').forEach(chip => {
     chip.classList.remove('is-active');
   });
-
-  // 6. 諸口科目名セクションを隠す・値クリア
-  const miscSection = document.getElementById('sm-cost-misc-section');
-  if (miscSection) miscSection.hidden = true;
-  _smCostMiscName = '';
-  const miscInput = document.getElementById('sm-cost-misc-name');
-  if (miscInput) miscInput.value = '';
 
   // 7. 内消費税メモを再計算（税率 null → 0円表示）
   _smCostRecalcTaxMemo();
@@ -805,31 +763,8 @@ function _smCostSelectItem(itemCode) {
   const selectedItem = items.find(it => it.code === itemCode);
   if (!selectedItem) return;
 
-  // 4. 諸口判定
-  const isMisc = selectedItem.type === 'misc';
-
-  // 諸口科目名セクションの出し分け
-  const miscSection = document.getElementById('sm-cost-misc-section');
-  if (miscSection) {
-    miscSection.hidden = !isMisc;
-    if (!isMisc) {
-      // 諸口以外に切り替わったら入力値もクリア
-      _smCostMiscName = '';
-      const miscInput = document.getElementById('sm-cost-misc-name');
-      if (miscInput) miscInput.value = '';
-    }
-  }
-
-  if (isMisc) {
-    // 諸口特例：全税率チップを未選択にする
-    _smCostSelectedTaxRate = null;
-    document.querySelectorAll('.sm-taxrate-chip').forEach(chip => {
-      chip.classList.remove('is-active');
-    });
-  } else {
-    // 通常科目：マスタの taxRate を自動選択
-    _smCostSetTaxRate(selectedItem.taxRate);
-  }
+  // 科目のマスタ taxRate を自動選択
+  _smCostSetTaxRate(selectedItem.taxRate);
 
   // 5. 内消費税メモを再計算
   _smCostRecalcTaxMemo();
@@ -909,7 +844,7 @@ function _smCostRecalcTaxMemo() {
 
 // ── バリデーション・送信 ───────────────
 /**
- * バリデーション順序：日付→区分→科目→（諸口なら科目名）→税率→金額
+ * バリデーション順序：日付→区分→科目→税率→金額
  * 返り値：{ ok: true } or { ok: false, errorTarget: Element|null, errorMsg: string }
  */
 function _smCostValidate() {
@@ -929,7 +864,6 @@ function _smCostValidate() {
     return { ok: false, errorTarget: cards, errorMsg: '科目を選択してください' };
   }
 
-  // 諸口の科目名は任意入力（空でも登録可・全経路で対称／前会話確定）。
   // マスタ未登録の受け皿のため、詳細はメモ運用で足りる。
 
   // A-2-X-1：給与系3科目選択時はスタッフ選択必須
@@ -981,10 +915,6 @@ async function _smCostHandleSubmit() {
   const amountInTax = Number(amountRaw);
   const memoEl      = document.getElementById('sm-cost-memo');
   const memoVal     = memoEl ? memoEl.value : '';
-  const miscInput   = document.getElementById('sm-cost-misc-name');
-  const miscName    = miscInput && !miscInput.closest('section').hidden
-    ? miscInput.value.trim()
-    : '';
   const unpaidEl    = document.getElementById('sm-cost-unpaid');
   const unpaidVal   = unpaidEl ? (unpaidEl.checked ? 1 : 0) : 0;
 
@@ -1027,7 +957,7 @@ async function _smCostHandleSubmit() {
     divisionName:      divisionLabel(_smCostSelectedDivisionCode),
     itemCode:          selectedItem.code,
     itemName:          selectedItem.name,
-    miscItemName:      miscName,
+    miscItemName:      '',
     taxExcluded:       taxExcluded,
     taxRate:           _smCostSelectedTaxRate,
     tax:               tax,
@@ -1112,16 +1042,6 @@ function _smCostBindDateInput() {
   const removeErr = () => date.classList.remove('cost-sm-field-error');
   date.addEventListener('change', removeErr);
   date.addEventListener('input',  removeErr);
-}
-
-// ── 諸口科目名入力のバインド ─────────────────────────
-function _smCostBindMiscNameInput() {
-  const el = document.getElementById('sm-cost-misc-name');
-  if (!el) return;
-  el.addEventListener('input', () => {
-    _smCostMiscName = el.value.trim();
-    el.classList.remove('cost-sm-field-error');
-  });
 }
 
 // ── 買掛トグルのバインド ─────────────────────────────
