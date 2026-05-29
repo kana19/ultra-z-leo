@@ -87,15 +87,16 @@ document.addEventListener('DOMContentLoaded', function() {
 /* ── サイドバー共通生成（iPad全画面共通・4項目） ─────────────
    各HTMLは <nav class="nav-sidebar" id="nav-sidebar" data-active="…"></nav> の
    空プレースホルダのみを置き、中身はこの関数が一括生成する。
-   4項目：ホーム（土星 ti-planet）／月次管理（月 ti-moon・売上入力とコスト入力を統合）／
+   4項目：ホーム（土星 ti-planet）／月次管理（月 ti-moon・履歴/修正と売上コスト入力を統合した history.html）／
           勤怠管理（ti-clock）／設定（ti-settings）。MD 00_原則.md §6-3-B・02_画面仕様.md §2-2。
    data-active は当該ページのキー（home/monthly/attendance/settings）。
-   data-page="sales" / "cost" は月次管理に統合されたため active="monthly" を渡す。
+   月次管理は history.html（売上コスト一覧・集計・新規入力・修正を集約）を指す。
+   data-page="sales" / "cost" は history へ集約されたため active="monthly" を渡す。
    後続の uzRenderAllBrands / uzLoadSidebarTimer / uzInitSidebarDateTime より
    先に実行する必要があるため、最優先の DOMContentLoaded リスナとして本関数を最初に登録する。 */
 const UZ_SIDEBAR_ITEMS = [
   { key: 'home',       href: 'index.html',            icon: 'ti-planet',   label: 'ホーム'   },
-  { key: 'monthly',    href: 'monthly.html',          icon: 'ti-moon',     label: '月次管理' },
+  { key: 'monthly',    href: 'history.html',          icon: 'ti-moon',     label: '月次管理' },
   { key: 'attendance', href: 'history.html#attendance', icon: 'ti-clock',  label: '勤怠管理' },
   { key: 'settings',   href: 'settings.html',         icon: 'ti-settings', label: '設定'     }
 ];
@@ -263,7 +264,7 @@ async function callGAS(action, data = {}) {
 /* ══════════════════════════════════════════════════════════
    データ層（共通）
    GAS取得・科目別集計・キャッシュを1箇所に集約する。
-   home.js / pl.js / monthly統合先 / その他画面はここを呼び、
+   home.js / pl.js / history（月次管理）/ その他画面はここを呼び、
    各自で getHistory を叩いて集計する重複を作らない。
 
    getHistory の正本データ構造（GAS応答1行）：
@@ -681,10 +682,9 @@ function uzInitSidebarDateTime() {
 document.addEventListener('DOMContentLoaded', uzLoadSidebarTimer);
 document.addEventListener('DOMContentLoaded', uzInitSidebarDateTime);
 
-/* ── UI用語（A-9-X：業態固定概念撤廃後・「出勤／退勤」表記に静的統一） ─
- * 業態判定ロジックは撤廃し、deriveUILabels() は固定ラベルを返すスタブとして残す。
- * 既存呼び出し側（history.js / home.js / pc-common.js）が ReferenceError にならないための
- * 後方互換措置。新規コードはラベルリテラルを直接書くことを推奨。
+/* ── UI用語（「出勤／退勤」表記に静的統一） ─
+ * deriveUILabels() は固定ラベルを返す。
+ * 呼び出し側（history.js / home.js / pc-common.js）が参照する。
  */
 const _UI_LABELS_STATIC = {
   clockin_record:      '出勤記録',
@@ -807,8 +807,7 @@ function _extractHHMM(val) {
 }
 
 /**
- * UI用語ラベルマップを返すスタブ（A-9-X：業態固定概念撤廃後の後方互換層）。
- * 引数は無視され、常に「出勤／退勤」表記の固定ラベルを返す。
+ * UI用語ラベルマップを返す。常に「出勤／退勤」表記の固定ラベルを返す。
  * @returns {Object} ラベルマップ
  */
 function deriveUILabels() {
@@ -832,9 +831,8 @@ function employmentTypeLabel(value) {
 }
 
 /* ── 機能表示フラグ（featureVisibility）─────────────────────
- * A-9-X：業態固定概念撤廃後、業態判定なしで固定値返却。
- * 納品時設定原則に従い、ターゲット社が必要に応じて運営ポータル経由で
- * settings B16 を直接書き換える運用に移行する（運営ポータル実装時に対応）。
+ * 固定値を返す。clockin_menu=true / payroll_menu=false。
+ * ターゲット社が運営ポータル経由で settings B16 を書き換える運用に対応する（運営ポータル実装時）。
  */
 function getFeatureVisibility() {
   return { clockin_menu: true, payroll_menu: false };
@@ -1092,7 +1090,7 @@ const DEFAULT_COST_MASTER = [
   { code: '17', taxRow: 17, name: '消耗品費',       taxRate: 10, type: 'fixed',  divisionCode: '2' },
   { code: '18', taxRow: 18, name: '減価償却費',     taxRate: 0,  type: 'fixed',  divisionCode: '2' },
   { code: '19', taxRow: 19, name: '福利厚生費',     taxRate: 10, type: 'fixed',  divisionCode: '2' },
-  { code: '20', taxRow: 20, name: '給料賃金（スポット）', taxRate: 0,  type: 'fixed',  divisionCode: '2' },
+  { code: '20', taxRow: 20, name: '給料賃金',       taxRate: 0,  type: 'fixed',  divisionCode: '2' },
   { code: '21', taxRow: 21, name: '外注工賃',       taxRate: 10, type: 'fixed',  divisionCode: '2' },
   { code: '22', taxRow: 22, name: '利子割引料',     taxRate: 0,  type: 'fixed',  divisionCode: '2' },
   { code: '23', taxRow: 23, name: '地代家賃',       taxRate: 10, type: 'fixed',  divisionCode: '2' },

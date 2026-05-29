@@ -18,6 +18,8 @@
   <link rel="stylesheet" href="css/forms.css">
   <link rel="stylesheet" href="css/sheet-modal.css">
   <link rel="stylesheet" href="css/sales-modal.css">
+  <link rel="stylesheet" href="css/cost-modal.css">
+  <link rel="stylesheet" href="css/ipad-input.css">
   <style>
     /* ══════════════════════════════════════════════════════════
        上部完全固定構造（A-9整流化・最終版）
@@ -466,13 +468,98 @@
       top: auto;
       box-shadow: none;
     }
+
+    /* ══════════════════════════════════════════════════════════
+       削除ボタン（全デバイス・確認必須／00§3-2）
+       配色はモノトーン濃淡のみ（00§5-9）。編集と区別するため surface2 地。
+       ══════════════════════════════════════════════════════════ */
+    .hist-del-btn {
+      font-size: 11px;
+      padding: 4px 12px;
+      line-height: 1.4;
+      border-radius: 20px;
+      border: 0.5px solid var(--uz-border);
+      cursor: pointer;
+      font-family: var(--font-main);
+      font-weight: 600;
+      background: var(--uz-surface2);
+      color: var(--uz-muted);
+      white-space: nowrap;
+      flex-shrink: 0;
+      box-sizing: border-box;
+      margin-left: 6px;
+    }
+    .hist-del-btn:active { opacity: 0.7; }
+
+    /* 売上コスト行（スマホ）の操作セルは編集・削除を横並び */
+    .hist-row__edit { display: flex; align-items: center; gap: 0; }
+
+    /* 出勤履歴行（スマホ）の操作（編集・削除）を最終グリッド列にまとめる */
+    .hist-attend-ops { display: flex; align-items: center; gap: 0; justify-self: end; }
+    .hist-attend-ops .hist-edit-btn { margin: 0; }
+
+    /* ══════════════════════════════════════════════════════════
+       科目別集計（iPad左カラム・▼アコーディオン）。スマホは非表示。
+       配色はモノトーン濃淡のみ（00§5-9）。
+       ══════════════════════════════════════════════════════════ */
+    .hist-breakdown { display: none; }
+    body.is-ipad .hist-breakdown {
+      display: block;
+      padding: 8px 12px 4px;
+      border-bottom: 1px solid var(--uz-border);
+    }
+    .hist-bd-group { border-bottom: 1px solid var(--uz-border); }
+    .hist-bd-group:last-child { border-bottom: none; }
+    .hist-bd-head {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 4px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-family: var(--font-main);
+      color: var(--uz-text);
+      text-align: left;
+    }
+    .hist-bd-head[disabled] { cursor: default; opacity: 0.55; }
+    .hist-bd-caret { font-size: 10px; color: var(--uz-muted); width: 12px; flex-shrink: 0; }
+    .hist-bd-label { flex: 1; font-size: 13px; font-weight: 700; }
+    .hist-bd-total { font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .hist-bd-body { padding: 0 0 10px 20px; }
+    .hist-bd-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 5px 4px;
+      font-size: 12px;
+      color: var(--uz-text2);
+    }
+    .hist-bd-row--empty { color: var(--uz-text3); }
+    .hist-bd-amt { font-variant-numeric: tabular-nums; }
+
+    /* ══════════════════════════════════════════════════════════
+       iPad 右カラム：既定入力モード（売上/コスト/出勤の新規入力を注入）。
+       カード枠を解除し、注入フォーム（sticky フッター）が右カラムの
+       スクロール領域に追従できるようにする。
+       ══════════════════════════════════════════════════════════ */
+    body.is-ipad .ipad-right-panel.hist-right--input {
+      border: none;
+      background: transparent;
+      border-radius: 0;
+      overflow: visible;
+    }
+    body.is-ipad .ipad-right-panel.hist-right--input #hist-input-host { padding: 0; }
+    /* 新規登録ボタン（上段固定）は iPad では右カラムに登録フォームがあるため隠す */
+    body.is-ipad #fixed-ci-open-btn-wrap { display: none !important; }
   </style>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.9.0/dist/tabler-icons.min.css">
 </head>
 <body data-page="history">
 
 <!-- iPad サイドバーナビ（スマホでは非表示／中身は app.js uzRenderSidebar が生成） -->
-<nav class="nav-sidebar" id="nav-sidebar" data-active="attendance" aria-label="メインナビゲーション"></nav>
+<nav class="nav-sidebar" id="nav-sidebar" data-active="monthly" aria-label="メインナビゲーション"></nav>
 
 <div class="page-wrapper">
 
@@ -551,6 +638,9 @@
         <!-- タブ1：売上・コスト -->
         <div id="panel-salescost" class="hist-tab-content hist-tab-content--active"
              role="tabpanel" aria-labelledby="tab-salescost">
+
+          <!-- 科目別集計（iPad左カラム・売上/仕入原価/販管費の▼アコーディオン。スマホは非表示） -->
+          <div id="hist-breakdown" class="hist-breakdown" aria-label="科目別集計"></div>
 
           <div id="history-list"
                class="hist-list"
@@ -633,6 +723,7 @@
 <script src="js/app.js"></script>
 <script src="js/sheet-modal.js"></script>
 <script src="js/sales.js"></script>
+<script src="js/cost.js"></script>
 <script src="js/history.js"></script>
 </body>
 </html>

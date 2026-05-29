@@ -39,6 +39,10 @@ let isEditSaving    = false;
 
 // 新規入店登録フォーム
 let _ciStaffList = []; // localStorage から読み込み
+let _ciInline    = false; // CI登録フォームを iPad 右カラムに埋め込み表示中か（true）／モーダル表示（false）
+
+// iPad 右カラムの既定入力タブ（売上を追加／コストを追加）
+let _histInputTab = 'sales';
 
 /* ── 新規入店登録：時刻セレクト（0〜29h / 5分刻み） ─────── */
 const _CI_HOURS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
@@ -103,6 +107,15 @@ document.addEventListener('DOMContentLoaded', () => {
   bindListClicks();
   bindFilterBtns();
   document.getElementById('ci-open-btn')?.addEventListener('click', openCIModal);
+
+  // iPad：右カラムに sales.js / cost.js のフォームを注入して入力正本を流用する（MD §6-3-B）。
+  // 各フォーム submit 後フック（_loadIpadSalesData / _loadIpadCostData）を history の
+  // loadAll に差し替え、登録後に当月の一覧・集計を再描画する（sales.js / cost.js は無改修）。
+  if (document.body.classList.contains('is-ipad')) {
+    window._loadIpadSalesData = function () { return loadAll(); };
+    window._loadIpadCostData  = function () { return loadAll(); };
+  }
+
   // A-9：初期表示時に必ず switchTab を呼び、上段固定エリア内のフィルタバー/新規登録ボタンの
   // 表示状態を確定させる（呼ばないと出勤履歴タブでもフィルタバーが見えてしまうバグの修正）
   const initialTab = (location.hash === '#attendance') ? 'attendance' : 'salescost';
@@ -132,6 +145,23 @@ function switchTab(tab) {
   const ciBtnWrap  = document.getElementById('fixed-ci-open-btn-wrap');
   if (filterBar)  filterBar.hidden  = (tab !== 'salescost');
   if (ciBtnWrap)  ciBtnWrap.hidden  = (tab !== 'attendance');
+  // サイドバー（iPad）：月次管理＝売上コスト／勤怠管理＝出勤履歴 のハイライトをタブ連動
+  _syncSidebarActive(tab);
+  // iPad：右カラムを当該タブの既定入力に戻す（行選択前の状態）
+  if (document.body.classList.contains('is-ipad')) _renderHistRightDefault();
+}
+
+/* サイドバー（iPad）の active を現在タブに同期する。
+   月次管理（history.html）＝売上コストタブ／勤怠管理（history.html#attendance）＝出勤履歴タブ。 */
+function _syncSidebarActive(tab) {
+  document.querySelectorAll('#nav-sidebar .sidebar-item').forEach(a => {
+    const href = a.getAttribute('href') || '';
+    const isAttend = href.indexOf('#attendance') >= 0;
+    const on = (tab === 'attendance') ? isAttend : (href === 'history.html');
+    a.classList.toggle('sidebar-item--active', on);
+    if (on) a.setAttribute('aria-current', 'page');
+    else    a.removeAttribute('aria-current');
+  });
 }
 
 /* ── 月ナビゲーション ────────────────────────────────────── */
@@ -216,6 +246,13 @@ function buildLockWidget(ls, idx, scope) {
 /* ── リストのクリック委譲（1回だけ登録） ────────────────── */
 function bindListClicks() {
   document.getElementById('history-list')?.addEventListener('click', e => {
+    // 削除ボタン（最優先・行クリック委譲より先に処理）
+    const delBtn = e.target.closest('.hist-del-btn[data-scope="sc"]');
+    if (delBtn) {
+      _histDeleteSalesCost(parseInt(delBtn.dataset.idx, 10));
+      return;
+    }
+
     // iPad：テーブル行クリック
     const row = e.target.closest('.ipad-hist-row[data-scope="sc"]');
     if (row) {
@@ -242,6 +279,13 @@ function bindListClicks() {
   });
 
   document.getElementById('attendance-list')?.addEventListener('click', e => {
+    // 削除ボタン（最優先）
+    const delBtn = e.target.closest('.hist-del-btn[data-scope="at"]');
+    if (delBtn) {
+      _histDeleteAttendance(parseInt(delBtn.dataset.idx, 10));
+      return;
+    }
+
     // iPad：テーブル行クリック
     const row = e.target.closest('.ipad-hist-row[data-scope="at"]');
     if (row) {
@@ -276,6 +320,69 @@ function bindListClicks() {
       );
     }
   });
+}
+
+/* ── 行削除（全デバイス・確認必須・00§3-2 確定操作の明示確認）─────
+   売上削除時は GAS deleteRow が紐付け経費の V列を空欄化して経費行は残す
+   （紐付けのみ解除）。経費連鎖削除はPC案件管理に残す（00§5-4）。 */
+async function _histDeleteSalesCost(idx) {
+  const item = editableItems[idx];
+  if (!item) return;
+  if (!item.rowIndex) {
+    showToast('rowIndex が取得できません。GAS の getHistory に rowIndex を追加してください。', 'error', 4000);
+    return;
+  }
+  const isSales   = item.type === 'sales';
+  const sheetName = isSales ? '売上' : 'コスト';
+  const name      = item.itemName || '—';
+  const amount    = formatYen(item.amount);
+  const date      = item.date || '';
+  const tail = isSales
+    ? '\n削除すると元に戻せません。紐付け済みの経費は残り、紐付けのみ解除されます。'
+    : '\n削除すると元に戻せません。';
+  if (!confirm(`この${isSales ? '売上' : 'コスト'}を削除しますか？\n${date} / ${name} / ${amount}${tail}`)) return;
+
+  showLoading();
+  try {
+    const result = await callGAS('deleteRow', { sheetName, rowIndex: item.rowIndex });
+    if (result?.status !== 'ok') throw new Error(result?.message || '削除エラー');
+    showToast('削除しました ✓', 'success');
+    if (typeof uzInvalidateMonth === 'function') {
+      uzInvalidateMonth(`${currentYear}-${String(currentMonth).padStart(2, '0')}`);
+    }
+    if (document.body.classList.contains('is-ipad')) _renderHistRightDefault();
+    await loadAll();
+  } catch (e) {
+    showToast('削除に失敗しました：' + e.message, 'error');
+  } finally {
+    hideLoading();
+  }
+}
+
+async function _histDeleteAttendance(idx) {
+  const item = attendItems[idx];
+  if (!item) return;
+  if (!item.rowIndex) {
+    showToast('rowIndex が取得できません。GAS の getAttendanceByMonth に rowIndex を追加してください。', 'error', 4000);
+    return;
+  }
+  const labels = deriveUILabels();
+  const who  = item.staffName || '（スタッフ名なし）';
+  const date = item.date || '';
+  if (!confirm(`${who} の ${date} の${labels.clockin_record}を削除しますか？\n削除すると元に戻せません。`)) return;
+
+  showLoading();
+  try {
+    const result = await callGAS('deleteRow', { sheetName: 'attendance', rowIndex: item.rowIndex });
+    if (result?.status !== 'ok') throw new Error(result?.message || '削除エラー');
+    showToast('削除しました ✓', 'success');
+    if (document.body.classList.contains('is-ipad')) _renderHistRightDefault();
+    await loadAttendanceOnly();
+  } catch (e) {
+    showToast('削除に失敗しました：' + e.message, 'error');
+  } finally {
+    hideLoading();
+  }
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -354,7 +461,10 @@ function _renderFilteredList() {
         <td style="font-size:12px;color:var(--uz-text3);">${escHtml((item.memo || '').substring(0, 12))}</td>
         <td class="ipad-td-r" style="font-weight:600;">${formatYen(item.amount)}</td>
         <td style="text-align:center;">${dot}</td>
-        <td style="text-align:center;"><button class="hist-edit-btn" type="button" data-idx="${idx}" data-scope="sc">編集</button></td>
+        <td style="text-align:center;white-space:nowrap;">
+          <button class="hist-edit-btn" type="button" data-idx="${idx}" data-scope="sc">編集</button>
+          <button class="hist-del-btn" type="button" data-idx="${idx}" data-scope="sc" aria-label="削除">削除</button>
+        </td>
       </tr>`;
     });
 
@@ -385,6 +495,7 @@ function _renderFilteredList() {
 function renderSalesCost(items) {
   _allSalesCostItems = items || [];
   _currentFilter     = 'all';
+  _renderHistBreakdown();
   document.querySelectorAll('.hist-filter-btn').forEach(b =>
     b.classList.toggle('hist-filter-btn--active', b.dataset.filter === 'all')
   );
@@ -400,11 +511,135 @@ function renderSalesCost(items) {
 }
 
 function renderSalesCostError() {
+  const box = document.getElementById('hist-breakdown');
+  if (box) box.innerHTML = '';
   const container = document.getElementById('history-list');
   if (container) container.innerHTML = `
     <p style="text-align:center;padding:40px 20px;font-size:13px;color:var(--uz-muted);">
       データの取得に失敗しました。<br>通信状態を確認してください。
     </p>`;
+}
+
+/* ── 科目別集計（iPad左カラム・売上/仕入原価/販管費の▼アコーディオン）─────
+   データ源は _allSalesCostItems（getHistory 由来）。type='sales'→売上、
+   type='cost' は divisionCode='1'→仕入原価／それ以外→販管費で判定し、
+   itemName でグループ化する（諸口プレフィックスは持ち込まない）。
+   フィルタ（全件/売掛/買掛）に依存せず常に全件集計を表示する。スマホは非表示。 */
+function _renderHistBreakdown() {
+  const box = document.getElementById('hist-breakdown');
+  if (!box) return;
+  if (!document.body.classList.contains('is-ipad')) { box.innerHTML = ''; return; }
+
+  const groups = { sales: {}, purchase: {}, sga: {} };
+  const totals = { sales: 0, purchase: 0, sga: 0 };
+  (_allSalesCostItems || []).forEach(r => {
+    const kind = (r.type === 'sales')
+      ? 'sales'
+      : (String(r.divisionCode) === '1' ? 'purchase' : 'sga');
+    const name = r.itemName || '—';
+    const amt  = Number(r.amount) || 0;
+    groups[kind][name] = (groups[kind][name] || 0) + amt;
+    totals[kind] += amt;
+  });
+
+  const block = (label, kind) => {
+    const entries = Object.entries(groups[kind]).sort((a, b) => b[1] - a[1]);
+    const hasItems = entries.length > 0;
+    const rows = entries.map(([name, amt]) =>
+      `<div class="hist-bd-row"><span class="hist-bd-name">${escHtml(name)}</span>` +
+      `<span class="hist-bd-amt">${formatYen(amt)}</span></div>`
+    ).join('');
+    return `<div class="hist-bd-group">
+      <button type="button" class="hist-bd-head" ${hasItems ? '' : 'disabled'} aria-expanded="false">
+        <span class="hist-bd-caret" aria-hidden="true">▶</span>
+        <span class="hist-bd-label">${label}</span>
+        <span class="hist-bd-total">${formatYen(totals[kind])}</span>
+      </button>
+      <div class="hist-bd-body" hidden>${rows || '<div class="hist-bd-row hist-bd-row--empty">内訳なし</div>'}</div>
+    </div>`;
+  };
+
+  box.innerHTML = block('売上', 'sales') + block('仕入原価', 'purchase') + block('販管費', 'sga');
+
+  box.querySelectorAll('.hist-bd-head').forEach(head => {
+    head.addEventListener('click', () => {
+      if (head.hasAttribute('disabled')) return;
+      const body = head.parentElement.querySelector('.hist-bd-body');
+      const open = head.getAttribute('aria-expanded') === 'true';
+      head.setAttribute('aria-expanded', open ? 'false' : 'true');
+      head.querySelector('.hist-bd-caret').textContent = open ? '▶' : '▼';
+      if (body) body.hidden = open;
+    });
+  });
+}
+
+/* ── iPad 右カラム：既定入力（行未選択時）──────────────────────
+   売上コストタブ＝売上/コストの入力タブ（sales.js / cost.js のフォーム注入）。
+   出勤履歴タブ＝新規登録（_buildCIFormBodyHTML を注入）。
+   行選択時は renderIpadRightPanel（修正）に切り替わる。 */
+function _renderHistRightDefault() {
+  if (!document.body.classList.contains('is-ipad')) return;
+  const panel = document.querySelector('.ipad-right-panel');
+  if (!panel) return;
+
+  _ipadSelectedRecord = null;
+  currentEditItem = null;
+  document.querySelectorAll('.ipad-hist-row--selected').forEach(r => r.classList.remove('ipad-hist-row--selected'));
+
+  if (activeTab === 'attendance') {
+    const labels = deriveUILabels();
+    panel.className = 'ipad-right-panel hist-right--input';
+    panel.innerHTML = `
+      <div class="ipad-right-panel__header">${escHtml(labels.clockin_register)}</div>
+      <div id="hist-ci-host"></div>`;
+    const host = document.getElementById('hist-ci-host');
+    if (host) {
+      host.innerHTML = _buildCIFormBodyHTML();
+      _ciInline = true;
+      _initCIFormInModal();
+    }
+    return;
+  }
+
+  // 売上コストタブ：売上/コストの入力タブ
+  panel.className = 'ipad-right-panel hist-right--input';
+  panel.innerHTML = `
+    <div class="ipad-input-tabs">
+      <button class="ipad-tab${_histInputTab === 'sales' ? ' ipad-tab--active' : ''}" type="button" data-histtab="sales">売上を追加</button>
+      <button class="ipad-tab${_histInputTab === 'cost'  ? ' ipad-tab--active' : ''}" type="button" data-histtab="cost">コストを追加</button>
+    </div>
+    <div id="hist-input-host" class="ipad-tab-content"></div>`;
+  panel.querySelectorAll('.ipad-tab[data-histtab]').forEach(btn => {
+    btn.addEventListener('click', () => _histSwitchInputTab(btn.dataset.histtab));
+  });
+  _histInjectInputForm(_histInputTab);
+}
+
+function _histSwitchInputTab(tab) {
+  if (tab !== 'sales' && tab !== 'cost') return;
+  _histInputTab = tab;
+  document.querySelectorAll('.ipad-right-panel .ipad-tab[data-histtab]').forEach(b =>
+    b.classList.toggle('ipad-tab--active', b.dataset.histtab === tab)
+  );
+  _histInjectInputForm(tab);
+}
+
+/* 入力フォームの注入（sales.js / cost.js の正本を流用・MD §6-3-B）。
+   送信後の一覧再描画は init で差し替えた _loadIpadSalesData / _loadIpadCostData（=loadAll）。*/
+function _histInjectInputForm(tab) {
+  const host = document.getElementById('hist-input-host');
+  if (!host) return;
+  if (tab === 'cost') {
+    if (typeof _smCostBuildFormBodyHTML === 'function') {
+      host.innerHTML = _smCostBuildFormBodyHTML();
+      if (typeof _smCostInitFormInModal === 'function') _smCostInitFormInModal();
+    }
+  } else {
+    if (typeof _buildSalesFormBodyHTML === 'function') {
+      host.innerHTML = _buildSalesFormBodyHTML();
+      if (typeof _initSalesFormInModal === 'function') _initSalesFormInModal();
+    }
+  }
 }
 
 /* ── カラータイマードット（売掛・買掛ありのみ表示） ──────── */
@@ -452,6 +687,7 @@ function buildSalesCostItemHTML(item, idx) {
       ${dot}
       <div class="hist-row__edit">
         <button class="hist-edit-btn" type="button" data-idx="${idx}" data-scope="sc">編集</button>
+        <button class="hist-del-btn" type="button" data-idx="${idx}" data-scope="sc" aria-label="削除">削除</button>
       </div>
     </div>`;
 }
@@ -481,7 +717,7 @@ function renderAttendance(items) {
 
     let html = `<table class="ipad-hist-flat-table">
       <thead><tr>
-        <th>日付</th><th>スタッフ</th><th>${escHtml(labels.clockin_time)}</th><th>${escHtml(labels.clockout_time)}</th><th>勤務時間</th><th>状態</th>
+        <th>日付</th><th>スタッフ</th><th>${escHtml(labels.clockin_time)}</th><th>${escHtml(labels.clockout_time)}</th><th>勤務時間</th><th>状態</th><th></th>
       </tr></thead><tbody>`;
 
     allRecs.forEach(r => {
@@ -512,6 +748,10 @@ function renderAttendance(items) {
         <td>${clockOut ? escHtml(clockOut) : '—'}</td>
         <td style="font-size:12px;color:var(--uz-muted);">${durLabel}</td>
         <td>${statusBadge}</td>
+        <td style="text-align:center;white-space:nowrap;">
+          <button class="hist-edit-btn" type="button" data-idx="${atIdx}" data-scope="at">編集</button>
+          <button class="hist-del-btn" type="button" data-idx="${atIdx}" data-scope="at" aria-label="削除">削除</button>
+        </td>
       </tr>`;
     });
 
@@ -625,7 +865,10 @@ function renderAttendance(items) {
             <span class="hist-attend-arrow">→</span>
             <span class="${timeOutClass}">${timeOutStr}</span>
             <span class="hist-attend-state-col">${durOrState}</span>
-            <button class="hist-edit-btn" type="button" data-idx="${atIdx}" data-scope="at" aria-label="編集">編集</button>
+            <span class="hist-attend-ops">
+              <button class="hist-edit-btn" type="button" data-idx="${atIdx}" data-scope="at" aria-label="編集">編集</button>
+              <button class="hist-del-btn" type="button" data-idx="${atIdx}" data-scope="at" aria-label="削除">削除</button>
+            </span>
           </div>`;
       });
     });
@@ -933,6 +1176,7 @@ async function saveEdit() {
           closeEditForm();
           alert(`⚠️ 労働時間が${dur.hours}時間${dur.mins}分です。\n異常値の可能性があります。\n保存されましたが確認してください。`);
           await loadAll();
+          if (document.body.classList.contains('is-ipad')) _renderHistRightDefault();
           return;
         }
       }
@@ -946,6 +1190,7 @@ async function saveEdit() {
       uzInvalidateMonth(`${currentYear}-${String(currentMonth).padStart(2, '0')}`);
     }
     await loadAll(); // 一覧をリロード
+    if (document.body.classList.contains('is-ipad')) _renderHistRightDefault();
 
   } catch (e) {
     showToast('保存に失敗しました：' + e.message, 'error');
@@ -1331,7 +1576,13 @@ async function submitClockIn() {
     if (result?.status !== 'ok') throw new Error(result?.message || '登録エラー');
 
     showToast(`${staffName} の${labels.clockin_label}を記録しました ✓`, 'success');
-    closeCIModal();
+    if (_ciInline) {
+      // iPad 右カラム埋め込み：フォームをリセットして連続登録できるようにする
+      const host = document.getElementById('hist-ci-host');
+      if (host) { host.innerHTML = _buildCIFormBodyHTML(); _initCIFormInModal(); }
+    } else {
+      closeCIModal();
+    }
     await loadAttendanceOnly();
 
   } catch (e) {
@@ -1358,6 +1609,7 @@ function getCurrentTimeRounded() {
 
 function openCIModal() {
   const labels = deriveUILabels();
+  _ciInline = false;
   SheetModal.open({
     title:    labels.clockin_register,
     bodyHtml: _buildCIFormBodyHTML(),
@@ -1454,6 +1706,9 @@ function getLockState(record) {
 function renderIpadRightPanel(record) {
   const panel = document.querySelector('.ipad-right-panel');
   if (!panel) return;
+
+  // 入力モード（hist-right--input）で外したカード枠を、修正表示では復帰する
+  panel.className = 'ipad-right-panel';
 
   _ipadSelectedRecord = record;
   currentEditItem = record;

@@ -200,13 +200,10 @@ function migrateSalesRowIds() {
  *  PC版の通常追加経路では空文字を入れて作成し、紐付けは linkTransactions で後付けする
  *  後方互換のため payload.projectId も受け付ける（同一意味で扱う）
  *
- * A-2-X-3拡張：
- *  - data.staffId / data.staffName を受付
- *  - 給与系科目（20/21/25）でスタッフ名がある場合、H列にプレフィックス＋スタッフ名を記録
- *    科目20 → 「[スポット]スタッフ名」（20bコスト入力経路のみ。20aはPC給与確定経由）
- *    科目21/25 → 「スタッフ名」（科目名自体で種別が分かるためプレフィックス不要）
- *  - data.staffId がある場合、attendanceシートに金額由来行を連動追記（時刻空欄）
- *    マスタ外フリー入力（staffId空）の場合はattendance連動なし
+ *  人件費系科目（20/21/25）も通常のコスト追記として扱う。スマホ/iPad のスタッフ紐付け都度入力は持たない。
+ *  人件費の算出・確定は勤怠管理→PC出勤管理で行う（→ 02§5-9 / 03§5-2）。
+ *  PC給与確定（subType==='20a'）の行は H列に「[月次]スタッフ名」を記録する。
+ *  PC出勤管理がこの記録を読んで当月の給与確定済みを判定・復元する。
  */
 function addCost(data) {
   var date = data.date || '';
@@ -217,20 +214,12 @@ function addCost(data) {
   var inAmt = Math.max(0, Math.floor(Number(data.taxIncluded) || 0));
   var t = calcTax_(inAmt, rate);
 
-  // --- A-2-X-3：給与系科目（20/21/25）のスタッフ指定対応 ---
-  var staffId   = String(data.staffId   || '');
-  var staffName = String(data.staffName || '');
-  var itemCode  = String(data.itemCode  || '');
-
-  // H列（miscItemName）にプレフィックス＋スタッフ名を組み立て
-  // 給与系科目（20/21/25）でスタッフ名がある場合のみプレフィックス付与
-  // 20のコスト入力経路は全て20b（スポット）扱い（20aはPC給与確定経由のみ）
-  var PAYROLL_CODES = ['20', '21', '25'];
+  var itemCode     = String(data.itemCode || '');
   var miscItemName = data.miscItemName || '';
-  if (PAYROLL_CODES.indexOf(itemCode) >= 0 && staffName) {
-    // 科目20はスポット、21/25はそのまま科目名で識別可能なのでプレフィックスは20のみ
-    var prefix = (itemCode === '20') ? (String(data.subType || '') === '20a' ? '[月次]' : '[スポット]') : '';
-    miscItemName = prefix + staffName;
+
+  // PC給与確定行（subType==='20a'）は H列に「[月次]スタッフ名」を記録する（確定状態の復元キー）
+  if (String(data.subType || '') === '20a' && String(data.staffName || '')) {
+    miscItemName = '[月次]' + String(data.staffName);
   }
 
   sheet.appendRow([
@@ -244,43 +233,8 @@ function addCost(data) {
     Number(data.unpaid) || 0, '', new Date(), 0,
     Number(data.withholdingAmount) || 0,   // T列(20)
     String(data.clientId || ''),            // U列(21)
-    String(data.projectId || '')            // V列(22) 紐付け先売上行ID（取引ペア紐付けモデル・§3-9-3）
+    String(data.projectId || '')            // V列(22) 紐付け先売上行ID（取引ペア紐付けモデル）
   ]);
-
-  // --- A-2-X-3：スタッフID指定時はattendanceシートに金額由来行を連動追記 ---
-  // マスタ外フリー入力（staffId空・staffNameあり）の場合はattendance連動しない（仕様確定）
-  if (staffId && PAYROLL_CODES.indexOf(itemCode) >= 0) {
-    try {
-      // staffListから雇用形態を引く
-      var ss = _ss_();
-      var settingsSheet = ss.getSheetByName('settings');
-      var employmentType = '';
-      if (settingsSheet) {
-        var staffJson = settingsSheet.getRange('B2').getValue();
-        var staffList = [];
-        try { if (staffJson) staffList = JSON.parse(staffJson); } catch(e) {}
-        var matched = staffList.filter(function(s) { return s.id === staffId; });
-        if (matched.length > 0) {
-          employmentType = _normalizeEmploymentType_(matched[0].employmentType || '');
-        }
-      }
-      // attendanceシートに金額由来行を追記（時刻空欄＝金額由来を示す）
-      var attSheet = getOrCreateSheet_('attendance', ['日付','スタッフID','スタッフ名','雇用形態','入店時刻','退店時刻','登録日時','案件ID']);
-      attSheet.appendRow([
-        date,                          // A:日付
-        staffId,                       // B:スタッフID
-        staffName,                     // C:スタッフ名
-        employmentType,                // D:雇用形態
-        '',                            // E:入店時刻（空欄＝金額由来）
-        '',                            // F:退店時刻（空欄）
-        new Date().toISOString(),      // G:登録日時
-        ''                             // H:案件ID（空欄・PC月次管理☆で後付け）
-      ]);
-    } catch(e) {
-      // attendance連動失敗はコスト追記の成功に影響させない（ログのみ）
-      Logger.log('addCost attendance連動エラー: ' + e.message);
-    }
-  }
 
   return { status: 'ok' };
 }
@@ -1613,7 +1567,6 @@ function _isLinkableCostRow_(costRow) {
  *    （複数アイテムが同一 salesRowId を指していても親売上の参照は1回で済ます）
  *  - 後方互換：data.rowIndex + data.salesRowId 形式の単発 payload も内部で items[] に変換して処理
  *  - 紐付け解除（salesRowId 空）の場合、売上側の U列 は変更しない（案件管理画面に残し続ける運用）
- *  - A-2-X-7：給与系コスト（20/21/25）紐付け時、同日同スタッフのattendance行のprojectIdも連動更新
  */
 function linkTransactions(data) {
   // payload 正規化：items 配列を優先・なければ単発を1要素配列として扱う（後方互換）
@@ -1681,52 +1634,7 @@ function linkTransactions(data) {
     }
   }
 
-  // ═══ A-2-X-7：給与系コスト紐付け時のattendance.projectId連動更新 ═══
-  var PAYROLL_CODES_LINK = ['20', '21', '25'];
-  var attSheet = ss.getSheetByName('attendance');
-  if (attSheet) {
-    var attLastRow = attSheet.getLastRow();
-    var attLastCol = attSheet.getLastColumn();
-    var attData = attLastRow >= 2
-      ? attSheet.getRange(2, 1, attLastRow - 1, attLastCol).getValues()
-      : [];
-    // attendance列構成:
-    //   8列版(main.gs getOrCreateSheet_): H列(8)=案件ID → 書き込み先=col 8
-    //   9列版(attendance_v3.gs):          I列(9)=案件ID → 書き込み先=col 9
-    var attProjectCol = attLastCol >= 9 ? 9 : 8;
-
-    for (var q = 0; q < normalized.length; q++) {
-      var costRowIdx = normalized[q].rowIndex;
-      var newSalesRowId = normalized[q].salesRowId; // 空文字なら解除
-
-      // コスト行のデータを取得（科目コード・H列・日付）
-      var costRowData = costSheet.getRange(costRowIdx, 1, 1, 22).getValues()[0];
-      var costItemCode = String(costRowData[5] || '');  // F列(6)=index 5
-      if (PAYROLL_CODES_LINK.indexOf(costItemCode) < 0) continue; // 給与系以外はスキップ
-
-      var costDate = toDateStr_(costRowData[0]);
-      var costMisc = String(costRowData[7] || '');  // H列(8)=index 7
-      // スタッフ名を抽出（[スポット]/[月次]プレフィックス除去）
-      var costStaffName = costMisc
-        .replace(/^\[スポット\]/, '')
-        .replace(/^\[月次\]/, '')
-        .trim();
-      if (!costStaffName) continue; // スタッフ名なしはスキップ
-
-      // attendanceシートから同日・同スタッフ名の行を検索して projectId を更新
-      for (var r = 0; r < attData.length; r++) {
-        var attDate = attData[r][0] instanceof Date
-          ? Utilities.formatDate(attData[r][0], 'Asia/Tokyo', 'yyyy-MM-dd')
-          : String(attData[r][0] || '').substring(0, 10);
-        var attStaffName = String(attData[r][2] || '');  // C列(3)=index 2
-
-        if (attDate === costDate && attStaffName === costStaffName) {
-          attSheet.getRange(r + 2, attProjectCol).setValue(newSalesRowId);
-        }
-      }
-    }
-  }
-  // ═══ A-2-X-7 ここまで ═══
+  // ═══ 案件紐付けはコスト行V列(22)で完結する。attendance連動は持たない ═══
 
   return {
     status: 'ok',
@@ -2284,7 +2192,7 @@ function deleteRow(data) {
     var sheetName = String(data && data.sheetName || '').trim();
     var rowIndex = parseInt(data && data.rowIndex, 10);
 
-    if (sheetName !== '売上' && sheetName !== 'コスト') {
+    if (sheetName !== '売上' && sheetName !== 'コスト' && sheetName !== 'attendance') {
       return { status: 'error', message: 'sheetNameが不正です' };
     }
     if (!rowIndex || rowIndex < 2) {
@@ -2302,10 +2210,12 @@ function deleteRow(data) {
       return { status: 'error', message: '指定行が存在しません' };
     }
 
-    // ロック行チェック（S列=19）
-    var lockFlag = sheet.getRange(rowIndex, 19).getValue();
-    if (lockFlag === 1 || lockFlag === '1') {
-      return { status: 'error', message: 'ロック行は削除できません' };
+    // ロック行チェック（S列=19・売上/コストのみ。attendance は S列を持たない）
+    if (sheetName === '売上' || sheetName === 'コスト') {
+      var lockFlag = sheet.getRange(rowIndex, 19).getValue();
+      if (lockFlag === 1 || lockFlag === '1') {
+        return { status: 'error', message: 'ロック行は削除できません' };
+      }
     }
 
     var unlinkedCostRows = [];

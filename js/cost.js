@@ -71,7 +71,7 @@ function divisionLabel(code) {
 
 /* ── 初期化 ──────────────────────────────────────────────── */
 document.addEventListener('DOMContentLoaded', () => {
-  if (document.body.dataset.page !== 'cost') return; // cost.html 専用（monthly では monthly.js が起動）
+  if (document.body.dataset.page !== 'cost') return; // cost.html 専用（他ページは各JSが起動／history は右カラム注入で流用）
   // 起動時 localStorage 値も正規化を通す（divisionCode/type 欠落の旧データ矯正・03§1-2）。
   // これをしないと getDivisionItems の divisionCode 厳密一致で販管費が諸口のみになる。
   costMaster = (typeof normalizeCostMasterList === 'function')
@@ -484,24 +484,16 @@ function _costScEsc(s) {
    SheetModal 版 コスト入力（D案ハイブリッド）
    3デバイス統合仕様.md §6-3 準拠
    既存フルページ版（L1〜L457）とは完全独立・DOM / state / 関数名すべて別系統
-   諸口・買掛 実装済み
-   入力時統一ルール：全科目で総額（税込）入力（戦略思想§3-7・システム仕様書§8-5）
-   業態テンプレート連動：smartphoneVisible: false の科目は科目選択リストから非表示
-   源泉徴収はPC版「月末経理機能」で月末に処理する（スマホには源泉徴収UIなし）
+   入力時統一ルール：全科目で総額（税込）入力
+   販管費タブは smartphoneVisible=true の科目のみ表示する（現場入力の簡潔化）
+   人件費は勤怠管理→PC出勤管理で算出・確定する（→ 02§5-9 / 03§5-2）
    ══════════════════════════════════════════════════════════════ */
 
 // ── state ─────────────────────────────────────────────
 let _smCostSelectedDivisionCode = '2';   // 初期値 = 販管費
 let _smCostSelectedItemCode     = null;
 let _smCostSelectedTaxRate      = null;
-// 諸口・買掛
 let _smCostUnpaid               = false;
-// A-2-X-1：スタッフプルダウン（給与系3科目: 20/21/25 選択時）
-let _smCostSelectedStaffId      = null;   // staffList内スタッフのID or '_free_' or null
-let _smCostFreeStaffName        = '';     // マスタ外フリー入力時の名前
-
-/** 給与系3科目コード */
-const PAYROLL_ITEM_CODES = ['20', '21', '25'];
 
 // ── モーダル起動 ───────────────────────
 /**
@@ -537,8 +529,6 @@ function _smCostResetState() {
   _smCostSelectedItemCode     = null;
   _smCostSelectedTaxRate      = null;
   _smCostUnpaid               = false;
-  _smCostSelectedStaffId      = null;
-  _smCostFreeStaffName        = '';
 }
 
 // ── モーダル HTML 生成 ───────────────────────────────
@@ -565,24 +555,6 @@ function _smCostBuildFormBodyHTML() {
       <section class="cost-sm-section">
         <label class="cost-sm-label">科目を選択</label>
         <div id="sm-cost-item-cards" class="cost-sm-cards"></div>
-      </section>
-
-      <!-- A-2-X-1：スタッフプルダウン（給与系3科目選択時のみ表示） -->
-      <section class="cost-sm-section" id="sm-cost-staff-section" hidden>
-        <label class="cost-sm-label">支払先スタッフ</label>
-        <select id="sm-cost-staff-select" class="cost-sm-memo"
-                style="width:100%;padding:10px 12px;font-size:16px;appearance:auto;-webkit-appearance:auto;cursor:pointer;">
-          <option value="" disabled selected>選択してください</option>
-        </select>
-        <!-- マスタ外フリー入力（「マスタ外」選択時のみ表示） -->
-        <div id="sm-cost-staff-free-wrap" hidden style="margin-top:8px;">
-          <input type="text"
-                 id="sm-cost-staff-free-name"
-                 class="cost-sm-memo"
-                 maxlength="40"
-                 autocomplete="off"
-                 placeholder="スタッフ名を入力">
-        </div>
       </section>
 
       <section class="cost-sm-section">
@@ -663,7 +635,6 @@ function _smCostInitFormInModal() {
   _smCostBindMemoInput();
   _smCostBindDateInput();
   _smCostBindUnpaidToggle();
-  _smCostBindStaffSelect();    // A-2-X-1
 
   // 4. 内消費税メモを初期表示（税率未選択なので 0円 表示）
   _smCostRecalcTaxMemo();
@@ -712,9 +683,6 @@ function _smCostSelectDivision(divisionCode) {
   document.querySelectorAll('.cost-sm-field-error').forEach(el => {
     el.classList.remove('cost-sm-field-error');
   });
-
-  // 9. A-2-X-1：スタッフセクションを非表示・状態リセット
-  _smCostHideStaffSection();
 }
 
 function _smCostRenderItemCards(divisionCode) {
@@ -772,9 +740,6 @@ function _smCostSelectItem(itemCode) {
   // 6. エラー枠解除
   const cardsContainer = document.getElementById('sm-cost-item-cards');
   if (cardsContainer) cardsContainer.classList.remove('cost-sm-field-error');
-
-  // 7. A-2-X-1：給与系3科目ならスタッフプルダウンを表示
-  _smCostUpdateStaffSection(selectedItem.code);
 }
 
 function _smCostSetTaxRate(taxRate) {
@@ -864,22 +829,6 @@ function _smCostValidate() {
     return { ok: false, errorTarget: cards, errorMsg: '科目を選択してください' };
   }
 
-  // マスタ未登録の受け皿のため、詳細はメモ運用で足りる。
-
-  // A-2-X-1：給与系3科目選択時はスタッフ選択必須
-  const items = getDivisionItems(_smCostSelectedDivisionCode, { filterBySmartphoneVisible: true });
-  const selectedItem = items.find(it => it.code === _smCostSelectedItemCode);
-  if (selectedItem && PAYROLL_ITEM_CODES.includes(selectedItem.code)) {
-    if (!_smCostSelectedStaffId) {
-      const staffSelect = document.getElementById('sm-cost-staff-select');
-      return { ok: false, errorTarget: staffSelect, errorMsg: 'スタッフを選択してください' };
-    }
-    if (_smCostSelectedStaffId === '_free_' && !_smCostFreeStaffName) {
-      const freeInput = document.getElementById('sm-cost-staff-free-name');
-      return { ok: false, errorTarget: freeInput, errorMsg: 'スタッフ名を入力してください' };
-    }
-  }
-
   if (_smCostSelectedTaxRate === null) {
     const chips = document.querySelector('.sm-taxrate-chips');
     return { ok: false, errorTarget: chips, errorMsg: '税率を選択してください' };
@@ -925,32 +874,13 @@ async function _smCostHandleSubmit() {
     return;
   }
 
-  // 3. 税額計算（3デバイス統合仕様§6-4）
+  // 3. 税額計算
   const { taxExcluded, tax } = calcTax(amountInTax, _smCostSelectedTaxRate);
 
   // 4. payload 組立（clientId は箱だけ用意・現フェーズでは空文字固定）
-  // 源泉徴収額はスマホ入力では扱わない（戦略思想§3-7・システム仕様書§8-5）
-  // 全科目で総額（税込）入力に統一・源泉徴収はPC版「月末経理機能」で月末に処理する
-  //
-  // A-2-X-1：給与系3科目（20/21/25）選択時はstaffId・staffNameを付与
-  //   - マスタ内スタッフ → staffId = 'sXXX', staffName = staffList から自動取得
-  //   - マスタ外フリー入力 → staffId = '', staffName = ユーザー入力値
-  //   - 給与系以外 → staffId / staffName は空文字（GAS側で無視）
-  let payloadStaffId   = '';
-  let payloadStaffName = '';
-  if (PAYROLL_ITEM_CODES.includes(selectedItem.code) && _smCostSelectedStaffId) {
-    if (_smCostSelectedStaffId === '_free_') {
-      payloadStaffId   = '';
-      payloadStaffName = _smCostFreeStaffName;
-    } else {
-      payloadStaffId   = _smCostSelectedStaffId;
-      // staffListから名前を引く
-      const staffList  = _smCostGetStaffList();
-      const staff      = staffList.find(s => s.id === _smCostSelectedStaffId);
-      payloadStaffName = staff ? staff.name : '';
-    }
-  }
-
+  //   全科目で総額（税込）入力に統一する。
+  //   人件費系科目（20/21/25）も科目選択して金額入力できるが、スタッフ紐付けは持たない。
+  //   人件費の算出・確定は勤怠管理→PC出勤管理で行う（→ 02§5-9 / 03§5-2）。
   const payload = {
     date:              dateVal,
     divisionCode:      _smCostSelectedDivisionCode,
@@ -964,9 +894,7 @@ async function _smCostHandleSubmit() {
     taxIncluded:       amountInTax,
     memo:              memoVal,
     unpaid:            unpaidVal,
-    staffId:           payloadStaffId,    // A-2-X-1
-    staffName:         payloadStaffName,  // A-2-X-1
-    clientId:          '',   // Phase A 管理ポータル実装時に実値を入れる・現時点は空
+    clientId:          '',   // 管理ポータル実装時に実値を入れる・現時点は空
   };
 
   // 5. GAS 送信
@@ -1052,142 +980,6 @@ function _smCostBindUnpaidToggle() {
     _smCostUnpaid = el.checked;
   });
 }
-
-// ── A-2-X-1：スタッフプルダウン関連 ───────────────────
-/**
- * localStorageからstaffListを取得する
- * @returns {Array} staffList配列（空配列はフォールバック）
- */
-function _smCostGetStaffList() {
-  try {
-    const raw = localStorage.getItem(STAFF_MASTER_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch (e) {
-    console.warn('[cost.js] staffList取得失敗:', e);
-  }
-  return [];
-}
-
-/**
- * 給与系3科目が選択されたときにスタッフプルダウンを構築・表示する
- * @param {string} itemCode 選択された科目コード
- */
-function _smCostUpdateStaffSection(itemCode) {
-  const section = document.getElementById('sm-cost-staff-section');
-  if (!section) return;
-
-  const isPayroll = PAYROLL_ITEM_CODES.includes(itemCode);
-
-  if (!isPayroll) {
-    _smCostHideStaffSection();
-    return;
-  }
-
-  // スタッフリストを取得してプルダウンを構築
-  const staffList = _smCostGetStaffList();
-  const select    = document.getElementById('sm-cost-staff-select');
-  if (!select) return;
-
-  // A-2-X-2で履歴順並び替え（localStorage）を実装予定。現段階はマスタ順
-  select.innerHTML = '<option value="" disabled selected>選択してください</option>';
-
-  staffList.forEach(staff => {
-    if (!staff.id || !staff.name) return;
-    const opt = document.createElement('option');
-    opt.value       = staff.id;
-    opt.textContent = staff.name;
-    select.appendChild(opt);
-  });
-
-  // セパレーター＋マスタ外
-  const sepOpt = document.createElement('option');
-  sepOpt.disabled    = true;
-  sepOpt.textContent = '──────────';
-  select.appendChild(sepOpt);
-
-  const freeOpt = document.createElement('option');
-  freeOpt.value       = '_free_';
-  freeOpt.textContent = '＋ マスタ外（フリー入力）';
-  select.appendChild(freeOpt);
-
-  // 前回選択をリセット
-  _smCostSelectedStaffId = null;
-  _smCostFreeStaffName   = '';
-  const freeWrap = document.getElementById('sm-cost-staff-free-wrap');
-  if (freeWrap) freeWrap.hidden = true;
-  const freeInput = document.getElementById('sm-cost-staff-free-name');
-  if (freeInput) freeInput.value = '';
-
-  // セクションを表示
-  section.hidden = false;
-}
-
-/**
- * スタッフセクションを非表示にして状態をリセットする
- */
-function _smCostHideStaffSection() {
-  const section = document.getElementById('sm-cost-staff-section');
-  if (section) section.hidden = true;
-
-  _smCostSelectedStaffId = null;
-  _smCostFreeStaffName   = '';
-
-  const freeWrap = document.getElementById('sm-cost-staff-free-wrap');
-  if (freeWrap) freeWrap.hidden = true;
-  const freeInput = document.getElementById('sm-cost-staff-free-name');
-  if (freeInput) freeInput.value = '';
-
-  // エラー枠解除
-  const select = document.getElementById('sm-cost-staff-select');
-  if (select) select.classList.remove('cost-sm-field-error');
-  if (freeWrap) {
-    const input = freeWrap.querySelector('input');
-    if (input) input.classList.remove('cost-sm-field-error');
-  }
-}
-
-/**
- * スタッフプルダウンのchangeイベントバインド
- */
-function _smCostBindStaffSelect() {
-  const select = document.getElementById('sm-cost-staff-select');
-  if (!select) return;
-
-  select.addEventListener('change', () => {
-    const val = select.value;
-    _smCostSelectedStaffId = val || null;
-
-    // エラー枠解除
-    select.classList.remove('cost-sm-field-error');
-
-    // マスタ外フリー入力の出し分け
-    const freeWrap  = document.getElementById('sm-cost-staff-free-wrap');
-    const freeInput = document.getElementById('sm-cost-staff-free-name');
-
-    if (val === '_free_') {
-      if (freeWrap) freeWrap.hidden = false;
-      if (freeInput) {
-        freeInput.value = '';
-        freeInput.focus();
-      }
-      _smCostFreeStaffName = '';
-    } else {
-      if (freeWrap) freeWrap.hidden = true;
-      if (freeInput) freeInput.value = '';
-      _smCostFreeStaffName = '';
-    }
-  });
-
-  // フリー入力のinputバインド
-  const freeInput = document.getElementById('sm-cost-staff-free-name');
-  if (freeInput) {
-    freeInput.addEventListener('input', () => {
-      _smCostFreeStaffName = freeInput.value.trim();
-      freeInput.classList.remove('cost-sm-field-error');
-    });
-  }
-}
-
 
 // ── グローバル露出 ───────────────
 // index.html からの onclick="openCostModal()" 呼び出しに対応するため window に露出
