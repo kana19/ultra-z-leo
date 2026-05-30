@@ -83,7 +83,7 @@
     (_costRows || []).forEach(r => {
       if (!PAYROLL_CODES.includes(String(r.itemCode || ''))) return;
       const misc = String(r.miscItemName || '');
-      const staffName = misc.replace(/^\[スポット\]/, '').replace(/^\[月次\]/, '').trim();
+      const staffName = misc.replace(/^\[月次\]/, '').trim();
       if (!staffName) return;
       const key = r.date + '|' + staffName;
       map[key] = (map[key] || 0) + (Number(r.amount) || 0);
@@ -173,8 +173,6 @@
       { key: 'adjustment', label: '調整額' },
       { key: 'adjustmentMemo', label: '' },
       { key: 'adjustedTotal', label: '調整後金額' },
-      { key: 'spotDays', label: '臨時案件' },
-      { key: 'spotAmount', label: '' },
       { key: 'whMode', label: '源泉徴収' },
       { key: 'whAmount', label: '' },
       { key: 'net', label: '差引金額' },
@@ -235,14 +233,6 @@
             html += `<td class="att-calc-cell att-calc-cell--gross">${_fmtYen(adjTotal)}</td>`;
             break;
           }
-          case 'spotDays': {
-            const spotCount = (st.spotCosts || []).length;
-            html += `<td class="att-calc-cell att-calc-cell--spot">${spotCount > 0 ? spotCount + '件' : ''}</td>`;
-            break;
-          }
-          case 'spotAmount':
-            html += `<td class="att-calc-cell att-calc-cell--spot">${st.spotTotal > 0 ? _fmtYen(st.spotTotal) : ''}</td>`;
-            break;
           case 'whMode':
             html += `<td class="att-calc-cell"><select class="att-inline-select" data-staff="${sid}" data-field="whMode">` +
               WH_OPTIONS.map(o => `<option value="${o.value}"${st.whMode === o.value ? ' selected' : ''}>${o.label}</option>`).join('') +
@@ -424,9 +414,6 @@
       const whAmount = prev.whAmount !== undefined ? prev.whAmount : _calcWithholdingAmount(whMode, adjustedTotal, days);
       const net = adjustedTotal - whAmount;
 
-      const spotCosts = _findSpotCosts(s.name);
-      const spotTotal = spotCosts.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
-
       const hasMonthly = _hasMonthlyConfirmed(s.name);
       const status = prev.status || (hasMonthly ? 'confirmed' : 'pending');
       if (hasMonthly) _confirmedStaffIds.add(s.id);
@@ -435,7 +422,7 @@
         payType, unitPrice, hours, days, gross, adjustment,
         adjustmentMemo: prev.adjustmentMemo || '',
         whMode, whAmount, net,
-        spotTotal, spotCosts, excludedProject, status
+        excludedProject, status
       };
     });
 
@@ -476,30 +463,6 @@
       `<div>差引支給額：${st.net.toLocaleString()}円</div>` +
       `<div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.1);font-size:11px;">コスト追記：<strong>${costItemName}（科目${costItemCode}）</strong></div>`;
 
-    const spotCosts = st.spotCosts || [];
-    const spotSection = document.getElementById('confirmSpotSection');
-    const choicesSection = document.getElementById('confirmChoices');
-
-    if (spotCosts.length > 0) {
-      const diff = adjTotal - st.spotTotal;
-      document.getElementById('confirmSpotList').innerHTML = spotCosts.map(r => {
-        const dateShort = (r.date || '').substring(5);
-        return `<div class="att-confirm-spot-row"><span class="att-confirm-spot-row__date">${_escHtml(dateShort)}</span><span class="att-confirm-spot-row__name">${_escHtml(String(r.itemName || r.itemCode || ''))}</span><span class="att-confirm-spot-row__amount">${(Number(r.amount) || 0).toLocaleString()}円</span></div>`;
-      }).join('');
-      document.getElementById('confirmSpotTotal').textContent = 'スポット合計：' + st.spotTotal.toLocaleString() + '円';
-      document.getElementById('confirmDiffDesc').textContent = diff > 0
-        ? '調整後' + adjTotal.toLocaleString() + '円 − スポット' + st.spotTotal.toLocaleString() + '円 ＝ 不足分 ' + diff.toLocaleString() + '円'
-        : 'スポット合計が調整後金額以上のため不足分0円';
-      const dm = diff > 0 ? 'diff' : 'skip';
-      const r = document.querySelector(`input[name="confirmMode"][value="${dm}"]`);
-      if (r) r.checked = true;
-      spotSection.style.display = '';
-      choicesSection.style.display = '';
-    } else {
-      spotSection.style.display = 'none';
-      choicesSection.style.display = 'none';
-    }
-
     document.getElementById('confirmDialog').style.display = '';
   }
 
@@ -531,22 +494,8 @@
       itemCode = '20'; itemName = '給料賃金';
     }
 
-    const spotCosts = st.spotCosts || [];
-    const hasSpot = spotCosts.length > 0;
-    const confirmMode = hasSpot
-      ? (document.querySelector('input[name="confirmMode"]:checked')?.value || 'full')
-      : 'full';
-
-    if (confirmMode === 'skip') { st.status = 'skipped'; return; }
-
-    let confirmAmount = (st.gross || 0) + (st.adjustment || 0);
-    let confirmWh = st.whAmount;
-
-    if (confirmMode === 'diff' && hasSpot) {
-      confirmAmount = Math.max(0, confirmAmount - st.spotTotal);
-      confirmWh = _calcWithholdingAmount(st.whMode, confirmAmount, st.days);
-    }
-    if (confirmAmount === 0 && confirmMode === 'diff') { st.status = 'skipped'; return; }
+    const confirmAmount = (st.gross || 0) + (st.adjustment || 0);
+    const confirmWh = st.whAmount;
 
     const [y, m] = _currentMonth.split('-').map(Number);
     const lastDay = new Date(y, m, 0).getDate();
@@ -583,12 +532,7 @@
       document.getElementById('confirmTitle').textContent = '一括給与確定';
       document.getElementById('confirmBody').innerHTML =
         `<div>対象：${names.join('、')}</div>` +
-        '<div style="margin-top:8px;">各スタッフの算出金額で一括確定します。</div>' +
-        '<div style="margin-top:4px;font-size:11px;color:var(--uz-text-muted);">スポット既計上ありは「不足分のみ確定」が適用されます。</div>';
-      document.getElementById('confirmSpotSection').style.display = 'none';
-      document.getElementById('confirmChoices').style.display = 'none';
-      const r = document.querySelector('input[name="confirmMode"][value="diff"]');
-      if (r) r.checked = true;
+        '<div style="margin-top:8px;">各スタッフの算出金額で一括確定します。</div>';
       document.getElementById('confirmDialog').style.display = '';
     });
   }
@@ -599,18 +543,6 @@
       _confirmTarget = null;
     });
     document.getElementById('confirmOk').addEventListener('click', _executeConfirm);
-  }
-
-  /* ---------- スポット検出 ---------- */
-  function _findSpotCosts(staffName) {
-    return (_costRows || []).filter(r => {
-      if (!PAYROLL_CODES.includes(String(r.itemCode || ''))) return false;
-      const misc = String(r.miscItemName || '');
-      if (!misc.startsWith('[スポット]')) return false;
-      if (misc.replace(/^\[スポット\]/, '').trim() !== staffName) return false;
-      if (String(r.projectId || r.linkedSalesRowId || '')) return false;
-      return true;
-    });
   }
 
   function _hasMonthlyConfirmed(staffName) {

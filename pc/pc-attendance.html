@@ -78,34 +78,6 @@
   <div class="att-confirm-dialog__inner att-confirm-dialog__inner--wide">
     <h3 id="confirmTitle">給与確定</h3>
     <div class="att-confirm-dialog__body" id="confirmBody"></div>
-    <div id="confirmSpotSection" style="display:none;">
-      <div class="att-confirm-spot-header">同月のスポットコスト（案件未紐付け）</div>
-      <div class="att-confirm-spot-list" id="confirmSpotList"></div>
-      <div class="att-confirm-spot-total" id="confirmSpotTotal"></div>
-    </div>
-    <div class="att-confirm-choices" id="confirmChoices" style="display:none;">
-      <label class="att-confirm-choice">
-        <input type="radio" name="confirmMode" value="diff" checked>
-        <div class="att-confirm-choice__body">
-          <div class="att-confirm-choice__title">不足分のみ確定</div>
-          <div class="att-confirm-choice__desc" id="confirmDiffDesc"></div>
-        </div>
-      </label>
-      <label class="att-confirm-choice">
-        <input type="radio" name="confirmMode" value="full">
-        <div class="att-confirm-choice__body">
-          <div class="att-confirm-choice__title">算出全額を別途確定</div>
-          <div class="att-confirm-choice__desc">スポットとは別件として月次一括を追記</div>
-        </div>
-      </label>
-      <label class="att-confirm-choice">
-        <input type="radio" name="confirmMode" value="skip">
-        <div class="att-confirm-choice__body">
-          <div class="att-confirm-choice__title">この月は確定しない</div>
-          <div class="att-confirm-choice__desc">既存スポットのみで給与済みとする</div>
-        </div>
-      </label>
-    </div>
     <div class="att-confirm-dialog__actions">
       <button class="att-confirm-dialog__cancel" id="confirmCancel">キャンセル</button>
       <button class="att-confirm-dialog__ok" id="confirmOk">確定</button>
