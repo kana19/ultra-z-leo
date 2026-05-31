@@ -886,34 +886,8 @@
   justify-content: center;
 }
 
-/* カラータイマードット（消灯=グレー縁のみ・点灯=内側色変化） */
-.hist-timer-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  border: 2px solid var(--uz-silver);
-  background: transparent;
-  display: block;
-}
-.hist-timer-dot--blue  {
-  background: #4A90D9;
-  border-color: #4A90D9;
-  box-shadow: 0 0 0 2px rgba(74,144,217,0.2);
-}
-.hist-timer-dot--red   {
-  background: var(--uz-danger);
-  border-color: var(--uz-danger);
-  box-shadow: 0 0 0 2px rgba(192,57,43,0.2);
-}
-.hist-timer-dot--blink {
-  background: var(--uz-danger);
-  border-color: var(--uz-danger);
-  animation: hist-dot-blink 0.8s ease-in-out infinite;
-}
-@keyframes hist-dot-blink {
-  0%, 100% { opacity: 1; box-shadow: 0 0 0 2px rgba(192,57,43,0.3); }
-  50%       { opacity: 0.15; box-shadow: 0 0 0 2px rgba(192,57,43,0); }
-}
+/* カラータイマーは base.css の .uz-timer-dot に統合（SSOT・§5-4） */
+
 .hist-date-header {
   padding: 8px 14px 4px;
   font-size: 12px;

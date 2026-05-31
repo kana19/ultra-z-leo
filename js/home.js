@@ -43,20 +43,7 @@ function renderHeaderDate() {
 
 /* ── カラータイマー状態判定 ──────────────────────────────── */
 function _getTimerState(hasItem) {
-  if (!hasItem) return null;
-  const now  = new Date();
-  const last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-  let bizDays = 0;
-  const cur = new Date(now); cur.setHours(0,0,0,0);
-  const end = new Date(last); end.setHours(0,0,0,0);
-  while (cur <= end) {
-    const dow = cur.getDay();
-    if (dow !== 0 && dow !== 6) bizDays++;
-    cur.setDate(cur.getDate() + 1);
-  }
-  if (bizDays <= 1) return 'blink';
-  if (bizDays <= 3) return 'red';
-  return 'blue';
+  return window.uzTimer.stateAR(hasItem);
 }
 
 /* カラータイマークラスをドット要素に付与する
@@ -64,11 +51,7 @@ function _getTimerState(hasItem) {
    消灯時（state=null）はクラスなし=ダークグレー縁のみ。
    history.js buildTimerDotHTML と同じ表現を採用。 */
 function _applyTimerClass(dotEl, state) {
-  if (!dotEl) return;
-  dotEl.classList.remove('home-timer-dot--blue','home-timer-dot--red','home-timer-dot--blink');
-  if (state === 'blue')  dotEl.classList.add('home-timer-dot--blue');
-  if (state === 'red')   dotEl.classList.add('home-timer-dot--red');
-  if (state === 'blink') dotEl.classList.add('home-timer-dot--blink');
+  window.uzTimer.apply(dotEl, state);
 }
 
 /* ── アラートドット描画（補助） ─────────────────────────── */
@@ -133,6 +116,7 @@ function renderStaffList() {
             <div class="staff-name">${escapeHtml(s.name)}</div>
             <div class="staff-time">${ci}</div>
           </div>
+          ${window.uzTimer.dotHTML(window.uzTimer.stateWork(window.uzTimer.workedMin(todayStr(), s.clockIn, new Date()), false), 'home')}
           <span class="staff-status staff-status--active">${escapeHtml(labels.clockin_active)}</span>
           <button class="staff-clockout-btn" type="button" onclick="handleClockOut(${s.id})">${escapeHtml(labels.clockout_label || '退勤')}</button>
         </div>`;
@@ -145,6 +129,7 @@ function renderStaffList() {
             <div class="staff-name" style="color:var(--uz-muted)">${escapeHtml(s.name)}</div>
             <div class="staff-time">${ci} → ${co}</div>
           </div>
+          ${window.uzTimer.dotHTML('gray', 'home')}
         </div>`;
     }
   }).join('');

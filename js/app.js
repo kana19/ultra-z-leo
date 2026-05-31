@@ -122,7 +122,8 @@ function uzRenderSidebar() {
   nav.innerHTML =
     '<div class="nav-sidebar__brand">' +
       '<div class="nav-sidebar__logo" data-uz-brand data-uz-icon-base="icons/" data-uz-fallback="ウルトラZAIMUくん"></div>' +
-      '<span id="sidebar-timer-dot" class="sidebar-timer-dot" aria-hidden="true" title="売掛・買掛のお知らせ"></span>' +
+      '<span id="sidebar-timer-dot" class="uz-timer-dot uz-timer-dot--sidebar" aria-hidden="true" title="売掛・買掛のお知らせ">' +
+        '<span class="uz-timer-dot__core"></span></span>' +
     '</div>' +
     itemsHtml;
 
@@ -600,6 +601,78 @@ document.addEventListener('DOMContentLoaded', uzRenderAllBrands);
 // settings 同期で storeName が確定したら再描画（テキストフォールバック更新）。
 document.addEventListener('uz:settings-synced', uzRenderAllBrands);
 
+/* ════════════════════════════════════════════════════════════
+   カラータイマー SSOT（状態判定1・マークアップ1・02_画面仕様.md §5-4）
+   home / sidebar / history（取引・勤怠）が共通利用する単一系統。
+   外枠は不変、状態は核(__core)のみに与える。
+   ════════════════════════════════════════════════════════════ */
+window.uzTimer = (function () {
+  /* 当月末までの営業日数（土日除外・祝日は考慮しない） */
+  function bizDaysToMonthEnd(now) {
+    const last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    let n = 0;
+    const cur = new Date(now); cur.setHours(0,0,0,0);
+    const end = new Date(last); end.setHours(0,0,0,0);
+    while (cur <= end) {
+      const dow = cur.getDay();
+      if (dow !== 0 && dow !== 6) n++;
+      cur.setDate(cur.getDate() + 1);
+    }
+    return n;
+  }
+  /* 売掛・買掛の状態：消灯(null)/青/赤/赤点滅 */
+  function stateAR(hasItem, now) {
+    if (!hasItem) return null;
+    const b = bizDaysToMonthEnd(now || new Date());
+    if (b <= 1) return 'blink';
+    if (b <= 3) return 'red';
+    return 'blue';
+  }
+  /* 勤怠（稼働時間）の状態：退勤済=グレー／勤務中<7h=青／7h=赤／7h57m〜=赤点滅 */
+  function stateWork(workedMin, hasClockOut) {
+    if (hasClockOut) return 'gray';
+    if (workedMin == null) return 'blue';   // 勤務中だが算出不可→点灯
+    if (workedMin >= 477) return 'blink';    // 7時間57分（8時間の3分前）以降
+    if (workedMin >= 420) return 'red';      // 7時間到達
+    return 'blue';                           // 7時間未満
+  }
+  /* 日付(YYYY-MM-DD)＋出勤時刻(HH:MM)から現在までの稼働分（翌日跨ぎ簡易補正） */
+  function workedMin(dateStr, clockInStr, now) {
+    if (!dateStr || !clockInStr) return null;
+    const m = String(clockInStr).match(/(\d{1,2}):(\d{2})/);
+    if (!m) return null;
+    const parts = String(dateStr).split(/[-\/]/).map(Number);
+    const [y, mo, d] = parts;
+    if (!y || !mo || !d) return null;
+    const ci = new Date(y, mo - 1, d, Number(m[1]), Number(m[2]), 0, 0);
+    let diff = Math.floor(((now || new Date()) - ci) / 60000);
+    if (diff < 0) diff += 24 * 60;
+    return diff;
+  }
+  function coreCls(state) { return state ? ' uz-timer-dot__core--' + state : ''; }
+  /* マークアップ生成（外枠＋核）。size: 'home'|'hist'|'sidebar' */
+  function dotHTML(state, size) {
+    return '<span class="uz-timer-dot uz-timer-dot--' + (size || 'hist') + '" aria-hidden="true">' +
+             '<span class="uz-timer-dot__core' + coreCls(state) + '"></span></span>';
+  }
+  /* 既存の外枠要素に核を確保し状態クラスを付け替える */
+  function apply(outerEl, state) {
+    if (!outerEl) return;
+    let core = outerEl.querySelector('.uz-timer-dot__core');
+    if (!core) {
+      core = document.createElement('span');
+      core.className = 'uz-timer-dot__core';
+      outerEl.appendChild(core);
+    }
+    core.classList.remove(
+      'uz-timer-dot__core--blue','uz-timer-dot__core--red',
+      'uz-timer-dot__core--blink','uz-timer-dot__core--gray'
+    );
+    if (state) core.classList.add('uz-timer-dot__core--' + state);
+  }
+  return { bizDaysToMonthEnd, stateAR, stateWork, workedMin, dotHTML, apply };
+})();
+
 /* ── サイドバー カラータイマー（全画面共通・ウルトラマンの胸のシンボル） ──
    店名の真下中央に1個表示。売掛・買掛の最緊急状態を代表表示する（お知らせ機能・リンクなし）。
    状態：①該当0件=消灯（シルバー縁のみ）／②売掛 or 買掛 1件以上=青／
@@ -607,31 +680,14 @@ document.addEventListener('uz:settings-synced', uzRenderAllBrands);
    集約ロジック：売掛・買掛いずれかが④なら④、いずれかが③なら③、いずれか残件あれば②、全0なら①。
    月末営業日は土日のみ除外（祝日は考慮しない・home.js _getTimerState と同一）。 */
 function uzTimerStateFromBizDays() {
-  const now  = new Date();
-  const last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-  let bizDays = 0;
-  const cur = new Date(now); cur.setHours(0,0,0,0);
-  const end = new Date(last); end.setHours(0,0,0,0);
-  while (cur <= end) {
-    const dow = cur.getDay();
-    if (dow !== 0 && dow !== 6) bizDays++;
-    cur.setDate(cur.getDate() + 1);
-  }
-  if (bizDays <= 1) return 'blink';
-  if (bizDays <= 3) return 'red';
-  return 'blue';
+  return window.uzTimer.stateAR(true);
 }
 
 function uzApplySidebarTimer(hasUncollected, hasPayable) {
   const dot = document.getElementById('sidebar-timer-dot');
   if (!dot) return;
-  dot.classList.remove('sidebar-timer-dot--blue','sidebar-timer-dot--red','sidebar-timer-dot--blink');
-  if (!hasUncollected && !hasPayable) return; // 消灯（シルバー縁のみ）
-  // 売掛・買掛のいずれか1件でもあれば、月末営業日に基づく最緊急状態を1個に表示
-  const state = uzTimerStateFromBizDays();
-  if (state === 'blue')  dot.classList.add('sidebar-timer-dot--blue');
-  if (state === 'red')   dot.classList.add('sidebar-timer-dot--red');
-  if (state === 'blink') dot.classList.add('sidebar-timer-dot--blink');
+  // 売掛・買掛のいずれか1件でもあれば月末営業日に基づく最緊急状態、0件なら消灯。
+  window.uzTimer.apply(dot, window.uzTimer.stateAR(hasUncollected || hasPayable));
 }
 
 async function uzLoadSidebarTimer() {

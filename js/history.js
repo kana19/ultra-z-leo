@@ -651,22 +651,8 @@ function buildTimerDotHTML(item) {
   /* 売掛・買掛なし → 固定幅の空スペース（列揃え維持） */
   if (!hasFlag) return `<span class="hist-row__timer"></span>`;
 
-  const now  = new Date();
-  const last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-  let bizDays = 0;
-  const cur = new Date(now); cur.setHours(0,0,0,0);
-  const end = new Date(last); end.setHours(0,0,0,0);
-  while (cur <= end) {
-    const dow = cur.getDay();
-    if (dow !== 0 && dow !== 6) bizDays++;
-    cur.setDate(cur.getDate() + 1);
-  }
-
-  let cls = 'hist-timer-dot--blue';
-  if (bizDays <= 1) cls = 'hist-timer-dot--blink';
-  else if (bizDays <= 3) cls = 'hist-timer-dot--red';
-
-  return `<span class="hist-row__timer"><span class="hist-timer-dot ${cls}"></span></span>`;
+  const state = window.uzTimer.stateAR(true);
+  return `<span class="hist-row__timer">${window.uzTimer.dotHTML(state, 'hist')}</span>`;
 }
 
 /* ── 売上・コスト行HTML（行型・列順：科目名→金額→ドット→編集） */
@@ -737,9 +723,9 @@ function renderAttendance(items) {
       }
 
       const isActive = !clockOut;
-      const statusBadge = isActive
-        ? `<span style="color:var(--uz-green);font-size:12px;">${escHtml(labels.clockin_active)}</span>`
-        : `<span style="font-size:12px;color:var(--uz-muted);">${escHtml(labels.clockout_done)}</span>`;
+      // 状態列は稼働時間カラータイマー（§5-4）：退勤済=グレー核／勤務中<7h=青／7h=赤／7h57m〜=赤点滅
+      const _wmin = window.uzTimer.workedMin(r.date, r.clockIn, new Date());
+      const statusBadge = window.uzTimer.dotHTML(window.uzTimer.stateWork(_wmin, !isActive), 'hist');
 
       html += `<tr class="ipad-hist-row" data-idx="${atIdx}" data-scope="at">
         <td style="white-space:nowrap;">${md}</td>
@@ -852,10 +838,12 @@ function renderAttendance(items) {
           }
         }
 
-        // 「勤務時間」または「状態バッジ」を5番目のカラムに配置（どちらか片方のみ）
-        const durOrState = clockOut
+        // 状態列：稼働時間カラータイマー（§5-4）＋ 勤務時間/状態テキスト
+        const _wmin = window.uzTimer.workedMin(r.date, r.clockIn, now);
+        const workDot = window.uzTimer.dotHTML(window.uzTimer.stateWork(_wmin, !!clockOut), 'hist');
+        const durOrState = workDot + (clockOut
           ? `<span class="hist-attend-dur">${durLabel}</span>`
-          : stateBadge;
+          : stateBadge);
 
         // Grid 6カラム行：スタッフ名 | 出勤時刻 | → | 退勤時刻 | 勤務時間or状態 | 編集
         html += `

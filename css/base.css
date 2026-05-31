@@ -522,43 +522,50 @@ body.is-ipad .home-sticky-top {
   outline: none;
 }
 
-/* ── ホーム画面カラータイマードット（history.css準拠） ────── */
-/* 売上・経費ボタン右上に表示する円形ドット
-   ①消灯：ダークグレー縁のみ・中身透明（売掛/買掛なし）
-   ②発生：青塗り（売掛/買掛あり・残営業日4以上）
-   ③接近：赤塗り（残営業日1〜3）
-   ④直前：赤点滅（残営業日1以下） */
-.home-timer-dot {
-  width: 10px;
-  height: 10px;
+/* ── カラータイマー（SSOT・02_画面仕様.md §5-4） ──────────────
+   外枠＝ダークグレー(--uz-silver)で固定・状態によらず不変・点滅しない。
+   核(__core)＝状態色。点滅は核のみ。消灯時は核を透明にし縁のみ残す。
+   設置箇所差はサイズ修飾(--home/--hist/--sidebar)のみ。
+   状態：売掛買掛=消灯/青/赤/赤点滅、勤怠稼働=グレー/青/赤/赤点滅。 */
+.uz-timer-dot {
+  display: inline-block;
   border-radius: 50%;
   border: 2px solid var(--uz-silver);
   background: transparent;
+  flex-shrink: 0;
+  line-height: 0;
+  vertical-align: middle;
+}
+.uz-timer-dot__core {
   display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: transparent;   /* 消灯：縁のみ */
 }
-.home-timer-dot--blue {
+.uz-timer-dot__core--blue {
   background: var(--uz-timer-blue);
-  border-color: var(--uz-timer-blue);
-  box-shadow: 0 0 0 2px rgba(74,144,217,0.2);
+  box-shadow: 0 0 0 2px rgba(74,144,217,0.22);
 }
-.home-timer-dot--red {
+.uz-timer-dot__core--red {
   background: var(--uz-timer-red);
-  border-color: var(--uz-timer-red);
   box-shadow: 0 0 0 2px var(--uz-timer-red-glow);
 }
-.home-timer-dot--blink {
+.uz-timer-dot__core--gray {
+  background: var(--uz-silver);
+}
+.uz-timer-dot__core--blink {
   background: var(--uz-timer-red);
-  border-color: var(--uz-timer-red);
-  animation: home-dot-blink 0.8s ease-in-out infinite;
+  animation: uz-timer-core-blink 0.8s ease-in-out infinite;
 }
-@keyframes home-dot-blink {
-  0%, 100% { opacity: 1;    box-shadow: 0 0 0 2px rgba(192,57,43,0.3); }
-  50%      { opacity: 0.15; box-shadow: 0 0 0 2px rgba(192,57,43,0); }
+@keyframes uz-timer-core-blink {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.15; }
 }
-@keyframes sidebar-dot-blink {
-  0%, 100% { opacity: 1;    box-shadow: 0 0 0 3px rgba(192,57,43,0.32); }
-  50%      { opacity: 0.15; box-shadow: 0 0 0 3px rgba(192,57,43,0); }
-}
+/* 設置箇所別サイズ（差はサイズのみ） */
+.uz-timer-dot--home    { width: 10px; height: 10px; }
+.uz-timer-dot--hist    { width: 10px; height: 10px; }
+.uz-timer-dot--sidebar { width: 16px; height: 16px; border-width: 2.5px; }
 
 .action-btn__main-label {
   font-size: 26px;
@@ -895,32 +902,6 @@ body.is-ipad {
   .nav-sidebar__logo .uz-brand-logo {
     height: 40px;
     max-width: 168px;
-  }
-  /* サイドバー カラータイマー（ウルトラマンの胸のシンボル・店名の真下中央）
-     スマホ/履歴の home-timer-dot(10px) より少し大きめ（16px）。消灯時はシルバー縁のみ。 */
-  .sidebar-timer-dot {
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
-    border: 2.5px solid var(--uz-silver);
-    background: var(--uz-surface2);
-    display: block;
-    flex-shrink: 0;
-  }
-  .sidebar-timer-dot--blue {
-    background: var(--uz-timer-blue);
-    border-color: var(--uz-timer-blue);
-    box-shadow: 0 0 0 3px rgba(74,144,217,0.22);
-  }
-  .sidebar-timer-dot--red {
-    background: var(--uz-timer-red);
-    border-color: var(--uz-timer-red);
-    box-shadow: 0 0 0 3px rgba(192,57,43,0.22);
-  }
-  .sidebar-timer-dot--blink {
-    background: var(--uz-timer-red);
-    border-color: var(--uz-timer-red);
-    animation: sidebar-dot-blink 0.8s ease-in-out infinite;
   }
   /* サイドバー日時（カラータイマー直下・中央寄せ・リアルタイム） */
   .sidebar-datetime {
