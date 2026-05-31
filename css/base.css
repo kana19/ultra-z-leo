@@ -48,7 +48,7 @@
   --uz-info-bg:    rgba(0,0,0,0.04);
 
   /* アラートドット縁 */
-  --uz-silver:   #5A5A5A;
+  --uz-silver:   #A0A0A0;
 
   /* ── カラータイマー専用色（モノトーン例外・ウルトラマン胸の装飾／00_原則.md §5-9） ── */
   /* 売掛・買掛のお知らせドットのみ状態色を使用する。UI一般には使わない。 */
@@ -523,7 +523,7 @@ body.is-ipad .home-sticky-top {
 }
 
 /* ── カラータイマー（SSOT・02_画面仕様.md §5-4） ──────────────
-   外枠＝ダークグレー(--uz-silver)で固定・状態によらず不変・点滅しない。
+   外枠＝シルバーグレー(--uz-silver)で固定・状態によらず不変・点滅しない。
    核(__core)＝状態色。点滅は核のみ。消灯時は核を透明にし縁のみ残す。
    設置箇所差はサイズ修飾(--home/--hist/--sidebar)のみ。
    状態：売掛買掛=消灯/青/赤/赤点滅、勤怠稼働=グレー/青/赤/赤点滅。 */
@@ -558,7 +558,7 @@ body.is-ipad .home-sticky-top {
   background: var(--uz-timer-red);
   animation: uz-timer-core-blink 0.8s ease-in-out infinite;
 }
-@keyframes uz-timer-core-blink {     /* 赤 ⇄ グレー(--uz-silver) の交互点滅 */
+@keyframes uz-timer-core-blink {     /* 赤 ⇄ シルバーグレー(--uz-silver) の交互点滅 */
   0%, 100% { background-color: var(--uz-timer-red); }
   50%      { background-color: var(--uz-silver); }
 }
@@ -1208,11 +1208,18 @@ body.is-ipad .ipad-hist-flat-table td:nth-child(-n+4) {
 }
 body.is-ipad .ipad-hist-flat-table td.ipad-td-date,
 body.is-ipad .ipad-hist-flat-table td.ipad-td-div,
+body.is-ipad .ipad-hist-flat-table td.ipad-td-staff,
+body.is-ipad .ipad-hist-flat-table td.ipad-td-times,
+body.is-ipad .ipad-hist-flat-table td.ipad-td-dur,
 body.is-ipad .ipad-hist-flat-table td.ipad-td-r,
 body.is-ipad .ipad-hist-flat-table td.ipad-td-timer,
 body.is-ipad .ipad-hist-flat-table td.ipad-td-edit {
   width: 1%;
   white-space: nowrap;
+}
+body.is-ipad .ipad-hist-flat-table td.ipad-td-dur {
+  font-size: 12px;
+  color: var(--uz-muted);
 }
 body.is-ipad .ipad-hist-flat-table td.ipad-td-r     { text-align: right; }
 body.is-ipad .ipad-hist-flat-table td.ipad-td-timer { text-align: center; }

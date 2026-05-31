@@ -107,6 +107,10 @@ document.addEventListener('DOMContentLoaded', () => {
   bindListClicks();
   bindFilterBtns();
   document.getElementById('ci-open-btn')?.addEventListener('click', openCIModal);
+  document.getElementById('attend-staff-filter')?.addEventListener('change', (e) => {
+    _attendStaffFilter = e.target.value;
+    _renderAttendanceFiltered();
+  });
 
   // iPad：右カラムに sales.js / cost.js のフォームを注入して入力正本を流用する（MD §6-3-B）。
   // 各フォーム submit 後フック（_loadIpadSalesData / _loadIpadCostData）を history の
@@ -143,8 +147,10 @@ function switchTab(tab) {
   // A-9：上段固定エリア内のフィルタバー/新規登録ボタンをタブ連動で表示切替
   const filterBar  = document.getElementById('fixed-filter-bar');
   const ciBtnWrap  = document.getElementById('fixed-ci-open-btn-wrap');
-  if (filterBar)  filterBar.hidden  = (tab !== 'salescost');
-  if (ciBtnWrap)  ciBtnWrap.hidden  = (tab !== 'attendance');
+  const attendFilter = document.getElementById('fixed-attend-filter');
+  if (filterBar)    filterBar.hidden    = (tab !== 'salescost');
+  if (ciBtnWrap)    ciBtnWrap.hidden    = (tab !== 'attendance');
+  if (attendFilter) attendFilter.hidden = (tab !== 'attendance');
   // サイドバー（iPad）：history.html は常に月次管理をアクティブ（勤怠は同画面の勤怠タブ）
   _syncSidebarActive(tab);
   // iPad：右カラムを当該タブの既定入力に戻す（行選択前の状態）
@@ -692,12 +698,40 @@ function buildSalesCostItemHTML(item, idx) {
    タブ2：入店履歴描画
    ══════════════════════════════════════════════════════════ */
 
+let _allAttendRecs    = [];   // 当月の勤怠レコード全件（絞り込み前）
+let _attendStaffFilter = 'all'; // スタッフ別プルダウンの選択値
+
+/* スタッフ別プルダウンの選択肢を当月データから生成 */
+function _populateAttendStaffOptions(recs) {
+  const sel = document.getElementById('attend-staff-filter');
+  if (!sel) return;
+  const names = [...new Set(recs.map(r => r.staffName || '不明'))]
+    .sort((a, b) => a.localeCompare(b, 'ja'));
+  if (_attendStaffFilter !== 'all' && !names.includes(_attendStaffFilter)) {
+    _attendStaffFilter = 'all';
+  }
+  sel.innerHTML = '<option value="all">全スタッフ</option>'
+    + names.map(n => `<option value="${escHtml(n)}">${escHtml(n)}</option>`).join('');
+  sel.value = _attendStaffFilter;
+}
+
 function renderAttendance(items) {
+  _allAttendRecs = items || [];
+  _populateAttendStaffOptions(_allAttendRecs);
+  _renderAttendanceFiltered();
+}
+
+function _renderAttendanceFiltered() {
   const container = document.getElementById('attendance-list');
   if (!container) return;
   attendItems = [];
 
   const labels = deriveUILabels();
+
+  // スタッフ別絞り込み（全スタッフ＝絞り込みなし）
+  const items = (_attendStaffFilter === 'all')
+    ? _allAttendRecs
+    : _allAttendRecs.filter(r => (r.staffName || '不明') === _attendStaffFilter);
 
   if (items.length === 0) {
     container.innerHTML = `
@@ -713,7 +747,7 @@ function renderAttendance(items) {
 
     let html = `<table class="ipad-hist-flat-table">
       <thead><tr>
-        <th>日付</th><th>スタッフ</th><th>${escHtml(labels.clockin_time)}</th><th>${escHtml(labels.clockout_time)}</th><th>勤務時間</th><th>状態</th><th></th>
+        <th>出勤</th><th>スタッフ</th><th>出退勤</th><th>勤務時間</th><th></th><th></th>
       </tr></thead><tbody>`;
 
     allRecs.forEach(r => {
@@ -733,18 +767,17 @@ function renderAttendance(items) {
       }
 
       const isActive = !clockOut;
-      // 状態列は稼働時間カラータイマー（§5-4）：退勤済=グレー核／勤務中<7h=青／7h=赤／7h57m〜=赤点滅
+      // タイマー列は稼働時間カラータイマー（§5-4）：退勤済=枠のみ／勤務中<7h=青／7h=赤／7h57m〜=赤点滅
       const _wmin = window.uzTimer.workedMin(r.date, r.clockIn, new Date());
       const statusBadge = window.uzTimer.dotHTML(window.uzTimer.stateWork(_wmin, !isActive), 'hist');
 
       html += `<tr class="ipad-hist-row" data-idx="${atIdx}" data-scope="at">
-        <td style="white-space:nowrap;">${md}</td>
-        <td>${escHtml((r.staffName || '不明').substring(0, 8))}</td>
-        <td>${escHtml(clockIn)}</td>
-        <td>${clockOut ? escHtml(clockOut) : '—'}</td>
-        <td style="font-size:12px;color:var(--uz-muted);">${durLabel}</td>
-        <td>${statusBadge}</td>
-        <td style="text-align:center;white-space:nowrap;">
+        <td class="ipad-td-date">${md}</td>
+        <td class="ipad-td-staff">${escHtml((r.staffName || '不明').substring(0, 8))}</td>
+        <td class="ipad-td-times">${escHtml(clockIn)} → ${clockOut ? escHtml(clockOut) : '—'}</td>
+        <td class="ipad-td-dur">${durLabel}</td>
+        <td class="ipad-td-timer">${statusBadge}</td>
+        <td class="ipad-td-edit">
           <button class="hist-edit-btn" type="button" data-idx="${atIdx}" data-scope="at">編集</button>
         </td>
       </tr>`;
@@ -857,7 +890,7 @@ function renderAttendance(items) {
         // Grid 6カラム行：スタッフ名 | 出勤時刻 | → | 退勤時刻 | 勤務時間or状態 | 編集
         html += `
           <div class="hist-attend-row">
-            <div class="hist-attend-name">${escHtml(sname)}</div>
+            <div class="hist-attend-name">${escHtml(sname.length > 8 ? sname.substring(0, 8) + '…' : sname)}</div>
             <span class="hist-attend-time-in">${timeInStr}</span>
             <span class="hist-attend-arrow">→</span>
             <span class="${timeOutClass}">${timeOutStr}</span>

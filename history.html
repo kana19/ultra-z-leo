@@ -638,6 +638,14 @@
           <span id="hist-filter-total" class="hist-filter-total" style="display:none;"></span>
         </div>
 
+        <!-- スタッフ別絞り込み（勤怠タブ時のみ表示） -->
+        <div id="fixed-attend-filter" class="hist-attend-filter" hidden>
+          <label class="hist-attend-filter__label" for="attend-staff-filter">スタッフ</label>
+          <select id="attend-staff-filter" class="hist-attend-filter__select">
+            <option value="all">全スタッフ</option>
+          </select>
+        </div>
+
         <!-- 新規登録ボタン（出勤履歴タブ時のみ表示） -->
         <div id="fixed-ci-open-btn-wrap" class="ci-open-btn-wrap" hidden>
           <button id="ci-open-btn" type="button" class="ci-open-btn">
@@ -708,18 +716,17 @@
 
 <!-- ボトムナビゲーション（スマホ用） -->
 <nav class="bottom-nav" aria-label="メインナビゲーション">
+
   <a href="index.html" class="nav-item">
     <i class="ti ti-planet nav-item__icon" aria-hidden="true"></i>
     <span class="nav-item__label">ホーム</span>
   </a>
-  <a href="pl.html" class="nav-item">
-    <i class="ti ti-chart-bar nav-item__icon" aria-hidden="true"></i>
-    <span class="nav-item__label">損益</span>
-  </a>
+
   <a href="history.html" class="nav-item nav-item--active" aria-current="page">
-    <i class="ti ti-history nav-item__icon" aria-hidden="true"></i>
-    <span class="nav-item__label">履歴・修正</span>
+    <i class="ti ti-moon nav-item__icon" aria-hidden="true"></i>
+    <span class="nav-item__label">月次管理</span>
   </a>
+
   <a href="settings.html" class="nav-item">
     <i class="ti ti-settings nav-item__icon" aria-hidden="true"></i>
     <span class="nav-item__label">設定</span>
