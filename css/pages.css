@@ -766,23 +766,20 @@
 }
 
 /* ── フィルターバー ──────────────────────────────────────── */
-/* 勤怠タブ スタッフ別絞り込み（プルダウン） */
-.hist-attend-filter {
+/* 勤怠タブ 二段目：スタッフ別絞り込み＋新規登録を並列。
+   高さは取引タブの .hist-filter-bar（ピル30px）と統一する。 */
+.hist-attend-bar {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 14px;
+  padding: 0 14px 8px;
 }
-.hist-attend-filter__label {
-  font-size: 12px;
-  color: var(--uz-text3);
-  flex-shrink: 0;
-}
-.hist-attend-filter__select {
+.hist-attend-bar .hist-attend-filter__select {
   flex: 1;
-  max-width: 220px;
-  padding: 7px 10px;
-  font-size: 14px;
+  min-width: 0;
+  height: 30px;
+  padding: 0 10px;
+  font-size: 13px;
   font-family: var(--font-main);
   color: var(--uz-text);
   background: var(--uz-bg);
@@ -790,6 +787,14 @@
   border-radius: 8px;
   -webkit-appearance: none;
   appearance: none;
+}
+.hist-attend-bar .ci-open-btn {
+  flex-shrink: 0;
+  width: auto;
+  height: 30px;
+  padding: 0 16px;
+  display: inline-flex;
+  align-items: center;
 }
 
 .hist-filter-bar {

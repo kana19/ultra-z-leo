@@ -146,11 +146,9 @@ function switchTab(tab) {
   });
   // A-9：上段固定エリア内のフィルタバー/新規登録ボタンをタブ連動で表示切替
   const filterBar  = document.getElementById('fixed-filter-bar');
-  const ciBtnWrap  = document.getElementById('fixed-ci-open-btn-wrap');
-  const attendFilter = document.getElementById('fixed-attend-filter');
-  if (filterBar)    filterBar.hidden    = (tab !== 'salescost');
-  if (ciBtnWrap)    ciBtnWrap.hidden    = (tab !== 'attendance');
-  if (attendFilter) attendFilter.hidden = (tab !== 'attendance');
+  const attendBar  = document.getElementById('fixed-attend-bar');
+  if (filterBar) filterBar.hidden = (tab !== 'salescost');
+  if (attendBar) attendBar.hidden = (tab !== 'attendance');
   // サイドバー（iPad）：history.html は常に月次管理をアクティブ（勤怠は同画面の勤怠タブ）
   _syncSidebarActive(tab);
   // iPad：右カラムを当該タブの既定入力に戻す（行選択前の状態）

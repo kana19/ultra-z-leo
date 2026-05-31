@@ -103,7 +103,7 @@
        pages.css 等で .hist-filter-bar に display:flex が指定されている可能性に備え、
        ID + !important で詳細度を最大化する */
     #fixed-filter-bar[hidden],
-    #fixed-ci-open-btn-wrap[hidden] {
+    #fixed-attend-bar[hidden] {
       display: none !important;
     }
 
@@ -566,8 +566,8 @@
       overflow: visible;
     }
     body.is-ipad .ipad-right-panel.hist-right--input #hist-input-host { padding: 0; }
-    /* 新規登録ボタン（上段固定）は iPad では右カラムに登録フォームがあるため隠す */
-    body.is-ipad #fixed-ci-open-btn-wrap { display: none !important; }
+    /* 新規登録ボタンは iPad では右カラムに登録フォームがあるため隠す（スタッフ絞り込みプルダウンは残す） */
+    body.is-ipad #fixed-attend-bar .ci-open-btn { display: none !important; }
   </style>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.9.0/dist/tabler-icons.min.css">
 </head>
@@ -638,16 +638,11 @@
           <span id="hist-filter-total" class="hist-filter-total" style="display:none;"></span>
         </div>
 
-        <!-- スタッフ別絞り込み（勤怠タブ時のみ表示） -->
-        <div id="fixed-attend-filter" class="hist-attend-filter" hidden>
-          <label class="hist-attend-filter__label" for="attend-staff-filter">スタッフ</label>
-          <select id="attend-staff-filter" class="hist-attend-filter__select">
+        <!-- 勤怠タブ：スタッフ絞り込み＋新規登録を並列（勤怠タブ時のみ表示・二段目） -->
+        <div id="fixed-attend-bar" class="hist-attend-bar" hidden>
+          <select id="attend-staff-filter" class="hist-attend-filter__select" aria-label="スタッフ絞り込み">
             <option value="all">全スタッフ</option>
           </select>
-        </div>
-
-        <!-- 新規登録ボタン（出勤履歴タブ時のみ表示） -->
-        <div id="fixed-ci-open-btn-wrap" class="ci-open-btn-wrap" hidden>
           <button id="ci-open-btn" type="button" class="ci-open-btn">
             ＋ <span>新規登録</span>
           </button>
