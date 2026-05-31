@@ -146,8 +146,10 @@ function switchTab(tab) {
   });
   // A-9：上段固定エリア内のフィルタバー/新規登録ボタンをタブ連動で表示切替
   const filterBar  = document.getElementById('fixed-filter-bar');
+  const scAdd      = document.getElementById('fixed-salescost-add');
   const attendBar  = document.getElementById('fixed-attend-bar');
   if (filterBar) filterBar.hidden = (tab !== 'salescost');
+  if (scAdd)     scAdd.hidden     = (tab !== 'salescost');
   if (attendBar) attendBar.hidden = (tab !== 'attendance');
   // サイドバー（iPad）：history.html は常に月次管理をアクティブ（勤怠は同画面の勤怠タブ）
   _syncSidebarActive(tab);

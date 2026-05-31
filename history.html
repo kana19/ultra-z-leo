@@ -103,6 +103,7 @@
        pages.css 等で .hist-filter-bar に display:flex が指定されている可能性に備え、
        ID + !important で詳細度を最大化する */
     #fixed-filter-bar[hidden],
+    #fixed-salescost-add[hidden],
     #fixed-attend-bar[hidden] {
       display: none !important;
     }
@@ -568,6 +569,8 @@
     body.is-ipad .ipad-right-panel.hist-right--input #hist-input-host { padding: 0; }
     /* 新規登録ボタンは iPad では右カラムに登録フォームがあるため隠す（スタッフ絞り込みプルダウンは残す） */
     body.is-ipad #fixed-attend-bar .ci-open-btn { display: none !important; }
+    /* 取引の売上/コスト追加ボタンも iPad は右カラム入力（売上を追加/コストを追加タブ）があるため隠す */
+    body.is-ipad #fixed-salescost-add { display: none !important; }
   </style>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.9.0/dist/tabler-icons.min.css">
 </head>
@@ -628,6 +631,12 @@
           <button id="hist-next" class="hist-month-btn" type="button" aria-label="次の月">
             <i class="ti ti-chevron-right"></i>
           </button>
+        </div>
+
+        <!-- 取引タブ：売上/コスト追加（ホーム倣い・取引タブ時のみ表示／iPadは右カラム入力のため非表示） -->
+        <div id="fixed-salescost-add" class="hist-sc-add">
+          <button type="button" class="hist-sc-add__btn hist-sc-add__btn--sales" onclick="openSalesModal()">売上を追加</button>
+          <button type="button" class="hist-sc-add__btn hist-sc-add__btn--cost" onclick="openCostModal()">コストを追加</button>
         </div>
 
         <!-- フィルタバー（売上・コストタブ時のみ表示） -->
