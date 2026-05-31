@@ -552,15 +552,15 @@ body.is-ipad .home-sticky-top {
   box-shadow: 0 0 0 2px var(--uz-timer-red-glow);
 }
 .uz-timer-dot__core--gray {
-  background: var(--uz-silver);
+  background: var(--uz-bg);   /* 退勤済：枠のみ・中は白 */
 }
 .uz-timer-dot__core--blink {
   background: var(--uz-timer-red);
   animation: uz-timer-core-blink 0.8s ease-in-out infinite;
 }
-@keyframes uz-timer-core-blink {
-  0%, 100% { opacity: 1; }
-  50%      { opacity: 0.15; }
+@keyframes uz-timer-core-blink {     /* 赤 ⇄ グレー(--uz-silver) の交互点滅 */
+  0%, 100% { background-color: var(--uz-timer-red); }
+  50%      { background-color: var(--uz-silver); }
 }
 /* 設置箇所別サイズ（差はサイズのみ） */
 .uz-timer-dot--home    { width: 10px; height: 10px; }
