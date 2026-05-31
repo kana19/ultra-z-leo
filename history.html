@@ -325,15 +325,30 @@
       padding: 12px 20px calc(16px + env(safe-area-inset-bottom));
       border-top: 1px solid var(--uz-border);
       position: sticky; bottom: 0; background: var(--uz-surface);
+      display: flex; gap: 10px; align-items: center;
     }
     .edit-save-btn {
-      width: 100%; padding: 14px;
+      flex: 1; padding: 14px;
       background: var(--uz-amber-bg); color: var(--uz-text);
       border: 0.5px solid var(--uz-border2); border-radius: 10px;
       font-size: 15px; font-weight: 700; font-family: var(--font-main);
       cursor: pointer;
     }
     .edit-save-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    /* 削除ボタン（編集フォーム内・全デバイス・モノトーン／00§5-9） */
+    .edit-delete-btn {
+      flex-shrink: 0; padding: 14px 18px;
+      background: var(--uz-bg); color: var(--uz-text);
+      border: 1px solid var(--uz-border2); border-radius: 10px;
+      font-size: 15px; font-weight: 700; font-family: var(--font-main);
+      cursor: pointer;
+    }
+    .edit-delete-btn:active { filter: brightness(0.95); }
+    /* iPad 右パネル：保存／削除の横並び */
+    .ipad-right-actions {
+      display: flex; gap: 10px; align-items: center; margin-top: 12px;
+    }
+    body.is-ipad .ipad-right-actions .edit-save-btn { flex: 1; margin-top: 0; }
 
     /* ── 新規登録セクション ── */
     .ci-section {
@@ -686,6 +701,7 @@
     <!-- history.js が描画 -->
   </div>
   <div class="edit-panel__footer">
+    <button id="edit-delete-btn" type="button" class="edit-delete-btn">削除</button>
     <button id="edit-save-btn" type="button" class="edit-save-btn">保存する</button>
   </div>
 </div>

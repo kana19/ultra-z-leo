@@ -440,29 +440,25 @@ function _renderFilteredList() {
   if (document.body.classList.contains('is-ipad')) {
     let html = `<table class="ipad-hist-flat-table">
       <thead><tr>
-        <th>日付</th><th>種別</th><th>内容</th><th>メモ</th><th class="ipad-td-r">金額</th><th></th><th></th>
+        <th>発生日</th><th>区分</th><th>適用</th><th>メモ</th><th class="ipad-td-r">金額</th><th></th><th></th>
       </tr></thead><tbody>`;
 
     sorted.forEach(item => {
       const idx     = editableItems.push(item) - 1;
       const isSales = item.type === 'sales';
-      const typeLabel = isSales
-        ? '<span style="color:var(--uz-text2);font-size:12px;">売上</span>'
-        : '<span style="color:var(--uz-text2);font-size:12px;">経費</span>';
       const md  = (item.date || '').replace(/(\d{4})-(\d{2})-(\d{2})/, '$2/$3');
       const dot = buildTimerDotHTML(item);
       const rowBg = isSales ? '' : 'background:var(--uz-surface);';
 
       html += `<tr class="ipad-hist-row" data-idx="${idx}" data-scope="sc" style="${rowBg}">
         <td style="white-space:nowrap;">${md}</td>
-        <td>${typeLabel}</td>
+        <td>${_divisionBadgeHTML(item)}</td>
         <td>${escHtml((item.itemName || '').substring(0, 16))}</td>
         <td style="font-size:12px;color:var(--uz-text3);">${escHtml((item.memo || '').substring(0, 12))}</td>
         <td class="ipad-td-r" style="font-weight:600;">${formatYen(item.amount)}</td>
         <td style="text-align:center;">${dot}</td>
         <td style="text-align:center;white-space:nowrap;">
           <button class="hist-edit-btn" type="button" data-idx="${idx}" data-scope="sc">編集</button>
-          <button class="hist-del-btn" type="button" data-idx="${idx}" data-scope="sc" aria-label="削除">削除</button>
         </td>
       </tr>`;
     });
@@ -641,6 +637,18 @@ function _histInjectInputForm(tab) {
   }
 }
 
+/* ── 区分（売上／仕入／販管費）判定とバッジ（02_画面仕様.md §2-2・§5-9） ──
+   売上=type 'sales' ／ 仕入=cost かつ divisionCode '1' ／ 販管費=cost のそれ以外。 */
+function _divisionOf(item) {
+  if (item.type === 'sales') return 'sales';
+  return String(item.divisionCode) === '1' ? 'purchase' : 'sga';
+}
+function _divisionBadgeHTML(item) {
+  const k = _divisionOf(item);
+  const label = k === 'sales' ? '売上' : (k === 'purchase' ? '仕入' : '販管費');
+  return `<span class="uz-div-badge uz-div-badge--${k}">${label}</span>`;
+}
+
 /* ── カラータイマードット（売掛・買掛ありのみ表示） ──────── */
 function buildTimerDotHTML(item) {
   const hasFlag = item.type === 'sales'
@@ -664,6 +672,7 @@ function buildSalesCostItemHTML(item, idx) {
 
   return `
     <div class="hist-row ${rowCls}" data-idx="${idx}">
+      ${_divisionBadgeHTML(item)}
       <div class="hist-row__name">
         ${name}
         ${memo}
@@ -672,7 +681,6 @@ function buildSalesCostItemHTML(item, idx) {
       ${dot}
       <div class="hist-row__edit">
         <button class="hist-edit-btn" type="button" data-idx="${idx}" data-scope="sc">編集</button>
-        <button class="hist-del-btn" type="button" data-idx="${idx}" data-scope="sc" aria-label="削除">削除</button>
       </div>
     </div>`;
 }
@@ -735,7 +743,6 @@ function renderAttendance(items) {
         <td>${statusBadge}</td>
         <td style="text-align:center;white-space:nowrap;">
           <button class="hist-edit-btn" type="button" data-idx="${atIdx}" data-scope="at">編集</button>
-          <button class="hist-del-btn" type="button" data-idx="${atIdx}" data-scope="at" aria-label="削除">削除</button>
         </td>
       </tr>`;
     });
@@ -854,7 +861,6 @@ function renderAttendance(items) {
             <span class="hist-attend-state-col">${durOrState}</span>
             <span class="hist-attend-ops">
               <button class="hist-edit-btn" type="button" data-idx="${atIdx}" data-scope="at" aria-label="編集">編集</button>
-              <button class="hist-del-btn" type="button" data-idx="${atIdx}" data-scope="at" aria-label="削除">削除</button>
             </span>
           </div>`;
       });
@@ -883,6 +889,33 @@ function bindEditPanel() {
   document.getElementById('edit-cancel-btn')?.addEventListener('click', closeEditForm);
   document.getElementById('edit-backdrop')?.addEventListener('click',   closeEditForm);
   document.getElementById('edit-save-btn')?.addEventListener('click',   saveEdit);
+  document.getElementById('edit-delete-btn')?.addEventListener('click', _editPanelDelete);
+}
+
+/* 編集フォーム内の削除（全デバイス可・確認は各削除関数が実施・00§3-2）。
+   開いている currentEditItem を一覧配列から引き当て、既存の削除フローへ委譲する。 */
+async function _editPanelDelete() {
+  const item = currentEditItem;
+  if (!item) return;
+  const isAtt = item.type === 'attendance';
+  const arr = isAtt ? attendItems : editableItems;
+  const idx = arr.indexOf(item);
+  if (idx < 0) return;
+  closeEditForm();
+  if (isAtt) await _histDeleteAttendance(idx);
+  else       await _histDeleteSalesCost(idx);
+}
+
+/* iPad 右パネル修正フォーム内の削除。_ipadSelectedRecord を引き当てて委譲する。 */
+async function _ipadRightDelete() {
+  const rec = _ipadSelectedRecord;
+  if (!rec) return;
+  const isAtt = rec.type === 'attendance';
+  const arr = isAtt ? attendItems : editableItems;
+  const idx = arr.indexOf(rec);
+  if (idx < 0) return;
+  if (isAtt) await _histDeleteAttendance(idx);
+  else       await _histDeleteSalesCost(idx);
 }
 
 function openEditForm(item) {
@@ -1766,7 +1799,10 @@ function renderIpadRightPanel(record) {
     <div class="ipad-right-form-body">
       ${graceNote}
       ${formHTML}
-      <button id="ipad-right-save-btn" type="button" class="edit-save-btn" style="margin-top:12px;">保存する</button>
+      <div class="ipad-right-actions">
+        <button id="ipad-right-delete-btn" type="button" class="edit-delete-btn">削除</button>
+        <button id="ipad-right-save-btn" type="button" class="edit-save-btn">保存する</button>
+      </div>
     </div>
   `;
 
@@ -1781,9 +1817,12 @@ function renderIpadRightPanel(record) {
     });
   }
 
-  // 保存ボタン
+  // 保存・削除ボタン
   document.getElementById('ipad-right-save-btn')?.addEventListener('click', () => {
     saveEdit();
+  });
+  document.getElementById('ipad-right-delete-btn')?.addEventListener('click', () => {
+    _ipadRightDelete();
   });
 }
 
