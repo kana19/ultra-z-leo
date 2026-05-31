@@ -336,10 +336,8 @@ async function _histDeleteSalesCost(idx) {
   const name      = item.itemName || '—';
   const amount    = formatYen(item.amount);
   const date      = item.date || '';
-  const tail = isSales
-    ? '\n削除すると元に戻せません。紐付け済みの経費は残り、紐付けのみ解除されます。'
-    : '\n削除すると元に戻せません。';
-  if (!confirm(`この${isSales ? '売上' : 'コスト'}を削除しますか？\n${date} / ${name} / ${amount}${tail}`)) return;
+  // 案件管理（紐付け）はPC限定機能のため、PWA側の削除では紐付け解除に関する警告は出さない（02§5-3）。
+  if (!confirm(`この${isSales ? '売上' : 'コスト'}を削除しますか？\n${date} / ${name} / ${amount}\n削除すると元に戻せません。`)) return;
 
   showLoading();
   try {
