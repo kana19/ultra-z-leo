@@ -1196,18 +1196,23 @@ body.is-ipad .ipad-hist-flat-table tr:last-child td { border-bottom: none; }
 body.is-ipad .ipad-hist-flat-table td.ipad-td-r {
   white-space: nowrap;
   width: 1%;
-  padding-right: 8px;
+  padding-left: 8px;
+  padding-right: 0;
 }
 body.is-ipad .ipad-hist-flat-table td.ipad-td-timer {
   width: 1%;
-  padding: 9px 2px;
+  padding: 9px 0;
   text-align: center;
 }
 body.is-ipad .ipad-hist-flat-table td.ipad-td-edit {
   width: 1%;
-  padding: 9px 8px 9px 2px;
+  padding: 9px 8px 9px 4px;
   text-align: right;
   white-space: nowrap;
+}
+body.is-ipad .ipad-hist-flat-table .hist-row__timer {
+  margin-left: 0;
+  width: 16px;
 }
 body.is-ipad .ipad-hist-flat-table td.ipad-td-applic,
 body.is-ipad .ipad-hist-flat-table td.ipad-td-memo {

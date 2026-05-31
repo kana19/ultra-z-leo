@@ -444,18 +444,23 @@ function _renderFilteredList() {
     sorted.forEach(item => {
       const idx     = editableItems.push(item) - 1;
       const isSales = item.type === 'sales';
-      const md  = (item.date || '').replace(/(\d{4})-(\d{2})-(\d{2})/, '$2/$3');
+      // 発生日：MM/DD（曜日）。曜日は WEEKDAYS（app.js）を流用。
+      const _dp = (item.date || '').split('-').map(Number);
+      let md = (item.date || '').replace(/(\d{4})-(\d{2})-(\d{2})/, '$2/$3');
+      if (_dp.length === 3 && _dp[0]) {
+        md += `（${WEEKDAYS[new Date(_dp[0], _dp[1] - 1, _dp[2]).getDay()]}）`;
+      }
       const dot = buildTimerDotHTML(item);
       const rowBg = isSales ? '' : 'background:var(--uz-surface);';
 
       html += `<tr class="ipad-hist-row" data-idx="${idx}" data-scope="sc" style="${rowBg}">
         <td style="white-space:nowrap;">${md}</td>
         <td>${_divisionBadgeHTML(item)}</td>
-        <td>${escHtml((item.itemName || '').substring(0, 16))}</td>
-        <td style="font-size:12px;color:var(--uz-text3);">${escHtml((item.memo || '').substring(0, 12))}</td>
+        <td class="ipad-td-applic">${escHtml((item.itemName || '').substring(0, 40))}</td>
+        <td class="ipad-td-memo" style="font-size:12px;color:var(--uz-text3);">${escHtml((item.memo || '').substring(0, 30))}</td>
         <td class="ipad-td-r" style="font-weight:600;">${formatYen(item.amount)}</td>
-        <td style="text-align:center;">${dot}</td>
-        <td style="text-align:center;white-space:nowrap;">
+        <td class="ipad-td-timer">${dot}</td>
+        <td class="ipad-td-edit">
           <button class="hist-edit-btn" type="button" data-idx="${idx}" data-scope="sc">編集</button>
         </td>
       </tr>`;
