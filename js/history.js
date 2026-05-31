@@ -1,6 +1,6 @@
 /**
  * ウルトラZAIMUくん LEO版 PWA — history.js
- * 履歴・修正画面ロジック
+ * 月次管理（取引・勤怠タブ統合）画面ロジック
  *
  * タブ1：売上・コスト（getHistory）
  *   ※ GAS側で以下のフィールドを含めてください：
@@ -145,19 +145,18 @@ function switchTab(tab) {
   const ciBtnWrap  = document.getElementById('fixed-ci-open-btn-wrap');
   if (filterBar)  filterBar.hidden  = (tab !== 'salescost');
   if (ciBtnWrap)  ciBtnWrap.hidden  = (tab !== 'attendance');
-  // サイドバー（iPad）：月次管理＝売上コスト／勤怠管理＝出勤履歴 のハイライトをタブ連動
+  // サイドバー（iPad）：history.html は常に月次管理をアクティブ（勤怠は同画面の勤怠タブ）
   _syncSidebarActive(tab);
   // iPad：右カラムを当該タブの既定入力に戻す（行選択前の状態）
   if (document.body.classList.contains('is-ipad')) _renderHistRightDefault();
 }
 
-/* サイドバー（iPad）の active を現在タブに同期する。
-   月次管理（history.html）＝売上コストタブ／勤怠管理（history.html#attendance）＝出勤履歴タブ。 */
-function _syncSidebarActive(tab) {
+/* サイドバー（iPad）の active 同期。
+   勤怠は月次管理の勤怠タブに統合済み（独立ナビなし）のため、history.html では
+   タブに依らず常に「月次管理」をアクティブにする（02_画面仕様.md §2-2）。 */
+function _syncSidebarActive(_tab) {
   document.querySelectorAll('#nav-sidebar .sidebar-item').forEach(a => {
-    const href = a.getAttribute('href') || '';
-    const isAttend = href.indexOf('#attendance') >= 0;
-    const on = (tab === 'attendance') ? isAttend : (href === 'history.html');
+    const on = (a.getAttribute('href') || '') === 'history.html';
     a.classList.toggle('sidebar-item--active', on);
     if (on) a.setAttribute('aria-current', 'page');
     else    a.removeAttribute('aria-current');

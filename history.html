@@ -564,8 +564,8 @@
 <div class="page-wrapper">
 
   <!-- ページヘッダー -->
-  <header class="history-header">
-    <span class="history-header__title">履歴・修正</span>
+  <header class="history-header app-header">
+    <div class="app-header__store" data-uz-brand data-uz-icon-base="icons/" data-uz-fallback="店舗名未設定"></div>
   </header>
 
   <!-- 承認バナー（表示条件はGAS側フラグ実装後に有効化） -->
@@ -594,13 +594,13 @@
                   class="hist-tab hist-tab--active"
                   type="button" role="tab"
                   aria-selected="true" aria-controls="panel-salescost">
-            売上・コスト
+            取引
           </button>
           <button id="tab-attendance"
                   class="hist-tab"
                   type="button" role="tab"
                   aria-selected="false" aria-controls="panel-attendance">
-            <span>出勤履歴</span>
+            勤怠
           </button>
         </div>
 

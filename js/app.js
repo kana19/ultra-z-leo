@@ -88,17 +88,16 @@ document.addEventListener('DOMContentLoaded', function() {
    各HTMLは <nav class="nav-sidebar" id="nav-sidebar" data-active="…"></nav> の
    空プレースホルダのみを置き、中身はこの関数が一括生成する。
    4項目：ホーム（土星 ti-planet）／月次管理（月 ti-moon・履歴/修正と売上コスト入力を統合した history.html）／
-          勤怠管理（ti-clock）／設定（ti-settings）。MD 00_原則.md §6-3-B・02_画面仕様.md §2-2。
-   data-active は当該ページのキー（home/monthly/attendance/settings）。
+          設定（ti-settings）。勤怠は月次管理の勤怠タブ・出勤状況はホーム。MD 02_画面仕様.md §2-2。
+   data-active は当該ページのキー（home/monthly/settings）。
    月次管理は history.html（売上コスト一覧・集計・新規入力・修正を集約）を指す。
    data-page="sales" / "cost" は history へ集約されたため active="monthly" を渡す。
    後続の uzRenderAllBrands / uzLoadSidebarTimer / uzInitSidebarDateTime より
    先に実行する必要があるため、最優先の DOMContentLoaded リスナとして本関数を最初に登録する。 */
 const UZ_SIDEBAR_ITEMS = [
-  { key: 'home',       href: 'index.html',            icon: 'ti-planet',   label: 'ホーム'   },
-  { key: 'monthly',    href: 'history.html',          icon: 'ti-moon',     label: '月次管理' },
-  { key: 'attendance', href: 'history.html#attendance', icon: 'ti-clock',  label: '勤怠管理' },
-  { key: 'settings',   href: 'settings.html',         icon: 'ti-settings', label: '設定'     }
+  { key: 'home',     href: 'index.html',    icon: 'ti-planet',   label: 'ホーム'   },
+  { key: 'monthly',  href: 'history.html',  icon: 'ti-moon',     label: '月次管理' },
+  { key: 'settings', href: 'settings.html', icon: 'ti-settings', label: '設定'     }
 ];
 
 function uzRenderSidebar() {
