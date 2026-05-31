@@ -1199,6 +1199,13 @@ body.is-ipad .ipad-hist-flat-table td {
   padding-left: 2px;
   padding-right: 2px;
 }
+/* 左側グループ（発生日・区分・適用・メモ＝1〜4列目）は区切りを広めに取る。
+   右側グループ（金額・タイマー・編集＝5〜7列目）は上記の詰めた間隔を維持。 */
+body.is-ipad .ipad-hist-flat-table th:nth-child(-n+4),
+body.is-ipad .ipad-hist-flat-table td:nth-child(-n+4) {
+  padding-left: 9px;
+  padding-right: 9px;
+}
 body.is-ipad .ipad-hist-flat-table td.ipad-td-date,
 body.is-ipad .ipad-hist-flat-table td.ipad-td-div,
 body.is-ipad .ipad-hist-flat-table td.ipad-td-r,
