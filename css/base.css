@@ -1190,6 +1190,33 @@ body.is-ipad .ipad-hist-flat-table td {
 
 body.is-ipad .ipad-hist-flat-table tr:last-child td { border-bottom: none; }
 
+/* iPad 取引テーブル 列幅最適化（金額・カラータイマー・編集を詰め、適用/メモへ配分）
+   ・金額/タイマー/編集は shrink-to-fit（width:1%＋nowrap）＋詰めパディングで横幅を最小化
+   ・適用/メモは残り幅を取り、超過分は…で省略（横幅と許容文字数を確保） */
+body.is-ipad .ipad-hist-flat-table td.ipad-td-r {
+  white-space: nowrap;
+  width: 1%;
+  padding-right: 8px;
+}
+body.is-ipad .ipad-hist-flat-table td.ipad-td-timer {
+  width: 1%;
+  padding: 9px 2px;
+  text-align: center;
+}
+body.is-ipad .ipad-hist-flat-table td.ipad-td-edit {
+  width: 1%;
+  padding: 9px 8px 9px 2px;
+  text-align: right;
+  white-space: nowrap;
+}
+body.is-ipad .ipad-hist-flat-table td.ipad-td-applic,
+body.is-ipad .ipad-hist-flat-table td.ipad-td-memo {
+  max-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 body.is-ipad .ipad-hist-row {
   cursor: pointer;
   transition: background 0.12s;

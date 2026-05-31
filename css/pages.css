@@ -807,6 +807,28 @@
   border-top: 1px solid var(--uz-border);
 }
 
+/* ── 区分バッジ（売上／仕入／販管費・枠サイズ統一・モノトーン／00§5-9 §2-2） ──
+   売上=白地黒枠黒字／仕入=薄グレー地黒枠黒字／販管費=黒地白字黒枠。 */
+.uz-div-badge {
+  display: inline-block;
+  box-sizing: border-box;
+  width: 3.6em;
+  text-align: center;
+  padding: 2px 0;
+  border-radius: 4px;
+  border: 1px solid var(--uz-text);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.uz-div-badge--sales    { background: var(--uz-bg);       color: var(--uz-text); }
+.uz-div-badge--purchase { background: var(--uz-surface2); color: var(--uz-text); }
+.uz-div-badge--sga      { background: var(--uz-text);     color: var(--uz-bg);   }
+/* スマホ取引行内のバッジ：名称との間隔 */
+.hist-row > .uz-div-badge { margin-right: 8px; }
+
 .hist-row {
   display: flex;
   align-items: center;
