@@ -448,14 +448,14 @@ function _renderFilteredList() {
       const _dp = (item.date || '').split('-').map(Number);
       let md = (item.date || '').replace(/(\d{4})-(\d{2})-(\d{2})/, '$2/$3');
       if (_dp.length === 3 && _dp[0]) {
-        md += `（${WEEKDAYS[new Date(_dp[0], _dp[1] - 1, _dp[2]).getDay()]}）`;
+        md += `(${WEEKDAYS[new Date(_dp[0], _dp[1] - 1, _dp[2]).getDay()]})`;
       }
       const dot = buildTimerDotHTML(item);
       const rowBg = isSales ? '' : 'background:var(--uz-surface);';
 
       html += `<tr class="ipad-hist-row" data-idx="${idx}" data-scope="sc" style="${rowBg}">
-        <td style="white-space:nowrap;">${md}</td>
-        <td>${_divisionBadgeHTML(item)}</td>
+        <td class="ipad-td-date">${md}</td>
+        <td class="ipad-td-div">${_divisionBadgeHTML(item)}</td>
         <td class="ipad-td-applic">${escHtml((item.itemName || '').substring(0, 40))}</td>
         <td class="ipad-td-memo" style="font-size:12px;color:var(--uz-text3);">${escHtml((item.memo || '').substring(0, 30))}</td>
         <td class="ipad-td-r" style="font-weight:600;">${formatYen(item.amount)}</td>

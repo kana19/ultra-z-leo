@@ -1190,26 +1190,26 @@ body.is-ipad .ipad-hist-flat-table td {
 
 body.is-ipad .ipad-hist-flat-table tr:last-child td { border-bottom: none; }
 
-/* iPad 取引テーブル 列幅最適化（金額・カラータイマー・編集を詰め、適用/メモへ配分）
-   ・金額/タイマー/編集は shrink-to-fit（width:1%＋nowrap）＋詰めパディングで横幅を最小化
-   ・適用/メモは残り幅を取り、超過分は…で省略（横幅と許容文字数を確保） */
-body.is-ipad .ipad-hist-flat-table td.ipad-td-r {
-  white-space: nowrap;
-  width: 1%;
-  padding-left: 8px;
-  padding-right: 0;
+/* iPad 取引テーブル 列幅最適化（全列間を均一に）
+   ・全セルの左右パディングを2pxに統一 → 隣接列の間隔を全て同一(約4px)にする
+   ・発生日/区分/金額/タイマー/編集は内容幅（width:1%＋nowrap）で固定し余白を吸収しない
+   ・適用/メモが残り幅を取り、超過分は…で省略（横幅と許容文字数を確保） */
+body.is-ipad .ipad-hist-flat-table th,
+body.is-ipad .ipad-hist-flat-table td {
+  padding-left: 2px;
+  padding-right: 2px;
 }
-body.is-ipad .ipad-hist-flat-table td.ipad-td-timer {
-  width: 1%;
-  padding: 9px 0;
-  text-align: center;
-}
+body.is-ipad .ipad-hist-flat-table td.ipad-td-date,
+body.is-ipad .ipad-hist-flat-table td.ipad-td-div,
+body.is-ipad .ipad-hist-flat-table td.ipad-td-r,
+body.is-ipad .ipad-hist-flat-table td.ipad-td-timer,
 body.is-ipad .ipad-hist-flat-table td.ipad-td-edit {
   width: 1%;
-  padding: 9px 8px 9px 4px;
-  text-align: right;
   white-space: nowrap;
 }
+body.is-ipad .ipad-hist-flat-table td.ipad-td-r     { text-align: right; }
+body.is-ipad .ipad-hist-flat-table td.ipad-td-timer { text-align: center; }
+body.is-ipad .ipad-hist-flat-table td.ipad-td-edit  { text-align: right; }
 body.is-ipad .ipad-hist-flat-table .hist-row__timer {
   margin-left: 0;
   width: 16px;
