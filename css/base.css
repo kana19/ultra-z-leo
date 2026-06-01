@@ -1070,12 +1070,6 @@ body.is-ipad {
     left: calc(200px + (100% - 200px) / 2);
     bottom: 20px;
   }
-
-  /* ── 設定画面：コンテンツ中央寄せ ────────────────────── */
-  .ipad-settings-wrap {
-    max-width: 600px;
-    margin: 0 auto;
-  }
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -2206,65 +2200,3 @@ body.is-ipad[data-page="clockin"] .ipad-clockin-panel {
   .ipad-approve-btns { display: none !important; }
 }
 
-/* ══════════════════════════════════════════════════════════
-   iPad 設定アコーディオン
-   ══════════════════════════════════════════════════════════ */
-body.is-ipad[data-page="settings"] .ipad-settings-wrap {
-  max-width: 720px;
-  margin: 0 auto;
-  padding: 16px;
-}
-
-/* 非iPad：元の .settings-section__title と同じ見た目 */
-.settings-accordion-btn {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 16px 10px;
-  background: none;
-  border: none;
-  border-bottom: 1px solid var(--uz-border);
-  color: var(--uz-muted);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  font-family: var(--font-main);
-  cursor: default;
-  pointer-events: none;
-  text-align: left;
-}
-
-/* iPad：インタラクティブなアコーディオンボタン */
-body.is-ipad[data-page="settings"] .settings-accordion-btn {
-  cursor: pointer;
-  pointer-events: auto;
-  font-size: 14px;
-  color: var(--uz-text);
-  padding: 14px 16px;
-  letter-spacing: 0;
-}
-
-body:not(.is-ipad) .settings-accordion-chevron {
-  display: none;
-}
-
-/* 非iPad：本体は常時表示 */
-body:not(.is-ipad) .settings-section__body[hidden] {
-  display: block !important;
-}
-
-.settings-accordion-chevron {
-  font-size: 18px;
-  color: var(--uz-text2);
-  transition: transform 0.2s;
-  flex-shrink: 0;
-}
-
-.settings-accordion-btn[aria-expanded="true"] .settings-accordion-chevron {
-  transform: rotate(90deg);
-}
-
-body.is-ipad[data-page="settings"] .settings-section__body[hidden] {
-  display: none !important;
-}
