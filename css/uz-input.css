@@ -1,0 +1,266 @@
+/* ============================================================
+   uz-input.css — 売上・コスト入力フォーム（正本・積層ステッパー）
+   ------------------------------------------------------------
+   02_画面仕様.md §5-10。単一系統共有の入力フォーム。
+   スマホモーダル・iPad月次管理右カラム・iPad取引(履歴)右カラムの
+   全面で uz-input.js が .uzf-host に描画する。デバイス非依存。
+   ・選択タブは固定、選択済み項目は上部に積層し常時可視（.uzf-stack）
+   ・テンキー入力中も選択を覆わない（積層の下にインライン配置）
+   ・確定（登録）ボタンを押すまで一連で視認できる
+   ・OSキーボード/OSカレンダーを一切呼ばない（自作テンキー/カレンダー）
+   配色は 00_原則.md §5-9 モノトーン濃淡のみ・トークン経由。
+   ============================================================ */
+
+.uzf-host {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  font-family: var(--font-main);
+}
+
+/* ── 積層ステッパー：確定項目を上部に積む（タップで個別再編集） ── */
+.uzf-stack {
+  position: sticky;
+  top: 0;
+  z-index: 7;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--uz-border);
+}
+.uzf-stack:empty { display: none; }
+.uzf-chip {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 20px;
+  background: var(--uz-text);
+  color: var(--uz-on-accent);
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+}
+.uzf-chip-k { font-size: 11px; opacity: 0.65; flex: 0 0 52px; }
+.uzf-chip-v { flex: 1; font-size: 15px; font-weight: 600; }
+.uzf-chip-edit {
+  font-size: 12px;
+  opacity: 0.8;
+  border: 1px solid var(--uz-border2);
+  border-radius: 8px;
+  padding: 4px 12px;
+}
+
+/* ── エディタ領域 ─────────────────────────────────────── */
+.uzf-editor { padding: 16px 20px; }
+.uzf-ed-head { font-size: 12px; color: var(--uz-text2); margin-bottom: 12px; }
+.uzf-ed-sub  { font-size: 12px; color: var(--uz-text2); margin: 18px 0 10px; }
+
+/* 区分タブ（仕入原価／販管費） */
+.uzf-divtabs { display: flex; gap: 10px; padding: 16px 20px 0; }
+.uzf-divtab {
+  flex: 1;
+  height: 46px;
+  border: 1px solid var(--uz-border);
+  border-radius: 10px;
+  background: var(--uz-bg);
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--uz-text);
+  cursor: pointer;
+}
+.uzf-divtab.is-active {
+  background: var(--uz-text);
+  color: var(--uz-on-accent);
+  border-color: var(--uz-text);
+}
+
+/* 科目カード：3列（販管費の多件数を収める・区分タブと縦幅統一） */
+.uzf-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.uzf-card {
+  min-height: 46px;
+  padding: 8px 10px;
+  border: 1px solid var(--uz-border);
+  border-radius: 10px;
+  background: var(--uz-bg);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--uz-text);
+  cursor: pointer;
+  line-height: 1.25;
+}
+.uzf-card.is-active {
+  background: var(--uz-text);
+  color: var(--uz-on-accent);
+  border-color: var(--uz-text);
+}
+
+/* 諸口名称 */
+.uzf-misc { margin-top: 14px; }
+.uzf-misc-label { display: block; font-size: 12px; color: var(--uz-text2); margin-bottom: 8px; }
+.uzf-misc-input {
+  width: 100%;
+  height: 46px;
+  padding: 0 14px;
+  border: 1px solid var(--uz-border);
+  border-radius: 10px;
+  font-size: 15px;
+  font-family: inherit;
+  background: var(--uz-bg);
+  color: var(--uz-text);
+  box-sizing: border-box;
+}
+
+/* 税率チップ */
+.uzf-taxchips { display: flex; gap: 10px; }
+.uzf-taxchip {
+  flex: 1;
+  height: 46px;
+  border: 1px solid var(--uz-border);
+  border-radius: 10px;
+  background: var(--uz-bg);
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--uz-text);
+  cursor: pointer;
+}
+.uzf-taxchip.is-active {
+  background: var(--uz-text);
+  color: var(--uz-on-accent);
+  border-color: var(--uz-text);
+}
+
+/* 金額表示＋自作テンキー */
+.uzf-amount-disp {
+  font-size: 34px;
+  font-weight: 700;
+  text-align: right;
+  color: var(--uz-text);
+  font-variant-numeric: tabular-nums;
+  padding: 6px 4px;
+  border-bottom: 2px solid var(--uz-text);
+}
+.uzf-amount-yen { font-size: 18px; font-weight: 400; margin-left: 6px; color: var(--uz-text2); }
+.uzf-amount-tax { font-size: 13px; color: var(--uz-text2); text-align: right; margin: 8px 0 16px; }
+.uzf-keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.uzf-key {
+  height: 56px;
+  border: 1px solid var(--uz-border);
+  border-radius: 12px;
+  background: var(--uz-bg);
+  font-family: inherit;
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--uz-text);
+  cursor: pointer;
+}
+.uzf-key:active { background: var(--uz-surface); }
+.uzf-key--del, .uzf-key--clear { font-size: 16px; color: var(--uz-text2); }
+.uzf-key--clear { grid-column: span 3; }
+
+/* tail：状況トグル・メモ・登録 */
+.uzf-tail { padding: 8px 20px 20px; border-top: 1px solid var(--uz-border); margin-top: 8px; }
+.uzf-toggle { display: flex; align-items: center; gap: 12px; font-size: 15px; color: var(--uz-text); padding: 12px 0; cursor: pointer; }
+.uzf-toggle input { width: 22px; height: 22px; accent-color: var(--uz-gold); }
+.uzf-memo-label { display: block; font-size: 12px; color: var(--uz-text2); margin: 8px 0; }
+.uzf-memo {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--uz-border);
+  border-radius: 10px;
+  font-size: 15px;
+  font-family: inherit;
+  background: var(--uz-bg);
+  color: var(--uz-text);
+  resize: none;
+  box-sizing: border-box;
+}
+.uzf-submit {
+  width: 100%;
+  min-height: 54px;
+  margin-top: 16px;
+  border: none;
+  border-radius: 12px;
+  background: var(--uz-gold);
+  color: var(--uz-on-accent);
+  font-family: inherit;
+  font-size: 17px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.uzf-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+.uzf-submit:active:not(:disabled) { filter: brightness(1.06); }
+.uzf-reset {
+  display: block;
+  margin: 4px 20px 0;
+  padding: 6px 0;
+  background: none;
+  border: none;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--uz-text2);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* 自作カレンダー */
+.uzf-cal { border: 1px solid var(--uz-border); border-radius: 12px; padding: 12px; }
+.uzf-cal-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.uzf-cal-title { font-size: 15px; font-weight: 700; color: var(--uz-text); }
+.uzf-cal-nav {
+  width: 40px; height: 40px;
+  border: 1px solid var(--uz-border);
+  border-radius: 10px;
+  background: var(--uz-bg);
+  font-size: 18px;
+  color: var(--uz-text);
+  cursor: pointer;
+}
+.uzf-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.uzf-cal-dow { text-align: center; font-size: 11px; color: var(--uz-text2); padding: 4px 0; }
+.uzf-cal-cell {
+  aspect-ratio: 1 / 1;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 15px;
+  color: var(--uz-text);
+  cursor: pointer;
+}
+.uzf-cal-cell.is-sel { background: var(--uz-text); color: var(--uz-on-accent); font-weight: 700; }
+.uzf-cal-empty { cursor: default; }
+
+/* トースト（showToast 不在環境のフォールバック） */
+.uzf-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 40px;
+  transform: translateX(-50%);
+  background: var(--uz-text);
+  color: var(--uz-on-accent);
+  padding: 12px 24px;
+  border-radius: 10px;
+  font-size: 14px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+  z-index: 800;
+}
+.uzf-toast.show { opacity: 1; }
+
+/* スマホ（モーダル）でのキー高さ微調整 */
+@media (max-width: 380px) {
+  .uzf-key { height: 50px; font-size: 22px; }
+  .uzf-amount-disp { font-size: 30px; }
+}

@@ -633,16 +633,9 @@ function _histSwitchInputTab(tab) {
 function _histInjectInputForm(tab) {
   const host = document.getElementById('hist-input-host');
   if (!host) return;
-  if (tab === 'cost') {
-    if (typeof _smCostBuildFormBodyHTML === 'function') {
-      host.innerHTML = _smCostBuildFormBodyHTML();
-      if (typeof _smCostInitFormInModal === 'function') _smCostInitFormInModal();
-    }
-  } else {
-    if (typeof _buildSalesFormBodyHTML === 'function') {
-      host.innerHTML = _buildSalesFormBodyHTML();
-      if (typeof _initSalesFormInModal === 'function') _initSalesFormInModal();
-    }
+  // 入力フォームの正本は uz-input.js（積層ステッパー・単一系統・02 §5-10）。
+  if (window.UzInput && UzInput.mount) {
+    UzInput.mount(host, tab === 'cost' ? 'cost' : 'sales', { onSubmitted: () => loadAll() });
   }
 }
 
