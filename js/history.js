@@ -667,7 +667,7 @@ function buildTimerDotHTML(item) {
   /* 売掛・買掛なし → 固定幅の空スペース（列揃え維持） */
   if (!hasFlag) return `<span class="hist-row__timer"></span>`;
 
-  const state = window.uzTimer.stateAR(true);
+  const state = window.uzTimer.stateAR(true, new Date(), item.date);
   return `<span class="hist-row__timer">${window.uzTimer.dotHTML(state, 'hist')}</span>`;
 }
 

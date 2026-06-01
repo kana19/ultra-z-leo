@@ -63,10 +63,18 @@ function createAlertDot(urgent) {
 }
 
 function renderAlerts(alerts) {
-  const { hasUncollected, hasPayable, hasUnrecordedClockOut } = alerts;
+  const { hasUncollected, hasPayable, hasUnrecordedClockOut,
+          uncollectedItems, payableItems } = alerts;
+  const now = new Date();
+  /* 各項目の月末を期限に最緊急状態を代表表示（期限超過＋未処理は点滅を維持）。
+     項目配列がない場合は従来の当月末判定にフォールバック。 */
+  const stateU = uncollectedItems ? window.uzTimer.mostUrgentAR(uncollectedItems, now)
+                                  : _getTimerState(hasUncollected);
+  const stateP = payableItems ? window.uzTimer.mostUrgentAR(payableItems, now)
+                              : _getTimerState(hasPayable);
   /* カラータイマーはボタン内のドット要素（id=dot-uncollected/dot-payable）に当てる */
-  _applyTimerClass(document.getElementById('dot-uncollected'), _getTimerState(hasUncollected));
-  _applyTimerClass(document.getElementById('dot-payable'),     _getTimerState(hasPayable));
+  _applyTimerClass(document.getElementById('dot-uncollected'), stateU);
+  _applyTimerClass(document.getElementById('dot-payable'),     stateP);
   const clockDot = document.getElementById('dot-clockout');
   if (clockDot) {
     clockDot.innerHTML = '';
@@ -191,9 +199,14 @@ async function loadAlerts() {
   try {
     const res = await callGAS('getUncollected', {});
     if (res && res.status === 'ok' && Array.isArray(res.data)) {
-      const hasUncollected = res.data.some(r => r.type === 'uncollected');
-      const hasPayable     = res.data.some(r => r.type === 'payable');
-      renderAlerts({ hasUncollected, hasPayable, hasUnrecordedClockOut: false });
+      const uncollectedItems = res.data.filter(r => r.type === 'uncollected');
+      const payableItems     = res.data.filter(r => r.type === 'payable');
+      renderAlerts({
+        hasUncollected: uncollectedItems.length > 0,
+        hasPayable:     payableItems.length > 0,
+        uncollectedItems, payableItems,
+        hasUnrecordedClockOut: false
+      });
     }
   } catch { /* GAS失敗時はタイマーなし */ }
 }

@@ -606,12 +606,11 @@ document.addEventListener('uz:settings-synced', uzRenderAllBrands);
    外枠は不変、状態は核(__core)のみに与える。
    ════════════════════════════════════════════════════════════ */
 window.uzTimer = (function () {
-  /* 当月末までの営業日数（土日除外・祝日は考慮しない） */
-  function bizDaysToMonthEnd(now) {
-    const last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  /* 平日数（土日除外・祝日は考慮しない）：from〜to を両端含めて数える。to<from は 0。 */
+  function bizDaysBetween(from, to) {
+    const cur = new Date(from); cur.setHours(0,0,0,0);
+    const end = new Date(to);   end.setHours(0,0,0,0);
     let n = 0;
-    const cur = new Date(now); cur.setHours(0,0,0,0);
-    const end = new Date(last); end.setHours(0,0,0,0);
     while (cur <= end) {
       const dow = cur.getDay();
       if (dow !== 0 && dow !== 6) n++;
@@ -619,13 +618,46 @@ window.uzTimer = (function () {
     }
     return n;
   }
-  /* 売掛・買掛の状態：消灯(null)/青/赤/赤点滅 */
-  function stateAR(hasItem, now) {
+  /* 当月末までの営業日数（後方互換） */
+  function bizDaysToMonthEnd(now) {
+    const last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    return bizDaysBetween(now, last);
+  }
+  /* 日付文字列(YYYY-MM-DD / YYYY/MM/DD)が属する月の末日。不正なら null。 */
+  function monthEndOf(dateStr) {
+    const p = String(dateStr || '').split(/[-\/]/).map(Number);
+    if (!p[0] || !p[1]) return null;
+    return new Date(p[0], p[1], 0);
+  }
+  /* 売掛・買掛の状態：消灯(null)/青/赤/赤点滅
+     dueDateStr 指定時はその項目の月末を期限とし、期限超過かつ未処理なら点滅を維持する
+     （知らせ＋処理督促の表示のため、未処理の間はリセットしない）。
+     未指定時は当月末カウントダウン（集約boolean呼び出しの後方互換）。 */
+  function stateAR(hasItem, now, dueDateStr) {
     if (!hasItem) return null;
-    const b = bizDaysToMonthEnd(now || new Date());
+    now = now || new Date();
+    const today = new Date(now); today.setHours(0,0,0,0);
+    let due = (dueDateStr ? monthEndOf(dueDateStr) : null)
+              || new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    due.setHours(0,0,0,0);
+    if (today > due) return 'blink';          // 期限（月末）超過＋未処理 → 最緊急を維持
+    const b = bizDaysBetween(today, due);     // 今日〜期限の平日数（今日含む）
     if (b <= 1) return 'blink';
     if (b <= 3) return 'red';
     return 'blue';
+  }
+  /* 複数の未処理項目から最緊急状態を代表として返す（ホーム/サイドバー集約用）。
+     items: [{date}] を想定。空/未指定なら消灯(null)。 */
+  function mostUrgentAR(items, now) {
+    if (!Array.isArray(items) || items.length === 0) return null;
+    const rank = { blink: 3, red: 2, blue: 1 };
+    let best = null, bestRank = 0;
+    for (const it of items) {
+      const s = stateAR(true, now, it && it.date);
+      const r = rank[s] || 0;
+      if (r > bestRank) { bestRank = r; best = s; }
+    }
+    return best;
   }
   /* 勤怠（稼働時間）の状態：退勤済=グレー／勤務中<7h=青／7h=赤／7h57m〜=赤点滅 */
   function stateWork(workedMin, hasClockOut) {
@@ -669,7 +701,7 @@ window.uzTimer = (function () {
     );
     if (state) core.classList.add('uz-timer-dot__core--' + state);
   }
-  return { bizDaysToMonthEnd, stateAR, stateWork, workedMin, dotHTML, apply };
+  return { bizDaysToMonthEnd, bizDaysBetween, monthEndOf, stateAR, mostUrgentAR, stateWork, workedMin, dotHTML, apply };
 })();
 
 /* ── サイドバー カラータイマー（全画面共通・ウルトラマンの胸のシンボル） ──
@@ -682,11 +714,11 @@ function uzTimerStateFromBizDays() {
   return window.uzTimer.stateAR(true);
 }
 
-function uzApplySidebarTimer(hasUncollected, hasPayable) {
+function uzApplySidebarTimer(arItems) {
   const dot = document.getElementById('sidebar-timer-dot');
   if (!dot) return;
-  // 売掛・買掛のいずれか1件でもあれば月末営業日に基づく最緊急状態、0件なら消灯。
-  window.uzTimer.apply(dot, window.uzTimer.stateAR(hasUncollected || hasPayable));
+  // 売掛・買掛の全未処理項目から最緊急状態を代表表示（期限超過は点滅を維持）。0件なら消灯。
+  window.uzTimer.apply(dot, window.uzTimer.mostUrgentAR(arItems, new Date()));
 }
 
 async function uzLoadSidebarTimer() {
@@ -694,9 +726,8 @@ async function uzLoadSidebarTimer() {
   try {
     const res = await callGAS('getUncollected', {});
     if (res && res.status === 'ok' && Array.isArray(res.data)) {
-      const hasUncollected = res.data.some(r => r.type === 'uncollected');
-      const hasPayable     = res.data.some(r => r.type === 'payable');
-      uzApplySidebarTimer(hasUncollected, hasPayable);
+      const arItems = res.data.filter(r => r.type === 'uncollected' || r.type === 'payable');
+      uzApplySidebarTimer(arItems);
     }
   } catch { /* GAS失敗時は消灯のまま */ }
 }
