@@ -1320,6 +1320,16 @@ body.is-ipad .ipad-home-right {
   box-sizing: border-box;
   overflow: hidden;
 }
+
+/* ── フェーズA：iPad 上端整列 ───────────────────────────────
+   各画面の見出し帯（history-header / settings-header）を撤廃し、
+   先頭コンテンツをサイドバー屋号の高さ（≈28px）に統一する。
+   ページ識別はサイドバーのアクティブ表示が担う（02_画面仕様.md §2-2）。 */
+body.is-ipad[data-page="history"] .history-header { display: none; }
+body.is-ipad .ipad-hist-left  { padding-top: 28px; }
+body.is-ipad .ipad-hist-right { padding-top: 28px; }
+body.is-ipad[data-page="settings"] .settings-header { display: none; }
+body.is-ipad[data-page="settings"] .settings-section:first-of-type { margin-top: 28px; }
 body.is-ipad .ipad-dash-section--full {
   flex: 1;
   display: flex;
