@@ -246,7 +246,7 @@
     host.querySelectorAll('.uzf-cal-cell.is-sel').forEach(c => c.classList.remove('is-sel'));
     cell.classList.add('is-sel');
     setHead(host, 'date', fmtDate(s.date));
-    const btn = $(host, '.uzf-submit'); if (btn && !btn.disabled) btn.textContent = `発生日 ${fmtDate(s.date)}　登録する`;
+    const btn = $(host, '.uzf-submit'); if (btn && !btn.dataset.busy) btn.textContent = `発生日 ${fmtDate(s.date)}　登録する`;
   }
   function navCal(host, nav) {
     const s = host.__uzf;
@@ -271,7 +271,7 @@
 
     const { taxExcluded, tax } = calcTax(amount, s.taxRate);
     const btn = $(host, '.uzf-submit');
-    if (btn) { btn.disabled = true; btn.textContent = '登録中...'; }
+    if (btn) { btn.disabled = true; btn.dataset.busy = '1'; btn.textContent = '登録中...'; }
     try {
       let result;
       if (s.kind === 'sales') {
@@ -298,7 +298,7 @@
       resetForm(host);
     } catch (e) {
       toast('登録に失敗しました：' + (e?.message || '通信エラー'));
-      if (btn) { btn.disabled = false; btn.textContent = `発生日 ${fmtDate(s.date)}　登録する`; }
+      if (btn) { btn.disabled = false; delete btn.dataset.busy; btn.textContent = `発生日 ${fmtDate(s.date)}　登録する`; }
     }
   }
 
