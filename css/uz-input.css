@@ -1,279 +1,161 @@
 /* ============================================================
-   uz-input.css — 売上・コスト入力フォーム（正本・積層ステッパー）
+   uz-input.css — 売上・コスト入力フォーム（正本・全項目並列＋積層スタッキング）
    ------------------------------------------------------------
-   02_画面仕様.md §5-10。単一系統共有の入力フォーム。
-   スマホモーダル・iPad月次管理右カラム・iPad取引(履歴)右カラムの
-   全面で uz-input.js が .uzf-host に描画する。デバイス非依存。
-   ・選択タブは固定、選択済み項目は上部に積層し常時可視（.uzf-stack）
-   ・テンキー入力中も選択を覆わない（積層の下にインライン配置）
-   ・確定（登録）ボタンを押すまで一連で視認できる
-   ・OSキーボード/OSカレンダーを一切呼ばない（自作テンキー/カレンダー）
+   02_画面仕様.md §5-10。uz-input.js が .uzf-host に描画する単一系統フォーム。
+   ・全項目（発生日／区分・科目／金額）を常時並べる（高さ不変）。
+   ・各見出し .uzf-head は sticky。スクロールで上部に到達した順に固定され積み下がる。
+   ・テンキー入力中も上部に確定見出しが残り視認できる。
    配色は 00_原則.md §5-9 モノトーン濃淡のみ・トークン経由。
    ============================================================ */
 
 .uzf-host {
-  display: flex;
-  flex-direction: column;
+  display: block;
   height: 100%;
-  min-height: 0;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   font-family: var(--font-main);
 }
+/* スマホ（モーダル）：スクロールは .sm-body に任せ、見出しは sm-body に sticky 固定 */
+.uzf-host[data-uzf-modal] { height: auto; overflow: visible; }
 
-/* iPad（常設パネル）：タブ直下に詰まって見えないよう余白 */
-.uzf-host:not([data-uzf-modal]) { margin-top: 10px; }
-
-/* スマホ（モーダル）：スクロールは .sm-body 側に任せ、選択チップ(.uzf-stack)を
-   モーダル上部に sticky 固定する。テンキー入力中も発生日・区分/科目・金額の
-   確定チップが常に見え、覆われない（入力～確定まで一連で視認）。 */
-.uzf-host[data-uzf-modal] {
-  display: block;
-  height: auto;
-  min-height: 0;
-  overflow: visible;
-  padding-bottom: 8px;
-}
-.uzf-host[data-uzf-modal] .uzf-stack { top: 0; }
-
-/* ── 積層ステッパー：確定項目を上部に積む（タップで個別再編集） ── */
-.uzf-stack {
+/* ── 積層見出し（sticky スタッキング） ───────────────────── */
+.uzf-head {
   position: sticky;
-  top: 0;
-  z-index: 7;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  background: var(--uz-border);
-}
-.uzf-stack:empty { display: none; }
-.uzf-chip {
   display: flex;
   align-items: center;
   gap: 12px;
-  width: 100%;
-  padding: 12px 20px;
+  height: 42px;
+  box-sizing: border-box;
+  padding: 0 18px;
   background: var(--uz-text);
   color: var(--uz-on-accent);
-  border: none;
-  text-align: left;
+  border-bottom: 1px solid var(--uz-surface);
   cursor: pointer;
-  font-family: inherit;
 }
-.uzf-chip-k { font-size: 11px; opacity: 0.65; flex: 0 0 52px; }
-.uzf-chip-v { flex: 1; font-size: 15px; font-weight: 600; }
-.uzf-chip-edit {
-  font-size: 12px;
-  opacity: 0.8;
-  border: 1px solid var(--uz-border2);
-  border-radius: 8px;
-  padding: 4px 12px;
-}
+.uzf-head[data-stick="0"] { top: 0;    z-index: 9; }
+.uzf-head[data-stick="1"] { top: 42px; z-index: 8; }
+.uzf-head[data-stick="2"] { top: 84px; z-index: 7; }
+.uzf-sh-k { font-size: 11px; opacity: 0.6; flex: 0 0 46px; }
+.uzf-sh-v { flex: 1; font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* ── エディタ領域 ─────────────────────────────────────── */
-.uzf-editor { padding: 16px 20px; }
-.uzf-ed-head { font-size: 12px; color: var(--uz-text2); margin-bottom: 12px; }
-.uzf-ed-sub  { font-size: 12px; color: var(--uz-text2); margin: 18px 0 10px; }
+/* ── 各項目本体 ─────────────────────────────────────────── */
+.uzf-body { padding: 14px 18px; }
+.uzf-ed-sub { font-size: 12px; color: var(--uz-text2); margin: 16px 0 8px; }
 
 /* 区分タブ（仕入原価／販管費） */
-.uzf-divtabs { display: flex; gap: 10px; padding: 16px 20px 0; }
+.uzf-divtabs { display: flex; gap: 10px; margin-bottom: 12px; }
 .uzf-divtab {
-  flex: 1;
-  height: 46px;
-  border: 1px solid var(--uz-border);
-  border-radius: 10px;
-  background: var(--uz-bg);
-  font-family: inherit;
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--uz-text);
-  cursor: pointer;
+  flex: 1; height: 42px;
+  border: 1px solid var(--uz-border); border-radius: 10px;
+  background: var(--uz-bg); font-family: inherit; font-size: 15px; font-weight: 600;
+  color: var(--uz-text); cursor: pointer;
 }
-.uzf-divtab.is-active {
-  background: var(--uz-text);
-  color: var(--uz-on-accent);
-  border-color: var(--uz-text);
-}
+.uzf-divtab.is-active { background: var(--uz-text); color: var(--uz-on-accent); border-color: var(--uz-text); }
 
-/* 科目カード：列数は呼び出し側で uzf-cards--2 / --3 を付与 */
+/* 科目カード：列数は uzf-cards--2 / --3 で指定（売上・仕入=2／販管費=3） */
 .uzf-cards { display: grid; gap: 8px; }
 .uzf-cards--2 { grid-template-columns: 1fr 1fr; }
 .uzf-cards--3 { grid-template-columns: repeat(3, 1fr); }
+.uzf-cards-empty { color: var(--uz-text2); font-size: 13px; padding: 8px 0; }
 .uzf-card {
-  min-height: 46px;
-  padding: 8px 10px;
-  border: 1px solid var(--uz-border);
-  border-radius: 10px;
-  background: var(--uz-bg);
-  font-family: inherit;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--uz-text);
-  cursor: pointer;
-  line-height: 1.25;
+  min-height: 44px; padding: 8px 10px;
+  border: 1px solid var(--uz-border); border-radius: 10px;
+  background: var(--uz-bg); font-family: inherit; font-size: 14px; font-weight: 600;
+  color: var(--uz-text); cursor: pointer; line-height: 1.25;
 }
-.uzf-card.is-active {
-  background: var(--uz-text);
-  color: var(--uz-on-accent);
-  border-color: var(--uz-text);
-}
+.uzf-card.is-active { background: var(--uz-text); color: var(--uz-on-accent); border-color: var(--uz-text); }
 
 /* 諸口名称 */
 .uzf-misc { margin-top: 14px; }
+.uzf-misc[hidden] { display: none; }
 .uzf-misc-label { display: block; font-size: 12px; color: var(--uz-text2); margin-bottom: 8px; }
 .uzf-misc-input {
-  width: 100%;
-  height: 46px;
-  padding: 0 14px;
-  border: 1px solid var(--uz-border);
-  border-radius: 10px;
-  font-size: 15px;
-  font-family: inherit;
-  background: var(--uz-bg);
-  color: var(--uz-text);
-  box-sizing: border-box;
+  width: 100%; height: 44px; padding: 0 14px; box-sizing: border-box;
+  border: 1px solid var(--uz-border); border-radius: 10px;
+  font-size: 15px; font-family: inherit; background: var(--uz-bg); color: var(--uz-text);
 }
 
 /* 税率チップ */
 .uzf-taxchips { display: flex; gap: 10px; }
 .uzf-taxchip {
-  flex: 1;
-  height: 46px;
-  border: 1px solid var(--uz-border);
-  border-radius: 10px;
-  background: var(--uz-bg);
-  font-family: inherit;
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--uz-text);
-  cursor: pointer;
+  flex: 1; height: 42px;
+  border: 1px solid var(--uz-border); border-radius: 10px;
+  background: var(--uz-bg); font-family: inherit; font-size: 15px; font-weight: 600;
+  color: var(--uz-text); cursor: pointer;
 }
-.uzf-taxchip.is-active {
-  background: var(--uz-text);
-  color: var(--uz-on-accent);
-  border-color: var(--uz-text);
-}
+.uzf-taxchip.is-active { background: var(--uz-text); color: var(--uz-on-accent); border-color: var(--uz-text); }
 
-/* 金額表示＋自作テンキー */
+/* 金額表示＋自作テンキー（上下幅を短縮） */
 .uzf-amount-disp {
-  font-size: 34px;
-  font-weight: 700;
-  text-align: right;
-  color: var(--uz-text);
-  font-variant-numeric: tabular-nums;
-  padding: 6px 4px;
-  border-bottom: 2px solid var(--uz-text);
+  font-size: 30px; font-weight: 700; text-align: right; color: var(--uz-text);
+  font-variant-numeric: tabular-nums; padding: 4px 4px; border-bottom: 2px solid var(--uz-text);
 }
-.uzf-amount-yen { font-size: 18px; font-weight: 400; margin-left: 6px; color: var(--uz-text2); }
-.uzf-amount-tax { font-size: 13px; color: var(--uz-text2); text-align: right; margin: 8px 0 16px; }
-.uzf-keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.uzf-amount-yen { font-size: 16px; font-weight: 400; margin-left: 6px; color: var(--uz-text2); }
+.uzf-amount-tax { font-size: 13px; color: var(--uz-text2); text-align: right; margin: 6px 0 12px; }
+.uzf-keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .uzf-key {
-  height: 56px;
-  border: 1px solid var(--uz-border);
-  border-radius: 12px;
-  background: var(--uz-bg);
-  font-family: inherit;
-  font-size: 24px;
-  font-weight: 600;
-  color: var(--uz-text);
-  cursor: pointer;
+  height: 44px;
+  border: 1px solid var(--uz-border); border-radius: 10px;
+  background: var(--uz-bg); font-family: inherit; font-size: 22px; font-weight: 600;
+  color: var(--uz-text); cursor: pointer;
 }
 .uzf-key:active { background: var(--uz-surface); }
-.uzf-key--del, .uzf-key--clear { font-size: 16px; color: var(--uz-text2); }
+.uzf-key--del, .uzf-key--clear { font-size: 15px; color: var(--uz-text2); }
 .uzf-key--clear { grid-column: span 3; }
 
 /* tail：状況トグル・メモ・登録 */
-.uzf-tail { padding: 8px 20px 20px; border-top: 1px solid var(--uz-border); margin-top: 8px; }
-.uzf-toggle { display: flex; align-items: center; gap: 12px; font-size: 15px; color: var(--uz-text); padding: 12px 0; cursor: pointer; }
+.uzf-tail { padding: 12px 18px 20px; border-top: 1px solid var(--uz-border); }
+.uzf-toggle { display: flex; align-items: center; gap: 12px; font-size: 15px; color: var(--uz-text); padding: 10px 0; cursor: pointer; }
 .uzf-toggle input { width: 22px; height: 22px; accent-color: var(--uz-gold); }
-.uzf-memo-label { display: block; font-size: 12px; color: var(--uz-text2); margin: 8px 0; }
+.uzf-memo-label { display: block; font-size: 12px; color: var(--uz-text2); margin: 6px 0; }
 .uzf-memo {
-  width: 100%;
-  padding: 12px 14px;
-  border: 1px solid var(--uz-border);
-  border-radius: 10px;
-  font-size: 15px;
-  font-family: inherit;
-  background: var(--uz-bg);
-  color: var(--uz-text);
-  resize: none;
-  box-sizing: border-box;
+  width: 100%; padding: 10px 14px; box-sizing: border-box;
+  border: 1px solid var(--uz-border); border-radius: 10px;
+  font-size: 15px; font-family: inherit; background: var(--uz-bg); color: var(--uz-text); resize: none;
+}
+.uzf-reset {
+  display: block; margin: 10px auto 0; padding: 6px 0;
+  background: none; border: none; font-family: inherit; font-size: 13px;
+  color: var(--uz-text2); text-decoration: underline; cursor: pointer;
 }
 .uzf-submit {
-  width: 100%;
-  min-height: 54px;
-  margin-top: 16px;
-  border: none;
-  border-radius: 12px;
-  background: var(--uz-gold);
-  color: var(--uz-on-accent);
-  font-family: inherit;
-  font-size: 17px;
-  font-weight: 700;
-  cursor: pointer;
+  width: 100%; min-height: 50px; margin-top: 10px;
+  border: none; border-radius: 12px; background: var(--uz-gold); color: var(--uz-on-accent);
+  font-family: inherit; font-size: 17px; font-weight: 700; cursor: pointer;
 }
-.uzf-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+.uzf-submit:disabled { opacity: 0.45; cursor: not-allowed; }
 .uzf-submit:active:not(:disabled) { filter: brightness(1.06); }
-.uzf-reset {
-  display: block;
-  margin: 4px 20px 0;
-  padding: 6px 0;
-  background: none;
-  border: none;
-  font-family: inherit;
-  font-size: 13px;
-  color: var(--uz-text2);
-  text-decoration: underline;
-  cursor: pointer;
-}
 
-/* 自作カレンダー */
-.uzf-cal { border: 1px solid var(--uz-border); border-radius: 12px; padding: 12px; }
-.uzf-cal-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+/* 自作カレンダー（コンパクト） */
+.uzf-cal { border: 1px solid var(--uz-border); border-radius: 12px; padding: 10px; }
+.uzf-cal-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
 .uzf-cal-title { font-size: 15px; font-weight: 700; color: var(--uz-text); }
 .uzf-cal-nav {
-  width: 40px; height: 40px;
-  border: 1px solid var(--uz-border);
-  border-radius: 10px;
-  background: var(--uz-bg);
-  font-size: 18px;
-  color: var(--uz-text);
-  cursor: pointer;
+  width: 38px; height: 38px; border: 1px solid var(--uz-border); border-radius: 10px;
+  background: var(--uz-bg); font-size: 18px; color: var(--uz-text); cursor: pointer;
 }
-.uzf-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
-.uzf-cal-dow { text-align: center; font-size: 11px; color: var(--uz-text2); padding: 4px 0; }
+.uzf-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+.uzf-cal-dow { text-align: center; font-size: 11px; color: var(--uz-text2); padding: 3px 0; }
 .uzf-cal-cell {
-  aspect-ratio: 1 / 1;
-  border: none;
-  background: transparent;
-  border-radius: 8px;
-  font-family: inherit;
-  font-size: 15px;
-  color: var(--uz-text);
-  cursor: pointer;
+  aspect-ratio: 1 / 1; border: none; background: transparent; border-radius: 8px;
+  font-family: inherit; font-size: 15px; color: var(--uz-text); cursor: pointer;
 }
 .uzf-cal-cell.is-sel { background: var(--uz-text); color: var(--uz-on-accent); font-weight: 700; }
 .uzf-cal-empty { cursor: default; }
 
-/* トースト（showToast 不在環境のフォールバック） */
+/* トースト（showToast 不在時のフォールバック） */
 .uzf-toast {
-  position: fixed;
-  left: 50%;
-  bottom: 40px;
-  transform: translateX(-50%);
-  background: var(--uz-text);
-  color: var(--uz-on-accent);
-  padding: 12px 24px;
-  border-radius: 10px;
-  font-size: 14px;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.2s;
-  z-index: 800;
+  position: fixed; left: 50%; bottom: 40px; transform: translateX(-50%);
+  background: var(--uz-text); color: var(--uz-on-accent);
+  padding: 12px 24px; border-radius: 10px; font-size: 14px;
+  opacity: 0; pointer-events: none; transition: opacity 0.2s; z-index: 800;
 }
 .uzf-toast.show { opacity: 1; }
 
-/* スマホ（モーダル）でのキー高さ微調整 */
-@media (max-width: 380px) {
-  .uzf-key { height: 50px; font-size: 22px; }
-  .uzf-amount-disp { font-size: 30px; }
+/* スマホ（モーダル）：出現時に十分な高さを確保＋テンキーをさらに短縮 */
+.sm-sheet.sm-sheet--tall { height: 88vh; max-height: 88vh; }
+@media (max-width: 480px) {
+  .uzf-key { height: 40px; font-size: 20px; }
+  .uzf-amount-disp { font-size: 26px; }
+  .uzf-body { padding: 12px 16px; }
 }

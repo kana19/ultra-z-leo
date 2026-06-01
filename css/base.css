@@ -1816,13 +1816,14 @@ body.is-ipad .ipad-tab {
   border: none;
   color: var(--uz-text2);
   cursor: pointer;
+  border-top: 2px solid transparent;
   border-bottom: 2px solid transparent;
   margin-bottom: -1px;
 }
 
 body.is-ipad .ipad-tab.ipad-tab--active {
   color: var(--uz-gold);
-  border-bottom-color: var(--uz-gold);
+  border-top-color: var(--uz-gold);
   font-weight: 600;
 }
 
