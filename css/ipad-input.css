@@ -43,37 +43,42 @@ body.is-ipad .sm-sticky-date-input {
 /* ── セクション：横線で区切り、見出し高さを揃える ───────── */
 body.is-ipad .sales-sm-section,
 body.is-ipad .cost-sm-section {
-  padding: 16px 0;
+  padding: 11px 0;
 }
 body.is-ipad .sales-sm-label,
 body.is-ipad .cost-sm-label {
   font-size: 12px;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
-/* ── サービス／科目カード：2列グリッド・タップ目標拡大 ───── */
+/* ── サービス／科目カード：3列グリッド・区分タブと縦幅統一 ──
+   縦幅の冗長を解消（min-height を区分タブ 46px 相当に揃え、販管費の
+   多件数を3列で収める）。02_画面仕様.md §5-10。 */
 body.is-ipad .sales-sm-cards,
 body.is-ipad #sm-cost-item-cards {
   display: grid;
-  grid-template-columns: 1fr 1fr !important;
-  gap: 12px;
+  grid-template-columns: repeat(3, 1fr) !important;
+  gap: 8px;
 }
-/* radio-card（売上モーダルが生成）と cost-sm-card（コスト）双方を拡大 */
+/* radio-card（売上モーダル）・sales-sm-card・cost-sm-card 全対応 */
 body.is-ipad .sales-sm-cards .radio-card,
+body.is-ipad .sales-sm-card,
 body.is-ipad .cost-sm-card {
-  min-height: 64px;
-  padding: 14px 14px;
-  border-radius: 12px;
+  min-height: 46px;
+  padding: 8px 10px;
+  border-radius: 10px;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
   justify-content: center;
   text-align: center;
 }
 body.is-ipad .sales-sm-cards .radio-card__label,
+body.is-ipad .sales-sm-card__label,
 body.is-ipad .cost-sm-card__label {
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 600;
+  line-height: 1.25;
 }
 body.is-ipad .sales-sm-cards .radio-card__sub {
   font-size: 12px;

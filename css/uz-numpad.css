@@ -1,36 +1,41 @@
 /* ============================================================
-   uz-numpad.css — アプリ内蔵テンキー（金額入力）
+   uz-numpad.css — アプリ内蔵テンキー（金額入力・吹き出し型）
    ------------------------------------------------------------
    02_画面仕様.md §5-10「テンキー：OSキーボードを呼ばない金額入力」。
+   全幅下部バーをやめ、金額欄に紐づくコンパクトな吹き出し（カレンダー
+   ピッカー同様）として表示し、画面占有を抑える。
    配色は 00_原則.md §5-9 のモノトーン濃淡のみ。色相を持たない。
    すべて base.css の CSS変数経由（ハードコード16進カラーを置かない）。
-   スマホモーダル・iPad右カラム・iPadページの3面で共通利用。
    ============================================================ */
 
 .uz-numpad {
   position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
   z-index: 700; /* SheetModal(501)・トースト(600) より前面 */
+  width: 280px;
+  max-width: calc(100vw - 16px);
   background: var(--uz-surface);
-  border-top: 1px solid var(--uz-border2);
-  box-shadow: 0 -6px 20px rgba(0, 0, 0, 0.18);
-  padding: 8px 10px calc(10px + env(safe-area-inset-bottom));
-  transform: translateY(100%);
-  transition: transform 0.2s ease-out;
+  border: 1px solid var(--uz-border2);
+  border-radius: 14px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28);
+  padding: 10px;
+  opacity: 0;
+  transform: translateY(4px) scale(0.985);
+  transition: opacity 0.14s ease-out, transform 0.14s ease-out;
+  pointer-events: none;
   font-family: var(--font-main);
 }
 .uz-numpad--open {
-  transform: translateY(0);
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
 }
 
-/* ── 上部バー：ラベル・現在値エコー・完了ボタン ─────────── */
+/* ── 上部バー：ラベル・現在値エコー・完了 ───────────────── */
 .uz-numpad__bar {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 4px 6px 10px;
+  gap: 8px;
+  padding: 2px 4px 8px;
   border-bottom: 1px solid var(--uz-border);
   margin-bottom: 8px;
 }
@@ -46,25 +51,25 @@
   flex: 1;
   min-width: 0;
   text-align: right;
-  font-size: 22px;
+  font-size: 18px;
   font-weight: 700;
   color: var(--uz-text);
 }
 .uz-numpad__bar-value::after {
   content: " 円";
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--uz-text2);
 }
 .uz-numpad__done {
   flex-shrink: 0;
-  min-height: 36px;
-  padding: 6px 16px;
+  min-height: 30px;
+  padding: 5px 14px;
   background: var(--uz-gold);
   color: var(--uz-on-accent);
   border: none;
-  border-radius: 8px;
-  font-size: 14px;
+  border-radius: 7px;
+  font-size: 13px;
   font-weight: 700;
   font-family: var(--font-main);
   cursor: pointer;
@@ -73,20 +78,18 @@
   filter: brightness(1.08);
 }
 
-/* ── キー配列（3列） ───────────────────────────────────── */
+/* ── キー配列（3列・コンパクト） ─────────────────────────── */
 .uz-numpad__keys {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  max-width: 480px;
-  margin: 0 auto;
+  gap: 6px;
 }
 .uz-numpad__key {
-  min-height: 52px;
+  min-height: 46px;
   background: var(--uz-bg);
   border: 1px solid var(--uz-border2);
-  border-radius: 10px;
-  font-size: 22px;
+  border-radius: 9px;
+  font-size: 20px;
   font-weight: 700;
   color: var(--uz-text);
   font-family: var(--font-main);
@@ -102,28 +105,11 @@
   background: var(--uz-surface2);
 }
 .uz-numpad__key--sub {
-  font-size: 18px;
+  font-size: 16px;
   color: var(--uz-text2);
 }
 
-/* ── 装着中の金額欄を強調（タップ対象を明示） ───────────── */
+/* ── 装着中の金額欄を強調（吹き出しの紐づけを明示） ──────── */
 .uz-numpad-focus {
   border-color: var(--uz-gold) !important;
-  background: var(--uz-surface2) !important;
-}
-
-/* ── iPad：広幅でキーを中央寄せ ─────────────────────────── */
-body.is-ipad .uz-numpad__keys {
-  max-width: 520px;
-}
-
-/* ── 狭幅端末（iPhone SE 等） ───────────────────────────── */
-@media (max-width: 380px) {
-  .uz-numpad__key {
-    min-height: 46px;
-    font-size: 20px;
-  }
-  .uz-numpad__bar-value {
-    font-size: 20px;
-  }
 }

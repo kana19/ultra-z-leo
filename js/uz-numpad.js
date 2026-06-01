@@ -4,21 +4,20 @@
  * 02_画面仕様.md §5-10。売上・コストの金額入力は単一系統を共有するため、
  * 本コンポーネントは sales.js / cost.js を改変せず自己装着する。
  *
+ * 表示形態: 全幅下部バーではなく、金額欄に紐づくコンパクトな吹き出し
+ *   （カレンダーピッカー同様）として、欄の直下／直上に配置する。
+ *
  * 対象欄: .sales-sm-amount-input / .cost-sm-amount-input / [data-uz-numpad]
  *   - 装着時に readonly + inputmode=none を付与し OSキーボードを開かせない。
  *   - キー入力は「生の数字」を input.value に書いて input イベントを発火する。
- *     これにより既存の桁区切り整形（_bindSalesAmountFormatting /
- *     _smCostBindAmountInput）と内消費税再計算（_smRefreshTaxDisplay /
- *     _smCostRecalcTaxMemo）がそのまま動作する。
- *
- * 適用面: スマホ売上/コストモーダル・iPad月次管理右カラム・iPad売上/コストページ。
- * SheetModal / iPadパネルは金額欄を動的注入するため、委譲 + MutationObserver で捕捉する。
+ *     これにより既存の桁区切り整形・内消費税再計算がそのまま動作する。
  */
 'use strict';
 
 (function () {
   const SELECTOR = '.sales-sm-amount-input, .cost-sm-amount-input, [data-uz-numpad]';
   const MAXLEN = 12;
+  const GAP = 8;
 
   let _activeInput = null;
   let _pad = null;
@@ -47,7 +46,7 @@
 
   /* 生の数字を入れ、既存の整形・税再計算ハンドラを input で起動させる */
   function _setRaw(el, raw) {
-    raw = raw.replace(/^0+(?=\d)/, '');         // 先頭ゼロ除去
+    raw = raw.replace(/^0+(?=\d)/, '');
     if (raw.length > MAXLEN) raw = raw.slice(0, MAXLEN);
     el.value = raw;
     el.dispatchEvent(new Event('input', { bubbles: true }));
@@ -83,6 +82,27 @@
     return pad;
   }
 
+  /* 金額欄にアンカーして吹き出しを配置（下に出す・収まらなければ上） */
+  function _position(el, pad) {
+    const r = el.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const pw = pad.offsetWidth;
+    const ph = pad.offsetHeight;
+    let left = Math.min(Math.max(8, r.left), vw - pw - 8);
+    let top = r.bottom + GAP;
+    if (top + ph > vh - 8) {
+      const above = r.top - ph - GAP;
+      top = above >= 8 ? above : Math.max(8, vh - ph - 8);
+    }
+    pad.style.left = left + 'px';
+    pad.style.top = top + 'px';
+  }
+
+  function _reposition() {
+    if (_activeInput && _pad) _position(_activeInput, _pad);
+  }
+
   function _echo(el) {
     const e = document.getElementById('uz-numpad-echo');
     if (!e) return;
@@ -111,19 +131,22 @@
     _activeInput = el;
     const pad = _buildPad();
     el.classList.add('uz-numpad-focus');
+    _echo(el);
+    // レイアウト確定後に位置決め → 表示
     requestAnimationFrame(() => {
+      _position(el, pad);
       pad.classList.add('uz-numpad--open');
-      document.body.classList.add('uz-numpad-active');
-      _echo(el);
-      try { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) {}
     });
+    window.addEventListener('scroll', _reposition, true);
+    window.addEventListener('resize', _reposition);
   }
 
   function close() {
     if (_pad) _pad.classList.remove('uz-numpad--open');
-    document.body.classList.remove('uz-numpad-active');
     if (_activeInput) _activeInput.classList.remove('uz-numpad-focus');
     _activeInput = null;
+    window.removeEventListener('scroll', _reposition, true);
+    window.removeEventListener('resize', _reposition);
   }
 
   /* ── 委譲：金額欄のタップでテンキー、他フィールドへ移れば閉じる ── */
