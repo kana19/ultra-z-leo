@@ -123,6 +123,8 @@
     }
     const items = getItems(s);
     const sel = s.kind === 'sales' ? s.svcCode : s.itemCode;
+    // 列数：売上品目・仕入原価科目は2列、件数が多い販管費（区分2）のみ3列。
+    const colsCls = (s.kind === 'cost' && s.divCode === '2') ? 'uzf-cards--3' : 'uzf-cards--2';
     const cards = items.map(it => `
       <button type="button" class="uzf-card ${it.code === sel ? 'is-active' : ''}" data-code="${ESC(it.code)}" data-name="${ESC(it.name)}" data-tax="${it.taxRate ?? 10}">
         ${ESC(it.name)}
@@ -138,7 +140,7 @@
          </div>` : '';
     return `${divTabs}
       <div class="uzf-ed-head">${s.kind === 'sales' ? 'サービスを選択' : '科目を選択'}</div>
-      <div class="uzf-cards">${cards}</div>
+      <div class="uzf-cards ${colsCls}">${cards}</div>
       ${miscBox}${taxChips}`;
   }
 
@@ -330,11 +332,32 @@
   }
 
   /* ── 公開 API ─────────────────────────────────────────── */
+  /* 販管費（区分2）は costMaster（グローバル）に依存する。仕入原価（区分1）は
+     別ソース（purchaseMaster）。cost フォーム mount 時に costMaster を確実にロードし、
+     非同期ロード完了後に科目選択中の host を再描画する（→ cost.js getDivisionItems）。*/
+  const _hosts = new Set();
+  function _ensureCostMaster() {
+    try { if (typeof getCostMaster === 'function') costMaster = getCostMaster(); } catch (_) {}
+    if (typeof loadCostMasterFromGAS === 'function') {
+      try {
+        const p = loadCostMasterFromGAS();
+        if (p && typeof p.then === 'function') p.then(_refreshItemStep).catch(() => {});
+      } catch (_) {}
+    }
+  }
+  function _refreshItemStep() {
+    _hosts.forEach(h => {
+      if (h.isConnected && h.__uzf && h.__uzf.kind === 'cost' && h.__uzf.editing === 'item') render(h);
+    });
+  }
+
   function mount(host, kind, opts = {}) {
     if (!host) return;
     host.classList.add('uzf-host');
     host.__uzf = newState(kind);
     host.__uzf.opts = opts || {};
+    _hosts.add(host);
+    if (kind === 'cost') _ensureCostMaster();
     render(host);
   }
 

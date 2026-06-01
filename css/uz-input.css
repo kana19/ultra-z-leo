@@ -20,6 +20,21 @@
   font-family: var(--font-main);
 }
 
+/* iPad（常設パネル）：タブ直下に詰まって見えないよう余白 */
+.uzf-host:not([data-uzf-modal]) { margin-top: 10px; }
+
+/* スマホ（モーダル）：スクロールは .sm-body 側に任せ、選択チップ(.uzf-stack)を
+   モーダル上部に sticky 固定する。テンキー入力中も発生日・区分/科目・金額の
+   確定チップが常に見え、覆われない（入力～確定まで一連で視認）。 */
+.uzf-host[data-uzf-modal] {
+  display: block;
+  height: auto;
+  min-height: 0;
+  overflow: visible;
+  padding-bottom: 8px;
+}
+.uzf-host[data-uzf-modal] .uzf-stack { top: 0; }
+
 /* ── 積層ステッパー：確定項目を上部に積む（タップで個別再編集） ── */
 .uzf-stack {
   position: sticky;
@@ -79,12 +94,10 @@
   border-color: var(--uz-text);
 }
 
-/* 科目カード：3列（販管費の多件数を収める・区分タブと縦幅統一） */
-.uzf-cards {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-}
+/* 科目カード：列数は呼び出し側で uzf-cards--2 / --3 を付与 */
+.uzf-cards { display: grid; gap: 8px; }
+.uzf-cards--2 { grid-template-columns: 1fr 1fr; }
+.uzf-cards--3 { grid-template-columns: repeat(3, 1fr); }
 .uzf-card {
   min-height: 46px;
   padding: 8px 10px;
