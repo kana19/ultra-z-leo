@@ -34,27 +34,42 @@ window.SheetModal = (() => {
   }
 
   /* ── ドラッグ閉じ ─────────────────────────────────────── */
+  /* 本体スクロールが最上部のとき（またはハンドル/ヘッダー把持時）だけ
+     下方向ドラッグで閉じる。途中スクロール中は閉じない（§5-10 逆戻り閲覧）。 */
   function _bindDrag(sheet) {
-    let startY = 0, dragY = 0, active = false;
+    let startY = 0, dragY = 0, active = false, dragging = false, fromHandle = false, body = null;
+    const TH = 80;
 
     sheet.addEventListener('touchstart', e => {
+      body = sheet.querySelector('.sm-body');
+      const t = e.target;
+      fromHandle = !!(t.closest && (t.closest('.sm-handle') || t.closest('.sm-header')));
       startY = e.touches[0].clientY;
       dragY  = 0;
       active = true;
+      dragging = false;
       sheet.style.transition = 'none';
     }, { passive: true });
 
     sheet.addEventListener('touchmove', e => {
       if (!active) return;
       dragY = e.touches[0].clientY - startY;
-      if (dragY < 0) dragY = 0;
+      // 下方向（dragY>0）のみ閉じ対象。上方向は通常スクロールに任せる。
+      if (dragY <= 0) {
+        if (dragging) { sheet.style.transform = 'translateY(0)'; dragging = false; }
+        return;
+      }
+      // ハンドル/ヘッダー以外は、本体スクロールが最上部のときだけドラッグ閉じを始動。
+      const atTop = !body || body.scrollTop <= 0;
+      if (!fromHandle && !atTop) { dragging = false; return; }
+      dragging = true;
       sheet.style.transform = `translateY(${dragY}px)`;
     }, { passive: true });
 
     sheet.addEventListener('touchend', () => {
       if (!active) return;
       active = false;
-      if (dragY >= 80) {
+      if (dragging && dragY >= TH) {
         close();
       } else {
         sheet.style.transition = 'transform 0.15s ease-out';
@@ -63,6 +78,7 @@ window.SheetModal = (() => {
       }
       startY = 0;
       dragY  = 0;
+      dragging = false;
     });
   }
 
