@@ -1326,7 +1326,13 @@ body.is-ipad .ipad-home-right {
    先頭コンテンツをサイドバー屋号の高さ（≈28px）に統一する。
    ページ識別はサイドバーのアクティブ表示が担う（02_画面仕様.md §2-2）。 */
 body.is-ipad[data-page="history"] .history-header { display: none; }
-body.is-ipad .ipad-hist-left  { padding-top: 28px; }
+/* 左カラム：上部帯をタブと同色(surface)で連続させ白背景の境目を消す。
+   28px の屋号整列は固定帯(hist-fixed-top)の上余白として確保する。 */
+body.is-ipad .ipad-hist-left  { padding-top: 0; }
+body.is-ipad[data-page="history"] .hist-fixed-top {
+  background: var(--uz-surface);
+  padding-top: 28px;
+}
 body.is-ipad .ipad-hist-right { padding-top: 28px; }
 body.is-ipad[data-page="settings"] .settings-header { display: none; }
 body.is-ipad[data-page="settings"] .settings-section:first-of-type { margin-top: 28px; }
@@ -1803,8 +1809,8 @@ body.is-ipad .ipad-input-tabs {
 
 body.is-ipad .ipad-tab {
   flex: 1;
-  padding: 12px;
-  font-size: 14px;
+  padding: 12px 4px;
+  font-size: 13px;
   font-family: inherit;
   background: transparent;
   border: none;
