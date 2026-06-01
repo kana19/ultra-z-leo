@@ -33,13 +33,16 @@ async function loadAll() {
     callGAS('getCostMaster', {}).catch(() => null),
   ]);
   settings = (sRes && sRes.status === 'ok' && sRes.data) ? sRes.data : {};
-  // 6-G フェーズ2：マスタ件数枠を取得（未投入の既存ユーザーはフォールバック値を使う）
+  // 6-G フェーズ2：マスタ件数枠を取得（未投入の既存ユーザーは上限制御を無効化）
   if (settings.masterQuota && typeof settings.masterQuota === 'object') {
     masterQuota = {
       serviceMasterQuota: Number(settings.masterQuota.serviceMasterQuota) || 5,
       purchaseMasterQuota: Number(settings.masterQuota.purchaseMasterQuota) || 3,
       costOptionalQuota: Number(settings.masterQuota.costOptionalQuota) || 5
     };
+  } else if (settings.masterQuota === null) {
+    // B17未投入の既存ユーザー → 上限制御を無効化（03_データ仕様.md §1-4-2）
+    masterQuota = { serviceMasterQuota: null, purchaseMasterQuota: null, costOptionalQuota: null };
   }
   // 6-G フェーズ2：仕入マスタを取得（getSettings 応答から優先・なければ空）
   if (Array.isArray(settings.purchaseMasterList)) {
@@ -160,17 +163,18 @@ function renderServices() {
   }
 
   const badge = document.getElementById('svc-count-badge');
+  const quotaUnlimited = (quota == null || !isFinite(quota));
   if (badge) {
     badge.hidden = false;
-    badge.textContent = ` ${svcs.length}/${quota}`;
+    badge.textContent = quotaUnlimited ? ` ${svcs.length}件` : ` ${svcs.length}/${quota}`;
   }
   const addRow = document.getElementById('svc-add-row');
   const hint = document.getElementById('svc-limit-hint');
-  const atMax = svcs.length >= quota;
+  const atMax = !quotaUnlimited && svcs.length >= quota;
   if (addRow) addRow.style.display = atMax ? 'none' : '';
   if (hint) {
     hint.hidden = !atMax;
-    hint.textContent = `件数枠の上限（${quota}件）に達しています。追加するにはターゲット社にご相談ください。`;
+    if (atMax) hint.textContent = `件数枠の上限（${quota}件）に達しています。追加するにはターゲット社にご相談ください。`;
   }
 }
 
@@ -184,7 +188,8 @@ async function addService() {
   if (name.length > 30) return showToast('サービス名は30文字以内で入力してください', 'error');
 
   const list = getServiceListFromState();
-  if (list.length >= masterQuota.serviceMasterQuota) {
+  if (masterQuota.serviceMasterQuota != null && isFinite(masterQuota.serviceMasterQuota)
+      && list.length >= masterQuota.serviceMasterQuota) {
     return showToast(`件数枠の上限（${masterQuota.serviceMasterQuota}件）に達しています`, 'error');
   }
   if (list.some(s => s.name === name)) {
@@ -257,17 +262,18 @@ function renderPurchases() {
   }
 
   const badge = document.getElementById('pur-count-badge');
+  const quotaUnlimited = (quota == null || !isFinite(quota));
   if (badge) {
     badge.hidden = false;
-    badge.textContent = ` ${purchaseList.length}/${quota}`;
+    badge.textContent = quotaUnlimited ? ` ${purchaseList.length}件` : ` ${purchaseList.length}/${quota}`;
   }
   const addRow = document.getElementById('pur-add-row');
   const hint = document.getElementById('pur-limit-hint');
-  const atMax = purchaseList.length >= quota;
+  const atMax = !quotaUnlimited && purchaseList.length >= quota;
   if (addRow) addRow.style.display = atMax ? 'none' : '';
   if (hint) {
     hint.hidden = !atMax;
-    hint.textContent = `件数枠の上限（${quota}件）に達しています。追加するにはターゲット社にご相談ください。`;
+    if (atMax) hint.textContent = `件数枠の上限（${quota}件）に達しています。追加するにはターゲット社にご相談ください。`;
   }
 }
 
@@ -280,7 +286,8 @@ async function addPurchase() {
   if (!name) return showToast('科目名を入力してください', 'error');
   if (name.length > 30) return showToast('科目名は30文字以内で入力してください', 'error');
 
-  if (purchaseList.length >= masterQuota.purchaseMasterQuota) {
+  if (masterQuota.purchaseMasterQuota != null && isFinite(masterQuota.purchaseMasterQuota)
+      && purchaseList.length >= masterQuota.purchaseMasterQuota) {
     return showToast(`件数枠の上限（${masterQuota.purchaseMasterQuota}件）に達しています`, 'error');
   }
   if (purchaseList.some(p => p.name === name)) {

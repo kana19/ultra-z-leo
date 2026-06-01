@@ -110,9 +110,10 @@ function getMasterQuota() {
     const saved = localStorage.getItem(MASTER_QUOTA_KEY);
     if (!saved) return { ...DEFAULT_MASTER_QUOTA };
     const parsed = JSON.parse(saved);
+    // null フィールド（B17未投入 → 上限制御無効化・03_データ仕様.md §1-4-2）も許容する
     if (parsed && typeof parsed === 'object'
-        && typeof parsed.serviceMasterQuota === 'number'
-        && typeof parsed.purchaseMasterQuota === 'number') {
+        && ('serviceMasterQuota' in parsed)
+        && ('purchaseMasterQuota' in parsed)) {
       return parsed;
     }
     return { ...DEFAULT_MASTER_QUOTA };
@@ -140,9 +141,12 @@ async function loadSettingsFromGAS() {
       if (Array.isArray(serviceList)) _saveServiceList(serviceList);
       // 6-G フェーズ2：仕入マスタを受け取る
       if (Array.isArray(purchaseMasterList)) _savePurchaseList(purchaseMasterList);
-      // 6-G フェーズ2：マスタ件数枠を受け取る（null なら既存ユーザー扱い・フォールバック）
+      // 6-G フェーズ2：マスタ件数枠を受け取る
       if (masterQuota && typeof masterQuota === 'object') {
         _saveMasterQuota(masterQuota);
+      } else if (masterQuota === null) {
+        // B17未投入の既存ユーザー → 上限制御を無効化（03_データ仕様.md §1-4-2）
+        _saveMasterQuota({ serviceMasterQuota: null, purchaseMasterQuota: null, costOptionalQuota: null });
       }
       // businessHours も localStorage に保存（A-9：基本情報・出勤履歴判定で使用）
       if (businessHours && typeof businessHours === 'object' && businessHours.open && businessHours.close) {
@@ -600,6 +604,7 @@ function renderServiceList() {
 
   const list = getServiceList();
   const quota = getMasterQuota().serviceMasterQuota;
+  const unlimited = (quota == null || !isFinite(quota));
 
   let html = list.map(s => {
     const idKey = String(s.id || s.code || '');  // 旧データ互換（code フィールドも受ける）
@@ -617,20 +622,20 @@ function renderServiceList() {
 
   container.innerHTML = html;
 
-  // 件数バッジ表示（運営付与枠 vs 現使用件数）
+  // 件数バッジ表示（運営付与枠 vs 現使用件数・無制限時は件数のみ）
   const badge = document.getElementById('service-count-badge');
   if (badge) {
     badge.hidden = false;
-    badge.textContent = ` ${list.length}/${quota}`;
+    badge.textContent = unlimited ? ` ${list.length}件` : ` ${list.length}/${quota}`;
   }
   // 追加フォーム表示制御
   const addRow = document.getElementById('service-add-row');
   const hint   = document.getElementById('service-limit-hint');
-  const atMax  = list.length >= quota;
+  const atMax  = !unlimited && list.length >= quota;
   if (addRow) addRow.hidden = atMax;
   if (hint) {
     hint.hidden = !atMax;
-    hint.textContent = `件数枠の上限（${quota}件）に達しています。追加するにはターゲット社にご相談ください。`;
+    if (atMax) hint.textContent = `件数枠の上限（${quota}件）に達しています。追加するにはターゲット社にご相談ください。`;
   }
 }
 
@@ -674,7 +679,7 @@ function bindServiceAdd() {
     // クライアント側でも枠超過チェック（即時フィードバック・サーバ側でも再チェック）
     const list = getServiceList();
     const quota = getMasterQuota().serviceMasterQuota;
-    if (list.length >= quota) {
+    if (quota != null && isFinite(quota) && list.length >= quota) {
       return showToast(`件数枠の上限（${quota}件）に達しています`, 'error');
     }
     if (list.some(s => s.name === name)) {
@@ -725,6 +730,7 @@ function renderPurchaseList() {
 
   const list = getPurchaseList();
   const quota = getMasterQuota().purchaseMasterQuota;
+  const unlimited = (quota == null || !isFinite(quota));
 
   let html = list.map(p => {
     const idKey = String(p.id || '');
@@ -746,15 +752,15 @@ function renderPurchaseList() {
   const badge = document.getElementById('purchase-count-badge');
   if (badge) {
     badge.hidden = false;
-    badge.textContent = ` ${list.length}/${quota}`;
+    badge.textContent = unlimited ? ` ${list.length}件` : ` ${list.length}/${quota}`;
   }
   const addRow = document.getElementById('purchase-add-row');
   const hint   = document.getElementById('purchase-limit-hint');
-  const atMax  = list.length >= quota;
+  const atMax  = !unlimited && list.length >= quota;
   if (addRow) addRow.hidden = atMax;
   if (hint) {
     hint.hidden = !atMax;
-    hint.textContent = `件数枠の上限（${quota}件）に達しています。追加するにはターゲット社にご相談ください。`;
+    if (atMax) hint.textContent = `件数枠の上限（${quota}件）に達しています。追加するにはターゲット社にご相談ください。`;
   }
 }
 
@@ -794,7 +800,7 @@ function bindPurchaseAdd() {
 
     const list = getPurchaseList();
     const quota = getMasterQuota().purchaseMasterQuota;
-    if (list.length >= quota) {
+    if (quota != null && isFinite(quota) && list.length >= quota) {
       return showToast(`件数枠の上限（${quota}件）に達しています`, 'error');
     }
     if (list.some(p => p.name === name)) {
@@ -867,7 +873,7 @@ function renderCostMaster() {
     return `
       <label style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--uz-muted);cursor:pointer;white-space:nowrap;">
         <input type="checkbox" id="${id}" style="width:16px;height:16px;accent-color:var(--uz-gold,#b8860b);"${checked}>
-        表示
+        アプリ表示
       </label>`;
   }
 
@@ -913,8 +919,8 @@ function renderCostMaster() {
       <p style="font-size:12px;color:var(--uz-muted);line-height:1.6;">
         固定科目は名称変更不可・税率のみ変更可。<br>
         任意科目は科目名を入力すると有効になります。<br>
-        「表示」のチェックを外した科目はスマホ・iPadのコスト入力に表示されません（PC版は全科目入力可）。<br>
-        科目番号は確定申告書（収支内訳書）の科目番号に対応しています。
+        「アプリ表示」のチェックを外した科目はスマホ・iPadのコスト入力に表示されません（PC版は全科目入力可）。<br>
+        科目番号は青色申告決算書の科目番号に対応しています。
       </p>
     </div>`;
 
