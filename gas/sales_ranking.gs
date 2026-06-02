@@ -16,7 +16,7 @@
 
 function getSalesCategoryRanking_(months) {
   const monthsNum = parseInt(months, 10) || 1;
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('sales');
+  const sheet = _ss_().getSheetByName('sales');
   if (!sheet) return [];
 
   const lastRow = sheet.getLastRow();

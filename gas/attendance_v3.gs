@@ -100,7 +100,7 @@ function _resolveClockOutDate(clockInDateStr, clockInTime, clockOutTime, explici
    ══════════════════════════════════════════════════════════ */
 
 function setupAttendanceMigrationV3() {
-  const ss    = SpreadsheetApp.getActiveSpreadsheet();
+  const ss    = _ss_();
   const sheet = ss.getSheetByName('attendance');
   if (!sheet) return { status: 'error', message: 'attendance シートが見つかりません' };
 
@@ -213,7 +213,7 @@ function setupAttendanceMigrationV3() {
    ══════════════════════════════════════════════════════════ */
 
 function _doClockInV3(data) {
-  const ss    = SpreadsheetApp.getActiveSpreadsheet();
+  const ss    = _ss_();
   let   sheet = ss.getSheetByName('attendance');
   if (!sheet) sheet = ss.insertSheet('attendance');
 
@@ -248,7 +248,7 @@ function _doClockInV3(data) {
    ══════════════════════════════════════════════════════════ */
 
 function _doClockOutV3(data) {
-  const ss    = SpreadsheetApp.getActiveSpreadsheet();
+  const ss    = _ss_();
   const sheet = ss.getSheetByName('attendance');
   if (!sheet) return { status: 'error', message: 'attendance シートが見つかりません' };
 
@@ -280,7 +280,7 @@ function _doClockOutV3(data) {
    ══════════════════════════════════════════════════════════ */
 
 function _doUpdateAttendanceV3(data) {
-  const ss    = SpreadsheetApp.getActiveSpreadsheet();
+  const ss    = _ss_();
   const sheet = ss.getSheetByName('attendance');
   if (!sheet) return { status: 'error', message: 'attendance シートが見つかりません' };
 
@@ -337,7 +337,7 @@ function _doGetAttendanceByMonthV3(data) {
   const month = data.month || '';
   if (!month) return { status: 'error', message: 'month は必須です (YYYY-MM)' };
 
-  const ss    = SpreadsheetApp.getActiveSpreadsheet();
+  const ss    = _ss_();
   const sheet = ss.getSheetByName('attendance');
   if (!sheet) return { status: 'ok', data: [] };
 
