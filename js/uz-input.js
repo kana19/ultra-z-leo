@@ -115,6 +115,7 @@
   function buildSkeleton(host) {
     const s = host.__uzf;
     const stateLabel = s.kind === 'sales' ? '売掛（未入金）' : '買掛（未払い）';
+    const editLabel = (s.opts && s.opts.editId) ? '保存する' : '登録する';
     host.innerHTML =
       `<div class="uzf-head" data-stick="0" data-go="date">
          <span class="uzf-sh-k">発生日</span><span class="uzf-sh-v" data-v="date">${fmtDate(s.date)}</span>
@@ -145,14 +146,13 @@
          <div class="uzf-keypad">${keypadHTML()}</div>
          <div class="uzf-keypad-last">
            <button type="button" class="uzf-key uzf-key--clear" data-key="clear">クリア</button>
-           <label class="uzf-toggle"><input type="checkbox" class="uzf-unpaid"><span>${stateLabel}</span></label>
          </div>
          <textarea class="uzf-memo" rows="1" placeholder="メモ（任意）"></textarea>
        </div>
 
        <div class="uzf-tail">
-         <button type="button" class="uzf-reset">入力をリセット</button>
-         <button type="button" class="uzf-submit" disabled>発生日 ${fmtDate(s.date)}　登録する</button>
+         <label class="uzf-toggle"><input type="checkbox" class="uzf-unpaid"><span>${stateLabel}</span></label>
+         <button type="button" class="uzf-submit" disabled>${editLabel}</button>
        </div>`;
   }
 
@@ -251,7 +251,6 @@
     host.querySelectorAll('.uzf-cal-cell.is-sel').forEach(c => c.classList.remove('is-sel'));
     cell.classList.add('is-sel');
     setHead(host, 'date', fmtDate(s.date));
-    const btn = $(host, '.uzf-submit'); if (btn && !btn.dataset.busy) btn.textContent = `発生日 ${fmtDate(s.date)}　登録する`;
   }
   function navCal(host, nav) {
     const s = host.__uzf;
@@ -303,7 +302,7 @@
       resetForm(host);
     } catch (e) {
       toast('登録に失敗しました：' + (e?.message || '通信エラー'));
-      if (btn) { btn.disabled = false; delete btn.dataset.busy; btn.textContent = `発生日 ${fmtDate(s.date)}　登録する`; }
+      if (btn) { btn.disabled = false; delete btn.dataset.busy; btn.textContent = (s.opts && s.opts.editId) ? '保存する' : '登録する'; }
     }
   }
 
@@ -317,6 +316,8 @@
 
   /* ── 結線（イベント委譲：部分更新後も再バインド不要） ── */
   function bindAll(host) {
+    if (host.__uzfBound) return;
+    host.__uzfBound = true;
     host.addEventListener('click', e => {
       let el;
       if ((el = e.target.closest('.uzf-card'))) return selectItem(host, el);
@@ -325,7 +326,6 @@
       if ((el = e.target.closest('.uzf-key'))) return pressKey(host, el);
       if ((el = e.target.closest('.uzf-cal-cell[data-day]'))) return selectDay(host, el);
       if ((el = e.target.closest('.uzf-cal-nav'))) return navCal(host, el);
-      if ((el = e.target.closest('.uzf-reset'))) return resetForm(host);
       if ((el = e.target.closest('.uzf-submit'))) return submitForm(host);
       if ((el = e.target.closest('.uzf-head[data-go]'))) {
         const body = el.nextElementSibling;
