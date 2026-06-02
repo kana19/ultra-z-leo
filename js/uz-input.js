@@ -54,12 +54,18 @@
     let label;
     if (s.kind === 'sales') label = s.svcName ? s.svcName + (s.miscName ? `（${s.miscName}）` : '') : '';
     else label = s.itemName ? `${divLabel(s.divCode)}／${s.itemName}` + (s.miscName ? `（${s.miscName}）` : '') : '';
-    if (!label) return '未選択';
-    if (s.taxRate != null) label += `（${s.taxRate === 0 ? '非課税' : s.taxRate + '%'}）`;
-    return label;
+    return label || '未選択';
+  }
+  function itemTaxLabel(s) {
+    return (s.taxRate == null) ? '' : (s.taxRate === 0 ? '非課税' : s.taxRate + '%');
   }
   function amountHeadValue(s) {
     return (s.amount && parseInt(s.amount, 10) > 0) ? fmtAmt(s.amount) : '¥0';
+  }
+  function amountTaxLabel(s) {
+    const tax = (s.taxRate != null && s.amount && typeof calcTax === 'function')
+      ? calcTax(parseInt(s.amount, 10), s.taxRate).tax : 0;
+    return `内消費税 ${tax.toLocaleString('ja-JP')} 円`;
   }
   function colsCls(s) {
     return (s.kind === 'cost' && s.divCode === '2') ? 'uzf-cards--3' : 'uzf-cards--2';
@@ -82,8 +88,7 @@
     const keys = ['7', '8', '9', '4', '5', '6', '1', '2', '3', '00', '0', 'del'];
     return keys.map(k => k === 'del'
       ? `<button type="button" class="uzf-key uzf-key--del" data-key="del">←</button>`
-      : `<button type="button" class="uzf-key" data-key="${k}">${k}</button>`).join('')
-      + `<button type="button" class="uzf-key uzf-key--clear" data-key="clear">クリア</button>`;
+      : `<button type="button" class="uzf-key" data-key="${k}">${k}</button>`).join('');
   }
   function calInnerHTML(s) {
     const base = s.calView || (s.date ? new Date(s.date) : new Date());
@@ -109,7 +114,7 @@
   /* ── スケルトン（全項目を一度だけ描画・以降はインクリメンタル更新） ── */
   function buildSkeleton(host) {
     const s = host.__uzf;
-    const stateLabel = s.kind === 'sales' ? '売掛（未入金）として登録' : '買掛（未払い）として登録';
+    const stateLabel = s.kind === 'sales' ? '売掛（未入金）' : '買掛（未払い）';
     host.innerHTML =
       `<div class="uzf-head" data-stick="0" data-go="date">
          <span class="uzf-sh-k">発生日</span><span class="uzf-sh-v" data-v="date">${fmtDate(s.date)}</span>
@@ -117,7 +122,7 @@
        <div class="uzf-body"><div class="uzf-cal">${calInnerHTML(s)}</div></div>
 
        <div class="uzf-head" data-stick="1" data-go="item">
-         <span class="uzf-sh-k">${s.kind === 'sales' ? '区分' : '科目'}</span><span class="uzf-sh-v" data-v="item">未選択</span>
+         <span class="uzf-sh-k">${s.kind === 'sales' ? '区分' : '科目'}</span><span class="uzf-sh-v" data-v="item">未選択</span><span class="uzf-sh-tax" data-v="itemtax"></span>
        </div>
        <div class="uzf-body">
          ${s.kind === 'cost' ? `<div class="uzf-divtabs">
@@ -126,26 +131,26 @@
          </div>` : ''}
          <div class="uzf-cards ${colsCls(s)}" data-cards>${cardsHTML(s)}</div>
          <div class="uzf-misc" data-misc hidden>
-           <label class="uzf-misc-label">品目名（任意）</label>
-           <input type="text" class="uzf-misc-input" maxlength="50" placeholder="例：手土産代">
+           <input type="text" class="uzf-misc-input" maxlength="50" placeholder="品目名（任意）">
          </div>
          <div class="uzf-ed-sub">税率</div>
          <div class="uzf-taxchips" data-tax-chips>${taxchipsHTML(s)}</div>
        </div>
 
        <div class="uzf-head" data-stick="2" data-go="amount">
-         <span class="uzf-sh-k">金額</span><span class="uzf-sh-v" data-v="amount">¥0</span>
+         <span class="uzf-sh-k">金額</span><span class="uzf-sh-v" data-v="amount">¥0</span><span class="uzf-sh-tax" data-v="amounttax">内消費税 0 円</span>
        </div>
        <div class="uzf-body">
          <div class="uzf-amount-disp" data-amt>¥0<span class="uzf-amount-yen">円</span></div>
-         <div class="uzf-amount-tax" data-taxinfo>内消費税 0 円</div>
          <div class="uzf-keypad">${keypadHTML()}</div>
+         <div class="uzf-keypad-last">
+           <button type="button" class="uzf-key uzf-key--clear" data-key="clear">クリア</button>
+           <label class="uzf-toggle"><input type="checkbox" class="uzf-unpaid"><span>${stateLabel}</span></label>
+         </div>
+         <textarea class="uzf-memo" rows="1" placeholder="メモ（任意）"></textarea>
        </div>
 
        <div class="uzf-tail">
-         <label class="uzf-toggle"><input type="checkbox" class="uzf-unpaid"><span>${stateLabel}</span></label>
-         <label class="uzf-memo-label">メモ（任意）</label>
-         <textarea class="uzf-memo" rows="2"></textarea>
          <button type="button" class="uzf-reset">入力をリセット</button>
          <button type="button" class="uzf-submit" disabled>発生日 ${fmtDate(s.date)}　登録する</button>
        </div>`;
@@ -153,15 +158,13 @@
 
   /* ── 部分更新 ─────────────────────────────────────────── */
   const $ = (host, sel) => host.querySelector(sel);
-  function setHead(host, key, val) { const el = $(host, `.uzf-sh-v[data-v="${key}"]`); if (el) el.textContent = val; }
+  function setHead(host, key, val) { const el = $(host, `[data-v="${key}"]`); if (el) el.textContent = val; }
   function updateAmountUI(host) {
     const s = host.__uzf;
     const amt = $(host, '[data-amt]');
     if (amt) amt.innerHTML = (s.amount ? fmtAmt(s.amount) : '¥0') + '<span class="uzf-amount-yen">円</span>';
-    const tax = (s.taxRate != null && s.amount && typeof calcTax === 'function')
-      ? calcTax(parseInt(s.amount, 10), s.taxRate).tax : 0;
-    const ti = $(host, '[data-taxinfo]'); if (ti) ti.textContent = `内消費税 ${tax.toLocaleString('ja-JP')} 円`;
     setHead(host, 'amount', amountHeadValue(s));
+    setHead(host, 'amounttax', amountTaxLabel(s));
   }
   function updateReady(host) {
     const s = host.__uzf;
@@ -202,6 +205,7 @@
     updateMiscBox(host);
     updateTaxActive(host);
     setHead(host, 'item', itemHeadValue(s));
+    setHead(host, 'itemtax', itemTaxLabel(s));
     updateAmountUI(host);
     updateReady(host);
   }
@@ -209,7 +213,7 @@
     const s = host.__uzf;
     s.taxRate = parseInt(chip.dataset.rate, 10);
     updateTaxActive(host);
-    setHead(host, 'item', itemHeadValue(s));
+    setHead(host, 'itemtax', itemTaxLabel(s));
     updateAmountUI(host);
     updateReady(host);
   }
@@ -222,6 +226,7 @@
     updateMiscBox(host);
     updateTaxActive(host);
     setHead(host, 'item', itemHeadValue(s));
+    setHead(host, 'itemtax', itemTaxLabel(s));
     updateAmountUI(host);
     updateReady(host);
   }

@@ -1375,28 +1375,31 @@ body.is-ipad .ipad-dash-header {
 }
 
 body.is-ipad .ipad-dash-header__title {
-  font-size: 12px;
+  font-size: 17px;
   font-weight: 700;
   color: var(--uz-text2);
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
-/* ①損益：月次/年度累計タブ */
+/* ①損益：月次/年度累計タブ（月次管理タブと統一・プルダウン左を2等分） */
 body.is-ipad .ipad-pl-tabs {
   display: flex;
-  gap: 4px;
+  gap: 0;
+  flex: 1;
 }
 body.is-ipad .ipad-pl-tab {
+  flex: 1;
   background: transparent;
   border: none;
   border-bottom: 2px solid transparent;
-  padding: 2px 2px 6px;
-  margin-right: 8px;
-  font-size: 12px;
+  padding: 12px 4px;
+  margin-right: 0;
+  font-size: 17px;
   font-weight: 700;
   font-family: inherit;
   letter-spacing: 0.04em;
+  text-align: center;
   color: var(--uz-text3);
   cursor: pointer;
   transition: color 0.15s, border-color 0.15s;
@@ -1425,6 +1428,7 @@ body.is-ipad .ipad-dash-table {
   width: 100%;
   border-collapse: collapse;
 }
+body.is-ipad .ipad-dash-section--pl .ipad-dash-table { margin-top: 6px; }
 
 body.is-ipad .ipad-dash-table th {
   padding: 8px 12px;
@@ -1810,7 +1814,7 @@ body.is-ipad .ipad-input-tabs {
 body.is-ipad .ipad-tab {
   flex: 1;
   padding: 12px 4px;
-  font-size: 13px;
+  font-size: 17px;
   font-family: inherit;
   background: transparent;
   border: none;
@@ -1826,6 +1830,9 @@ body.is-ipad .ipad-tab.ipad-tab--active {
   border-top-color: var(--uz-gold);
   font-weight: 600;
 }
+
+/* 取引/勤怠タブ（月次管理）も月見出し(17px)と統一 */
+body.is-ipad .hist-tab { font-size: 17px; }
 
 /* タブコンテンツ */
 body.is-ipad .ipad-tab-content {
