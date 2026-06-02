@@ -320,7 +320,7 @@
       font-size: 13px; font-family: var(--font-main); cursor: pointer;
     }
     .tax-toggle--active {
-      background: var(--uz-amber-bg); color: var(--uz-text); border-color: var(--uz-border2);
+      background: var(--uz-text); color: var(--uz-on-accent); border-color: var(--uz-text);
     }
 
     .edit-panel__footer {
@@ -331,12 +331,13 @@
     }
     .edit-save-btn {
       flex: 1; padding: 14px;
-      background: var(--uz-amber-bg); color: var(--uz-text);
-      border: 0.5px solid var(--uz-border2); border-radius: 10px;
+      background: var(--uz-text); color: var(--uz-on-accent);
+      border: none; border-radius: 10px;
       font-size: 15px; font-weight: 700; font-family: var(--font-main);
       cursor: pointer;
     }
-    .edit-save-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .edit-save-btn:active { filter: brightness(1.2); }
+    .edit-save-btn:disabled { background: var(--uz-surface2); color: var(--uz-text-muted); opacity: 1; cursor: not-allowed; }
     /* 削除ボタン（編集フォーム内・全デバイス・モノトーン／00§5-9） */
     .edit-delete-btn {
       flex-shrink: 0; padding: 14px 18px;
@@ -354,12 +355,21 @@
 
     /* ── 新規登録セクション ── */
     .ci-section {
-      margin: 12px 16px 4px;
-      background: var(--uz-surface);
-      border: 1px solid var(--uz-border);
-      border-radius: 12px;
-      overflow: hidden;
+      margin: 0;
+      background: transparent;
+      border: none;
+      border-radius: 0;
+      overflow: visible;
     }
+    .ci-head {
+      display: flex; align-items: center; gap: 12px;
+      height: 48px; box-sizing: border-box; padding: 0 18px;
+      background: var(--uz-text); color: var(--uz-on-accent);
+      border-bottom: 1px solid var(--uz-surface);
+    }
+    .ci-head__k { font-size: 15px; font-weight: 600; }
+    .ci-head__opt { font-size: 13px; font-weight: 600; opacity: 0.85; margin-left: auto; }
+    .ci-body { padding: 12px 18px; }
     .ci-section__title {
       padding: 10px 14px 8px;
       font-size: 12px; font-weight: 700;
@@ -368,20 +378,20 @@
     }
     .ci-row {
       display: flex; align-items: center; gap: 10px;
-      padding: 10px 14px;
-      border-bottom: 1px solid var(--uz-border);
+      padding: 6px 0;
+      border-bottom: none;
     }
     .ci-row:last-child { border-bottom: none; }
     .ci-row--radio { flex-wrap: wrap; gap: 6px 16px; }
-    .ci-row--submit { padding: 12px 14px; }
+    .ci-row--submit { padding: 16px 18px 96px; }
     .ci-radio-label {
       display: flex; align-items: center; gap: 6px;
-      font-size: 13px; color: var(--uz-text);
+      font-size: 14px; color: var(--uz-text);
       cursor: pointer; user-select: none;
     }
     .ci-radio-label input[type="radio"] { accent-color: var(--uz-gold); }
     .ci-field-label {
-      font-size: 12px; font-weight: 600; color: var(--uz-muted);
+      font-size: 14px; font-weight: 600; color: var(--uz-text2);
       min-width: 68px; flex-shrink: 0;
     }
     .ci-optional {
@@ -389,39 +399,39 @@
       color: var(--uz-muted); margin-left: 4px;
     }
     .ci-select {
-      flex: 1; height: 44px; padding: 0 10px;
-      background: var(--uz-surface2);
-      border: 1px solid var(--uz-border2); border-radius: 8px;
-      color: var(--uz-text); font-family: var(--font-main); font-size: 14px;
+      flex: 1; height: 44px; padding: 0 12px;
+      background: var(--uz-bg);
+      border: 1px solid var(--uz-border); border-radius: 10px;
+      color: var(--uz-text); font-family: var(--font-main); font-size: 15px;
       -webkit-appearance: none;
     }
-    .ci-select:focus { outline: none; border-color: var(--uz-gold); }
+    .ci-select:focus { outline: none; border-color: var(--uz-text); }
     .ci-input {
       flex: 1; height: 44px; padding: 0 12px;
-      background: var(--uz-surface2);
-      border: 1px solid var(--uz-border2); border-radius: 8px;
-      color: var(--uz-text); font-family: var(--font-main); font-size: 14px;
+      background: var(--uz-bg);
+      border: 1px solid var(--uz-border); border-radius: 10px;
+      color: var(--uz-text); font-family: var(--font-main); font-size: 15px;
     }
-    .ci-input::placeholder { color: var(--uz-text3); }
-    .ci-input:focus { outline: none; border-color: var(--uz-gold); }
+    .ci-input::placeholder { color: var(--uz-text2); }
+    .ci-input:focus { outline: none; border-color: var(--uz-text); }
     .ci-date-input {
       flex: 1; height: 44px; padding: 0 12px;
-      background: var(--uz-surface2);
-      border: 1px solid var(--uz-border2); border-radius: 8px;
-      color: var(--uz-text); font-family: var(--font-main); font-size: 14px;
+      background: var(--uz-bg);
+      border: 1px solid var(--uz-border); border-radius: 10px;
+      color: var(--uz-text); font-family: var(--font-main); font-size: 15px;
       -webkit-appearance: none;
     }
-    .ci-date-input:focus { outline: none; border-color: var(--uz-gold); }
+    .ci-date-input:focus { outline: none; border-color: var(--uz-text); }
     .ci-submit-btn {
-      width: 100%; min-height: 44px; padding: 10px 16px;
-      background: var(--uz-amber-bg); color: var(--uz-text);
-      border: 1px solid var(--uz-border2); border-radius: 10px;
-      font-size: 13px; font-weight: 700; font-family: var(--font-main);
+      width: 100%; min-height: 50px; padding: 10px 16px;
+      background: var(--uz-text); color: var(--uz-on-accent);
+      border: none; border-radius: 12px;
+      font-size: 17px; font-weight: 700; font-family: var(--font-main);
       cursor: pointer; line-height: 1.4; text-align: center;
-      transition: background 0.15s;
+      transition: filter 0.15s;
     }
-    .ci-submit-btn:active { background: rgba(0,0,0,0.05); }
-    .ci-submit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .ci-submit-btn:active { filter: brightness(1.2); }
+    .ci-submit-btn:disabled { background: var(--uz-surface2); color: var(--uz-text-muted); cursor: not-allowed; }
 
     /* A-9：履歴画面の「退店を記録」ボタンは廃止
        退勤入力は「編集」ボタン→修正フォームの退勤時刻欄で完結。

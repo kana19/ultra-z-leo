@@ -1301,52 +1301,57 @@ function _buildCIFormBodyHTML() {
   const labels = deriveUILabels();
   return `
     <div class="ci-section" aria-label="${escHtml(labels.clockin_register)}">
-      <div class="ci-row ci-row--radio">
-        <label class="ci-radio-label">
-          <input type="radio" name="ci-mode" id="ci-mode-registered" value="registered" checked>
-          <span>登録済みから選ぶ</span>
-        </label>
-        <label class="ci-radio-label">
-          <input type="radio" name="ci-mode" id="ci-mode-manual" value="manual">
-          <span>未登録を手入力</span>
-        </label>
+      <div class="ci-head"><span class="ci-head__k">スタッフ</span></div>
+      <div class="ci-body">
+        <div class="ci-row ci-row--radio">
+          <label class="ci-radio-label">
+            <input type="radio" name="ci-mode" id="ci-mode-registered" value="registered" checked>
+            <span>登録済みから選ぶ</span>
+          </label>
+          <label class="ci-radio-label">
+            <input type="radio" name="ci-mode" id="ci-mode-manual" value="manual">
+            <span>未登録を手入力</span>
+          </label>
+        </div>
+        <div id="ci-registered-wrap" class="ci-row">
+          <select id="ci-staff-select" class="ci-select" aria-label="スタッフを選択">
+            <option value="">スタッフを選択...</option>
+          </select>
+        </div>
+        <div id="ci-manual-wrap" class="ci-row" style="display:none;">
+          <input type="text" id="ci-staff-name" class="ci-input"
+                 placeholder="スタッフ名を入力" maxlength="20" autocomplete="off"
+                 aria-label="スタッフ名">
+        </div>
+        <div class="ci-row">
+          <label class="ci-field-label" for="ci-emp-type">雇用形態</label>
+          <select id="ci-emp-type" class="ci-select" aria-label="雇用形態">
+            <option value="">選択してください</option>
+            <option value="employed_full">常勤雇用（社員）</option>
+            <option value="employed_temp">臨時アルバイト</option>
+            <option value="contractor">委託・外注</option>
+          </select>
+        </div>
       </div>
-      <div id="ci-registered-wrap" class="ci-row">
-        <label class="ci-field-label" for="ci-staff-select">スタッフ</label>
-        <select id="ci-staff-select" class="ci-select" aria-label="スタッフを選択">
-          <option value="">スタッフを選択...</option>
-        </select>
+
+      <div class="ci-head"><span class="ci-head__k">日付</span></div>
+      <div class="ci-body">
+        <div class="ci-row"><input type="date" id="ci-date" class="ci-date-input" aria-label="日付"></div>
       </div>
-      <div id="ci-manual-wrap" class="ci-row" style="display:none;">
-        <label class="ci-field-label" for="ci-staff-name">スタッフ名</label>
-        <input type="text" id="ci-staff-name" class="ci-input"
-               placeholder="スタッフ名を入力" maxlength="20" autocomplete="off"
-               aria-label="スタッフ名">
+
+      <div class="ci-head"><span class="ci-head__k">${escHtml(labels.clockin_time)}</span></div>
+      <div class="ci-body">
+        <div class="ci-row"><div id="ci-clockin-wrap"></div></div>
       </div>
-      <div class="ci-row">
-        <label class="ci-field-label" for="ci-emp-type">雇用形態</label>
-        <select id="ci-emp-type" class="ci-select" aria-label="雇用形態">
-          <option value="">選択してください</option>
-          <option value="employed_full">常勤雇用（社員）</option>
-          <option value="employed_temp">臨時アルバイト</option>
-          <option value="contractor">委託・外注</option>
-        </select>
-      </div>
-      <div class="ci-row">
-        <label class="ci-field-label" for="ci-date">日付</label>
-        <input type="date" id="ci-date" class="ci-date-input" aria-label="日付">
-      </div>
-      <div class="ci-row">
-        <label class="ci-field-label">${escHtml(labels.clockin_time)}</label>
-        <div id="ci-clockin-wrap"></div>
-      </div>
-      <div class="ci-row">
-        <label class="ci-field-label">${escHtml(labels.clockout_time)}<span class="ci-optional">任意</span></label>
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+
+      <div class="ci-head"><span class="ci-head__k">${escHtml(labels.clockout_time)}</span><span class="ci-head__opt">任意</span></div>
+      <div class="ci-body">
+        <div class="ci-row" style="gap:8px;flex-wrap:wrap;">
           <div id="ci-clockout-wrap"></div>
           <span id="ci-next-day-badge" class="ci-badge-nextday" style="display:none;">翌日</span>
         </div>
       </div>
+
       <div id="ci-error-toast"></div>
       <div class="ci-row ci-row--submit">
         <button id="ci-submit-btn" type="button" class="ci-submit-btn">登録する</button>
