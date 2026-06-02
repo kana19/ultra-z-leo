@@ -135,6 +135,14 @@
   font-family: inherit; font-size: 15px; font-weight: 700; cursor: pointer;
 }
 .uzf-delete:active { filter: brightness(0.95); }
+.uzf-cancel {
+  width: 100%; min-height: 40px; margin-top: 6px;
+  background: transparent; color: var(--uz-text2);
+  border: none; border-radius: 8px;
+  font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
+  text-decoration: underline; text-underline-offset: 3px;
+}
+.uzf-cancel:active { color: var(--uz-text); }
 
 /* 自作カレンダー（枠線なし・やや上へ） */
 .uzf-cal { border: none; border-radius: 12px; padding: 0 4px; }

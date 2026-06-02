@@ -1239,8 +1239,13 @@ body.is-ipad .ipad-hist-row:hover {
   background: var(--uz-surface);
 }
 
-body.is-ipad .ipad-hist-row--selected {
-  background: var(--uz-surface2) !important;
+body.is-ipad .ipad-hist-row--selected > td {
+  background: #DADADA !important;
+  border-top: 2px solid var(--uz-text);
+  border-bottom: 2px solid var(--uz-text);
+}
+body.is-ipad .ipad-hist-row--selected > td:first-child {
+  box-shadow: inset 5px 0 0 var(--uz-text);
 }
 
 /* ── iPad 右パネル内修正フォーム ──────────────────────────── */

@@ -444,7 +444,7 @@ function _renderFilteredList() {
   if (document.body.classList.contains('is-ipad')) {
     let html = `<table class="ipad-hist-flat-table">
       <thead><tr>
-        <th>発生日</th><th>区分</th><th>適用</th><th>メモ</th><th class="ipad-td-r">金額</th><th></th><th></th>
+        <th>発生日</th><th>区分</th><th>適用</th><th>メモ</th><th class="ipad-td-r">金額</th><th></th>
       </tr></thead><tbody>`;
 
     sorted.forEach(item => {
@@ -466,9 +466,6 @@ function _renderFilteredList() {
         <td class="ipad-td-memo" style="font-size:12px;color:var(--uz-text3);">${escHtml((item.memo || '').substring(0, 30))}</td>
         <td class="ipad-td-r" style="font-weight:600;">${formatYen(item.amount)}</td>
         <td class="ipad-td-timer">${dot}</td>
-        <td class="ipad-td-edit">
-          <button class="hist-edit-btn" type="button" data-idx="${idx}" data-scope="sc">編集</button>
-        </td>
       </tr>`;
     });
 
@@ -740,7 +737,7 @@ function _renderAttendanceFiltered() {
 
     let html = `<table class="ipad-hist-flat-table">
       <thead><tr>
-        <th>出勤</th><th>スタッフ</th><th>出退勤</th><th>勤務時間</th><th></th><th></th>
+        <th>出勤</th><th>スタッフ</th><th>出退勤</th><th>勤務時間</th><th></th>
       </tr></thead><tbody>`;
 
     allRecs.forEach(r => {
@@ -770,9 +767,6 @@ function _renderAttendanceFiltered() {
         <td class="ipad-td-times">${escHtml(clockIn)} → ${clockOut ? escHtml(clockOut) : '—'}</td>
         <td class="ipad-td-dur">${durLabel}</td>
         <td class="ipad-td-timer">${statusBadge}</td>
-        <td class="ipad-td-edit">
-          <button class="hist-edit-btn" type="button" data-idx="${atIdx}" data-scope="at">編集</button>
-        </td>
       </tr>`;
     });
 
@@ -1821,33 +1815,68 @@ function renderIpadRightPanel(record) {
     return;
   }
 
-  // 編集可能（editable / grace）：修正フォームを右パネルに直接表示
+  // 編集可能（editable / grace）：まず詳細プレビュー（行タップで即編集にしない＝誤操作防止）
   const graceNote = state === 'grace'
     ? `<p class="form-hint" style="margin:0 0 8px;color:var(--uz-red);">猶予期間中（期限まであと${ls.daysLeft}日）</p>`
     : '';
+
+  panel.className = 'ipad-right-panel';
+  panel.innerHTML = `
+    <div class="ipad-right-panel__header">詳細</div>
+    <div class="ipad-right-form-body">
+      ${graceNote}
+      ${_buildIpadRecordDetail(record)}
+      <div class="ipad-right-actions">
+        <button id="ipad-right-close-btn" type="button" class="edit-delete-btn">新規登録に戻る</button>
+        <button id="ipad-right-editstart-btn" type="button" class="edit-save-btn">編集する</button>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('ipad-right-editstart-btn')?.addEventListener('click', () => _ipadEditForm(record));
+  document.getElementById('ipad-right-close-btn')?.addEventListener('click', () => {
+    _deselectIpadRow();
+    _renderHistRightDefault();
+  });
+}
+
+/* 行選択ハイライトを解除 */
+function _deselectIpadRow() {
+  document.querySelectorAll('.ipad-hist-row--selected').forEach(r => r.classList.remove('ipad-hist-row--selected'));
+}
+
+/* ── iPad 修正フォーム本体（プレビューの「編集する」から遷移）──────
+   売上・コストは単一エンジン（uz-input 編集モード）。勤怠は黒帯フォーム。
+   取消＝新規登録へ戻る（誤操作からの離脱導線）。 */
+function _ipadEditForm(record) {
+  const panel = document.querySelector('.ipad-right-panel');
+  if (!panel) return;
+  currentEditItem = record;
+  _ipadSelectedRecord = record;
 
   // 売上・コスト：単一エンジン（uz-input）で修正（カード選択・黒帯積層・ヘッド値）
   if ((record.type === 'sales' || record.type === 'cost') && window.UzInput && UzInput.mountEdit) {
     panel.className = 'ipad-right-panel hist-right--input hist-right--edit';
     panel.innerHTML = `
       <div class="ipad-right-panel__header">修正</div>
-      ${graceNote}
       <div id="ipad-edit-host"></div>`;
     UzInput.mountEdit(document.getElementById('ipad-edit-host'), record, {
-      onSubmitted: () => { loadAll(); _renderHistRightDefault(); },
+      onSubmitted: () => { _deselectIpadRow(); loadAll(); _renderHistRightDefault(); },
       onDelete:    () => { _ipadRightDelete(); },
+      onCancel:    () => { _deselectIpadRow(); _renderHistRightDefault(); },
     });
     return;
   }
 
-  // 勤怠：黒帯フォーム＋保存（積層エンジン外＝データ別）
+  // 勤怠：黒帯フォーム＋取消／削除／保存（積層エンジン外＝データ別）
   const formHTML = buildAttendanceFormHTML(record);
+  panel.className = 'ipad-right-panel';
   panel.innerHTML = `
     <div class="ipad-right-panel__header">修正</div>
     <div class="ipad-right-form-body">
-      ${graceNote}
       ${formHTML}
       <div class="ipad-right-actions">
+        <button id="ipad-right-cancel-btn" type="button" class="edit-delete-btn">取消</button>
         <button id="ipad-right-delete-btn" type="button" class="edit-delete-btn">削除</button>
         <button id="ipad-right-save-btn" type="button" class="edit-save-btn">保存する</button>
       </div>
@@ -1861,6 +1890,7 @@ function renderIpadRightPanel(record) {
 
   document.getElementById('ipad-right-save-btn')?.addEventListener('click', () => { saveEdit(); });
   document.getElementById('ipad-right-delete-btn')?.addEventListener('click', () => { _ipadRightDelete(); });
+  document.getElementById('ipad-right-cancel-btn')?.addEventListener('click', () => { _deselectIpadRow(); _renderHistRightDefault(); });
 }
 
 function _buildIpadRecordDetail(record) {

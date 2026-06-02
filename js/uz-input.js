@@ -157,6 +157,7 @@
          <label class="uzf-toggle"><input type="checkbox" class="uzf-unpaid"><span>${stateLabel}</span></label>
          <button type="button" class="uzf-submit" disabled>${editLabel}</button>
          ${(s.opts && s.opts.onDelete) ? `<button type="button" class="uzf-delete">削除する</button>` : ''}
+         ${(s.opts && s.opts.onCancel) ? `<button type="button" class="uzf-cancel">取消（新規登録に戻る）</button>` : ''}
        </div>`;
   }
 
@@ -355,6 +356,7 @@
       if ((el = e.target.closest('.uzf-cal-nav'))) return navCal(host, el);
       if ((el = e.target.closest('.uzf-submit'))) return submitForm(host);
       if ((el = e.target.closest('.uzf-delete'))) { try { host.__uzf.opts.onDelete && host.__uzf.opts.onDelete(); } catch (_) {} return; }
+      if ((el = e.target.closest('.uzf-cancel'))) { try { host.__uzf.opts.onCancel && host.__uzf.opts.onCancel(); } catch (_) {} return; }
       if ((el = e.target.closest('.uzf-head[data-go]'))) {
         const body = el.nextElementSibling;
         if (body) body.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
