@@ -965,6 +965,23 @@ function openEditForm(item) {
   const bodyEl  = document.getElementById('edit-form-body');
   if (!titleEl || !bodyEl) return;
 
+  const footerEl = document.querySelector('.edit-panel__footer');
+
+  if ((item.type === 'sales' || item.type === 'cost') && window.UzInput && UzInput.mountEdit) {
+    titleEl.textContent = item.type === 'sales' ? '売上を修正' : 'コストを修正';
+    bodyEl.innerHTML    = '<div id="edit-uz-host"></div>';
+    if (footerEl) footerEl.style.display = 'none';   // 保存・削除は uz-input 末尾に統合
+    UzInput.mountEdit(document.getElementById('edit-uz-host'), item, {
+      onSubmitted: () => { closeEditForm(); loadAll(); },
+      onDelete:    () => { _editPanelDelete(); },
+    });
+    document.getElementById('edit-backdrop')?.classList.add('edit-backdrop--show');
+    document.getElementById('edit-panel')?.classList.add('edit-panel--open');
+    return;
+  }
+
+  if (footerEl) footerEl.style.display = '';
+
   if (item.type === 'sales') {
     titleEl.textContent = '売上を修正';
     bodyEl.innerHTML    = buildSalesFormHTML(item);
@@ -1088,24 +1105,14 @@ function buildAttendanceFormHTML(item) {
   const clockIn  = parseTimeStr(item.clockIn)  || '';
   const clockOut = parseTimeStr(item.clockOut) || '';
   return `
-    <div class="edit-field">
-      <label class="edit-label">スタッフ名</label>
-      <div class="edit-readonly">${escHtml(item.staffName || '')}</div>
-    </div>
-    <div class="edit-field">
-      <label class="edit-label">日付</label>
-      <input type="date" id="ef-date" class="edit-input"
-             value="${escHtml(item.date || '')}">
-    </div>
-    <div class="edit-field">
-      <label class="edit-label">${escHtml(labels.clockin_time)}</label>
-      ${timeSelectHTML('ef-clockin', clockIn, true)}
-    </div>
-    <div class="edit-field">
-      <label class="edit-label">${escHtml(labels.clockout_time)}
-        <span style="font-size:11px;font-weight:400;color:var(--uz-muted);margin-left:4px;">任意</span>
-      </label>
-      ${timeSelectHTML('ef-clockout', clockOut, false)}
+    <div class="ci-section">
+      <div class="ci-head"><span class="ci-head__k">スタッフ</span><span class="ci-head__v">${escHtml(item.staffName || '')}</span></div>
+      <div class="ci-head"><span class="ci-head__k">日付</span></div>
+      <div class="ci-body"><div class="ci-row"><input type="date" id="ef-date" class="ci-date-input" value="${escHtml(item.date || '')}"></div></div>
+      <div class="ci-head"><span class="ci-head__k">${escHtml(labels.clockin_time)}</span></div>
+      <div class="ci-body"><div class="ci-row">${timeSelectHTML('ef-clockin', clockIn, true)}</div></div>
+      <div class="ci-head"><span class="ci-head__k">${escHtml(labels.clockout_time)}</span><span class="ci-head__opt">任意</span></div>
+      <div class="ci-body"><div class="ci-row">${timeSelectHTML('ef-clockout', clockOut, false)}</div></div>
     </div>`;
 }
 
@@ -1819,15 +1826,22 @@ function renderIpadRightPanel(record) {
     ? `<p class="form-hint" style="margin:0 0 8px;color:var(--uz-red);">猶予期間中（期限まであと${ls.daysLeft}日）</p>`
     : '';
 
-  let formHTML = '';
-  if (record.type === 'sales') {
-    formHTML = buildSalesFormHTML(record);
-  } else if (record.type === 'cost') {
-    formHTML = buildCostFormHTML(record);
-  } else {
-    formHTML = buildAttendanceFormHTML(record);
+  // 売上・コスト：単一エンジン（uz-input）で修正（カード選択・黒帯積層・ヘッド値）
+  if ((record.type === 'sales' || record.type === 'cost') && window.UzInput && UzInput.mountEdit) {
+    panel.className = 'ipad-right-panel hist-right--input hist-right--edit';
+    panel.innerHTML = `
+      <div class="ipad-right-panel__header">修正</div>
+      ${graceNote}
+      <div id="ipad-edit-host"></div>`;
+    UzInput.mountEdit(document.getElementById('ipad-edit-host'), record, {
+      onSubmitted: () => { loadAll(); _renderHistRightDefault(); },
+      onDelete:    () => { _ipadRightDelete(); },
+    });
+    return;
   }
 
+  // 勤怠：黒帯フォーム＋保存（積層エンジン外＝データ別）
+  const formHTML = buildAttendanceFormHTML(record);
   panel.innerHTML = `
     <div class="ipad-right-panel__header">修正</div>
     <div class="ipad-right-form-body">
@@ -1840,24 +1854,13 @@ function renderIpadRightPanel(record) {
     </div>
   `;
 
-  // 税率トグル・税額表示
-  bindTaxCalc();
-
-  // 入店履歴の退店時刻セレクト制御
-  if (record.type === 'attendance') {
+  _refreshClockOutHourSelect('ef-clockin-h', 'ef-clockout-h');
+  document.getElementById('ef-clockin-h')?.addEventListener('change', () => {
     _refreshClockOutHourSelect('ef-clockin-h', 'ef-clockout-h');
-    document.getElementById('ef-clockin-h')?.addEventListener('change', () => {
-      _refreshClockOutHourSelect('ef-clockin-h', 'ef-clockout-h');
-    });
-  }
+  });
 
-  // 保存・削除ボタン
-  document.getElementById('ipad-right-save-btn')?.addEventListener('click', () => {
-    saveEdit();
-  });
-  document.getElementById('ipad-right-delete-btn')?.addEventListener('click', () => {
-    _ipadRightDelete();
-  });
+  document.getElementById('ipad-right-save-btn')?.addEventListener('click', () => { saveEdit(); });
+  document.getElementById('ipad-right-delete-btn')?.addEventListener('click', () => { _ipadRightDelete(); });
 }
 
 function _buildIpadRecordDetail(record) {

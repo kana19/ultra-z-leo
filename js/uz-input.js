@@ -41,7 +41,10 @@
     else Object.assign(base, { divCode: '2', itemCode: '', itemName: '' });
     return base;
   }
-  function itemResolved(s) { return s.kind === 'sales' ? !!s.svcCode : !!s.itemCode; }
+  function itemResolved(s) {
+    if (s.editId) return s.kind === 'sales' ? !!(s.svcCode || s.svcName) : !!(s.itemCode || s.itemName);
+    return s.kind === 'sales' ? !!s.svcCode : !!s.itemCode;
+  }
   function getItems(s) {
     try {
       if (s.kind === 'sales') return (typeof getServiceMaster === 'function') ? getServiceMaster() : [];
@@ -115,7 +118,7 @@
   function buildSkeleton(host) {
     const s = host.__uzf;
     const stateLabel = s.kind === 'sales' ? '売掛（未入金）' : '買掛（未払い）';
-    const editLabel = (s.opts && s.opts.editId) ? '保存する' : '登録する';
+    const editLabel = s.editId ? '保存する' : '登録する';
     host.innerHTML =
       `<div class="uzf-head" data-stick="0" data-go="date">
          <span class="uzf-sh-k">発生日</span><span class="uzf-sh-v" data-v="date">${fmtDate(s.date)}</span>
@@ -153,6 +156,7 @@
        <div class="uzf-tail">
          <label class="uzf-toggle"><input type="checkbox" class="uzf-unpaid"><span>${stateLabel}</span></label>
          <button type="button" class="uzf-submit" disabled>${editLabel}</button>
+         ${(s.opts && s.opts.onDelete) ? `<button type="button" class="uzf-delete">削除する</button>` : ''}
        </div>`;
   }
 
@@ -275,9 +279,32 @@
 
     const { taxExcluded, tax } = calcTax(amount, s.taxRate);
     const btn = $(host, '.uzf-submit');
-    if (btn) { btn.disabled = true; btn.dataset.busy = '1'; btn.textContent = '登録中...'; }
+    if (btn) { btn.disabled = true; btn.dataset.busy = '1'; btn.textContent = s.editId ? '保存中...' : '登録中...'; }
     try {
       let result;
+      if (s.editId) {
+        // ── 修正（更新）：GAS updateSales / updateCost（契約は従来の saveEdit と同一） ──
+        if (s.kind === 'sales') {
+          result = await callGAS('updateSales', {
+            rowIndex: s.editId, date: s.date,
+            serviceName: s.svcName, serviceCode: s.svcCode || '',
+            amountExTax: taxExcluded, taxRate: s.taxRate, tax, amountInTax: amount,
+            memo: s.memo, uncollected: s.unpaid ? 1 : 0,
+          });
+        } else {
+          result = await callGAS('updateCost', {
+            rowIndex: s.editId, date: s.date,
+            divisionCode: s.divCode, divisionName: divLabel(s.divCode),
+            itemCode: s.itemCode || '', itemName: s.itemName,
+            taxExcluded, taxRate: s.taxRate, tax, taxIncluded: amount,
+            memo: s.memo, unpaid: s.unpaid ? 1 : 0,
+          });
+        }
+        if (result?.status !== 'ok') throw new Error(result?.message || '更新エラー');
+        toast('修正を保存しました ✓');
+        try { s.opts.onSubmitted && s.opts.onSubmitted(); } catch (_) {}
+        return;
+      }
       if (s.kind === 'sales') {
         result = await callGAS('addSales', {
           date: s.date, serviceCode: s.svcCode, serviceName: s.svcName,
@@ -302,7 +329,7 @@
       resetForm(host);
     } catch (e) {
       toast('登録に失敗しました：' + (e?.message || '通信エラー'));
-      if (btn) { btn.disabled = false; delete btn.dataset.busy; btn.textContent = (s.opts && s.opts.editId) ? '保存する' : '登録する'; }
+      if (btn) { btn.disabled = false; delete btn.dataset.busy; btn.textContent = s.editId ? '保存する' : '登録する'; }
     }
   }
 
@@ -327,6 +354,7 @@
       if ((el = e.target.closest('.uzf-cal-cell[data-day]'))) return selectDay(host, el);
       if ((el = e.target.closest('.uzf-cal-nav'))) return navCal(host, el);
       if ((el = e.target.closest('.uzf-submit'))) return submitForm(host);
+      if ((el = e.target.closest('.uzf-delete'))) { try { host.__uzf.opts.onDelete && host.__uzf.opts.onDelete(); } catch (_) {} return; }
       if ((el = e.target.closest('.uzf-head[data-go]'))) {
         const body = el.nextElementSibling;
         if (body) body.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -368,6 +396,46 @@
     if (kind === 'cost') _ensureCostMaster();
   }
 
+  /* 修正（編集）モード：既存レコードでプリフィルして同一エンジンで描画。
+     送信は updateSales / updateCost（契約は従来 saveEdit と同一）。
+     カードはコード一致で自動ハイライト。旧・自由入力名（コードなし）も保持して保存可。 */
+  function mountEdit(host, record, opts = {}) {
+    if (!host || !record) return;
+    const kind = record.type === 'cost' ? 'cost' : 'sales';
+    host.classList.add('uzf-host');
+    const s = newState(kind);
+    s.opts = opts || {};
+    s.editId = record.rowIndex;
+    s.date = record.date || s.date;
+    s.calView = s.date ? new Date(s.date) : null;
+    s.taxRate = (record.taxRate != null && record.taxRate !== '') ? Number(record.taxRate) : null;
+    s.amount = String(parseInt(record.amount, 10) || '');
+    s.memo = record.memo || '';
+    if (kind === 'sales') {
+      s.svcCode = record.serviceCode || '';
+      s.svcName = record.itemName || record.serviceName || '';
+      s.unpaid = Number(record.uncollected) === 1;
+    } else {
+      s.divCode = String(record.divisionCode || '2') === '1' ? '1' : '2';
+      s.itemCode = record.itemCode || '';
+      s.itemName = record.itemName || '';
+      s.unpaid = Number(record.unpaid) === 1;
+    }
+    host.__uzf = s;
+    _hosts.add(host);
+    buildSkeleton(host);
+    bindAll(host);
+    if (kind === 'cost') _ensureCostMaster();
+    // プリフィル値をヘッド・金額・税率・活性に反映
+    setHead(host, 'item', itemHeadValue(s));
+    setHead(host, 'itemtax', itemTaxLabel(s));
+    updateTaxActive(host);
+    updateAmountUI(host);
+    updateReady(host);
+    const memo = $(host, '.uzf-memo'); if (memo) memo.value = s.memo;
+    const unp = $(host, '.uzf-unpaid'); if (unp) unp.checked = !!s.unpaid;
+  }
+
   function openModal(kind, opts = {}) {
     if (!window.SheetModal) return;
     SheetModal.open({
@@ -382,7 +450,7 @@
     });
   }
 
-  window.UzInput = { mount, openModal };
+  window.UzInput = { mount, mountEdit, openModal };
 
   function afterEntry(kind) {
     if (kind === 'sales' && typeof window._loadIpadSalesData === 'function') window._loadIpadSalesData();
