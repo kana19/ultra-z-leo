@@ -976,30 +976,25 @@ function openEditForm(item) {
 
   if (footerEl) footerEl.style.display = '';
 
-  if (item.type === 'sales') {
-    titleEl.textContent = '売上を修正';
-    bodyEl.innerHTML    = buildSalesFormHTML(item);
-  } else if (item.type === 'cost') {
-    titleEl.textContent = 'コストを修正';
-    bodyEl.innerHTML    = buildCostFormHTML(item);
-  } else {
-    // attendance
-    const labels = deriveUILabels();
-    titleEl.textContent = `${labels.clockin_record}を修正`;
-    bodyEl.innerHTML    = buildAttendanceFormHTML(item);
-    // 退店時刻の時プルダウンを入店時刻基準で再生成
-    _refreshClockOutHourSelect('ef-clockin-h', 'ef-clockout-h');
-    document.getElementById('ef-clockin-h')?.addEventListener('change', () => {
-      _refreshClockOutHourSelect('ef-clockin-h', 'ef-clockout-h');
-    });
+  if (item.type === 'sales' || item.type === 'cost') {
+    // 通常は上の uz-input 経路で return 済み。ここに来るのは入力エンジン未読込時のみ。
+    showToast('入力エンジンが読み込まれていません。再読み込みしてください', 'error');
+    return;
   }
 
-  bindTaxCalc();
-
+  // attendance：§5-11 修正は詳細表示→編集する（詳細段では保存/削除を隠す）
+  const labels = deriveUILabels();
+  titleEl.textContent = `${labels.clockin_record}を修正`;
+  if (footerEl) footerEl.style.display = 'none';
+  bodyEl.innerHTML = _buildAttendanceDetailHTML(item) + `
+    <div class="ci-row ci-row--submit" style="display:flex;gap:10px;">
+      <button id="att-detail-edit"  type="button" class="edit-save-btn"   style="flex:1;">編集する</button>
+      <button id="att-detail-close" type="button" class="edit-delete-btn" style="flex:1;">閉じる</button>
+    </div>`;
+  document.getElementById('att-detail-edit')?.addEventListener('click', () => _smAttendanceEditState(item, footerEl));
+  document.getElementById('att-detail-close')?.addEventListener('click', () => closeEditForm());
   document.getElementById('edit-backdrop')?.classList.add('edit-backdrop--show');
   document.getElementById('edit-panel')?.classList.add('edit-panel--open');
-  document.getElementById('edit-save-btn').disabled = false;
-  document.getElementById('edit-save-btn').textContent = '保存する';
 }
 
 function closeEditForm() {
@@ -1020,78 +1015,38 @@ function taxToggleGroupHTML(taxRate) {
   </div>`;
 }
 
-function buildSalesFormHTML(item) {
-  const rate = Number(item.taxRate) || 10;
+/* 雇用形態の表示ラベル（attendance D列スナップショット・読み取り専用） */
+function _empLabel(t) {
+  return ({ employed_full: '常勤雇用（社員）', employed_temp: '臨時アルバイト', contractor: '委託・外注' })[t] || '—';
+}
+
+/* 勤怠 詳細表示（§5-11／§5-10）：全項目を読み取り専用。雇用形態は保持値を表示（修正不可）。 */
+function _buildAttendanceDetailHTML(item) {
+  const labels = deriveUILabels();
+  const ci = parseTimeStr(item.clockIn)  || '—';
+  const co = parseTimeStr(item.clockOut) || labels.clockout_unrecorded;
   return `
-    <div class="edit-field">
-      <label class="edit-label">日付</label>
-      <input type="date" id="ef-date" class="edit-input"
-             value="${escHtml(item.date || '')}">
-    </div>
-    <div class="edit-field">
-      <label class="edit-label">サービス名</label>
-      <input type="text" id="ef-name" class="edit-input"
-             value="${escHtml(item.itemName || '')}" maxlength="40">
-    </div>
-    <div class="edit-field">
-      <label class="edit-label">税率</label>
-      ${taxToggleGroupHTML(rate)}
-    </div>
-    <div class="edit-field">
-      <label class="edit-label">税込金額</label>
-      <input type="number" id="ef-amount" class="edit-input"
-             value="${Number(item.amount) || 0}" inputmode="numeric" min="0">
-      <div id="ef-tax-note" class="edit-tax-note"></div>
-    </div>
-    <div class="edit-field">
-      <label class="edit-label">メモ</label>
-      <input type="text" id="ef-memo" class="edit-input"
-             value="${escHtml(item.memo || '')}" maxlength="100">
-    </div>
-    <div class="edit-field">
-      <label class="edit-label">未収</label>
-      <label class="edit-toggle-wrap">
-        <input type="checkbox" id="ef-flag" ${Number(item.uncollected) ? 'checked' : ''}>
-        <span class="edit-toggle-label">未収あり</span>
-      </label>
+    <div class="ci-section">
+      <div class="ci-head"><span class="ci-head__k">スタッフ</span><span class="ci-head__v">${escHtml(item.staffName || '')}</span></div>
+      <div class="ci-head"><span class="ci-head__k">雇用形態</span><span class="ci-head__v">${escHtml(_empLabel(item.employmentType))}</span></div>
+      <div class="ci-head"><span class="ci-head__k">日付</span><span class="ci-head__v">${escHtml(item.date || '')}</span></div>
+      <div class="ci-head"><span class="ci-head__k">${escHtml(labels.clockin_time)}</span><span class="ci-head__v">${escHtml(ci)}</span></div>
+      <div class="ci-head"><span class="ci-head__k">${escHtml(labels.clockout_time)}</span><span class="ci-head__v">${escHtml(co)}</span></div>
     </div>`;
 }
 
-function buildCostFormHTML(item) {
-  const rate = Number(item.taxRate) || 10;
-  return `
-    <div class="edit-field">
-      <label class="edit-label">日付</label>
-      <input type="date" id="ef-date" class="edit-input"
-             value="${escHtml(item.date || '')}">
-    </div>
-    <div class="edit-field">
-      <label class="edit-label">科目名</label>
-      <input type="text" id="ef-name" class="edit-input"
-             value="${escHtml(item.itemName || '')}" maxlength="40">
-    </div>
-    <div class="edit-field">
-      <label class="edit-label">税率</label>
-      ${taxToggleGroupHTML(rate)}
-    </div>
-    <div class="edit-field">
-      <label class="edit-label">税込金額</label>
-      <input type="number" id="ef-amount" class="edit-input"
-             value="${Number(item.amount) || 0}" inputmode="numeric" min="0">
-      <div id="ef-tax-note" class="edit-tax-note"></div>
-    </div>
-    <div class="edit-field">
-      <label class="edit-label">メモ</label>
-      <input type="text" id="ef-memo" class="edit-input"
-             value="${escHtml(item.memo || '')}" maxlength="100">
-    </div>
-    <div class="edit-field">
-      <label class="edit-label">未払</label>
-      <label class="edit-toggle-wrap">
-        <input type="checkbox" id="ef-flag" ${Number(item.unpaid) ? 'checked' : ''}>
-        <span class="edit-toggle-label">未払あり</span>
-      </label>
-    </div>`;
+/* スマホ勤怠：詳細表示の「編集する」→黒帯フォーム編集状態へ（保存/削除フッターを表示） */
+function _smAttendanceEditState(item, footerEl) {
+  const bodyEl = document.getElementById('edit-form-body');
+  if (!bodyEl) return;
+  bodyEl.innerHTML = buildAttendanceFormHTML(item);
+  _refreshClockOutHourSelect('ef-clockin-h', 'ef-clockout-h');
+  document.getElementById('ef-clockin-h')?.addEventListener('change', () => {
+    _refreshClockOutHourSelect('ef-clockin-h', 'ef-clockout-h');
+  });
+  if (footerEl) footerEl.style.display = '';
+  const sb = document.getElementById('edit-save-btn');
+  if (sb) { sb.disabled = false; sb.textContent = '保存する'; }
 }
 
 function buildAttendanceFormHTML(item) {
@@ -1475,29 +1430,8 @@ function _updateOvernightBadge() {
 function updateCIBtnLabel() {
   const btn = document.getElementById('ci-submit-btn');
   if (!btn) return;
-
-  const labels   = deriveUILabels();
-  const dateVal  = document.getElementById('ci-date')?.value || '';
-  const clockIn  = getTimeSelectValue('ci-clockin');
-  const clockOut = getTimeSelectValue('ci-clockout');
-
-  const datePart = dateVal ? dateVal.replace(/-/g, '/') : '日付未選択';
-  const ciPart   = clockIn || '時刻未選択';
-
-  let coPart;
-  if (!clockOut) {
-    coPart = labels.clockout_unrecorded;
-  } else {
-    const ciH = document.getElementById('ci-clockin-h')?.value  || '';
-    const ciM = document.getElementById('ci-clockin-m')?.value  || '';
-    const coH = document.getElementById('ci-clockout-h')?.value || '';
-    const coM = document.getElementById('ci-clockout-m')?.value || '';
-    const overnight = isOvernightCI(ciH, ciM, coH, coM);
-    coPart = overnight === true ? `翌 ${clockOut} ${labels.clockout_label}` : `${clockOut} ${labels.clockout_label}`;
-  }
-
-  btn.textContent = `${datePart} ${ciPart} ${labels.clockin_label} / ${coPart} 登録する`;
-
+  // §5-11：登録ボタンは「登録する」固定。日付・時刻・出勤退勤状態を表記しない。
+  btn.textContent = '登録する';
   _updateOvernightBadge();
 }
 
@@ -1768,63 +1702,11 @@ function renderIpadRightPanel(record) {
   _ipadSelectedRecord = record;
   currentEditItem = record;
 
-  const state = getLockState(record);
-  const ls    = getLockStatus(record.date);
-
-  // ロック済み・申請中：詳細表示＋ロック操作ボタン
-  if (state === 'locked' || state === 'pending') {
-    const detail = _buildIpadRecordDetail(record);
-    let actionHTML = '';
-    if (state === 'locked') {
-      actionHTML = `
-        <div class="ipad-locked-note">🔒 このレコードはロック済みです</div>
-        <button class="ipad-right-action-btn ipad-right-action-btn--unlock"
-                type="button" id="ipad-right-unlock-btn">ロック解除を申請</button>`;
-    } else {
-      actionHTML = `
-        <span class="ipad-pending-badge">申請中</span>
-        <p class="form-hint" style="margin-bottom:12px;margin-top:8px;">
-          解除申請が送信されています。承認後に修正できます。
-        </p>
-        <div class="ipad-approve-btns">
-          <button class="ipad-right-action-btn ipad-right-action-btn--approve"
-                  type="button" id="ipad-right-approve-btn">承認する</button>
-          <button class="ipad-right-action-btn ipad-right-action-btn--reject"
-                  type="button" id="ipad-right-reject-btn">却下</button>
-        </div>`;
-    }
-
-    panel.innerHTML = `
-      <div class="ipad-right-panel__header">操作パネル</div>
-      ${detail}
-      ${actionHTML}
-    `;
-
-    document.getElementById('ipad-right-unlock-btn')?.addEventListener('click', () => {
-      requestUnlock(_ipadSelectedRecord.type, _ipadSelectedRecord.rowIndex);
-      renderIpadRightPanel(_ipadSelectedRecord);
-    });
-    document.getElementById('ipad-right-approve-btn')?.addEventListener('click', () => {
-      approveUnlock(_ipadSelectedRecord.type, _ipadSelectedRecord.rowIndex);
-      renderIpadRightPanel(_ipadSelectedRecord);
-    });
-    document.getElementById('ipad-right-reject-btn')?.addEventListener('click', () => {
-      rejectUnlock(_ipadSelectedRecord.type, _ipadSelectedRecord.rowIndex);
-      renderIpadRightPanel(_ipadSelectedRecord);
-    });
-    return;
-  }
-
-  // 編集可能（editable / grace）：まず詳細プレビュー（行タップで即編集にしない＝誤操作防止）
-  const graceNote = state === 'grace'
-    ? `<p class="form-hint" style="margin:0 0 8px;color:var(--uz-red);">猶予期間中（期限まであと${ls.daysLeft}日）</p>`
-    : '';
-
+  // ロック機能は存在しない（§5-3）。行選択は常に詳細プレビュー→「編集する」。
   panel.className = 'ipad-right-panel';
   panel.innerHTML = `
     <div class="ipad-right-panel__header">詳細</div>
     <div class="ipad-right-form-body">
-      ${graceNote}
       ${_buildIpadRecordDetail(record)}
       <div class="ipad-right-actions">
         <button id="ipad-right-close-btn" type="button" class="edit-delete-btn">新規登録に戻る</button>

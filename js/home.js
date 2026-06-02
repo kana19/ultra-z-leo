@@ -177,7 +177,12 @@ async function loadAttendance() {
       localStorage.setItem(ATTENDANCE_DATA_KEY, JSON.stringify(todayAttendance));
 
       renderStaffList();
-      _autoSwitchTab(); // 出勤データ取得後に自動タブ判定
+      _autoSwitchTab(); // 出勤データ取得後に自動タブ判定（スマホ・§3）
+      // iPad：右カラムの出勤状況を再描画し、出勤中がいれば出勤状況タブを既定表示（§2-2/§3）
+      if (document.body.classList.contains('is-ipad')) {
+        _renderIpadAttendance();
+        switchIpadRightTab(todayAttendance.some(s => s.isActive) ? 'attend' : 'recent');
+      }
 
       // 退店未記録フラグをアラートに反映（他フラグは既描画のまま更新）
       if (hasUnrecordedClockOut) {
@@ -362,6 +367,21 @@ document.addEventListener('DOMContentLoaded', () => {
     initIpadHome();
   }
 });
+
+/* iPad ホーム右カラム：直近入力／出勤状況 タブ切替（§2-2） */
+function switchIpadRightTab(which) {
+  const rec = document.getElementById('ipad-rt-panel-recent');
+  const att = document.getElementById('ipad-rt-panel-attend');
+  const tr  = document.getElementById('ipad-rt-tab-recent');
+  const ta  = document.getElementById('ipad-rt-tab-attend');
+  if (!rec || !att) return;
+  const showAttend = (which === 'attend');
+  rec.style.display = showAttend ? 'none' : '';
+  att.style.display = showAttend ? '' : 'none';
+  tr?.classList.toggle('active', !showAttend);
+  ta?.classList.toggle('active', showAttend);
+}
+window.switchIpadRightTab = switchIpadRightTab;
 
 /* ── iPad ホームダッシュボード ────────────────────────────── */
 async function initIpadHome() {
@@ -548,36 +568,39 @@ function _renderIpadTaxTimer() {
 }
 
 /* ── iPad 直近入力テーブル ──────────────────────────── */
+/* 直近入力の行データ正規化（登録順＝updatedAt・新規/編集判定・→ 02_画面仕様.md §2-2） */
+function _recentItem(r) {
+  const type    = r.type === 'cost' ? 'cost' : 'sales';
+  const created = Number(r.createdAt) || 0;
+  const updated = Number(r.updatedAt) || 0;
+  const sortKey = updated || created || 0;
+  const edited  = !!(created && updated && (updated - created > 60000));
+  const regDate = updated ? new Date(updated) : (created ? new Date(created) : null);
+  const regMd   = regDate ? `${String(regDate.getMonth() + 1).padStart(2, '0')}/${String(regDate.getDate()).padStart(2, '0')}` : '—';
+  const occMd   = String(r.date || '').replace(/(\d{4})-(\d{2})-(\d{2})/, '$2/$3');
+  const name    = type === 'sales' ? (r.itemName || r.serviceName || '売上') : (r.itemName || 'コスト');
+  const divLbl  = type === 'sales' ? '売上' : (String(r.divisionCode) === '1' ? '仕入' : '販管費');
+  return {
+    type, sortKey, date: String(r.date || ''), regMd, occMd, name,
+    memo: r.memo || '', amount: (r.amount ?? r.taxIncluded ?? 0), edited,
+    opBadge:  `<span class="recent-op recent-op--${edited ? 'edit' : 'new'}">${edited ? '編集' : '新規'}</span>`,
+    divBadge: `<span class="recent-div recent-div--${type}">${divLbl}</span>`,
+    amtCls:   type === 'sales' ? 'recent-sales' : 'recent-cost',
+  };
+}
+
 async function _renderIpadRecentEntries(month) {
   const tbody = document.getElementById('ipad-recent-body');
   const empty = document.getElementById('ipad-recent-empty');
   if (!tbody) return;
 
   try {
-    const [salesRes, costRes] = await Promise.all([
-      callGAS('getHistory', { type: 'sales', month }).catch(() => null),
-      callGAS('getHistory', { type: 'cost',  month }).catch(() => null),
-    ]);
+    const res  = await callGAS('getHistory', { month }).catch(() => null);
+    const data = (res && res.status === 'ok' && Array.isArray(res.data)) ? res.data : [];
+    const items = data.map(_recentItem);
 
-    const items = [];
-    if (salesRes && salesRes.status === 'ok' && Array.isArray(salesRes.data)) {
-      salesRes.data.forEach(r => items.push({
-        name:   r.service || r.serviceName || '売上',
-        amount: r.taxIncluded ?? r.amount ?? 0,
-        type:   'sales',
-        date:   String(r.date || ''),
-      }));
-    }
-    if (costRes && costRes.status === 'ok' && Array.isArray(costRes.data)) {
-      costRes.data.forEach(r => items.push({
-        name:   r.itemName || r.item || 'コスト',
-        amount: r.taxIncluded ?? r.amount ?? 0,
-        type:   'cost',
-        date:   String(r.date || ''),
-      }));
-    }
-
-    items.sort((a, b) => b.date.localeCompare(a.date));
+    // 登録順（最後に登録・編集した順）の新しい順（→ §2-2）
+    items.sort((a, b) => (b.sortKey - a.sortKey) || b.date.localeCompare(a.date));
     const top = items.slice(0, 15);
 
     if (top.length === 0) {
@@ -587,20 +610,15 @@ async function _renderIpadRecentEntries(month) {
     }
     if (empty) empty.hidden = true;
 
-    tbody.innerHTML = top.map(it => {
-      const md    = it.date.replace(/(\d{4})-(\d{2})-(\d{2})/, '$2/$3');
-      const nm    = escapeHtml(it.name).substring(0, 12);
-      const badge = it.type === 'sales'
-        ? '<span style="color:var(--uz-gold);font-size:11px;">売上</span>'
-        : '<span style="color:var(--uz-red);font-size:11px;">コスト</span>';
-      const cls   = it.type === 'sales' ? 'recent-sales' : 'recent-cost';
-      return `<tr>
-        <td style="font-size:13px;white-space:nowrap;">${md}</td>
-        <td>${badge}</td>
-        <td style="font-size:13px;">${nm}</td>
-        <td class="${cls}">${formatYen(it.amount)}</td>
-      </tr>`;
-    }).join('');
+    tbody.innerHTML = top.map(it => `<tr>
+        <td class="ipad-rc-reg">${it.regMd}</td>
+        <td>${it.opBadge}</td>
+        <td class="ipad-rc-occ">${it.occMd}</td>
+        <td>${it.divBadge}</td>
+        <td class="ipad-rc-item">${escapeHtml(it.name).substring(0, 12)}</td>
+        <td class="ipad-rc-memo">${escapeHtml(it.memo).substring(0, 16)}</td>
+        <td class="${it.amtCls} ipad-td-r">${formatYen(it.amount)}</td>
+      </tr>`).join('');
   } catch {
     tbody.innerHTML = '';
     if (empty) empty.hidden = false;
@@ -768,30 +786,12 @@ async function loadSidebarRecent() {
   const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
   try {
-    const [salesRes, costRes] = await Promise.all([
-      callGAS('getHistory', { type: 'sales', month }).catch(() => null),
-      callGAS('getHistory', { type: 'cost',  month }).catch(() => null),
-    ]);
+    const res  = await callGAS('getHistory', { month }).catch(() => null);
+    const data = (res && res.status === 'ok' && Array.isArray(res.data)) ? res.data : [];
+    const items = data.map(_recentItem);
 
-    const items = [];
-    if (salesRes && salesRes.status === 'ok' && Array.isArray(salesRes.data)) {
-      salesRes.data.slice(0, 5).forEach(r => items.push({
-        name:  r.service || r.serviceName || '売上',
-        amount: r.taxIncluded ?? r.amount ?? 0,
-        type:  'sales',
-        date:  String(r.date || ''),
-      }));
-    }
-    if (costRes && costRes.status === 'ok' && Array.isArray(costRes.data)) {
-      costRes.data.slice(0, 5).forEach(r => items.push({
-        name:  r.itemName || r.item || 'コスト',
-        amount: r.taxIncluded ?? r.amount ?? 0,
-        type:  'cost',
-        date:  String(r.date || ''),
-      }));
-    }
-
-    items.sort((a, b) => b.date.localeCompare(a.date));
+    // 登録順（最後に登録・編集した順）の新しい順（→ §2-2）
+    items.sort((a, b) => (b.sortKey - a.sortKey) || b.date.localeCompare(a.date));
     const top = items.slice(0, 8);
 
     if (top.length === 0) {
@@ -801,11 +801,9 @@ async function loadSidebarRecent() {
 
     container.innerHTML = `<div class="sidebar-recent__title">最近の入力</div>`
       + top.map(it => {
-          const md    = it.date.replace(/(\d{4})-(\d{2})-(\d{2})/, '$2/$3');
-          const nm    = escapeHtml(it.name).substring(0, 10);
           const color = it.type === 'sales' ? 'var(--uz-gold)' : 'var(--uz-red)';
           return `<div class="sidebar-recent__item">
-            <span class="sidebar-recent__item-name">${md} ${nm}</span>
+            <span class="sidebar-recent__item-name">${it.regMd} ${it.opBadge} ${escapeHtml(it.name).substring(0, 10)}</span>
             <span class="sidebar-recent__item-amt" style="color:${color}">${formatYen(it.amount)}</span>
           </div>`;
         }).join('');

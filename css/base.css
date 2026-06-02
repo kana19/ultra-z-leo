@@ -1474,6 +1474,20 @@ body.is-ipad .ipad-recent-table td:last-child {
 body.is-ipad .ipad-recent-table .recent-sales { color: var(--uz-text); }
 body.is-ipad .ipad-recent-table .recent-cost  { color: var(--uz-text2); }
 
+/* 直近入力 7列（登録日・操作・発生日・区分・適用・メモ・金額・→ §2-2）コンパクト化 */
+body.is-ipad .ipad-recent-table th,
+body.is-ipad .ipad-recent-table td { padding: 8px 8px; font-size: 12px; }
+body.is-ipad .ipad-recent-table .ipad-rc-reg,
+body.is-ipad .ipad-recent-table .ipad-rc-occ { white-space: nowrap; color: var(--uz-text2); }
+body.is-ipad .ipad-recent-table .ipad-rc-item { font-weight: 600; }
+body.is-ipad .ipad-recent-table .ipad-rc-memo { color: var(--uz-text2); }
+
+/* 操作（新規/編集）・区分バッジ（スマホ／iPad共通・モノトーン） */
+.recent-op { display: inline-block; font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 6px; white-space: nowrap; }
+.recent-op--new  { background: var(--uz-surface2); color: var(--uz-text2); }
+.recent-op--edit { background: var(--uz-text); color: var(--uz-on-accent); }
+.recent-div { font-size: 11px; font-weight: 600; color: var(--uz-text2); white-space: nowrap; }
+
 body.is-ipad .ipad-dash-empty {
   padding: 24px 14px;
   text-align: center;

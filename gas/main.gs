@@ -99,11 +99,11 @@ function addSales(data) {
     t.taxExcluded, rate,
     t.taxAmount, inAmt,
     data.memo || '', '', '',
-    Number(data.uncollected) || 0, '', new Date(), 0,
+    Number(data.uncollected) || 0, new Date(), new Date(), 0,
     salesRowId,                                    // T列(20) 売上行ID（自動採番・取引ペア紐付けモデル）
     isProject                                      // U列(21) 案件化フラグ（戦略思想§3-9-3 2画面分離モデル）
   ]);
-  return { status: 'ok', salesRowId: salesRowId };
+  return { status: 'ok', salesRowId: salesRowId, rowIndex: sheet.getLastRow() };
 }
 
 /**
@@ -230,13 +230,13 @@ function addCost(data) {
     t.taxExcluded, rate,
     t.taxAmount, inAmt,
     data.memo || '', '', '',
-    Number(data.unpaid) || 0, '', new Date(), 0,
+    Number(data.unpaid) || 0, new Date(), new Date(), 0,
     Number(data.withholdingAmount) || 0,   // T列(20)
     String(data.clientId || ''),            // U列(21)
     String(data.projectId || '')            // V列(22) 紐付け先売上行ID（取引ペア紐付けモデル）
   ]);
 
-  return { status: 'ok' };
+  return { status: 'ok', rowIndex: sheet.getLastRow() };
 }
 
 function updateSales(data) {
@@ -263,6 +263,8 @@ function updateSales(data) {
   sheet.getRange(row, 12).setValue(_sInAmt);
   sheet.getRange(row, 13).setValue(data.memo         || '');
   sheet.getRange(row, 16).setValue(Number(data.uncollected)  || 0);
+  // R列(18) 登録/更新日時：編集時に更新し「最後に登録・編集した順」を保持（→ 02_画面仕様.md §2-2）
+  sheet.getRange(row, 18).setValue(new Date());
   // 売上T列(20) は売上行ID（自動採番・不変）のため、payload で送られても更新しない
   // 取引ペア紐付けモデルでは売上行ID は採番後 immutable（戦略思想§3-9-3）
   return { status: 'ok' };
@@ -299,6 +301,8 @@ function updateCost(data) {
   sheet.getRange(row, 12).setValue(_cInAmt);
   sheet.getRange(row, 13).setValue(data.memo         || '');
   sheet.getRange(row, 16).setValue(Number(data.unpaid)       || 0);
+  // R列(18) 登録/更新日時：編集時に更新し「最後に登録・編集した順」を保持（→ 02_画面仕様.md §2-2）
+  sheet.getRange(row, 18).setValue(new Date());
   // payload に含まれていれば T列・U列・V列も更新（未送信時は既存値保持）
   if (data.withholdingAmount !== undefined) {
     sheet.getRange(row, 20).setValue(Number(data.withholdingAmount) || 0);
@@ -460,6 +464,8 @@ function getHistory(month) {
         projectId: String(row[19] || ''),       // T列(20=index 19)・既存名義（後方互換のため残置）
         salesRowId: String(row[19] || ''),      // T列(20=index 19)・取引ペア紐付けモデル親キー
         isProject: String(row[20]).trim() === '1', // U列(21=index 20)・案件化フラグ（§3-9-3 2画面分離）
+        updatedAt: (row[17] instanceof Date ? row[17].getTime() : (row[17] ? (new Date(row[17]).getTime() || 0) : 0)), // R列(18=index 17) 登録/更新日時
+        createdAt: (row[16] instanceof Date ? row[16].getTime() : (row[16] ? (new Date(row[16]).getTime() || 0) : 0)), // Q列(17=index 16) 作成日時
         isLocked:  Number(row[18]) === 1        // S列(19=index 18)・ロックフラグ
       });
     });
@@ -488,6 +494,8 @@ function getHistory(month) {
         withholdingAmount: Number(row[19]) || 0,
         projectId: String(row[21] || ''),       // V列(22=index 21)・既存名義（後方互換のため残置）
         linkedSalesRowId: String(row[21] || ''),// V列(22=index 21)・紐付け先売上行ID（projectIdの別名）
+        updatedAt: (row[17] instanceof Date ? row[17].getTime() : (row[17] ? (new Date(row[17]).getTime() || 0) : 0)), // R列(18=index 17) 登録/更新日時
+        createdAt: (row[16] instanceof Date ? row[16].getTime() : (row[16] ? (new Date(row[16]).getTime() || 0) : 0)), // Q列(17=index 16) 作成日時
         isLocked: Number(row[18]) === 1         // S列(19=index 18)・ロックフラグ
       });
     });
@@ -2504,9 +2512,15 @@ function _parseHHMM(val) {
   const s = String(val).trim();
   const m = s.match(/^(\d{1,2}):(\d{2})/);
   if (m) return { h: parseInt(m[1], 10), m: parseInt(m[2], 10) };
-  if (val instanceof Date) return { h: val.getUTCHours(), m: val.getUTCMinutes() };
+  if (val instanceof Date) {
+    const hm = Utilities.formatDate(val, 'Asia/Tokyo', 'HH:mm').split(':');
+    return { h: parseInt(hm[0], 10), m: parseInt(hm[1], 10) };
+  }
   const d = new Date(val);
-  if (!isNaN(d.getTime())) return { h: d.getUTCHours(), m: d.getUTCMinutes() };
+  if (!isNaN(d.getTime())) {
+    const hm = Utilities.formatDate(d, 'Asia/Tokyo', 'HH:mm').split(':');
+    return { h: parseInt(hm[0], 10), m: parseInt(hm[1], 10) };
+  }
   return null;
 }
 

@@ -612,6 +612,10 @@ function renderServiceList() {
       <div class="staff-row" id="service-row-${escHtml(idKey)}">
         <span class="staff-row__name">${escHtml(s.name)}</span>
         <span class="service-tax-badge">税率 ${s.taxRate}%</span>
+        <button class="staff-edit-btn"
+                type="button"
+                onclick="editService('${escHtml(idKey)}')"
+                aria-label="${escHtml(s.name)}を編集">編集</button>
         <button class="staff-delete-btn"
                 type="button"
                 onclick="deleteService('${escHtml(idKey)}')"
@@ -660,6 +664,75 @@ async function deleteService(id) {
     }
   } catch {
     showToast('通信エラーで削除できませんでした', 'error');
+  }
+}
+
+function editService(id) {
+  const list = getServiceList();
+  const svc  = list.find(s => String(s.id || s.code) === String(id));
+  if (!svc) return;
+  const row = document.getElementById(`service-row-${id}`);
+  if (!row) return;
+  const rate = (svc.taxRate !== undefined) ? svc.taxRate : 10;
+  row.classList.add('staff-row--editing');
+  row.innerHTML = `
+    <div class="staff-edit">
+      <div class="staff-edit__line">
+        <input type="text"
+               id="service-edit-name-${id}"
+               class="settings-input staff-edit__name"
+               value="${escHtml(svc.name)}"
+               maxlength="30"
+               autocomplete="off"
+               placeholder="サービス名"
+               aria-label="サービス名">
+        <select id="service-edit-tax-${id}"
+                class="form-select"
+                style="width:120px;flex-shrink:0;"
+                aria-label="税率">
+          <option value="10"${Number(rate) === 10 ? ' selected' : ''}>10%</option>
+          <option value="8"${Number(rate) === 8 ? ' selected' : ''}>8%（軽減）</option>
+          <option value="0"${Number(rate) === 0 ? ' selected' : ''}>0%（非課税）</option>
+        </select>
+      </div>
+      <div class="staff-edit__line staff-edit__actions">
+        <button class="staff-save-btn" type="button"
+                onclick="saveEditService('${escHtml(String(id))}')" aria-label="保存">保存</button>
+        <button class="staff-cancel-btn" type="button"
+                onclick="renderServiceList()" aria-label="キャンセル">キャンセル</button>
+        <span class="staff-edit__spacer"></span>
+        <button class="staff-delete-btn" type="button"
+                onclick="deleteService('${escHtml(String(id))}')"
+                aria-label="${escHtml(svc.name)}を削除">削除</button>
+      </div>
+    </div>
+  `;
+  document.getElementById(`service-edit-name-${id}`)?.focus();
+}
+
+async function saveEditService(id) {
+  const nameEl = document.getElementById(`service-edit-name-${id}`);
+  const taxEl  = document.getElementById(`service-edit-tax-${id}`);
+  if (!nameEl) return;
+  const name    = nameEl.value.trim();
+  const taxRate = parseInt(taxEl.value, 10);
+  if (!name) return showToast('サービス名を入力してください', 'error');
+  if (name.length > 30) return showToast('サービス名は30文字以内で入力してください', 'error');
+  const list = getServiceList();
+  if (list.some(s => s.name === name && String(s.id || s.code) !== String(id))) {
+    return showToast('同じ名前のサービスが既に登録されています', 'error');
+  }
+  try {
+    const res = await callGAS('updateServiceItem', { id: String(id), name, taxRate });
+    if (res && res.status === 'ok' && Array.isArray(res.serviceList)) {
+      _saveServiceList(res.serviceList);
+      renderServiceList();
+      showToast(`${name}を更新しました ✓`, 'success');
+    } else {
+      showToast((res && res.message) || '更新に失敗しました', 'error');
+    }
+  } catch {
+    showToast('通信エラーで更新できませんでした', 'error');
   }
 }
 
@@ -739,6 +812,10 @@ function renderPurchaseList() {
       <div class="staff-row" id="purchase-row-${escHtml(idKey)}">
         <span class="staff-row__name">${escHtml(p.name)}</span>
         <span class="service-tax-badge">税率 ${rate}%</span>
+        <button class="staff-edit-btn"
+                type="button"
+                onclick="editPurchase('${escHtml(idKey)}')"
+                aria-label="${escHtml(p.name)}を編集">編集</button>
         <button class="staff-delete-btn"
                 type="button"
                 onclick="deletePurchase('${escHtml(idKey)}')"
@@ -782,6 +859,75 @@ async function deletePurchase(id) {
     }
   } catch {
     showToast('通信エラーで削除できませんでした', 'error');
+  }
+}
+
+function editPurchase(id) {
+  const list = getPurchaseList();
+  const p    = list.find(it => String(it.id) === String(id));
+  if (!p) return;
+  const row = document.getElementById(`purchase-row-${id}`);
+  if (!row) return;
+  const rate = (p.defaultTaxRate !== undefined) ? p.defaultTaxRate : (p.taxRate !== undefined ? p.taxRate : 10);
+  row.classList.add('staff-row--editing');
+  row.innerHTML = `
+    <div class="staff-edit">
+      <div class="staff-edit__line">
+        <input type="text"
+               id="purchase-edit-name-${id}"
+               class="settings-input staff-edit__name"
+               value="${escHtml(p.name)}"
+               maxlength="30"
+               autocomplete="off"
+               placeholder="仕入科目名"
+               aria-label="仕入科目名">
+        <select id="purchase-edit-tax-${id}"
+                class="form-select"
+                style="width:120px;flex-shrink:0;"
+                aria-label="税率">
+          <option value="10"${Number(rate) === 10 ? ' selected' : ''}>10%</option>
+          <option value="8"${Number(rate) === 8 ? ' selected' : ''}>8%（軽減）</option>
+          <option value="0"${Number(rate) === 0 ? ' selected' : ''}>0%（非課税）</option>
+        </select>
+      </div>
+      <div class="staff-edit__line staff-edit__actions">
+        <button class="staff-save-btn" type="button"
+                onclick="saveEditPurchase('${escHtml(String(id))}')" aria-label="保存">保存</button>
+        <button class="staff-cancel-btn" type="button"
+                onclick="renderPurchaseList()" aria-label="キャンセル">キャンセル</button>
+        <span class="staff-edit__spacer"></span>
+        <button class="staff-delete-btn" type="button"
+                onclick="deletePurchase('${escHtml(String(id))}')"
+                aria-label="${escHtml(p.name)}を削除">削除</button>
+      </div>
+    </div>
+  `;
+  document.getElementById(`purchase-edit-name-${id}`)?.focus();
+}
+
+async function saveEditPurchase(id) {
+  const nameEl = document.getElementById(`purchase-edit-name-${id}`);
+  const taxEl  = document.getElementById(`purchase-edit-tax-${id}`);
+  if (!nameEl) return;
+  const name    = nameEl.value.trim();
+  const taxRate = parseInt(taxEl.value, 10);
+  if (!name) return showToast('科目名を入力してください', 'error');
+  if (name.length > 30) return showToast('科目名は30文字以内で入力してください', 'error');
+  const list = getPurchaseList();
+  if (list.some(it => it.name === name && String(it.id) !== String(id))) {
+    return showToast('同じ名前の科目が既に登録されています', 'error');
+  }
+  try {
+    const res = await callGAS('updatePurchaseItem', { id: String(id), name, defaultTaxRate: taxRate });
+    if (res && res.status === 'ok' && Array.isArray(res.purchaseMasterList)) {
+      _savePurchaseList(res.purchaseMasterList);
+      renderPurchaseList();
+      showToast(`${name}を更新しました ✓`, 'success');
+    } else {
+      showToast((res && res.message) || '更新に失敗しました', 'error');
+    }
+  } catch {
+    showToast('通信エラーで更新できませんでした', 'error');
   }
 }
 

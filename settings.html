@@ -272,12 +272,16 @@
           <option value="employed_temp">臨時アルバイト</option>
           <option value="contractor">委託・外注</option>
         </select>
+        <select id="staff-add-cost" class="form-select" style="flex-shrink:0;" disabled>
+          <option value="21">21：外注工賃</option>
+          <option value="25">25：税理士等の報酬</option>
+        </select>
         <input type="text" id="staff-add-password" class="settings-input"
                placeholder="パスワード（5桁英数字）" maxlength="5" autocomplete="off">
         <button id="staff-add-btn" class="settings-add-btn" type="button">＋ 追加</button>
       </div>
       <p class="settings-note">
-        氏名・雇用形態・パスワードを設定できます。給与単価・源泉区分はPC版の出勤管理で設定します。
+        氏名・雇用形態・コスト科目（委託・外注時）・パスワードを設定できます。給与単価・源泉区分はPC版の出勤管理で設定します。
       </p>
     </div>
   </section>

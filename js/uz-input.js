@@ -270,6 +270,54 @@
     buildSkeleton(host);
   }
 
+  /* ── 登録後・修正の詳細表示①（§5-10）─────────────────────
+     全項目を入力順に読み取り専用で並べ、同寸の「編集」「閉じる（新規登録）」を持つ。
+     「編集」は直前登録行の黒帯積層編集へ／「閉じる」は新規入力に戻る。 */
+  function buildDetailHTML(s) {
+    const itemKey  = s.kind === 'sales' ? '区分' : '科目';
+    const memoRow  = s.memo
+      ? `<div class="uzf-head uzf-head--ro"><span class="uzf-sh-k">メモ</span><span class="uzf-sh-v">${escapeHtmlUzf(s.memo)}</span></div>`
+      : '';
+    const stateRow = s.unpaid
+      ? `<div class="uzf-head uzf-head--ro"><span class="uzf-sh-k">状態</span><span class="uzf-sh-v">${s.kind === 'sales' ? '売掛（未入金）' : '買掛（未払い）'}</span></div>`
+      : '';
+    return `<div class="uzf-detail">
+      <div class="uzf-head uzf-head--ro"><span class="uzf-sh-k">発生日</span><span class="uzf-sh-v">${fmtDate(s.date)}</span></div>
+      <div class="uzf-head uzf-head--ro"><span class="uzf-sh-k">${itemKey}</span><span class="uzf-sh-v">${escapeHtmlUzf(itemHeadValue(s))}</span><span class="uzf-sh-tax">${itemTaxLabel(s)}</span></div>
+      <div class="uzf-head uzf-head--ro"><span class="uzf-sh-k">金額</span><span class="uzf-sh-v">${amountHeadValue(s)}</span><span class="uzf-sh-tax">${amountTaxLabel(s)}</span></div>
+      ${memoRow}
+      ${stateRow}
+      <div class="uzf-det-actions">
+        <button type="button" class="uzf-detbtn uzf-det-edit">編集</button>
+        <button type="button" class="uzf-detbtn uzf-det-close">閉じる（新規登録）</button>
+      </div>
+    </div>`;
+  }
+  function escapeHtmlUzf(v) {
+    return String(v == null ? '' : v).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  }
+  function showDetail(host, savedRecord) {
+    host.__uzfSaved = savedRecord || null;
+    host.innerHTML = buildDetailHTML(host.__uzf);
+  }
+  function _detailEdit(host) {
+    const rec  = host.__uzfSaved;
+    const opts = (host.__uzf && host.__uzf.opts) || {};
+    if (!rec) { resetForm(host); return; }
+    if (!rec.rowIndex) {
+      // rowIndex 不明（旧GAS等）：新規入力へフォールバック
+      toast('編集できる行が特定できませんでした。新規入力に戻ります');
+      mount(host, rec.type === 'cost' ? 'cost' : 'sales', opts);
+      return;
+    }
+    mountEdit(host, rec, opts);
+  }
+  function _detailClose(host) {
+    const kind = (host.__uzf && host.__uzf.kind) || 'sales';
+    const opts = (host.__uzf && host.__uzf.opts) || {};
+    mount(host, kind, opts);
+  }
+
   /* ── 登録 ─────────────────────────────────────────────── */
   async function submitForm(host) {
     const s = host.__uzf;
@@ -324,10 +372,20 @@
       }
       if (result?.status !== 'ok') throw new Error(result?.message || '登録エラー');
       toast(s.kind === 'sales' ? '売上を登録しました ✓' : 'コストを登録しました ✓');
-      const opts = s.opts;
-      try { opts.onSubmitted && opts.onSubmitted(); } catch (_) {}
-      if (opts.autoClose && window.SheetModal) { SheetModal.close(); return; }
-      resetForm(host);
+      try { s.opts.onSubmitted && s.opts.onSubmitted(); } catch (_) {}
+      // §5-10 登録後の表示フロー：全項目（入力順）を読み取り専用で並べた詳細表示①へ切替。
+      // 「編集」＝直前登録行の編集状態／「閉じる（新規登録）」＝新規入力に戻る。
+      const _rowIndex = (result && result.rowIndex) ? result.rowIndex : null;
+      const saved = (s.kind === 'sales')
+        ? { type: 'sales', rowIndex: _rowIndex, date: s.date,
+            serviceCode: s.svcCode, serviceName: s.svcName, itemName: s.svcName,
+            taxRate: s.taxRate, amount: String(amount), memo: s.memo,
+            uncollected: s.unpaid ? 1 : 0 }
+        : { type: 'cost', rowIndex: _rowIndex, date: s.date,
+            divisionCode: s.divCode, itemCode: s.itemCode, itemName: s.itemName,
+            taxRate: s.taxRate, amount: String(amount), memo: s.memo,
+            unpaid: s.unpaid ? 1 : 0 };
+      showDetail(host, saved);
     } catch (e) {
       toast('登録に失敗しました：' + (e?.message || '通信エラー'));
       if (btn) { btn.disabled = false; delete btn.dataset.busy; btn.textContent = s.editId ? '保存する' : '登録する'; }
@@ -354,6 +412,8 @@
       if ((el = e.target.closest('.uzf-key'))) return pressKey(host, el);
       if ((el = e.target.closest('.uzf-cal-cell[data-day]'))) return selectDay(host, el);
       if ((el = e.target.closest('.uzf-cal-nav'))) return navCal(host, el);
+      if ((el = e.target.closest('.uzf-det-edit'))) return _detailEdit(host);
+      if ((el = e.target.closest('.uzf-det-close'))) return _detailClose(host);
       if ((el = e.target.closest('.uzf-submit'))) return submitForm(host);
       if ((el = e.target.closest('.uzf-delete'))) { try { host.__uzf.opts.onDelete && host.__uzf.opts.onDelete(); } catch (_) {} return; }
       if ((el = e.target.closest('.uzf-cancel'))) { try { host.__uzf.opts.onCancel && host.__uzf.opts.onCancel(); } catch (_) {} return; }

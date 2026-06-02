@@ -24,7 +24,7 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  height: 48px;
+  height: 32px;
   box-sizing: border-box;
   padding: 0 18px;
   background: var(--uz-text);
@@ -33,8 +33,8 @@
   cursor: pointer;
 }
 .uzf-head[data-stick="0"] { top: 0;    z-index: 9; }
-.uzf-head[data-stick="1"] { top: 48px; z-index: 8; }
-.uzf-head[data-stick="2"] { top: 96px; z-index: 7; }
+.uzf-head[data-stick="1"] { top: 32px; z-index: 8; }
+.uzf-head[data-stick="2"] { top: 64px; z-index: 7; }
 .uzf-sh-k { font-size: 15px; opacity: 0.6; flex: 0 0 54px; }
 .uzf-sh-v { flex: 1; font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .uzf-sh-tax { flex: 0 0 auto; font-size: 13px; font-weight: 600; opacity: 0.85; white-space: nowrap; }
@@ -144,6 +144,19 @@
 }
 .uzf-cancel:active { color: var(--uz-text); }
 
+/* ── 登録後・修正の詳細表示①（§5-10）─────────────────── */
+.uzf-head--ro { position: static; cursor: default; }
+.uzf-det-actions { display: flex; gap: 10px; padding: 16px 18px 96px; }
+.uzf-detbtn {
+  flex: 1; min-height: 50px;
+  border-radius: 12px;
+  font-family: inherit; font-size: 16px; font-weight: 700; cursor: pointer;
+}
+.uzf-det-edit { border: none; background: var(--uz-text); color: var(--uz-on-accent); }
+.uzf-det-edit:active { filter: brightness(1.2); }
+.uzf-det-close { background: var(--uz-bg); color: var(--uz-text); border: 1px solid var(--uz-border2); }
+.uzf-det-close:active { filter: brightness(0.95); }
+
 /* 自作カレンダー（枠線なし・やや上へ） */
 .uzf-cal { border: none; border-radius: 12px; padding: 0 4px; }
 .uzf-cal-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
@@ -195,10 +208,10 @@ body.is-ipad .hist-right--input .ipad-input-tabs {
   position: sticky; top: 0; z-index: 11; background: var(--uz-surface);
 }
 body.is-ipad .hist-right--input .uzf-head[data-stick="0"] { top: 46px; }
-body.is-ipad .hist-right--input .uzf-head[data-stick="1"] { top: 94px; }
-body.is-ipad .hist-right--input .uzf-head[data-stick="2"] { top: 142px; }
+body.is-ipad .hist-right--input .uzf-head[data-stick="1"] { top: 78px; }
+body.is-ipad .hist-right--input .uzf-head[data-stick="2"] { top: 110px; }
 /* iPad 修正パネル（タブバーなし）：見出し sticky は黒帯高さ基準の 0/48/96 */
 body.is-ipad .hist-right--edit .uzf-head[data-stick="0"] { top: 0; }
-body.is-ipad .hist-right--edit .uzf-head[data-stick="1"] { top: 48px; }
-body.is-ipad .hist-right--edit .uzf-head[data-stick="2"] { top: 96px; }
+body.is-ipad .hist-right--edit .uzf-head[data-stick="1"] { top: 32px; }
+body.is-ipad .hist-right--edit .uzf-head[data-stick="2"] { top: 64px; }
 body.is-ipad .hist-right--edit .ipad-right-panel__header { padding: 12px 18px; }

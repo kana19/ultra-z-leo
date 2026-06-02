@@ -282,26 +282,33 @@
 
       </div><!-- /ipad-home-left -->
 
-      <!-- ③ 右カラム：直近入力／出勤状況（全高） -->
+      <!-- ③ 右カラム：直近入力／出勤状況 タブ切替（§2-2・全高） -->
       <div class="ipad-home-right">
         <div class="ipad-dash-section ipad-dash-section--full">
-          <div class="ipad-dash-header">
-            <span class="ipad-dash-header__title">直近の入力</span>
+          <div class="ipad-pl-tabs" id="ipad-right-tabs">
+            <button type="button" class="ipad-pl-tab active" id="ipad-rt-tab-recent" onclick="switchIpadRightTab('recent')">直近の入力</button>
+            <button type="button" class="ipad-pl-tab" id="ipad-rt-tab-attend" onclick="switchIpadRightTab('attend')">出勤状況</button>
           </div>
-          <table class="ipad-dash-table ipad-recent-table" id="ipad-recent-table">
-            <thead>
-              <tr>
-                <th>日付</th>
-                <th>種別</th>
-                <th>内容</th>
-                <th class="ipad-td-r">金額</th>
-              </tr>
-            </thead>
-            <tbody id="ipad-recent-body">
-              <!-- home.js が描画 -->
-            </tbody>
-          </table>
-          <div class="ipad-dash-empty" id="ipad-recent-empty" hidden>今月の記録はありません</div>
+          <div id="ipad-rt-panel-recent">
+            <table class="ipad-dash-table ipad-recent-table" id="ipad-recent-table">
+              <thead>
+                <tr>
+                  <th>登録日</th>
+                  <th>操作</th>
+                  <th>発生日</th>
+                  <th>区分</th>
+                  <th>適用</th>
+                  <th>メモ</th>
+                  <th class="ipad-td-r">金額</th>
+                </tr>
+              </thead>
+              <tbody id="ipad-recent-body"><!-- home.js が描画 --></tbody>
+            </table>
+            <div class="ipad-dash-empty" id="ipad-recent-empty" hidden>今月の記録はありません</div>
+          </div>
+          <div id="ipad-rt-panel-attend" style="display:none;">
+            <div id="ipad-staff-list"><!-- home.js が描画 --></div>
+          </div>
         </div>
       </div><!-- /ipad-home-right -->
 
