@@ -111,6 +111,14 @@ document.addEventListener('DOMContentLoaded', () => {
     _attendStaffFilter = e.target.value;
     _renderAttendanceFiltered();
   });
+  document.getElementById('attend-emp-filter')?.addEventListener('change', (e) => {
+    _attendEmpFilter = e.target.value;
+    _renderAttendanceFiltered();
+  });
+  document.getElementById('attend-month-filter')?.addEventListener('change', (e) => {
+    const [y, m] = String(e.target.value).split('-').map(Number);
+    if (y && m) { currentYear = y; currentMonth = m; loadAll(); }
+  });
 
   // iPad：右カラムに sales.js / cost.js のフォームを注入して入力正本を流用する（MD §6-3-B）。
   // 各フォーム submit 後フック（_loadIpadSalesData / _loadIpadCostData）を history の
@@ -690,6 +698,7 @@ function buildSalesCostItemHTML(item, idx) {
 
 let _allAttendRecs    = [];   // 当月の勤怠レコード全件（絞り込み前）
 let _attendStaffFilter = 'all'; // スタッフ別プルダウンの選択値
+let _attendEmpFilter   = 'all'; // 雇用形態プルダウンの選択値（attendance D列スナップショット）
 
 /* スタッフ別プルダウンの選択肢を当月データから生成 */
 function _populateAttendStaffOptions(recs) {
@@ -708,7 +717,25 @@ function _populateAttendStaffOptions(recs) {
 function renderAttendance(items) {
   _allAttendRecs = items || [];
   _populateAttendStaffOptions(_allAttendRecs);
+  _populateAttendMonthOptions();
   _renderAttendanceFiltered();
+}
+
+/* 年月プルダウン：MIN_YEAR-01 〜 当月 を生成し currentYear/Month を選択 */
+function _populateAttendMonthOptions() {
+  const sel = document.getElementById('attend-month-filter');
+  if (!sel) return;
+  const cur = `${currentYear}-${String(currentMonth).padStart(2, '0')}`;
+  let html = '';
+  for (let y = THIS_YEAR; y >= MIN_YEAR; y--) {
+    const startM = (y === THIS_YEAR) ? THIS_MONTH : 12;
+    for (let m = startM; m >= 1; m--) {
+      const v = `${y}-${String(m).padStart(2, '0')}`;
+      html += `<option value="${v}">${y}年${m}月</option>`;
+    }
+  }
+  sel.innerHTML = html;
+  sel.value = cur;
 }
 
 function _renderAttendanceFiltered() {
@@ -718,10 +745,14 @@ function _renderAttendanceFiltered() {
 
   const labels = deriveUILabels();
 
-  // スタッフ別絞り込み（全スタッフ＝絞り込みなし）
-  const items = (_attendStaffFilter === 'all')
-    ? _allAttendRecs
-    : _allAttendRecs.filter(r => (r.staffName || '不明') === _attendStaffFilter);
+  // スタッフ・雇用形態の絞り込み（all＝絞り込みなし）
+  let items = _allAttendRecs;
+  if (_attendStaffFilter !== 'all') {
+    items = items.filter(r => (r.staffName || '不明') === _attendStaffFilter);
+  }
+  if (_attendEmpFilter !== 'all') {
+    items = items.filter(r => (r.employmentType || '') === _attendEmpFilter);
+  }
 
   if (items.length === 0) {
     container.innerHTML = `
@@ -737,7 +768,7 @@ function _renderAttendanceFiltered() {
 
     let html = `<table class="ipad-hist-flat-table">
       <thead><tr>
-        <th>出勤</th><th>スタッフ</th><th>出退勤</th><th>勤務時間</th><th></th>
+        <th>出勤</th><th>曜日</th><th>スタッフ</th><th>雇用形態</th><th>出退勤</th><th>勤務時間</th><th></th>
       </tr></thead><tbody>`;
 
     allRecs.forEach(r => {
@@ -745,6 +776,8 @@ function _renderAttendanceFiltered() {
       const atIdx = attendItems.push(enriched) - 1;
 
       const md = (r.date || '').replace(/(\d{4})-(\d{2})-(\d{2})/, '$2/$3');
+      const _dp = (r.date || '').split(/[-\/]/).map(Number);
+      const dow = (_dp.length === 3) ? WEEKDAYS[new Date(_dp[0], _dp[1] - 1, _dp[2]).getDay()] : '';
       const clockIn  = parseTimeStr(r.clockIn)  || '—';
       const clockOut = parseTimeStr(r.clockOut) || '';
       const dur = clockOut ? calcWorkDuration(clockIn, clockOut) : null;
@@ -763,7 +796,9 @@ function _renderAttendanceFiltered() {
 
       html += `<tr class="ipad-hist-row" data-idx="${atIdx}" data-scope="at">
         <td class="ipad-td-date">${md}</td>
+        <td class="ipad-td-dow">${dow}</td>
         <td class="ipad-td-staff">${escHtml((r.staffName || '不明').substring(0, 8))}</td>
+        <td class="ipad-td-emp">${escHtml(_empShort(r.employmentType))}</td>
         <td class="ipad-td-times">${escHtml(clockIn)} → ${clockOut ? escHtml(clockOut) : '—'}</td>
         <td class="ipad-td-dur">${durLabel}</td>
         <td class="ipad-td-timer">${statusBadge}</td>
@@ -855,29 +890,21 @@ function _renderAttendanceFiltered() {
           durLabel = `${hours10}h`;
         }
 
-        // 勤務状態判定（businessHours ベース・未設定時は24時間フォールバック）
-        let stateBadge = '';
-        if (!clockOut && typeof judgeAttendanceState === 'function') {
-          const state = judgeAttendanceState(r, now);
-          if (state === 'working') {
-            stateBadge = `<span class="attend-state-badge attend-state-badge--working">勤務中</span>`;
-          } else if (state === 'forgotten') {
-            // A-9：「打刻忘れ」→「未記録」リネーム（短く・「勤務中」と枠幅統一）
-            stateBadge = `<span class="attend-state-badge attend-state-badge--forgotten">未記録</span>`;
-          }
-        }
-
-        // 状態列：稼働時間カラータイマー（§5-4）＋ 勤務時間/状態テキスト
+        // 状態は文字バッジを廃し、稼働時間カラータイマー（§5-4）のドットのみで表す。
+        // 勤務中<7h=青／7h=赤／7h57m〜=赤点滅／退勤済=枠のみ。未記録もドットが赤点滅で表現される。
         const _wmin = window.uzTimer.workedMin(r.date, r.clockIn, now);
         const workDot = window.uzTimer.dotHTML(window.uzTimer.stateWork(_wmin, !!clockOut), 'hist');
         const durOrState = workDot + (clockOut
           ? `<span class="hist-attend-dur">${durLabel}</span>`
-          : stateBadge);
+          : '');
+
+        // 雇用形態（attendance D列スナップショット・補助表示）
+        const empLabel = _empShort(r.employmentType);
 
         // Grid 6カラム行：スタッフ名 | 出勤時刻 | → | 退勤時刻 | 勤務時間or状態 | 編集
         html += `
           <div class="hist-attend-row">
-            <div class="hist-attend-name">${escHtml(sname.length > 8 ? sname.substring(0, 8) + '…' : sname)}</div>
+            <div class="hist-attend-name">${escHtml(sname.length > 8 ? sname.substring(0, 8) + '…' : sname)}<span class="hist-attend-emp">${escHtml(empLabel)}</span></div>
             <span class="hist-attend-time-in">${timeInStr}</span>
             <span class="hist-attend-arrow">→</span>
             <span class="${timeOutClass}">${timeOutStr}</span>
@@ -1018,6 +1045,10 @@ function taxToggleGroupHTML(taxRate) {
 /* 雇用形態の表示ラベル（attendance D列スナップショット・読み取り専用） */
 function _empLabel(t) {
   return ({ employed_full: '常勤雇用（社員）', employed_temp: '臨時アルバイト', contractor: '委託・外注' })[t] || '—';
+}
+/* 雇用形態の短縮ラベル（一覧の列・補助表示用） */
+function _empShort(t) {
+  return ({ employed_full: '社員', employed_temp: 'アルバイト', contractor: '委託外注' })[t] || '';
 }
 
 /* 勤怠 詳細表示（§5-11／§5-10）：全項目を読み取り専用。雇用形態は保持値を表示（修正不可）。 */

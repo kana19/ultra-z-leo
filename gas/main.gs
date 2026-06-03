@@ -21,6 +21,7 @@ function doGet(e) {
       case 'getUnpaid':                 result = getUnpaid();                             break;
       case 'getUncollected':            result = getUnpaid();                             break;
       case 'getHistory':                result = getHistory(data.month);                  break;
+      case 'getRecentEntries':          result = getRecentEntries(data.limit);            break;
       case 'clearUnpaid':               result = clearUnpaid(data);                       break;
       case 'reconcile':                 result = reconcile(data);                         break;
       case 'getSettings':               result = getSettings();                           break;
@@ -502,6 +503,24 @@ function getHistory(month) {
   }
   results.sort(function(a, b) { return b.date.localeCompare(a.date); });
   return { status: 'ok', data: results };
+}
+
+/**
+ * 直近入力（ホーム）専用：発生月でフィルタせず、登録/更新日時の新しい順に
+ * 売上・コストを横断して直近 limit 件返す（→ 02_画面仕様.md §2-2 登録順）。
+ * 先月発生だが今月登録・編集した行もホームの直近入力に反映するため、
+ * getHistory（発生月フィルタ）と分離する。
+ */
+function getRecentEntries(limit) {
+  var n = Number(limit) > 0 ? Number(limit) : 20;
+  var all = getHistory('').data; // 月指定なし＝全件・各行に createdAt/updatedAt を含む
+  all.sort(function(a, b) {
+    var ka = Math.max(a.updatedAt || 0, a.createdAt || 0);
+    var kb = Math.max(b.updatedAt || 0, b.createdAt || 0);
+    if (kb !== ka) return kb - ka;
+    return String(b.date).localeCompare(String(a.date));
+  });
+  return { status: 'ok', data: all.slice(0, n) };
 }
 
 /**

@@ -1202,7 +1202,9 @@ body.is-ipad .ipad-hist-flat-table td:nth-child(-n+4) {
 }
 body.is-ipad .ipad-hist-flat-table td.ipad-td-date,
 body.is-ipad .ipad-hist-flat-table td.ipad-td-div,
+body.is-ipad .ipad-hist-flat-table td.ipad-td-dow,
 body.is-ipad .ipad-hist-flat-table td.ipad-td-staff,
+body.is-ipad .ipad-hist-flat-table td.ipad-td-emp,
 body.is-ipad .ipad-hist-flat-table td.ipad-td-times,
 body.is-ipad .ipad-hist-flat-table td.ipad-td-dur,
 body.is-ipad .ipad-hist-flat-table td.ipad-td-r,
@@ -1210,6 +1212,10 @@ body.is-ipad .ipad-hist-flat-table td.ipad-td-timer,
 body.is-ipad .ipad-hist-flat-table td.ipad-td-edit {
   width: 1%;
   white-space: nowrap;
+}
+body.is-ipad .ipad-hist-flat-table td.ipad-td-emp {
+  font-size: 12px;
+  color: var(--uz-muted);
 }
 body.is-ipad .ipad-hist-flat-table td.ipad-td-dur {
   font-size: 12px;

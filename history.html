@@ -135,13 +135,24 @@
       font-size: 13px;
       color: var(--uz-text);
     }
-    /* スタッフ名：固定幅・長い場合は…で省略 */
+    /* スタッフ名：固定幅・2段（名前＋雇用形態の補助表示） */
     .hist-attend-name {
       min-width: 0;
       width: 105px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
       font-size: 13px;
       font-weight: 700;
       color: var(--uz-text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .hist-attend-emp {
+      font-size: 10px;
+      font-weight: 500;
+      color: var(--uz-muted);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -660,10 +671,17 @@
           <span id="hist-filter-total" class="hist-filter-total" style="display:none;"></span>
         </div>
 
-        <!-- 勤怠タブ：スタッフ絞り込み＋新規登録を並列（勤怠タブ時のみ表示・二段目） -->
+        <!-- 勤怠タブ：スタッフ／年月／雇用形態の絞り込み＋新規登録を並列（勤怠タブ時のみ表示・二段目） -->
         <div id="fixed-attend-bar" class="hist-attend-bar" hidden>
           <select id="attend-staff-filter" class="hist-attend-filter__select" aria-label="スタッフ絞り込み">
             <option value="all">全スタッフ</option>
+          </select>
+          <select id="attend-month-filter" class="hist-attend-filter__select" aria-label="年月絞り込み"></select>
+          <select id="attend-emp-filter" class="hist-attend-filter__select" aria-label="雇用形態絞り込み">
+            <option value="all">全雇用形態</option>
+            <option value="employed_full">社員</option>
+            <option value="employed_temp">アルバイト</option>
+            <option value="contractor">委託外注</option>
           </select>
           <button id="ci-open-btn" type="button" class="ci-open-btn">
             ＋ <span>新規登録</span>

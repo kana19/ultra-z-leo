@@ -207,11 +207,14 @@ body.is-ipad .hist-right--input .uzf-host { height: auto; overflow: visible; }
 body.is-ipad .hist-right--input .ipad-input-tabs {
   position: sticky; top: 0; z-index: 11; background: var(--uz-surface);
 }
+/* ⑤ iPad は入力黒帯ヘッドを勤怠の黒帯（.ci-head＝48px）と同じ高さに戻す。
+   スマホ（モーダル）は 32px のまま詰める。積層オフセットも48px連動。 */
+body.is-ipad .uzf-head { height: 48px; }
 body.is-ipad .hist-right--input .uzf-head[data-stick="0"] { top: 46px; }
-body.is-ipad .hist-right--input .uzf-head[data-stick="1"] { top: 78px; }
-body.is-ipad .hist-right--input .uzf-head[data-stick="2"] { top: 110px; }
-/* iPad 修正パネル（タブバーなし）：見出し sticky は黒帯高さ基準の 0/48/96 */
+body.is-ipad .hist-right--input .uzf-head[data-stick="1"] { top: 94px; }
+body.is-ipad .hist-right--input .uzf-head[data-stick="2"] { top: 142px; }
+/* iPad 修正パネル（タブバーなし）：見出し sticky は黒帯高さ48px基準の 0/48/96 */
 body.is-ipad .hist-right--edit .uzf-head[data-stick="0"] { top: 0; }
-body.is-ipad .hist-right--edit .uzf-head[data-stick="1"] { top: 32px; }
-body.is-ipad .hist-right--edit .uzf-head[data-stick="2"] { top: 64px; }
+body.is-ipad .hist-right--edit .uzf-head[data-stick="1"] { top: 48px; }
+body.is-ipad .hist-right--edit .uzf-head[data-stick="2"] { top: 96px; }
 body.is-ipad .hist-right--edit .ipad-right-panel__header { padding: 12px 18px; }

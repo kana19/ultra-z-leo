@@ -11,7 +11,7 @@ const ATTENDANCE_DATA_KEY = 'uz_attendance_data';
 
 /* ── 状態 ────────────────────────────────────────────────── */
 let todayAttendance = []; // { id, name, clockIn, clockOut, isActive, rowIndex }
-let _activeHomeTab = null; // 'pl' | 'attendance'（null=自動判定）
+let _userPickedHomeTab = false; // ユーザーが手動でホームタブを選んだか（true の間は自動判定で上書きしない）
 
 /* ── 時計（リアルタイム） ────────────────────────────────── */
 function updateClock() {
@@ -112,7 +112,12 @@ function renderStaffList() {
     return;
   }
 
-  container.innerHTML = display.map(s => {
+  // 当日のみ表示するため、日付は先頭に1か所だけ出す（各行に重複表示しない・§3）
+  const _now = new Date();
+  const _dow = ['日','月','火','水','木','金','土'][_now.getDay()];
+  const dateHeader = `<div class="hist-date-header" style="margin:0;">${_now.getMonth() + 1}月${_now.getDate()}日(${_dow})</div>`;
+
+  container.innerHTML = dateHeader + display.map(s => {
     const ci = escapeHtml(s.clockIn || '—');
     const co = s.clockOut ? escapeHtml(s.clockOut) : '';
     if (s.isActive) {
@@ -181,7 +186,7 @@ async function loadAttendance() {
       // iPad：右カラムの出勤状況を再描画し、出勤中がいれば出勤状況タブを既定表示（§2-2/§3）
       if (document.body.classList.contains('is-ipad')) {
         _renderIpadAttendance();
-        switchIpadRightTab(todayAttendance.some(s => s.isActive) ? 'attend' : 'recent');
+        switchIpadRightTab(todayAttendance.some(s => s.isActive) ? 'attend' : 'recent', true);
       }
 
       // 退店未記録フラグをアラートに反映（他フラグは既描画のまま更新）
@@ -368,13 +373,17 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 
-/* iPad ホーム右カラム：直近入力／出勤状況 タブ切替（§2-2） */
-function switchIpadRightTab(which) {
+/* iPad ホーム右カラム：直近入力／出勤状況 タブ切替（§2-2）
+ * auto=true はシステム自動判定（手動選択済みなら従う）・auto省略=ユーザー手動 */
+let _userPickedIpadTab = false;
+function switchIpadRightTab(which, auto) {
   const rec = document.getElementById('ipad-rt-panel-recent');
   const att = document.getElementById('ipad-rt-panel-attend');
   const tr  = document.getElementById('ipad-rt-tab-recent');
   const ta  = document.getElementById('ipad-rt-tab-attend');
   if (!rec || !att) return;
+  if (auto && _userPickedIpadTab) return;
+  if (!auto) _userPickedIpadTab = true;
   const showAttend = (which === 'attend');
   rec.style.display = showAttend ? 'none' : '';
   att.style.display = showAttend ? '' : 'none';
@@ -595,11 +604,11 @@ async function _renderIpadRecentEntries(month) {
   if (!tbody) return;
 
   try {
-    const res  = await callGAS('getHistory', { month }).catch(() => null);
+    const res  = await callGAS('getRecentEntries', { limit: 15 }).catch(() => null);
     const data = (res && res.status === 'ok' && Array.isArray(res.data)) ? res.data : [];
     const items = data.map(_recentItem);
 
-    // 登録順（最後に登録・編集した順）の新しい順（→ §2-2）
+    // 登録順（最後に登録・編集した順）の新しい順（→ §2-2・先月発生分も登録が新しければ表示）
     items.sort((a, b) => (b.sortKey - a.sortKey) || b.date.localeCompare(a.date));
     const top = items.slice(0, 15);
 
@@ -782,20 +791,17 @@ async function loadSidebarRecent() {
   const container = document.getElementById('sidebar-recent');
   if (!container) return;
 
-  const now   = new Date();
-  const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-
   try {
-    const res  = await callGAS('getHistory', { month }).catch(() => null);
+    const res  = await callGAS('getRecentEntries', { limit: 8 }).catch(() => null);
     const data = (res && res.status === 'ok' && Array.isArray(res.data)) ? res.data : [];
     const items = data.map(_recentItem);
 
-    // 登録順（最後に登録・編集した順）の新しい順（→ §2-2）
+    // 登録順（最後に登録・編集した順）の新しい順（→ §2-2・先月発生分も登録が新しければ表示）
     items.sort((a, b) => (b.sortKey - a.sortKey) || b.date.localeCompare(a.date));
     const top = items.slice(0, 8);
 
     if (top.length === 0) {
-      container.innerHTML = '<div class="sidebar-recent__title">今月の記録なし</div>';
+      container.innerHTML = '<div class="sidebar-recent__title">記録なし</div>';
       return;
     }
 
@@ -826,10 +832,9 @@ function switchHomeTab(tab, auto) {
   const panelAt = document.getElementById('panel-attendance');
   if (!tabPl || !tabAtt || !panelPl || !panelAt) return;
 
-  // 自動判定時はユーザーが既に手動で選択していれば従う
-  if (auto && _activeHomeTab !== null) return;
-
-  _activeHomeTab = tab;
+  // 自動判定はユーザーが手動選択済みのときのみ従う（システム既定 'pl' は上書き可）
+  if (auto && _userPickedHomeTab) return;
+  if (!auto) _userPickedHomeTab = true;
 
   if (tab === 'pl') {
     tabPl.classList.add('active');
