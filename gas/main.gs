@@ -1183,32 +1183,34 @@ function getAttendance(data) {
   var ss    = _ss_();
   var sheet = ss.getSheetByName('attendance');
   if (!sheet) return { status: 'ok', data: { attendance: [], hasUnrecordedClockOut: false } };
-  var colMap = getAttendanceColMap_(sheet);
-  var today  = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd');
-  var values = sheet.getDataRange().getValues();
+  // attendance は V3 固定列（ヘッダ行なし・行1からデータ）。_doGetAttendanceByMonthV3 と同一レイアウト。
+  // A=入店日 / B=スタッフID / C=スタッフ名 / D=雇用形態 / E=入店時刻 / F=退店日 / G=退店時刻 / H=登録日時 / I=案件ID
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 1) return { status: 'ok', data: { attendance: [], hasUnrecordedClockOut: false } };
+  var lastCol = Math.max(8, Math.min(9, sheet.getLastColumn()));
+  var rows  = sheet.getRange(1, 1, lastRow, lastCol).getValues();
+  var today = _dateToStr(new Date());
   var attendance = [], hasUnrecordedClockOut = false;
-  for (var i = 1; i < values.length; i++) {
-    var row = values[i];
-    var date = row[colMap.date - 1] instanceof Date
-      ? Utilities.formatDate(row[colMap.date - 1], 'Asia/Tokyo', 'yyyy-MM-dd')
-      : String(row[colMap.date - 1] || '').substring(0, 10);
-    var staffId   = row[colMap.staffId - 1];
-    var staffName = row[colMap.staffName - 1];
-    var employmentType = _normalizeEmploymentType_(colMap.employmentType > 0 ? row[colMap.employmentType - 1] : '');
-    var clockIn   = row[colMap.clockIn - 1];
-    var clockOut  = row[colMap.clockOut - 1];
+  for (var i = 0; i < rows.length; i++) {
+    var row = rows[i];
+    var staffId = row[1];
     if (!staffId) continue;
-    if (date === today) {
+    var clockInDate  = row[0] instanceof Date ? _dateToStr(row[0]) : String(row[0] || '');
+    var clockInTime  = _normalizeTimeStr(row[4]);
+    var clockOutTime = _normalizeTimeStr(row[6]);
+    var isActive     = !clockOutTime;
+    if (clockInDate === today) {
       attendance.push({
-        rowIndex: i + 1,
-        staffId: staffId,
-        staffName: staffName,
-        employmentType: employmentType,
-        clockIn: clockIn,
-        clockOut: clockOut !== '' ? clockOut : null,
-        isActive: clockOut === ''
+        rowIndex:       i + 1,
+        staffId:        String(staffId),
+        staffName:      String(row[2] || ''),
+        employmentType: _normalizeEmploymentType_(row[3]),
+        clockIn:        clockInTime,
+        clockOut:       clockOutTime || null,
+        isActive:       isActive
       });
-    } else if (clockOut === '') {
+    } else if (isActive) {
+      // 当日以外で退店時刻が空 → 退勤未記録（前日以前の打刻忘れ警告用）
       hasUnrecordedClockOut = true;
     }
   }

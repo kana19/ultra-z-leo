@@ -1399,6 +1399,10 @@ body.is-ipad .ipad-pl-tabs {
   gap: 0;
   flex: 1;
 }
+/* 右カラム（直近の入力／出勤状況）のタブは縦flexコンテナ直下のため、
+   .ipad-pl-tabs の flex:1 が縦方向に伸長してタブ帯が肥大・下方化する。
+   横幅2等分は内部ボタンの flex:1 が担うので、タブ帯自体は自然高さ・上端固定にする。 */
+body.is-ipad .ipad-home-right .ipad-pl-tabs { flex: 0 0 auto; }
 body.is-ipad .ipad-pl-tab {
   flex: 1;
   background: transparent;

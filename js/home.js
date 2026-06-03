@@ -121,23 +121,20 @@ function renderStaffList() {
     const ci = escapeHtml(s.clockIn || '—');
     const co = s.clockOut ? escapeHtml(s.clockOut) : '';
     if (s.isActive) {
-      // 入店中（出勤中）：黄色●点滅 + 入店時刻
+      // 出勤中：状況サインはカラータイマーのドットに一本化（テキストバッジ撤廃）＋退勤ボタン
       return `
         <div class="staff-item">
-          <span class="staff-marker staff-marker--active" aria-label="${escapeHtml(labels.clockin_active)}" title="${escapeHtml(labels.clockin_active)}"></span>
           <div class="staff-info">
             <div class="staff-name">${escapeHtml(s.name)}</div>
             <div class="staff-time">${ci}</div>
           </div>
           ${window.uzTimer.dotHTML(window.uzTimer.stateWork(window.uzTimer.workedMin(todayStr(), s.clockIn, new Date()), false), 'home')}
-          <span class="staff-status staff-status--active">${escapeHtml(labels.clockin_active)}</span>
           <button class="staff-clockout-btn" type="button" onclick="handleClockOut(${s.id})">${escapeHtml(labels.clockout_label || '退勤')}</button>
         </div>`;
     } else {
-      // 退店済み（退勤済み）：グレー☆ + 入店→退店時刻
+      // 退勤済み：枠のみのドット（カラータイマー）＋入店→退店時刻
       return `
         <div class="staff-item">
-          <span class="staff-marker staff-marker--off" aria-hidden="true">☆</span>
           <div class="staff-info">
             <div class="staff-name" style="color:var(--uz-muted)">${escapeHtml(s.name)}</div>
             <div class="staff-time">${ci} → ${co}</div>
@@ -634,30 +631,37 @@ async function _renderIpadRecentEntries(month) {
   }
 }
 
-/* ── iPad 出勤状況（ダッシュボード左カラム） ──────── */
+/* ── iPad 出勤状況（ダッシュボード右カラム） ──────── */
 async function _renderIpadAttendance() {
   const container = document.getElementById('ipad-staff-list');
   if (!container) return;
 
-  // todayAttendance は home.js の既存グローバル変数を使用
-  // 既にfetchAttendance()で取得済みのはず
   if (todayAttendance.length === 0) {
-    container.innerHTML = '<div style="padding:14px;font-size:13px;color:var(--uz-text2);">出勤データなし</div>';
+    container.innerHTML = '<div style="padding:14px;font-size:13px;color:var(--uz-text2);">本日の出勤記録がありません</div>';
     return;
   }
 
-  container.innerHTML = todayAttendance.map(s => {
-    const status = s.isActive
-      ? '<span style="color:var(--uz-green);font-weight:600;">出勤中</span>'
-      : '<span style="color:var(--uz-text2);">退勤済</span>';
+  // 当日のみ表示のため日付は先頭に1か所だけ（各行に重複表示しない・§3）
+  const now  = new Date();
+  const dow  = ['日','月','火','水','木','金','土'][now.getDay()];
+  const head = `<div class="hist-date-header" style="margin:0;padding:8px 14px 4px;">${now.getMonth() + 1}月${now.getDate()}日(${dow})</div>`;
+
+  // 出勤中（青/赤/赤点滅）を上に、退勤済（枠のみ）を下に
+  const active   = todayAttendance.filter(s => s.isActive);
+  const inactive = todayAttendance.filter(s => !s.isActive);
+
+  container.innerHTML = head + [...active, ...inactive].map(s => {
     const time = s.clockIn ? s.clockIn : '—';
     const out  = s.clockOut ? ` → ${s.clockOut}` : '';
+    const dot  = s.isActive
+      ? window.uzTimer.dotHTML(window.uzTimer.stateWork(window.uzTimer.workedMin(todayStr(), s.clockIn, new Date()), false), 'home')
+      : window.uzTimer.dotHTML('gray', 'home');
     return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid var(--uz-border);">
       <div>
         <span style="font-size:14px;font-weight:500;">${escapeHtml(s.name)}</span>
         <span style="font-size:12px;color:var(--uz-text2);margin-left:8px;">${time}${out}</span>
       </div>
-      ${status}
+      ${dot}
     </div>`;
   }).join('');
 }

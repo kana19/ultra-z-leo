@@ -116,29 +116,29 @@
        見本：「不明           09:30 → 14:00  (4.50H)  [編集]」
             「●●コンパニオン…   14:50 →   —    勤務中   [編集]」
        ══════════════════════════════════════════════════════════ */
-    .hist-date-group { padding: 8px 0; }
+    .hist-date-group { padding: 2px 0 4px; }
     .hist-date-header {
-      padding: 8px 16px 4px;
+      padding: 6px 16px 2px;
       font-size: 13px;
       font-weight: 700;
       color: var(--uz-text);
     }
     .hist-attend-row {
       display: grid;
-      /* スタッフ名を固定幅にして、全行で出勤時刻位置を完全に揃える（A-9整流化追加）
-         スタッフ名 105px | 出勤時刻 auto | → 14px | 退勤時刻 auto | 状態or勤務時間 auto | 編集 auto
-         105pxは約7文字（「コンパニオン」等）まで省略なし表示できる幅 */
-      grid-template-columns: 105px auto 14px auto 1fr auto;
+      /* 名前80px｜出勤時刻｜→｜退勤時刻｜状態(ドット+勤務時間)｜編集(右端)
+         名前を80pxに詰めて開始時刻の右寄りを解消し、編集まで1行に収める。
+         最終トラック1frに編集を入れ右端寄せ、それ以外は名前直後に左詰め。 */
+      grid-template-columns: 80px auto 12px auto auto 1fr;
       align-items: center;
-      column-gap: 6px;
-      padding: 8px 16px;
+      column-gap: 5px;
+      padding: 5px 16px;
       font-size: 13px;
       color: var(--uz-text);
     }
     /* スタッフ名：固定幅・2段（名前＋雇用形態の補助表示） */
     .hist-attend-name {
       min-width: 0;
-      width: 105px;
+      width: 80px;
       display: flex;
       flex-direction: column;
       justify-content: center;

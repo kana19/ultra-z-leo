@@ -784,9 +784,7 @@ function _renderAttendanceFiltered() {
       const wMin = r.workMinutes || dur?.minutes;
       let durLabel = '—';
       if (wMin && !dur?.isAbnormal) {
-        const wh = Math.floor(wMin / 60);
-        const wm = wMin % 60;
-        durLabel = wm > 0 ? `${wh}h${wm}m` : `${wh}h`;
+        durLabel = `${(wMin / 60).toFixed(2)}h`;
       }
 
       const isActive = !clockOut;
