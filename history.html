@@ -388,11 +388,21 @@
     .sm-body .ci-head[data-stick="1"] { top: 48px; z-index: 8; }
     .sm-body .ci-head[data-stick="2"] { top: 96px; z-index: 7; }
     .sm-body .ci-head[data-stick="3"] { top: 144px; z-index: 6; }
+    /* iPad右カラム：見出し「新規登録/詳細/修正」を左の取引/勤怠タブと同寸・同下線に統一し、
+       スタッフ黒帯以上（見出し＋スタッフ帯）を上部固定する（§5-11）。 */
+    body.is-ipad .ipad-right-panel__header {
+      font-size: 17px; font-weight: 700; color: var(--uz-text);
+      letter-spacing: 0; text-transform: none; text-align: center;
+      padding: 12px 4px; margin-bottom: 0;
+      background: var(--uz-surface);
+      border-bottom: 2px solid var(--uz-text);
+    }
+    body.is-ipad .hist-right--input .ipad-right-panel__header { position: sticky; top: 0; z-index: 12; }
     body.is-ipad .hist-right--input .ci-head[data-stick] { position: sticky; z-index: 6; }
-    body.is-ipad .hist-right--input .ci-head[data-stick="0"] { top: 0;    z-index: 9; }
-    body.is-ipad .hist-right--input .ci-head[data-stick="1"] { top: 48px; z-index: 8; }
-    body.is-ipad .hist-right--input .ci-head[data-stick="2"] { top: 96px; z-index: 7; }
-    body.is-ipad .hist-right--input .ci-head[data-stick="3"] { top: 144px; z-index: 6; }
+    body.is-ipad .hist-right--input .ci-head[data-stick="0"] { top: 46px;  z-index: 9; }
+    body.is-ipad .hist-right--input .ci-head[data-stick="1"] { top: 94px;  z-index: 8; }
+    body.is-ipad .hist-right--input .ci-head[data-stick="2"] { top: 142px; z-index: 7; }
+    body.is-ipad .hist-right--input .ci-head[data-stick="3"] { top: 190px; z-index: 6; }
     .ci-body { padding: 12px 18px; }
     .ci-section__title {
       padding: 10px 14px 8px;

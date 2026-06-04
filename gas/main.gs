@@ -1198,9 +1198,13 @@ function getAttendance(data) {
     var clockInDate  = row[0] instanceof Date ? _dateToStr(row[0]) : String(row[0] || '');
     var clockInTime  = _normalizeTimeStr(row[4]);
     var clockOutTime = _normalizeTimeStr(row[6]);
-    var isActive     = !clockOutTime;            // 退店時刻が空＝出勤中（青/赤/赤点滅）
-    // 表示対象：出勤中（未退勤・日付不問）または 当日の記録（退勤済も含む）
-    if (isActive || clockInDate === today) {
+    if (!clockInTime) continue;                  // 入店時刻なし＝無効行（架空入店を除去）
+    var isActive = !clockOutTime;                // 退店時刻が空＝出勤中（青/赤/赤点滅）
+    // 表示対象：当日の記録（退勤済も含む）／前日以前の未退勤（打刻忘れ＝今も出勤中扱い）。
+    // 未来日の未退勤は出勤状況に出さない（当日にまだ出勤していない＝架空の出勤中を防ぐ）。
+    var include = (clockInDate === today) ||
+                  (isActive && clockInDate && clockInDate < today);
+    if (include) {
       attendance.push({
         rowIndex:       i + 1,
         staffId:        String(staffId),

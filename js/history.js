@@ -1329,7 +1329,7 @@ function _buildCIFormBodyHTML() {
         <div class="ci-row"><div id="ci-clockin-wrap"></div></div>
       </div>
 
-      <div class="ci-head" data-stick="3"><span class="ci-head__k">${escHtml(labels.clockout_time)}<span class="ci-head__opt">任意</span></span><span class="ci-head__v" id="ci-hv-out"></span></div>
+      <div class="ci-head" data-stick="3"><span class="ci-head__k">${escHtml(labels.clockout_time)}<span class="ci-head__opt">${escHtml(labels.clockin_active)}は空欄</span></span><span class="ci-head__v" id="ci-hv-out"></span></div>
       <div class="ci-body">
         <div class="ci-row" style="gap:8px;flex-wrap:wrap;">
           <div id="ci-clockout-wrap"></div>
@@ -1527,7 +1527,21 @@ function _validateCIForm() {
 
   const labels = deriveUILabels();
 
-  // 雇用形態チェック
+  // スタッフ選択チェック（最優先・雇用形態はスタッフに紐づく派生値のため後段）
+  const mode        = document.querySelector('input[name="ci-mode"]:checked')?.value || 'registered';
+  const staffSelect = document.getElementById('ci-staff-select');
+  const staffInput  = document.getElementById('ci-staff-name');
+  if (mode === 'registered') {
+    if (!staffSelect?.value) {
+      return { type: 'error', field: staffSelect, message: 'スタッフを選択してください' };
+    }
+  } else {
+    if (!(staffInput?.value?.trim())) {
+      return { type: 'confirm' };   // 手入力で空欄は確認のうえ許容
+    }
+  }
+
+  // 雇用形態チェック（手入力でスタッフ名のみ入れて未選択の場合に発火）
   const empEl = document.getElementById('ci-emp-type');
   if (!empEl?.value) {
     return { type: 'error', field: empEl, message: '雇用形態を選択してください' };
@@ -1538,17 +1552,6 @@ function _validateCIForm() {
   const ciM = document.getElementById('ci-clockin-m');
   if (!ciH?.value || !ciM?.value) {
     return { type: 'error', field: document.getElementById('ci-clockin-wrap'), message: `${labels.clockin_time}を選択してください` };
-  }
-
-  // スタッフ未指定チェック（任意・confirmのみ）
-  const mode        = document.querySelector('input[name="ci-mode"]:checked')?.value || 'registered';
-  const staffSelect = document.getElementById('ci-staff-select');
-  const staffInput  = document.getElementById('ci-staff-name');
-  const noStaff     = mode === 'registered'
-    ? !staffSelect?.value
-    : !(staffInput?.value?.trim());
-  if (noStaff) {
-    return { type: 'confirm' };
   }
 
   return null;
