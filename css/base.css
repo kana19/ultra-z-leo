@@ -413,6 +413,36 @@ body.is-ipad .home-sticky-top {
   filter: brightness(0.85);
 }
 
+/* ホーム出勤状況：名前｜出勤｜→｜退勤｜0.0h｜カラータイマー を1行・列揃えで表示。
+   退勤操作は履歴の修正フォームに集約し、ホームは状態表示に専念（§3-1 改定）。 */
+.home-attend-row {
+  display: grid;
+  grid-template-columns: 90px auto 12px auto auto auto;
+  align-items: center;
+  column-gap: 8px;
+  padding: 11px 16px;
+  background: var(--uz-surface);
+  font-size: 13px;
+  color: var(--uz-text);
+}
+.home-attend-row + .home-attend-row { border-top: 1px solid var(--uz-border); }
+.home-attend-row .ha-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.home-attend-row .ha-name--off { color: var(--uz-muted); }
+.home-attend-row .ha-in,
+.home-attend-row .ha-out { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.home-attend-row .ha-arrow { color: var(--uz-muted); text-align: center; }
+.home-attend-row .ha-dur { color: var(--uz-muted); font-size: 12px; font-variant-numeric: tabular-nums; min-width: 44px; }
+.home-attend-row .ha-dot { justify-self: start; display: inline-flex; align-items: center; }
+/* iPad：名前9文字相当・開始時刻〜0.0hの数字を大きく（バランス） */
+body.is-ipad .home-attend-row {
+  grid-template-columns: 130px auto 14px auto auto auto;
+  font-size: 15px;
+  padding: 12px 14px;
+}
+body.is-ipad .home-attend-row .ha-in,
+body.is-ipad .home-attend-row .ha-out { font-size: 16px; }
+body.is-ipad .home-attend-row .ha-dur { font-size: 15px; min-width: 52px; }
+
 .staff-more {
   padding: 10px 16px;
   text-align: center;

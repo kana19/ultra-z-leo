@@ -1089,7 +1089,7 @@ function buildAttendanceFormHTML(item) {
       <div class="ci-body"><div class="ci-row"><input type="date" id="ef-date" class="ci-date-input" value="${escHtml(item.date || '')}"></div></div>
       <div class="ci-head"><span class="ci-head__k">${escHtml(labels.clockin_time)}</span></div>
       <div class="ci-body"><div class="ci-row">${timeSelectHTML('ef-clockin', clockIn, true)}</div></div>
-      <div class="ci-head"><span class="ci-head__k">${escHtml(labels.clockout_time)}</span><span class="ci-head__opt">任意</span></div>
+      <div class="ci-head"><span class="ci-head__k">${escHtml(labels.clockout_time)}</span><span class="ci-head__opt">${escHtml(labels.clockin_active)}は空欄</span></div>
       <div class="ci-body"><div class="ci-row">${timeSelectHTML('ef-clockout', clockOut, false)}</div></div>
     </div>`;
 }

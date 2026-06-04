@@ -112,33 +112,45 @@ function renderStaffList() {
   const groups = _groupAttendanceByDate(todayAttendance.slice(0, 12));
   container.innerHTML = groups.map(g => {
     const head = `<div class="hist-date-header" style="margin:0;">${g.label}</div>`;
-    const rows = g.items.map(s => {
-      const ci = escapeHtml(s.clockIn || '—');
-      const co = s.clockOut ? escapeHtml(s.clockOut) : '';
-      if (s.isActive) {
-        // 出勤中：状況サインはカラータイマーのドットに一本化＋退勤ボタン
-        return `
-          <div class="staff-item">
-            <div class="staff-info">
-              <div class="staff-name">${escapeHtml(s.name)}</div>
-              <div class="staff-time">${ci}</div>
-            </div>
-            ${window.uzTimer.dotHTML(window.uzTimer.stateWork(window.uzTimer.workedMin(s.clockInDate || todayStr(), s.clockIn, new Date()), false), 'home')}
-            <button class="staff-clockout-btn" type="button" onclick="handleClockOut(${s.id})">${escapeHtml(labels.clockout_label || '退勤')}</button>
-          </div>`;
-      }
-      // 退勤済み：枠のみのドット＋入店→退店時刻
-      return `
-        <div class="staff-item">
-          <div class="staff-info">
-            <div class="staff-name" style="color:var(--uz-muted)">${escapeHtml(s.name)}</div>
-            <div class="staff-time">${ci} → ${co}</div>
-          </div>
-          ${window.uzTimer.dotHTML('gray', 'home')}
-        </div>`;
-    }).join('');
-    return head + rows;
+    return head + g.items.map(_homeAttendRowHTML).join('');
   }).join('');
+}
+
+/* ホーム出勤状況の1行（名前｜出勤｜→｜退勤｜0.0h｜カラータイマー）。スマホ・iPad共有。 */
+function _homeAttendRowHTML(s) {
+  const ci = escapeHtml(s.clockIn || '—');
+  if (s.isActive) {
+    const dot = window.uzTimer.dotHTML(window.uzTimer.stateWork(window.uzTimer.workedMin(s.clockInDate || todayStr(), s.clockIn, new Date()), false), 'home');
+    return `<div class="home-attend-row">
+      <span class="ha-name">${escapeHtml(s.name)}</span>
+      <span class="ha-in">${ci}</span>
+      <span class="ha-arrow">→</span>
+      <span class="ha-out">—</span>
+      <span class="ha-dur"></span>
+      <span class="ha-dot">${dot}</span>
+    </div>`;
+  }
+  const co  = escapeHtml(s.clockOut || '—');
+  const dur = _calcDurH(s.clockIn, s.clockOut);
+  return `<div class="home-attend-row">
+    <span class="ha-name ha-name--off">${escapeHtml(s.name)}</span>
+    <span class="ha-in">${ci}</span>
+    <span class="ha-arrow">→</span>
+    <span class="ha-out">${co}</span>
+    <span class="ha-dur">${dur}</span>
+    <span class="ha-dot">${window.uzTimer.dotHTML('gray', 'home')}</span>
+  </div>`;
+}
+
+/* 退店時刻−入店時刻の勤務時間を "X.XXh" で返す（日跨ぎは+24h補正）。 */
+function _calcDurH(inStr, outStr) {
+  if (!inStr || !outStr) return '';
+  const [ih, im] = String(inStr).split(':').map(Number);
+  const [oh, om] = String(outStr).split(':').map(Number);
+  if ([ih, im, oh, om].some(Number.isNaN)) return '';
+  let mins = (oh * 60 + om) - (ih * 60 + im);
+  if (mins < 0) mins += 1440;
+  return (mins / 60).toFixed(2) + 'h';
 }
 
 /* 出勤状況を入店日でグループ化（日付降順・各日内は出勤中→入店時刻降順）。
@@ -457,8 +469,8 @@ async function initIpadHome() {
   // 直近入力を右カラムに表示
   _renderIpadRecentEntries(currentMonth);
 
-  // 月次損益グラフ
-  _renderIpadMonthlyChart(now.getFullYear());
+  // 月次損益グラフ（タブ連動：初期=月次損益→当月の日次推移）
+  _renderIpadPLChart();
 
   // iPad出勤状況を左カラムに表示
   _renderIpadAttendance();
@@ -480,6 +492,7 @@ function _initMonthSelect(currentMonth) {
   sel.addEventListener('change', async () => {
     const res = await callGAS('getSummary', { month: sel.value }).catch(() => null);
     if (res && res.status === 'ok' && res.data) _renderIpadPLRows(res.data);
+    if (_ipadPLTab === 'monthly') _renderIpadPLChart();
   });
 }
 
@@ -503,6 +516,7 @@ function _initYearSelect(currentYear) {
   sel.value = String(currentYear);
   sel.addEventListener('change', () => {
     _renderIpadYTD(Number(sel.value));
+    if (_ipadPLTab === 'ytd') _renderIpadPLChart();
   });
 }
 
@@ -529,6 +543,9 @@ function switchIpadPLTab(tab) {
   } else {
     _renderIpadYTD(Number(yearSel?.value) || new Date().getFullYear());
   }
+
+  // グラフもタブ連動（月次損益＝日次／年度累計＝12ヶ月累計）
+  _renderIpadPLChart();
 }
 
 /* 年度累計を集計して①損益テーブルに描画 */
@@ -666,73 +683,97 @@ async function _renderIpadAttendance() {
   const groups = _groupAttendanceByDate(todayAttendance.slice(0, 12));
   container.innerHTML = groups.map(g => {
     const head = `<div class="hist-date-header" style="margin:0;padding:8px 14px 4px;">${g.label}</div>`;
-    const rows = g.items.map(s => {
-      const time = s.clockIn ? s.clockIn : '—';
-      const out  = s.clockOut ? ` → ${s.clockOut}` : '';
-      const dot  = s.isActive
-        ? window.uzTimer.dotHTML(window.uzTimer.stateWork(window.uzTimer.workedMin(s.clockInDate || todayStr(), s.clockIn, new Date()), false), 'home')
-        : window.uzTimer.dotHTML('gray', 'home');
-      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid var(--uz-border);">
-        <div>
-          <span style="font-size:14px;font-weight:500;">${escapeHtml(s.name)}</span>
-          <span style="font-size:12px;color:var(--uz-text2);margin-left:8px;">${time}${out}</span>
-        </div>
-        ${dot}
-      </div>`;
-    }).join('');
-    return head + rows;
+    return head + g.items.map(_homeAttendRowHTML).join('');
   }).join('');
 }
 
 /* ── iPad 月次損益グラフ ────────────────────────────── */
 let _ipadChart = null;
 
-async function _renderIpadMonthlyChart(year) {
+/* y軸目盛りの万円表記 */
+function _yenTick(v) {
+  const abs = Math.abs(v);
+  if (abs >= 10000) return (v < 0 ? '-' : '') + Math.round(abs / 10000) + '万';
+  return v;
+}
+/* 累計マーカー用のコンパクト金額（5.8万／-1.2万／0） */
+function _yenShort(v) {
+  const abs = Math.abs(v);
+  if (abs >= 10000) return (v < 0 ? '-' : '') + (Math.round(abs / 1000) / 10) + '万';
+  return String(Math.round(v));
+}
+
+/* チャート見出し・凡例をモード別に差し替える */
+function _setChartHeader(title, legendHTML) {
+  const t  = document.querySelector('.ipad-dash-section--chart .ipad-dash-header__title');
+  const lg = document.querySelector('.ipad-dash-section--chart .ipad-chart-legend');
+  if (t)  t.textContent  = title;
+  if (lg) lg.innerHTML   = legendHTML;
+}
+
+/* タブ連動ディスパッチャ：月次損益＝日次／年度累計＝12ヶ月累計 */
+function _renderIpadPLChart() {
+  if (_ipadPLTab === 'ytd') {
+    const y = Number(document.getElementById('ipad-year-select')?.value) || new Date().getFullYear();
+    _renderYearlyCumulativeChart(y);
+  } else {
+    const now = new Date();
+    const m = document.getElementById('ipad-month-select')?.value
+      || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    _renderDailyChart(m);
+  }
+}
+
+/* 月次損益タブ：選択月の「日次推移」。売上＝折れ線／仕入原価・販管費＝積み上げ棒。
+   表（単月損益）とグラフ（その月の日次）の集計単位を一致させる（→ 経営の見える化）。 */
+async function _renderDailyChart(month) {
   const canvas  = document.getElementById('ipad-pl-chart');
   const loading = document.getElementById('ipad-chart-loading');
   if (!canvas || typeof Chart === 'undefined') return;
+  if (loading) loading.style.display = '';
 
-  const results = await Promise.all(
-    Array.from({ length: 12 }, (_, i) => {
-      const m = String(i + 1).padStart(2, '0');
-      return callGAS('getSummary', { month: `${year}-${m}` }).catch(() => null);
-    })
-  );
+  const [y, m] = String(month).split('-').map(Number);
+  const daysInMonth = new Date(y, m, 0).getDate();
 
+  const res = await callGAS('getHistory', { month }).catch(() => null);
   if (loading) loading.style.display = 'none';
 
-  const labels     = results.map((_, i) => `${i + 1}月`);
-  const cogsData = results.map(r =>
-    (r && r.status === 'ok' && r.data) ? (r.data.cogs ?? 0) : 0
-  );
-  const sgaData = results.map(r =>
-    (r && r.status === 'ok' && r.data) ? (r.data.sga ?? 0) : 0
-  );
-  const profitData = results.map(r => {
-    if (!r || r.status !== 'ok' || !r.data) return 0;
-    const d = r.data;
-    return d.operatingProfit ?? ((d.sales ?? 0) - (d.cogs ?? 0) - (d.sga ?? 0));
-  });
+  const sales = Array(daysInMonth).fill(0);
+  const cogs  = Array(daysInMonth).fill(0);
+  const sga   = Array(daysInMonth).fill(0);
+  if (res && res.status === 'ok' && Array.isArray(res.data)) {
+    res.data.forEach(r => {
+      const d = parseInt(String(r.date).slice(8, 10), 10);
+      if (!(d >= 1 && d <= daysInMonth)) return;
+      const amt = Number(r.amount) || 0;
+      if (r.type === 'sales') sales[d - 1] += amt;
+      else if (r.type === 'cost') {
+        if (String(r.divisionCode) === '1') cogs[d - 1] += amt;
+        else                                 sga[d - 1]  += amt;
+      }
+    });
+  }
+  const labels = Array.from({ length: daysInMonth }, (_, i) => String(i + 1));
+
+  _setChartHeader(`日次推移（${m}月）`,
+    `<span class="ipad-legend-item"><i class="ipad-legend-dot" data-c="profit"></i>売上</span>` +
+    `<span class="ipad-legend-item"><i class="ipad-legend-dot" data-c="cogs"></i>仕入原価</span>` +
+    `<span class="ipad-legend-item"><i class="ipad-legend-dot" data-c="sga"></i>販管費</span>`);
 
   if (_ipadChart) { _ipadChart.destroy(); _ipadChart = null; }
-
   const _cs = getComputedStyle(document.documentElement);
   const _cMuted = _cs.getPropertyValue('--uz-text2').trim() || '#666666';
   const _cGrid  = _cs.getPropertyValue('--uz-border').trim() || 'rgba(0,0,0,0.10)';
-  // 案1 積み上げ：仕入原価＋販管費＋経常利益＝売上高。経常利益を青で主役化。
-  const C_COGS   = '#C9CDD2';
-  const C_SGA    = '#8A929B';
-  const C_PROFIT = '#4A90D9';
 
   _ipadChart = new Chart(canvas, {
-    type: 'bar',
     data: {
       labels,
       datasets: [
-        { label: '仕入原価', data: cogsData,   backgroundColor: C_COGS,   borderWidth: 0, stack: 's' },
-        { label: '販管費',   data: sgaData,    backgroundColor: C_SGA,    borderWidth: 0, stack: 's' },
-        { label: '経常利益', data: profitData, backgroundColor: C_PROFIT, borderWidth: 0, stack: 's',
-          borderRadius: { topLeft: 3, topRight: 3 } },
+        { type: 'bar',  label: '仕入原価', data: cogs, backgroundColor: '#C9CDD2', borderWidth: 0, stack: 'cost', order: 3 },
+        { type: 'bar',  label: '販管費',   data: sga,  backgroundColor: '#8A929B', borderWidth: 0, stack: 'cost', order: 3 },
+        { type: 'line', label: '売上',     data: sales, stack: 'sales',
+          borderColor: '#4A90D9', backgroundColor: '#4A90D9', borderWidth: 2,
+          pointRadius: 2, pointHoverRadius: 4, tension: 0.3, fill: false, order: 1 },
       ],
     },
     options: {
@@ -740,37 +781,108 @@ async function _renderIpadMonthlyChart(year) {
       maintainAspectRatio: false,
       plugins: {
         legend: { display: false },
-        tooltip: {
-          callbacks: {
-            label: (ctx) => `${ctx.dataset.label}: ${formatYen(ctx.parsed.y)}`,
-            footer: (items) => {
-              const total = items.reduce((s, it) => s + (it.parsed.y || 0), 0);
-              return `売上: ${formatYen(total)}`;
-            },
-          },
-        },
+        tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${formatYen(ctx.parsed.y)}` } },
       },
       scales: {
-        x: {
-          stacked: true,
-          ticks: { color: _cMuted, font: { size: 10 } },
-          grid:  { color: _cGrid },
-        },
-        y: {
-          stacked: true,
-          ticks: {
-            color: _cMuted,
-            font:  { size: 10 },
-            callback: v => {
-              const abs = Math.abs(v);
-              if (abs >= 10000) return (v < 0 ? '-' : '') + Math.round(abs / 10000) + '万';
-              return v;
-            },
-          },
-          grid: { color: _cGrid },
-        },
+        x: { stacked: true, ticks: { color: _cMuted, font: { size: 9 }, autoSkip: false, maxRotation: 0 }, grid: { color: _cGrid } },
+        y: { stacked: true, beginAtZero: true, ticks: { color: _cMuted, font: { size: 10 }, callback: _yenTick }, grid: { color: _cGrid } },
       },
     },
+  });
+}
+
+/* 年度累計タブ：12ヶ月の積み上げ棒（仕入原価・販管費・経常利益）に
+   経常利益の累積折れ線を重ね、各マーカーに累計額を記載する（→ YTDは累積カーブが世界標準）。 */
+async function _renderYearlyCumulativeChart(year) {
+  const canvas  = document.getElementById('ipad-pl-chart');
+  const loading = document.getElementById('ipad-chart-loading');
+  if (!canvas || typeof Chart === 'undefined') return;
+  if (loading) loading.style.display = '';
+
+  const results = await Promise.all(
+    Array.from({ length: 12 }, (_, i) => {
+      const m = String(i + 1).padStart(2, '0');
+      return callGAS('getSummary', { month: `${year}-${m}` }).catch(() => null);
+    })
+  );
+  if (loading) loading.style.display = 'none';
+
+  const labels   = results.map((_, i) => `${i + 1}月`);
+  const cogsData = results.map(r => (r && r.status === 'ok' && r.data) ? (r.data.cogs ?? 0) : 0);
+  const sgaData  = results.map(r => (r && r.status === 'ok' && r.data) ? (r.data.sga  ?? 0) : 0);
+  const profitData = results.map(r => {
+    if (!r || r.status !== 'ok' || !r.data) return 0;
+    const d = r.data;
+    return d.operatingProfit ?? ((d.sales ?? 0) - (d.cogs ?? 0) - (d.sga ?? 0));
+  });
+  // 経常利益の累積
+  let run = 0;
+  const cumProfit = profitData.map(p => (run += p));
+  // データのある最終月（累計ラベルはここまで描く）
+  let lastIdx = -1;
+  results.forEach((r, i) => { if (r && r.status === 'ok' && r.data &&
+    ((r.data.sales ?? 0) || (r.data.cogs ?? 0) || (r.data.sga ?? 0))) lastIdx = i; });
+
+  _setChartHeader('年度累計推移',
+    `<span class="ipad-legend-item"><i class="ipad-legend-dot" data-c="cogs"></i>仕入原価</span>` +
+    `<span class="ipad-legend-item"><i class="ipad-legend-dot" data-c="sga"></i>販管費</span>` +
+    `<span class="ipad-legend-item"><i class="ipad-legend-dot" data-c="profit"></i>経常利益</span>` +
+    `<span class="ipad-legend-item"><i style="display:inline-block;width:12px;height:0;border-top:2px solid #2C3E50;vertical-align:middle;margin-right:3px;"></i>累計</span>`);
+
+  if (_ipadChart) { _ipadChart.destroy(); _ipadChart = null; }
+  const _cs = getComputedStyle(document.documentElement);
+  const _cMuted = _cs.getPropertyValue('--uz-text2').trim() || '#666666';
+  const _cGrid  = _cs.getPropertyValue('--uz-border').trim() || 'rgba(0,0,0,0.10)';
+  const _cText  = _cs.getPropertyValue('--uz-text').trim()  || '#1a1a1a';
+
+  // 累計マーカーに数字を描くプラグイン（経常利益累計の系列のみ・データのある月まで）
+  const cumLabel = {
+    id: 'cumLabel',
+    afterDatasetsDraw(chart) {
+      const idx = chart.data.datasets.findIndex(d => d.label === '経常利益（累計）');
+      if (idx < 0 || lastIdx < 0) return;
+      const meta = chart.getDatasetMeta(idx);
+      const ctx  = chart.ctx;
+      ctx.save();
+      ctx.font = 'bold 10px sans-serif';
+      ctx.fillStyle = _cText;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      meta.data.forEach((pt, i) => {
+        if (i > lastIdx) return;
+        ctx.fillText(_yenShort(cumProfit[i]), pt.x, pt.y - 5);
+      });
+      ctx.restore();
+    },
+  };
+
+  _ipadChart = new Chart(canvas, {
+    data: {
+      labels,
+      datasets: [
+        { type: 'bar',  label: '仕入原価', data: cogsData,   backgroundColor: '#C9CDD2', borderWidth: 0, stack: 's', order: 3 },
+        { type: 'bar',  label: '販管費',   data: sgaData,    backgroundColor: '#8A929B', borderWidth: 0, stack: 's', order: 3 },
+        { type: 'bar',  label: '経常利益', data: profitData, backgroundColor: '#4A90D9', borderWidth: 0, stack: 's',
+          order: 3, borderRadius: { topLeft: 3, topRight: 3 } },
+        { type: 'line', label: '経常利益（累計）', data: cumProfit, stack: 'cum',
+          borderColor: '#2C3E50', backgroundColor: '#2C3E50', borderWidth: 2,
+          pointRadius: 3, pointHoverRadius: 5, tension: 0.25, fill: false, order: 1 },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      layout: { padding: { top: 16 } },
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${formatYen(ctx.parsed.y)}` } },
+      },
+      scales: {
+        x: { stacked: true, ticks: { color: _cMuted, font: { size: 10 } }, grid: { color: _cGrid } },
+        y: { stacked: true, ticks: { color: _cMuted, font: { size: 10 }, callback: _yenTick }, grid: { color: _cGrid } },
+      },
+    },
+    plugins: [cumLabel],
   });
 }
 

@@ -398,6 +398,14 @@
       border-bottom: 2px solid var(--uz-text);
     }
     body.is-ipad .hist-right--input .ipad-right-panel__header { position: sticky; top: 0; z-index: 12; }
+    /* 詳細/修正（角丸カード）：カード枠は残しつつ見出しをカード上端へ全幅密着させ、
+       下線を左カラムの取引/勤怠タブ・新規登録見出しと一直線（同高さ・同太さ）に揃える。 */
+    body.is-ipad .ipad-right-panel:not(.hist-right--input) > .ipad-right-panel__header {
+      margin: -16px -16px 16px;
+      padding: 12px 4px;
+      border-top-left-radius: var(--radius-lg);
+      border-top-right-radius: var(--radius-lg);
+    }
     body.is-ipad .hist-right--input .ci-head[data-stick] { position: sticky; z-index: 6; }
     body.is-ipad .hist-right--input .ci-head[data-stick="0"] { top: 46px;  z-index: 9; }
     body.is-ipad .hist-right--input .ci-head[data-stick="1"] { top: 94px;  z-index: 8; }
