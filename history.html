@@ -379,8 +379,20 @@
       border-bottom: 1px solid var(--uz-surface);
     }
     .ci-head__k { font-size: 15px; font-weight: 600; }
-    .ci-head__v { margin-left: auto; font-size: 15px; font-weight: 600; }
-    .ci-head__opt { font-size: 13px; font-weight: 600; opacity: 0.85; margin-left: auto; }
+    .ci-head__v { margin-left: auto; font-size: 15px; font-weight: 600; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ci-head__opt { font-size: 13px; font-weight: 600; opacity: 0.85; margin-left: 6px; }
+    /* 勤怠フォーム黒帯：スクロールで上端到達順に固定＝積み下がり（売上/コスト入力 uzf-head と同一機構）。
+       見出し高さ48px基準でオフセット。詳細表示(data-stick無し)は固定しない。 */
+    .sm-body .ci-head[data-stick] { position: sticky; z-index: 6; }
+    .sm-body .ci-head[data-stick="0"] { top: 0;    z-index: 9; }
+    .sm-body .ci-head[data-stick="1"] { top: 48px; z-index: 8; }
+    .sm-body .ci-head[data-stick="2"] { top: 96px; z-index: 7; }
+    .sm-body .ci-head[data-stick="3"] { top: 144px; z-index: 6; }
+    body.is-ipad .hist-right--input .ci-head[data-stick] { position: sticky; z-index: 6; }
+    body.is-ipad .hist-right--input .ci-head[data-stick="0"] { top: 0;    z-index: 9; }
+    body.is-ipad .hist-right--input .ci-head[data-stick="1"] { top: 48px; z-index: 8; }
+    body.is-ipad .hist-right--input .ci-head[data-stick="2"] { top: 96px; z-index: 7; }
+    body.is-ipad .hist-right--input .ci-head[data-stick="3"] { top: 144px; z-index: 6; }
     .ci-body { padding: 12px 18px; }
     .ci-section__title {
       padding: 10px 14px 8px;

@@ -1286,7 +1286,7 @@ function _buildCIFormBodyHTML() {
   const labels = deriveUILabels();
   return `
     <div class="ci-section" aria-label="${escHtml(labels.clockin_register)}">
-      <div class="ci-head"><span class="ci-head__k">スタッフ</span></div>
+      <div class="ci-head" data-stick="0"><span class="ci-head__k">スタッフ</span><span class="ci-head__v" id="ci-hv-staff"></span></div>
       <div class="ci-body">
         <div class="ci-row ci-row--radio">
           <label class="ci-radio-label">
@@ -1319,17 +1319,17 @@ function _buildCIFormBodyHTML() {
         </div>
       </div>
 
-      <div class="ci-head"><span class="ci-head__k">日付</span></div>
+      <div class="ci-head" data-stick="1"><span class="ci-head__k">日付</span><span class="ci-head__v" id="ci-hv-date"></span></div>
       <div class="ci-body">
         <div class="ci-row"><input type="date" id="ci-date" class="ci-date-input" aria-label="日付"></div>
       </div>
 
-      <div class="ci-head"><span class="ci-head__k">${escHtml(labels.clockin_time)}</span></div>
+      <div class="ci-head" data-stick="2"><span class="ci-head__k">${escHtml(labels.clockin_time)}</span><span class="ci-head__v" id="ci-hv-in"></span></div>
       <div class="ci-body">
         <div class="ci-row"><div id="ci-clockin-wrap"></div></div>
       </div>
 
-      <div class="ci-head"><span class="ci-head__k">${escHtml(labels.clockout_time)}</span><span class="ci-head__opt">任意</span></div>
+      <div class="ci-head" data-stick="3"><span class="ci-head__k">${escHtml(labels.clockout_time)}<span class="ci-head__opt">任意</span></span><span class="ci-head__v" id="ci-hv-out"></span></div>
       <div class="ci-body">
         <div class="ci-row" style="gap:8px;flex-wrap:wrap;">
           <div id="ci-clockout-wrap"></div>
@@ -1418,6 +1418,43 @@ function _initCIFormInModal() {
   // 入店時刻基準で退店プルダウン初期化
   _refreshClockOutHourSelect('ci-clockin-h', 'ci-clockout-h');
   updateCIBtnLabel();
+
+  // 黒帯（見出し）への選択値リアルタイム反映：フォーム全体の change/input を集約
+  const ciSection = document.querySelector('.ci-section');
+  if (ciSection) {
+    ciSection.addEventListener('change', _updateCIHeadValues);
+    ciSection.addEventListener('input',  _updateCIHeadValues);
+  }
+  _updateCIHeadValues();
+}
+
+/* 勤怠フォームの黒帯（スタッフ／日付／出勤／退勤）に現在の選択値を表示。
+   売上・コスト入力の uzf-head と同じ「黒帯に確定値を出す」挙動に統一。 */
+function _updateCIHeadValues() {
+  const set = (id, t) => { const el = document.getElementById(id); if (el) el.textContent = t || ''; };
+
+  const mode = document.querySelector('input[name="ci-mode"]:checked')?.value || 'registered';
+  let staffName = '';
+  if (mode === 'registered') {
+    const sel = document.getElementById('ci-staff-select');
+    staffName = (sel && sel.selectedIndex > 0) ? sel.options[sel.selectedIndex].textContent : '';
+  } else {
+    staffName = (document.getElementById('ci-staff-name')?.value || '').trim();
+  }
+  const empSel   = document.getElementById('ci-emp-type');
+  const empLabel = (empSel && empSel.value) ? empSel.options[empSel.selectedIndex].textContent : '';
+  set('ci-hv-staff', staffName ? (empLabel ? `${staffName}・${empLabel}` : staffName) : '');
+
+  const dateVal = document.getElementById('ci-date')?.value || '';
+  set('ci-hv-date', dateVal ? dateVal.replace(/-/g, '/') : '');
+
+  const ciH = document.getElementById('ci-clockin-h')?.value;
+  const ciM = document.getElementById('ci-clockin-m')?.value;
+  set('ci-hv-in', (ciH && ciM && ciH !== '--' && ciM !== '--') ? `${ciH}:${ciM}` : '');
+
+  const coH = document.getElementById('ci-clockout-h')?.value;
+  const coM = document.getElementById('ci-clockout-m')?.value;
+  set('ci-hv-out', (coH && coM && coH !== '--' && coM !== '--') ? `${coH}:${coM}` : '');
 }
 
 function _applyStaffEmpType() {

@@ -1198,25 +1198,29 @@ function getAttendance(data) {
     var clockInDate  = row[0] instanceof Date ? _dateToStr(row[0]) : String(row[0] || '');
     var clockInTime  = _normalizeTimeStr(row[4]);
     var clockOutTime = _normalizeTimeStr(row[6]);
-    var isActive     = !clockOutTime;
-    if (clockInDate === today) {
+    var isActive     = !clockOutTime;            // 退店時刻が空＝出勤中（青/赤/赤点滅）
+    // 表示対象：出勤中（未退勤・日付不問）または 当日の記録（退勤済も含む）
+    if (isActive || clockInDate === today) {
       attendance.push({
         rowIndex:       i + 1,
         staffId:        String(staffId),
         staffName:      String(row[2] || ''),
         employmentType: _normalizeEmploymentType_(row[3]),
+        clockInDate:    clockInDate,
         clockIn:        clockInTime,
         clockOut:       clockOutTime || null,
         isActive:       isActive
       });
-    } else if (isActive) {
-      // 当日以外で退店時刻が空 → 退勤未記録（前日以前の打刻忘れ警告用）
-      hasUnrecordedClockOut = true;
     }
+    // 前日以前の未退勤は打刻忘れ警告対象
+    if (isActive && clockInDate && clockInDate < today) hasUnrecordedClockOut = true;
   }
+  // 出勤中を上に、その中で入店日時の新しい順。退勤済（当日）は下。
   attendance.sort(function(a, b) {
-    if (a.isActive === b.isActive) return 0;
-    return a.isActive ? -1 : 1;
+    if (a.isActive !== b.isActive) return a.isActive ? -1 : 1;
+    var d = String(b.clockInDate).localeCompare(String(a.clockInDate));
+    if (d !== 0) return d;
+    return String(b.clockIn).localeCompare(String(a.clockIn));
   });
   return { status: 'ok', data: {
     attendance: attendance,
