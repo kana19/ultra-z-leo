@@ -99,6 +99,9 @@
   border: 1px solid var(--uz-border); border-radius: 10px;
   background: var(--uz-bg); font-family: inherit; font-size: 22px; font-weight: 600;
   color: var(--uz-text); cursor: pointer;
+  touch-action: manipulation;            /* 連打時のダブルタップ拡大を抑止 */
+  -webkit-user-select: none; user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 .uzf-key:active { background: var(--uz-surface); }
 .uzf-key--del, .uzf-key--clear { font-size: 15px; color: var(--uz-text2); }
@@ -151,10 +154,12 @@
   flex: 1; min-height: 50px;
   border-radius: 12px;
   font-family: inherit; font-size: 16px; font-weight: 700; cursor: pointer;
+  white-space: nowrap;
+  touch-action: manipulation; -webkit-tap-highlight-color: transparent;
 }
 .uzf-det-edit { border: none; background: var(--uz-text); color: var(--uz-on-accent); }
 .uzf-det-edit:active { filter: brightness(1.2); }
-.uzf-det-close { background: var(--uz-bg); color: var(--uz-text); border: 1px solid var(--uz-border2); }
+.uzf-det-close { background: var(--uz-bg); color: var(--uz-text); border: 1px solid var(--uz-border2); font-size: 14px; letter-spacing: -0.01em; }
 .uzf-det-close:active { filter: brightness(0.95); }
 
 /* 自作カレンダー（枠線なし・やや上へ） */

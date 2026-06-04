@@ -236,10 +236,22 @@
       padding: 16px 0 24px;
     }
 
-    /* ── iPad：中央寄せ ── */
+    /* ── iPad：ホーム/月次管理と同じくサイドバー幅分を右オフセット（縦型でも隠れない）。
+       本体内で各カードを読みやすい幅に中央寄せ。 ── */
     body.is-ipad .page-wrapper {
-      max-width: 600px;
-      margin: 0 auto;
+      max-width: none;
+      margin-left: 200px;
+      margin-right: 0;
+      width: calc(100% - 200px);
+    }
+    body.is-ipad .settings-header,
+    body.is-ipad .settings-section,
+    body.is-ipad .settings-save-btn,
+    body.is-ipad .settings-note,
+    body.is-ipad .settings-footer {
+      max-width: 680px;
+      margin-left: auto;
+      margin-right: auto;
     }
   </style>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.9.0/dist/tabler-icons.min.css">

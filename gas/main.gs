@@ -2741,6 +2741,41 @@ function _doClockInV3(data) {
     : '';
   const projectId      = String(data.projectId || '');
 
+  // ── 整合性ガード（→ 02_画面仕様.md §5-11）─────────────────
+  // 同一スタッフが「出勤中（未退勤）」の間は新規登録不可（先に退勤を登録）。
+  // 同一日で時間帯が重複する登録も不可（架空・矛盾した勤務記録を防ぐ）。
+  if (staffId && clockInTime) {
+    function _toMin(t) {
+      var p = String(t || '').split(':');
+      return (p.length >= 2 && p[0] !== '') ? (Number(p[0]) * 60 + Number(p[1])) : null;
+    }
+    var nIn  = _toMin(clockInTime);
+    var nOut = clockOutTime ? _toMin(clockOutTime) : null;
+    if (nOut != null && nOut < nIn) nOut += 1440;            // 日跨ぎ
+    var nOutEff = (nOut == null) ? (nIn + 1440 * 2) : nOut;  // 未退勤は十分大きく
+    var exRows = sheet.getDataRange().getValues();
+    for (var er = 0; er < exRows.length; er++) {
+      var ex = exRows[er];
+      if (String(ex[1]) !== String(staffId)) continue;       // 別スタッフ
+      var exInTime = _normalizeTimeStr(ex[4]);
+      if (!exInTime) continue;
+      var exOutTime = _normalizeTimeStr(ex[6]);
+      if (!exOutTime) {
+        return { status: 'error', message: 'このスタッフは出勤中です。先に退勤を登録してください。' };
+      }
+      var exInDate = ex[0] instanceof Date ? _dateToStr(ex[0])
+        : String(ex[0] || '').substring(0, 10).replace(/\//g, '-');
+      if (exInDate === clockInDate) {
+        var eIn  = _toMin(exInTime);
+        var eOut = _toMin(exOutTime);
+        if (eOut != null && eIn != null && eOut < eIn) eOut += 1440;
+        if (eIn != null && nIn != null && nIn < eOut && eIn < nOutEff) {
+          return { status: 'error', message: '同じ時間帯に既に出勤記録があります。' };
+        }
+      }
+    }
+  }
+
   sheet.appendRow([
     clockInDate,              // A
     staffId,                  // B

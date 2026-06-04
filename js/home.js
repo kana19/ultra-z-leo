@@ -711,11 +711,11 @@ function _setChartHeader(title, legendHTML) {
   if (lg) lg.innerHTML   = legendHTML;
 }
 
-/* タブ連動ディスパッチャ：月次損益＝日次／年度累計＝12ヶ月累計 */
+/* タブ連動ディスパッチャ：月次損益＝当月の日次／年度累計＝当年の月別（いずれも売上×コスト対比） */
 function _renderIpadPLChart() {
   if (_ipadPLTab === 'ytd') {
     const y = Number(document.getElementById('ipad-year-select')?.value) || new Date().getFullYear();
-    _renderYearlyCumulativeChart(y);
+    _renderYearlyChart(y);
   } else {
     const now = new Date();
     const m = document.getElementById('ipad-month-select')?.value
@@ -724,8 +724,47 @@ function _renderIpadPLChart() {
   }
 }
 
-/* 月次損益タブ：選択月の「日次推移」。売上＝折れ線／仕入原価・販管費＝積み上げ棒。
-   表（単月損益）とグラフ（その月の日次）の集計単位を一致させる（→ 経営の見える化）。 */
+/* 経営判断向けの配色：カラータイマーの青を避け、売上＝ゴールド／コスト＝紫系で対比。
+   売上(ゴールド) と コスト(仕入原価＝淡紫＋販管費＝濃紫の積み上げ) を並べ、
+   その差（＝利益）を高さの対比で一目で読む。累計折れ線・未来日0表示は廃止。 */
+const _CHART_SALES = '#C8A24B';   // ゴールド系（売上）
+const _CHART_COGS  = '#C9B8DD';   // 紫系・淡（仕入原価）
+const _CHART_SGA   = '#7E5FA8';   // 紫系・濃（販管費）
+
+function _chartLegendHTML() {
+  return `<span class="ipad-legend-item"><i class="ipad-legend-dot" style="background:${_CHART_SALES}"></i>売上</span>` +
+         `<span class="ipad-legend-item"><i class="ipad-legend-dot" style="background:${_CHART_COGS}"></i>仕入原価</span>` +
+         `<span class="ipad-legend-item"><i class="ipad-legend-dot" style="background:${_CHART_SGA}"></i>販管費</span>`;
+}
+
+/* 売上(単独stack)とコスト(仕入＋販管の積み上げstack)を並列棒に。利益は両者の高さ差で読む。 */
+function _plChartDatasets(sales, cogs, sga) {
+  return [
+    { label: '売上',     data: sales, backgroundColor: _CHART_SALES, borderWidth: 0, stack: 'sales',
+      borderRadius: { topLeft: 3, topRight: 3 } },
+    { label: '仕入原価', data: cogs,  backgroundColor: _CHART_COGS,  borderWidth: 0, stack: 'cost' },
+    { label: '販管費',   data: sga,   backgroundColor: _CHART_SGA,   borderWidth: 0, stack: 'cost',
+      borderRadius: { topLeft: 3, topRight: 3 } },
+  ];
+}
+
+function _plChartOptions(cMuted, cGrid, xFontSize) {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${formatYen(ctx.parsed.y)}` } },
+    },
+    scales: {
+      x: { stacked: true, ticks: { color: cMuted, font: { size: xFontSize }, autoSkip: false, maxRotation: 0 }, grid: { color: cGrid } },
+      y: { stacked: true, beginAtZero: true, ticks: { color: cMuted, font: { size: 10 }, callback: _yenTick }, grid: { color: cGrid } },
+    },
+  };
+}
+
+/* 月次損益タブ：選択月の「日次推移」。x軸＝1〜当日（過去月は末日まで）で未来日は描かない。
+   表（単月損益）とグラフ（その月の日次・売上×コスト）の集計単位を一致させる。 */
 async function _renderDailyChart(month) {
   const canvas  = document.getElementById('ipad-pl-chart');
   const loading = document.getElementById('ipad-chart-loading');
@@ -734,17 +773,20 @@ async function _renderDailyChart(month) {
 
   const [y, m] = String(month).split('-').map(Number);
   const daysInMonth = new Date(y, m, 0).getDate();
+  const now = new Date();
+  const isCurrent = (y === now.getFullYear() && m === (now.getMonth() + 1));
+  const lastDay = isCurrent ? Math.min(now.getDate(), daysInMonth) : daysInMonth;
 
   const res = await callGAS('getHistory', { month }).catch(() => null);
   if (loading) loading.style.display = 'none';
 
-  const sales = Array(daysInMonth).fill(0);
-  const cogs  = Array(daysInMonth).fill(0);
-  const sga   = Array(daysInMonth).fill(0);
+  const sales = Array(lastDay).fill(0);
+  const cogs  = Array(lastDay).fill(0);
+  const sga   = Array(lastDay).fill(0);
   if (res && res.status === 'ok' && Array.isArray(res.data)) {
     res.data.forEach(r => {
       const d = parseInt(String(r.date).slice(8, 10), 10);
-      if (!(d >= 1 && d <= daysInMonth)) return;
+      if (!(d >= 1 && d <= lastDay)) return;
       const amt = Number(r.amount) || 0;
       if (r.type === 'sales') sales[d - 1] += amt;
       else if (r.type === 'cost') {
@@ -753,12 +795,9 @@ async function _renderDailyChart(month) {
       }
     });
   }
-  const labels = Array.from({ length: daysInMonth }, (_, i) => String(i + 1));
+  const labels = Array.from({ length: lastDay }, (_, i) => String(i + 1));
 
-  _setChartHeader(`日次推移（${m}月）`,
-    `<span class="ipad-legend-item"><i class="ipad-legend-dot" data-c="profit"></i>売上</span>` +
-    `<span class="ipad-legend-item"><i class="ipad-legend-dot" data-c="cogs"></i>仕入原価</span>` +
-    `<span class="ipad-legend-item"><i class="ipad-legend-dot" data-c="sga"></i>販管費</span>`);
+  _setChartHeader(`日次推移（${m}月）`, _chartLegendHTML());
 
   if (_ipadChart) { _ipadChart.destroy(); _ipadChart = null; }
   const _cs = getComputedStyle(document.documentElement);
@@ -766,123 +805,47 @@ async function _renderDailyChart(month) {
   const _cGrid  = _cs.getPropertyValue('--uz-border').trim() || 'rgba(0,0,0,0.10)';
 
   _ipadChart = new Chart(canvas, {
-    data: {
-      labels,
-      datasets: [
-        { type: 'bar',  label: '仕入原価', data: cogs, backgroundColor: '#C9CDD2', borderWidth: 0, stack: 'cost', order: 3 },
-        { type: 'bar',  label: '販管費',   data: sga,  backgroundColor: '#8A929B', borderWidth: 0, stack: 'cost', order: 3 },
-        { type: 'line', label: '売上',     data: sales, stack: 'sales',
-          borderColor: '#4A90D9', backgroundColor: '#4A90D9', borderWidth: 2,
-          pointRadius: 2, pointHoverRadius: 4, tension: 0.3, fill: false, order: 1 },
-      ],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${formatYen(ctx.parsed.y)}` } },
-      },
-      scales: {
-        x: { stacked: true, ticks: { color: _cMuted, font: { size: 9 }, autoSkip: false, maxRotation: 0 }, grid: { color: _cGrid } },
-        y: { stacked: true, beginAtZero: true, ticks: { color: _cMuted, font: { size: 10 }, callback: _yenTick }, grid: { color: _cGrid } },
-      },
-    },
+    type: 'bar',
+    data: { labels, datasets: _plChartDatasets(sales, cogs, sga) },
+    options: _plChartOptions(_cMuted, _cGrid, 9),
   });
 }
 
-/* 年度累計タブ：12ヶ月の積み上げ棒（仕入原価・販管費・経常利益）に
-   経常利益の累積折れ線を重ね、各マーカーに累計額を記載する（→ YTDは累積カーブが世界標準）。 */
-async function _renderYearlyCumulativeChart(year) {
+/* 年度累計タブ：当年の「月別推移」。x軸＝1月〜当月（過去年は12月まで）で未来月は描かない。
+   各月の売上×コストを対比し、年内の推移と各月の利益感を読む（累計値は左の損益表で表示）。 */
+async function _renderYearlyChart(year) {
   const canvas  = document.getElementById('ipad-pl-chart');
   const loading = document.getElementById('ipad-chart-loading');
   if (!canvas || typeof Chart === 'undefined') return;
   if (loading) loading.style.display = '';
 
+  const now = new Date();
+  const maxMonth = (year === now.getFullYear()) ? (now.getMonth() + 1) : 12;
+
   const results = await Promise.all(
-    Array.from({ length: 12 }, (_, i) => {
-      const m = String(i + 1).padStart(2, '0');
-      return callGAS('getSummary', { month: `${year}-${m}` }).catch(() => null);
+    Array.from({ length: maxMonth }, (_, i) => {
+      const mm = String(i + 1).padStart(2, '0');
+      return callGAS('getSummary', { month: `${year}-${mm}` }).catch(() => null);
     })
   );
   if (loading) loading.style.display = 'none';
 
-  const labels   = results.map((_, i) => `${i + 1}月`);
-  const cogsData = results.map(r => (r && r.status === 'ok' && r.data) ? (r.data.cogs ?? 0) : 0);
-  const sgaData  = results.map(r => (r && r.status === 'ok' && r.data) ? (r.data.sga  ?? 0) : 0);
-  const profitData = results.map(r => {
-    if (!r || r.status !== 'ok' || !r.data) return 0;
-    const d = r.data;
-    return d.operatingProfit ?? ((d.sales ?? 0) - (d.cogs ?? 0) - (d.sga ?? 0));
-  });
-  // 経常利益の累積
-  let run = 0;
-  const cumProfit = profitData.map(p => (run += p));
-  // データのある最終月（累計ラベルはここまで描く）
-  let lastIdx = -1;
-  results.forEach((r, i) => { if (r && r.status === 'ok' && r.data &&
-    ((r.data.sales ?? 0) || (r.data.cogs ?? 0) || (r.data.sga ?? 0))) lastIdx = i; });
+  const labels = results.map((_, i) => `${i + 1}月`);
+  const sales  = results.map(r => (r && r.status === 'ok' && r.data) ? (r.data.sales ?? 0) : 0);
+  const cogs   = results.map(r => (r && r.status === 'ok' && r.data) ? (r.data.cogs  ?? 0) : 0);
+  const sga    = results.map(r => (r && r.status === 'ok' && r.data) ? (r.data.sga   ?? 0) : 0);
 
-  _setChartHeader('年度累計推移',
-    `<span class="ipad-legend-item"><i class="ipad-legend-dot" data-c="cogs"></i>仕入原価</span>` +
-    `<span class="ipad-legend-item"><i class="ipad-legend-dot" data-c="sga"></i>販管費</span>` +
-    `<span class="ipad-legend-item"><i class="ipad-legend-dot" data-c="profit"></i>経常利益</span>` +
-    `<span class="ipad-legend-item"><i style="display:inline-block;width:12px;height:0;border-top:2px solid #2C3E50;vertical-align:middle;margin-right:3px;"></i>累計</span>`);
+  _setChartHeader(`月別推移（${year}年）`, _chartLegendHTML());
 
   if (_ipadChart) { _ipadChart.destroy(); _ipadChart = null; }
   const _cs = getComputedStyle(document.documentElement);
   const _cMuted = _cs.getPropertyValue('--uz-text2').trim() || '#666666';
   const _cGrid  = _cs.getPropertyValue('--uz-border').trim() || 'rgba(0,0,0,0.10)';
-  const _cText  = _cs.getPropertyValue('--uz-text').trim()  || '#1a1a1a';
-
-  // 累計マーカーに数字を描くプラグイン（経常利益累計の系列のみ・データのある月まで）
-  const cumLabel = {
-    id: 'cumLabel',
-    afterDatasetsDraw(chart) {
-      const idx = chart.data.datasets.findIndex(d => d.label === '経常利益（累計）');
-      if (idx < 0 || lastIdx < 0) return;
-      const meta = chart.getDatasetMeta(idx);
-      const ctx  = chart.ctx;
-      ctx.save();
-      ctx.font = 'bold 10px sans-serif';
-      ctx.fillStyle = _cText;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'bottom';
-      meta.data.forEach((pt, i) => {
-        if (i > lastIdx) return;
-        ctx.fillText(_yenShort(cumProfit[i]), pt.x, pt.y - 5);
-      });
-      ctx.restore();
-    },
-  };
 
   _ipadChart = new Chart(canvas, {
-    data: {
-      labels,
-      datasets: [
-        { type: 'bar',  label: '仕入原価', data: cogsData,   backgroundColor: '#C9CDD2', borderWidth: 0, stack: 's', order: 3 },
-        { type: 'bar',  label: '販管費',   data: sgaData,    backgroundColor: '#8A929B', borderWidth: 0, stack: 's', order: 3 },
-        { type: 'bar',  label: '経常利益', data: profitData, backgroundColor: '#4A90D9', borderWidth: 0, stack: 's',
-          order: 3, borderRadius: { topLeft: 3, topRight: 3 } },
-        { type: 'line', label: '経常利益（累計）', data: cumProfit, stack: 'cum',
-          borderColor: '#2C3E50', backgroundColor: '#2C3E50', borderWidth: 2,
-          pointRadius: 3, pointHoverRadius: 5, tension: 0.25, fill: false, order: 1 },
-      ],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      layout: { padding: { top: 16 } },
-      plugins: {
-        legend: { display: false },
-        tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${formatYen(ctx.parsed.y)}` } },
-      },
-      scales: {
-        x: { stacked: true, ticks: { color: _cMuted, font: { size: 10 } }, grid: { color: _cGrid } },
-        y: { stacked: true, ticks: { color: _cMuted, font: { size: 10 }, callback: _yenTick }, grid: { color: _cGrid } },
-      },
-    },
-    plugins: [cumLabel],
+    type: 'bar',
+    data: { labels, datasets: _plChartDatasets(sales, cogs, sga) },
+    options: _plChartOptions(_cMuted, _cGrid, 10),
   });
 }
 
