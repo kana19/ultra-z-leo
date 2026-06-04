@@ -1644,7 +1644,7 @@ async function submitClockIn() {
     await loadAttendanceOnly();
 
   } catch (e) {
-    showToast('登録に失敗しました：' + e.message, 'error');
+    showToast(e.message || '登録に失敗しました', 'error');
   } finally {
     if (btn) {
       btn.disabled = false;

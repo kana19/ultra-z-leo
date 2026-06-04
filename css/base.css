@@ -811,7 +811,9 @@ body.is-ipad .home-attend-row .ha-dur { font-size: 15px; min-width: 52px; }
   max-width: 320px;
   text-align: center;
   pointer-events: none;
-  white-space: nowrap;
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.5;
 }
 
 .toast--show {
