@@ -2410,13 +2410,27 @@ function validateStaff(data) {
   if (!found) {
     return { status: 'ok', data: { valid: false, staffId: staffId } };
   }
+  // 段2・QR現地証明：qr 拠点トークンの所属検証（→ 03_データ仕様.md §1-0-3・§6）。
+  //   非ブロッキング：qrValid=false でもスタッフ有効性（valid）は独立に true を返す。
+  //   front は qrValid を 📍表示の可否判定に使う。qrLocations 未設定時は accept。
+  var qr = String(data && data.qr || '').trim();
+  var qrLocation = _extractQrLocation_(qr);
+  var qrValid = true;
+  if (qr) {
+    var locs = settings.data.qrLocations;
+    if (Array.isArray(locs) && locs.length) {
+      qrValid = locs.some(function (l) { return String((l && l.code) || '') === qrLocation; });
+    }
+  }
   return {
     status: 'ok',
     data: {
       valid: true,
       staffId: staffId,
       staffName: String(found.name || ''),
-      storeName: String(settings.data.storeName || '')
+      storeName: String(settings.data.storeName || ''),
+      qrLocation: qrLocation,
+      qrValid: qrValid
     }
   };
 }
@@ -2740,6 +2754,10 @@ function _doClockInV3(data) {
     ? _resolveClockOutDate(clockInDate, clockInTime, clockOutTime, data.clockOutDate || '')
     : '';
   const projectId      = String(data.projectId || '');
+  // 段2・QR現地証明（→ 03_データ仕様.md §1-0-3 J列 qrLocation）。
+  //   qr トークン {clientId}-{拠点NN} の末尾数値を拠点NNとして抽出。無ければ空文字。
+  //   非ブロッキング：qr 不正・空でも打刻は止めない（証拠記録型）。
+  const qrLocation     = _extractQrLocation_(data.qr);
 
   // ── 整合性ガード（→ 02_画面仕様.md §5-11）─────────────────
   // 同一スタッフが「出勤中（未退勤）」の間は新規登録不可（先に退勤を登録）。
@@ -2786,9 +2804,24 @@ function _doClockInV3(data) {
     clockOutTime,             // G
     new Date(),               // H
     projectId,                // I 案件ID（サイクルA・通常は空文字でPC操作で後付け）
+    qrLocation,               // J qrLocation 拠点NN（段2・QR現地証明・無ければ空文字）
   ]);
 
-  return { status: 'ok', rowIndex: sheet.getLastRow() };
+  return { status: 'ok', rowIndex: sheet.getLastRow(), qrLocation: qrLocation };
+}
+
+/* ══════════════════════════════════════════════════════════
+   QR現地証明ヘルパー（段2・→ 03_データ仕様.md §1-0-3・§6）
+   ══════════════════════════════════════════════════════════ */
+
+// qr トークン {clientId}-{拠点NN} から拠点NN（末尾の数値セグメント）を抽出する。
+// 例：'ultra-z-leo-01' → '01' ／ 'uz-ab12cd34-02' → '02' ／ 空・不正 → ''。
+// clientId 自体がハイフンを含むため、末尾の数値セグメントのみを拠点とみなす。
+function _extractQrLocation_(qr) {
+  var s = String(qr || '').trim();
+  if (!s) return '';
+  var m = s.match(/-(\d{1,3})$/);
+  return m ? m[1] : '';
 }
 
 /* ══════════════════════════════════════════════════════════
