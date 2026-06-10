@@ -430,6 +430,18 @@ function getStaffArray() {
   return staff;
 }
 
+// 次のスタッフID（sNNN）。既存の sNNN・旧数値IDの双方から最大連番を求める（→ 03_データ仕様.md §2）。
+function _nextStaffIdPc(list) {
+  let max = 0;
+  (list || []).forEach(s => {
+    const raw = String((s && s.id) != null ? s.id : '');
+    const m = /^s(\d+)$/i.exec(raw);
+    if (m) max = Math.max(max, parseInt(m[1], 10));
+    else if (/^\d+$/.test(raw)) max = Math.max(max, parseInt(raw, 10));
+  });
+  return 's' + String(max + 1).padStart(3, '0');
+}
+
 function renderStaff() {
   const staff = getStaffArray();
   const body = document.getElementById('staff-body');
@@ -589,8 +601,8 @@ function bindStaffAdd() {
       return showToast('同じ名前のスタッフが既に登録されています', 'error');
     }
 
-    const maxId = list.length > 0 ? Math.max(...list.map(s => Number(s.id) || 0)) : 0;
-    const newId = maxId + 1;
+    // スタッフIDは sNNN 形式で採番（打刻URL・validateStaff・attendance B列と一致・→ 03_データ仕様.md §2）
+    const newId = _nextStaffIdPc(list);
     const empType = normalizeEmpType(empSelect ? empSelect.value : '');
     const costCategory = (empType === 'contractor') ? normalizeCostCategory(costSelect ? costSelect.value : '21') : '21';
     const passwordHash = await hashStaffPassword(newId, password);

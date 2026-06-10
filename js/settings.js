@@ -81,6 +81,19 @@ function _saveStaffList(list) {
   localStorage.setItem(STAFF_MASTER_KEY, JSON.stringify(list));
 }
 
+// 次のスタッフID（sNNN）を採番する。既存の sNNN・旧数値IDの双方から最大連番を求める。
+// 打刻URL（?staff=sNNN）・validateStaff・attendance B列 と一致する形式（→ 03_データ仕様.md §2）。
+function _nextStaffId(list) {
+  let max = 0;
+  (list || []).forEach(s => {
+    const raw = String((s && s.id) != null ? s.id : '');
+    const m = /^s(\d+)$/i.exec(raw);
+    if (m) max = Math.max(max, parseInt(m[1], 10));
+    else if (/^\d+$/.test(raw)) max = Math.max(max, parseInt(raw, 10)); // 旧数値ID互換
+  });
+  return 's' + String(max + 1).padStart(3, '0');
+}
+
 function getServiceList() {
   try {
     const saved = localStorage.getItem(SERVICE_MASTER_KEY);
@@ -558,8 +571,10 @@ function bindStaffAdd() {
       return showToast('同じ名前のスタッフが既に登録されています', 'error');
     }
 
-    const maxId         = list.length > 0 ? Math.max(...list.map(s => s.id)) : 0;
-    const newId         = maxId + 1;
+    // スタッフIDは sNNN 形式で採番する（→ 03_データ仕様.md §2・02_画面仕様.md §4-1）。
+    //   打刻URL（staff-clockin.html?staff=sNNN）・validateStaff・attendance B列と一致させる。
+    //   旧データの数値IDも連番計算に含めて衝突を避ける（後方互換）。
+    const newId         = _nextStaffId(list);
     const employmentType = _normalizeEmpType(empSelect ? empSelect.value : '');
     // コスト科目は委託・外注のときのみ意味を持つ（雇用系は給与計算側で20固定）
     const costCategory  = (employmentType === 'contractor')
