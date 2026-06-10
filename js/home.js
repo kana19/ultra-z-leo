@@ -116,13 +116,15 @@ function renderStaffList() {
   }).join('');
 }
 
-/* ホーム出勤状況の1行（名前｜出勤｜→｜退勤｜0.0h｜カラータイマー）。スマホ・iPad共有。 */
+/* ホーム出勤状況の1行（名前｜出勤｜→｜退勤｜0.0h｜カラータイマー）。スマホ・iPad共有。
+   段2：現地証明あり（qrLocation 非空）は名前に📍を添える（→ 02_画面仕様.md §8）。 */
 function _homeAttendRowHTML(s) {
   const ci = escapeHtml(s.clockIn || '—');
+  const pin = s.qrLocation ? '<span class="ha-pin" title="現地証明">📍</span>' : '';
   if (s.isActive) {
     const dot = window.uzTimer.dotHTML(window.uzTimer.stateWork(window.uzTimer.workedMin(s.clockInDate || todayStr(), s.clockIn, new Date()), false), 'home');
     return `<div class="home-attend-row">
-      <span class="ha-name">${escapeHtml(s.name)}</span>
+      <span class="ha-name">${escapeHtml(s.name)}${pin}</span>
       <span class="ha-in">${ci}</span>
       <span class="ha-arrow">→</span>
       <span class="ha-out">—</span>
@@ -133,7 +135,7 @@ function _homeAttendRowHTML(s) {
   const co  = escapeHtml(s.clockOut || '—');
   const dur = _calcDurH(s.clockIn, s.clockOut);
   return `<div class="home-attend-row">
-    <span class="ha-name ha-name--off">${escapeHtml(s.name)}</span>
+    <span class="ha-name ha-name--off">${escapeHtml(s.name)}${pin}</span>
     <span class="ha-in">${ci}</span>
     <span class="ha-arrow">→</span>
     <span class="ha-out">${co}</span>
@@ -205,6 +207,7 @@ async function loadAttendance() {
         clockIn:     r.clockIn,
         clockOut:    r.clockOut || null,
         isActive:    r.isActive,
+        qrLocation:  r.qrLocation || '',
         rowIndex:    r.rowIndex ?? null,
       }));
 

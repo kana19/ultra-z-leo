@@ -1187,7 +1187,7 @@ function getAttendance(data) {
   // A=入店日 / B=スタッフID / C=スタッフ名 / D=雇用形態 / E=入店時刻 / F=退店日 / G=退店時刻 / H=登録日時 / I=案件ID
   var lastRow = sheet.getLastRow();
   if (lastRow < 1) return { status: 'ok', data: { attendance: [], hasUnrecordedClockOut: false } };
-  var lastCol = Math.max(8, Math.min(9, sheet.getLastColumn()));
+  var lastCol = Math.max(8, Math.min(10, sheet.getLastColumn()));
   var rows  = sheet.getRange(1, 1, lastRow, lastCol).getValues();
   var today = _dateToStr(new Date());
   var attendance = [], hasUnrecordedClockOut = false;
@@ -1198,6 +1198,7 @@ function getAttendance(data) {
     var clockInDate  = row[0] instanceof Date ? _dateToStr(row[0]) : String(row[0] || '');
     var clockInTime  = _normalizeTimeStr(row[4]);
     var clockOutTime = _normalizeTimeStr(row[6]);
+    var qrLocation   = lastCol >= 10 ? String(row[9] || '') : '';   // J列・拠点NN（段2）
     if (!clockInTime) continue;                  // 入店時刻なし＝無効行（架空入店を除去）
     var isActive = !clockOutTime;                // 退店時刻が空＝出勤中（青/赤/赤点滅）
     // 表示対象：当日の記録（退勤済も含む）／前日以前の未退勤（打刻忘れ＝今も出勤中扱い）。
@@ -1213,7 +1214,8 @@ function getAttendance(data) {
         clockInDate:    clockInDate,
         clockIn:        clockInTime,
         clockOut:       clockOutTime || null,
-        isActive:       isActive
+        isActive:       isActive,
+        qrLocation:     qrLocation
       });
     }
     // 前日以前の未退勤は打刻忘れ警告対象
@@ -2452,7 +2454,7 @@ function getAttendanceForStaff(data) {
   if (lastRow < 2) {
     return { status: 'ok', data: { myRecord: null, todayList: [], myMonthly: [] } };
   }
-  var lastCol = Math.max(8, Math.min(9, sheet.getLastColumn()));
+  var lastCol = Math.max(8, Math.min(10, sheet.getLastColumn()));
   var rows    = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
   var myRecord  = null;
   var todayMap  = {};
@@ -2465,6 +2467,7 @@ function getAttendanceForStaff(data) {
     var ciTimeRaw    = row[4];
     var rawCoDate    = row[5];
     var coTimeRaw    = row[6];
+    var qrLocation   = String(row[9] || '');   // J列 qrLocation（段2・→ §1-0-3）
     var clockInDate  = rawDate instanceof Date
       ? Utilities.formatDate(rawDate, tz, 'yyyy-MM-dd')
       : String(rawDate || '').substring(0, 10);
@@ -2486,7 +2489,8 @@ function getAttendanceForStaff(data) {
           clockIn: clockInTime,
           clockOut: clockOutTime || null,
           clockOutDate: clockOutDate || null,
-          isActive: isActive
+          isActive: isActive,
+          qrLocation: qrLocation
         };
       }
     }
@@ -2508,7 +2512,8 @@ function getAttendanceForStaff(data) {
         clockOut: clockOutTime || null,
         clockOutDate: clockOutDate || null,
         workMinutes: workMinutes,
-        isActive: isActive
+        isActive: isActive,
+        qrLocation: qrLocation
       });
     }
   }
@@ -2925,8 +2930,8 @@ function _doGetAttendanceByMonthV3(data) {
   const lastRow = sheet.getLastRow();
   if (lastRow < 1) return { status: 'ok', data: [] };
 
-  // 9列目（I列・案件ID）が存在する場合のみ projectId を読み出す（後方互換）
-  const lastCol = Math.max(8, Math.min(9, sheet.getLastColumn()));
+  // I列(9)案件ID・J列(10)qrLocation が存在する場合のみ読み出す（後方互換）
+  const lastCol = Math.max(8, Math.min(10, sheet.getLastColumn()));
   const rows   = sheet.getRange(1, 1, lastRow, lastCol).getValues();
   const result = [];
 
@@ -2940,7 +2945,8 @@ function _doGetAttendanceByMonthV3(data) {
     const rawCoDate = row[5];
     const coTimeRaw = row[6];
     const regAt     = row[7];
-    const projectId = lastCol >= 9 ? String(row[8] || '') : '';   // I列・案件ID（サイクルA）
+    const projectId = lastCol >= 9  ? String(row[8] || '') : '';   // I列・案件ID（サイクルA）
+    const qrLocation = lastCol >= 10 ? String(row[9] || '') : '';  // J列・拠点NN（段2・現地証明）
 
     const clockInDate  = rawCiDate instanceof Date  ? _dateToStr(rawCiDate)  : String(rawCiDate  || '');
     const clockOutDate = rawCoDate instanceof Date   ? _dateToStr(rawCoDate)  : String(rawCoDate  || '');
@@ -2977,6 +2983,7 @@ function _doGetAttendanceByMonthV3(data) {
       is_overnight,
       workMinutes,
       projectId,                   // I列・案件ID（サイクルA・後付け紐付け運用）
+      qrLocation,                  // J列・拠点NN（段2・現地証明・空欄＝なし）
     });
   }
 

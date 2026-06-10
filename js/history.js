@@ -792,10 +792,11 @@ function _renderAttendanceFiltered() {
       const _wmin = window.uzTimer.workedMin(r.date, r.clockIn, new Date());
       const statusBadge = window.uzTimer.dotHTML(window.uzTimer.stateWork(_wmin, !isActive), 'hist');
 
+      const pinTag = r.qrLocation ? `<span class="hist-attend-pin" title="現地証明 拠点${escHtml(r.qrLocation)}">📍${escHtml(r.qrLocation)}</span>` : '';
       html += `<tr class="ipad-hist-row" data-idx="${atIdx}" data-scope="at">
         <td class="ipad-td-date">${md}</td>
         <td class="ipad-td-dow">${dow}</td>
-        <td class="ipad-td-staff">${escHtml((r.staffName || '不明').substring(0, 8))}</td>
+        <td class="ipad-td-staff">${escHtml((r.staffName || '不明').substring(0, 8))}${pinTag}</td>
         <td class="ipad-td-emp">${escHtml(_empShort(r.employmentType))}</td>
         <td class="ipad-td-times">${escHtml(clockIn)} → ${clockOut ? escHtml(clockOut) : '—'}</td>
         <td class="ipad-td-dur">${durLabel}</td>
@@ -900,9 +901,10 @@ function _renderAttendanceFiltered() {
         const empLabel = _empShort(r.employmentType);
 
         // Grid 6カラム行：スタッフ名 | 出勤時刻 | → | 退勤時刻 | 勤務時間or状態 | 編集
+        const pinTag = r.qrLocation ? `<span class="hist-attend-pin" title="現地証明 拠点${escHtml(r.qrLocation)}">📍${escHtml(r.qrLocation)}</span>` : '';
         html += `
           <div class="hist-attend-row">
-            <div class="hist-attend-name">${escHtml(sname.length > 8 ? sname.substring(0, 8) + '…' : sname)}<span class="hist-attend-emp">${escHtml(empLabel)}</span></div>
+            <div class="hist-attend-name">${escHtml(sname.length > 8 ? sname.substring(0, 8) + '…' : sname)}<span class="hist-attend-emp">${escHtml(empLabel)}</span>${pinTag}</div>
             <span class="hist-attend-time-in">${timeInStr}</span>
             <span class="hist-attend-arrow">→</span>
             <span class="${timeOutClass}">${timeOutStr}</span>
