@@ -426,7 +426,9 @@ body.is-ipad .home-sticky-top {
   color: var(--uz-text);
 }
 .home-attend-row + .home-attend-row { border-top: 1px solid var(--uz-border); }
-.home-attend-row .ha-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.home-attend-row .ha-name { font-weight: 600; display: flex; align-items: center; gap: 2px; min-width: 0; overflow: hidden; }
+.home-attend-row .ha-name .ha-name-txt { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.home-attend-row .ha-pin { flex: none; }
 .home-attend-row .ha-name--off { color: var(--uz-muted); }
 .home-attend-row .ha-in,
 .home-attend-row .ha-out { white-space: nowrap; font-variant-numeric: tabular-nums; }

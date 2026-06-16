@@ -124,7 +124,7 @@ function _homeAttendRowHTML(s) {
   if (s.isActive) {
     const dot = window.uzTimer.dotHTML(window.uzTimer.stateWork(window.uzTimer.workedMin(s.clockInDate || todayStr(), s.clockIn, new Date()), false), 'home');
     return `<div class="home-attend-row">
-      <span class="ha-name">${escapeHtml(s.name)}${pin}</span>
+      <span class="ha-name"><span class="ha-name-txt">${escapeHtml(s.name)}</span>${pin}</span>
       <span class="ha-in">${ci}</span>
       <span class="ha-arrow">→</span>
       <span class="ha-out">—</span>
@@ -135,7 +135,7 @@ function _homeAttendRowHTML(s) {
   const co  = escapeHtml(s.clockOut || '—');
   const dur = _calcDurH(s.clockIn, s.clockOut);
   return `<div class="home-attend-row">
-    <span class="ha-name ha-name--off">${escapeHtml(s.name)}${pin}</span>
+    <span class="ha-name ha-name--off"><span class="ha-name-txt">${escapeHtml(s.name)}</span>${pin}</span>
     <span class="ha-in">${ci}</span>
     <span class="ha-arrow">→</span>
     <span class="ha-out">${co}</span>
