@@ -9,7 +9,7 @@
 // 指示書9§1：月選択UIを廃止。指示書12§1：月パラメータを送らず GAS から全件取得し、月跨ぎは列見出しフィルタで対応
 
 let _monthlyData = [];                 // 統合後の全行配列（並び：date desc, rowIndex desc）
-let _settings = { costMaster: [], serviceList: [] };
+let _settings = { costMaster: [], serviceList: [], purchaseMaster: [] };
 // 指示書11§3：20件ページング
 const PAGE_SIZE = 20;
 let _pageIndex = 0;                    // 0 = 最新20件・1 = 21〜40件目 …
@@ -112,7 +112,22 @@ async function loadMonthlyData(month) {
         ? normalizeCostMasterList(settings.costMasterList)
         : settings.costMasterList;
     }
-    _settings.serviceList = Array.isArray(settings.serviceList) ? settings.serviceList : [];
+    // サービス／仕入原価マスタは getSettings 上 id / defaultTaxRate 形（→ 03_データ仕様）。
+    // PC月次は code/name/taxRate を期待するため、ここで正規化して共通形に揃える
+    // （旧実装は s.code を読み value が空→subjectCode 未確定→登録ボタンが出ない不具合）。
+    _settings.serviceList = (Array.isArray(settings.serviceList) ? settings.serviceList : []).map(s => ({
+      code: String(s.id || s.code || s.serviceCode || ''),
+      name: String(s.name || s.serviceName || ''),
+      taxRate: Number(s.taxRate != null ? s.taxRate : 10),
+    }));
+    // 仕入原価マスタ（区分1）。販管費(costMaster)には divisionCode='1' が無く、
+    // 仕入原価は purchaseMasterList が正本（旧実装は未ロード→区分1が諸口のみ）。
+    _settings.purchaseMaster = (Array.isArray(settings.purchaseMasterList) ? settings.purchaseMasterList : []).map(p => ({
+      code: String(p.id || p.code || ''),
+      name: String(p.name || ''),
+      taxRate: Number(p.defaultTaxRate != null ? p.defaultTaxRate : (p.taxRate != null ? p.taxRate : 10)),
+      divisionCode: '1',
+    }));
 
     _monthlyData = mergeAndClassify(history);
     _sortRows(_monthlyData);
@@ -592,18 +607,14 @@ function renderCostSubjectSelectFiltered(draft) {
               <option value="">先に区分を選択してください</option>
             </select>`;
   }
-  const items = (_settings.costMaster || [])
-    .filter(it => it && it.name && String(it.name).trim() !== '')
-    .filter(it => {
-      const itDiv = String(it.divisionCode || '');
-      return div === '1' ? itDiv === '1' : itDiv !== '1';
-    })
-    .filter(it => {
-      // 販管費（div='2'）のみ smartphoneVisible を参照。仕入原価はフラグ非搭載のため対象外。
-      // smartphoneVisible キーが無い既存データは表示扱い（後方互換）。
-      if (div === '1') return true;
-      return it.smartphoneVisible !== false;
-    });
+  // 区分1（仕入原価）＝ purchaseMaster が正本。区分2（販管費）＝ costMaster の非区分1かつ
+  // smartphoneVisible≠false（キー無しは表示扱い・後方互換）。
+  const items = (div === '1'
+    ? (_settings.purchaseMaster || [])
+    : (_settings.costMaster || [])
+        .filter(it => String(it.divisionCode || '') !== '1')
+        .filter(it => it.smartphoneVisible !== false)
+  ).filter(it => it && it.name && String(it.name).trim() !== '');
   // 諸口を末尾に追加（divisionCode に紐付く）
   items.push({
     code: `MISC_${div}`, name: '諸口', taxRate: 10,
@@ -694,12 +705,13 @@ function renderSubjectSelect(row, mode) {
   // cost：行の divisionCode で絞り込む（§3-3 #4 区分連動絞り込み）
   // 既存行の編集では区分自体は変更不可とし、同区分内での科目変更のみ許容する
   const rowDiv = String(row.divisionCode || '');
-  const opts = (_settings.costMaster || [])
+  // 区分1（仕入原価）は purchaseMaster、それ以外は costMaster の非区分1（後方互換で区分不明は全件）
+  const src = rowDiv === '1' ? (_settings.purchaseMaster || []) : (_settings.costMaster || []);
+  const opts = src
     .filter(it => it && it.name)
     .filter(it => {
-      if (!rowDiv) return true; // 区分不明は全件表示（後方互換）
-      const itDiv = String(it.divisionCode || '');
-      return rowDiv === '1' ? itDiv === '1' : itDiv !== '1';
+      if (rowDiv === '1' || !rowDiv) return true;
+      return String(it.divisionCode || '') !== '1';
     })
     .map(it => {
       const code = String(it.code || '');
