@@ -146,9 +146,9 @@ function _saveMasterQuota(quota) {
  */
 async function loadSettingsFromGAS() {
   try {
-    const res = await callGAS('getSettings', {});
-    if (res && res.status === 'ok' && res.data) {
-      const { storeName, staffList, serviceList, purchaseMasterList, masterQuota, businessHours } = res.data;
+    const data = await uzGetSettings();   // ②共通化：取得+{status,data}展開を app.js に集約
+    if (data) {
+      const { storeName, staffList, serviceList, purchaseMasterList, masterQuota, businessHours } = data;
       if (storeName   != null) _saveStoreName(storeName);
       if (Array.isArray(staffList))   _saveStaffList(staffList);
       if (Array.isArray(serviceList)) _saveServiceList(serviceList);

@@ -28,11 +28,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 async function loadAll() {
-  const [sRes, cmRes] = await Promise.all([
-    callGAS('getSettings', {}).catch(() => null),
+  const [settingsData, cmRes] = await Promise.all([
+    uzGetSettings(),                                  // ②共通化：取得+{status,data}展開を集約
     callGAS('getCostMaster', {}).catch(() => null),
   ]);
-  settings = (sRes && sRes.status === 'ok' && sRes.data) ? sRes.data : {};
+  settings = settingsData || {};
   // 6-G フェーズ2：マスタ件数枠を取得（未投入の既存ユーザーは上限制御を無効化）
   if (settings.masterQuota && typeof settings.masterQuota === 'object') {
     masterQuota = {

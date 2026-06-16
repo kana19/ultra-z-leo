@@ -112,22 +112,12 @@ async function loadMonthlyData(month) {
         ? normalizeCostMasterList(settings.costMasterList)
         : settings.costMasterList;
     }
-    // サービス／仕入原価マスタは getSettings 上 id / defaultTaxRate 形（→ 03_データ仕様）。
-    // PC月次は code/name/taxRate を期待するため、ここで正規化して共通形に揃える
-    // （旧実装は s.code を読み value が空→subjectCode 未確定→登録ボタンが出ない不具合）。
-    _settings.serviceList = (Array.isArray(settings.serviceList) ? settings.serviceList : []).map(s => ({
-      code: String(s.id || s.code || s.serviceCode || ''),
-      name: String(s.name || s.serviceName || ''),
-      taxRate: Number(s.taxRate != null ? s.taxRate : 10),
-    }));
-    // 仕入原価マスタ（区分1）。販管費(costMaster)には divisionCode='1' が無く、
-    // 仕入原価は purchaseMasterList が正本（旧実装は未ロード→区分1が諸口のみ）。
-    _settings.purchaseMaster = (Array.isArray(settings.purchaseMasterList) ? settings.purchaseMasterList : []).map(p => ({
-      code: String(p.id || p.code || ''),
-      name: String(p.name || ''),
-      taxRate: Number(p.defaultTaxRate != null ? p.defaultTaxRate : (p.taxRate != null ? p.taxRate : 10)),
-      divisionCode: '1',
-    }));
+    // サービス／仕入原価マスタの正準化は app.js の共通関数に集約（分岐実装の事故防止・②共通化）。
+    // serviceList は id を code として扱い（旧:空value→登録不能）、仕入は purchaseMasterList が正本。
+    _settings.serviceList = (typeof uzNormalizeServiceList === 'function')
+      ? uzNormalizeServiceList(settings.serviceList) : [];
+    _settings.purchaseMaster = (typeof uzNormalizePurchaseList === 'function')
+      ? uzNormalizePurchaseList(settings.purchaseMasterList) : [];
 
     _monthlyData = mergeAndClassify(history);
     _sortRows(_monthlyData);

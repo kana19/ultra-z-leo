@@ -1248,6 +1248,44 @@ function normalizeCostMasterList(raw) {
   });
 }
 
+/* ──────────────────────────────────────────────────────────
+   getSettings 共通アクセス層（スマホ/iPad/PC で共有・→ 03_データ仕様.md §1-0）
+   各画面が getSettings を個別実装して応答形・マスタ項目キーを取り違える事故
+   （PC月次：売上 id を code と誤読／仕入は purchaseMasterList 未参照）を断つため、
+   取得・{status,data} 展開・マスタ正準化をここへ集約する。
+   ────────────────────────────────────────────────────────── */
+
+// getSettings を呼び {status,data} を展開して data 本体を返す（失敗時 null）。
+async function uzGetSettings() {
+  try {
+    const res = await callGAS('getSettings', {});
+    return (res && res.status === 'ok' && res.data) ? res.data : null;
+  } catch {
+    return null;
+  }
+}
+
+// サービスマスタ（売上区分）を正準形 {code,name,taxRate} へ。GAS生は {id,name,taxRate}。
+// id を code として扱う（option value の正本）。
+function uzNormalizeServiceList(list) {
+  return (Array.isArray(list) ? list : []).map(s => ({
+    code: String(s.id || s.code || s.serviceCode || ''),
+    name: String(s.name || s.serviceName || ''),
+    taxRate: Number(s.taxRate != null ? s.taxRate : 10),
+  }));
+}
+
+// 仕入原価マスタ（区分1）を正準形 {code,name,taxRate,divisionCode:'1'} へ。
+// GAS生は {id,name,defaultTaxRate}。販管費(costMaster)には区分1が無く本リストが正本。
+function uzNormalizePurchaseList(list) {
+  return (Array.isArray(list) ? list : []).map(p => ({
+    code: String(p.id || p.code || ''),
+    name: String(p.name || ''),
+    taxRate: Number(p.defaultTaxRate != null ? p.defaultTaxRate : (p.taxRate != null ? p.taxRate : 10)),
+    divisionCode: '1',
+  }));
+}
+
 /**
  * コスト科目マスタをlocalStorageから取得（なければデフォルト）
  * @returns {Array}
