@@ -68,6 +68,15 @@ purgeMasterCacheOnClientChange();
     (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
   const isPC = !isIPad && window.innerWidth >= 1025;
 
+  // 実PC（≥1025）はスマホ/iPad向けの本アプリ（430px列・bottom-nav）ではなく、
+  // 専用PC版（/pc/・サイドバー＋全幅）へ誘導する。is-pc には専用レイアウトが無く
+  // 430px列＋画面下半分が空白になる「間延び」を解消するため。
+  // /pc/ 配下はループ防止で除外。staff-clockin は app.js 非読込だが念のため除外。
+  if (isPC && !/\/pc\//.test(location.pathname) && !/staff-clockin/.test(location.pathname)) {
+    location.replace(location.pathname.replace(/[^\/]*$/, '') + 'pc/');
+    return;
+  }
+
   if (isIPad) document.body.classList.add('is-ipad');
   if (isPC)   document.body.classList.add('is-pc');
 })();

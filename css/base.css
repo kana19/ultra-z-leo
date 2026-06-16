@@ -30,9 +30,9 @@
   /* テキスト */
   --uz-text:     #1A1A1A;
   --uz-text2:    #666666;
-  --uz-text3:    #999999;
+  --uz-text3:    #6B6B6B;   /* WCAG AA：白5.3:1 / #f5f5f5 4.8:1（旧#999は2.6〜2.85で不可読） */
   --uz-muted:    #666666;   /* 後方互換用 → text2 */
-  --uz-text-muted: #999999; /* JS参照用 */
+  --uz-text-muted: #6B6B6B; /* JS参照用・AA合格（旧#999） */
 
   /* ボタン上のテキスト（ダーク背景ボタンに白文字） */
   --uz-on-accent: #FFFFFF;
