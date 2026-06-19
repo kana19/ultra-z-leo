@@ -65,6 +65,11 @@ function doGet(e) {
       // A-1タスク：タイムカードPWA（スタッフ別出勤履歴・スタッフ検証）
       case 'validateStaff':             result = validateStaff(data);                     break;
       case 'getAttendanceForStaff':     result = getAttendanceForStaff(data);             break;
+      // 段3：シフト希望（shiftScheduleEnabled・→ 01_商品体系.md §4-6）
+      case 'getShifts':                 result = getShifts(data);                         break;
+      case 'getShiftsForStaff':         result = getShiftsForStaff(data);                 break;
+      case 'saveShift':                 result = saveShift(data);                         break;
+      case 'deleteShift':               result = deleteShift(data);                       break;
       default: result = { status: 'error', message: '不明なアクション: ' + action };
     }
   } catch (err) {
@@ -2581,6 +2586,135 @@ function getAttendanceForStaff(data) {
       myMonthly: myMonthly
     }
   };
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   段3・シフト希望（shiftScheduleEnabled・→ 01_商品体系.md §4-6）
+   shift シート：A id / B 日付 / C スタッフID / D スタッフ名 /
+                 E 希望開始 / F 希望終了 / G 種別 / H メモ / I 登録日時
+   MVP：スタッフが希望シフトを登録（1スタッフ1日1件・同日既存は上書き）、
+        オーナーが月次一覧を閲覧する。実績突合（予定vs実打刻）は次段階。
+   ═══════════════════════════════════════════════════════════ */
+var SHIFT_HEADERS = ['id','日付','スタッフID','スタッフ名','希望開始','希望終了','種別','メモ','登録日時'];
+
+function _shiftSheet_() {
+  return getOrCreateSheet_('shift', SHIFT_HEADERS);
+}
+
+function _isValidDateStr_(s) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(s || ''));
+}
+
+function _normalizeShiftRow_(row, rowIndex) {
+  var tz = Session.getScriptTimeZone();
+  var rawDate = row[1];
+  var date = rawDate instanceof Date
+    ? Utilities.formatDate(rawDate, tz, 'yyyy-MM-dd')
+    : String(rawDate || '').substring(0, 10);
+  return {
+    id:        String(row[0] || ''),
+    date:      date,
+    staffId:   String(row[2] || ''),
+    staffName: String(row[3] || ''),
+    startTime: _normalizeTimeStr(row[4]),
+    endTime:   _normalizeTimeStr(row[5]),
+    type:      String(row[6] || '希望'),
+    note:      String(row[7] || ''),
+    rowIndex:  rowIndex
+  };
+}
+
+function _readShiftRows_() {
+  var sheet = _shiftSheet_();
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return { sheet: sheet, list: [] };
+  var values = sheet.getRange(2, 1, lastRow - 1, SHIFT_HEADERS.length).getValues();
+  var list = [];
+  for (var i = 0; i < values.length; i++) {
+    var r = _normalizeShiftRow_(values[i], i + 2);
+    if (!r.date || !r.staffId) continue;
+    list.push(r);
+  }
+  return { sheet: sheet, list: list };
+}
+
+// オーナー：月次の全スタッフ希望シフト一覧（month = YYYY-MM・空なら全件）
+function getShifts(data) {
+  var month = String(data && data.month || '').trim();
+  var read = _readShiftRows_();
+  var list = read.list.filter(function (s) {
+    return !month || s.date.indexOf(month) === 0;
+  });
+  list.sort(function (a, b) {
+    if (a.date !== b.date) return a.date.localeCompare(b.date);
+    return String(a.staffName).localeCompare(String(b.staffName));
+  });
+  return { status: 'ok', data: { shifts: list } };
+}
+
+// スタッフ：自分の月次希望シフト
+function getShiftsForStaff(data) {
+  var staffId = String(data && data.staffId || '').trim();
+  if (!staffId) return { status: 'error', message: 'staffId が必要です' };
+  var month = String(data && data.month || '').trim();
+  var read = _readShiftRows_();
+  var list = read.list.filter(function (s) {
+    return s.staffId === staffId && (!month || s.date.indexOf(month) === 0);
+  });
+  list.sort(function (a, b) { return a.date.localeCompare(b.date); });
+  return { status: 'ok', data: { shifts: list } };
+}
+
+// スタッフ：希望シフト登録（1スタッフ1日1件・同日既存は上書き）
+function saveShift(data) {
+  var date      = String(data && data.date || '').trim();
+  var staffId   = String(data && data.staffId || '').trim();
+  var staffName = String(data && data.staffName || '').trim();
+  var startTime = String(data && data.startTime || '').trim();
+  var endTime   = String(data && data.endTime || '').trim();
+  var note      = String(data && data.note || '').trim();
+  if (!_isValidDateStr_(date)) return { status: 'error', message: '日付が不正です（YYYY-MM-DD）' };
+  if (!staffId) return { status: 'error', message: 'staffId が必要です' };
+  var read = _readShiftRows_();
+  var sheet = read.sheet;
+  var existing = null;
+  for (var i = 0; i < read.list.length; i++) {
+    if (read.list[i].staffId === staffId && read.list[i].date === date) {
+      existing = read.list[i];
+      break;
+    }
+  }
+  var id = existing ? existing.id : ('sh' + Date.now() + Math.floor(Math.random() * 1000));
+  var rowVals = [id, date, staffId, staffName, startTime, endTime, '希望', note, new Date().toISOString()];
+  if (existing) {
+    sheet.getRange(existing.rowIndex, 1, 1, SHIFT_HEADERS.length).setValues([rowVals]);
+  } else {
+    sheet.appendRow(rowVals);
+  }
+  return { status: 'ok', shift: {
+    id: id, date: date, staffId: staffId, staffName: staffName,
+    startTime: startTime, endTime: endTime, type: '希望', note: note
+  }};
+}
+
+// スタッフ：希望シフト削除（id 指定・本人のもののみ）
+function deleteShift(data) {
+  var id      = String(data && data.id || '').trim();
+  var staffId = String(data && data.staffId || '').trim();
+  if (!id) return { status: 'error', message: 'id が必要です' };
+  var read = _readShiftRows_();
+  var sheet = read.sheet;
+  for (var i = 0; i < read.list.length; i++) {
+    if (read.list[i].id === id) {
+      if (staffId && read.list[i].staffId !== staffId) {
+        return { status: 'error', message: '権限がありません' };
+      }
+      sheet.deleteRow(read.list[i].rowIndex);
+      return { status: 'ok' };
+    }
+  }
+  return { status: 'ok' }; // 既に無い場合も ok（冪等）
 }
 
 

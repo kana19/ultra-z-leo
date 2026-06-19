@@ -246,6 +246,33 @@
   .monthly-duration { font-size: 12px; color: var(--text-muted); text-align: right; flex-shrink: 0; }
   .ci-pin { color: var(--gold); font-weight: 600; }
 
+  /* 段3 シフト希望 */
+  .shift-add { padding: 14px 16px; border-bottom: 1px solid var(--card-border); display: flex; flex-direction: column; gap: 10px; }
+  .shift-add-row { display: flex; align-items: center; gap: 8px; }
+  .shift-lbl { width: 40px; flex-shrink: 0; font-size: 12px; color: var(--text-muted); }
+  .shift-input {
+    flex: 1; min-width: 0; padding: 8px 10px; font-size: 14px;
+    background: var(--card); color: var(--text);
+    border: 1px solid var(--card-border); border-radius: 8px;
+    font-family: inherit;
+  }
+  .shift-input--time { flex: none; width: 120px; font-variant-numeric: tabular-nums; }
+  .shift-tilde { color: var(--text-muted); font-size: 13px; }
+  .shift-add-btn {
+    margin-top: 2px; padding: 11px; font-size: 14px; font-weight: 700;
+    color: #fff; background: var(--text); border: none; border-radius: 10px;
+    cursor: pointer; font-family: inherit;
+  }
+  .shift-add-btn:disabled { opacity: 0.5; }
+  .shift-hint { font-size: 11px; color: var(--text-muted); line-height: 1.5; }
+  .shift-allday { color: var(--text-muted); }
+  .shift-note { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+  .shift-del-btn {
+    flex-shrink: 0; width: 28px; height: 28px; border-radius: 8px;
+    background: none; border: 1px solid var(--card-border); color: var(--text-muted);
+    cursor: pointer; font-size: 13px; line-height: 1;
+  }
+
   /* 段2 QR現地証明バッジ（未出勤時の案内） */
   .qr-pin-badge {
     display: inline-flex; align-items: center; gap: 4px;
@@ -320,6 +347,32 @@
             <div class="monthly-count" id="monthly-count">0日</div>
           </div>
           <div id="monthly-list"><div class="monthly-empty">記録がありません</div></div>
+        </div>
+      </div>
+
+      <!-- 段3 シフト希望（shiftScheduleEnabled 時のみ表示）-->
+      <div id="shift-section" style="display:none;">
+        <div class="section-title">シフト希望</div>
+        <div class="monthly-card">
+          <div class="shift-add">
+            <div class="shift-add-row">
+              <label class="shift-lbl" for="shift-date">日付</label>
+              <input type="date" id="shift-date" class="shift-input">
+            </div>
+            <div class="shift-add-row">
+              <label class="shift-lbl" for="shift-start">時間</label>
+              <input type="time" id="shift-start" class="shift-input shift-input--time">
+              <span class="shift-tilde">〜</span>
+              <input type="time" id="shift-end" class="shift-input shift-input--time">
+            </div>
+            <div class="shift-add-row">
+              <label class="shift-lbl" for="shift-note">メモ</label>
+              <input type="text" id="shift-note" class="shift-input" maxlength="40" placeholder="任意（例：遅番希望）" autocomplete="off">
+            </div>
+            <button id="shift-add-btn" class="shift-add-btn" type="button">この日で希望を登録</button>
+            <div class="shift-hint">時間を空欄にすると終日希望になります。同じ日に再登録すると上書きします。</div>
+          </div>
+          <div id="shift-list"></div>
         </div>
       </div>
 

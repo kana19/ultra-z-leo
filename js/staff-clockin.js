@@ -17,6 +17,7 @@ let state = {
   staffId:'', staffName:'', storeName:'', employmentType:'employed_full',
   myRecord:null, myMonthly:[],
   urlQr:'', qrProofEnabled:false,
+  shiftEnabled:false, myShifts:[],
   isPunching:false, isEditingTime:false, editHour:0, editMin:0,
 };
 
@@ -75,10 +76,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (me && me.employmentType) state.employmentType = me.employmentType;
       const fv = settings.featureVisibility || {};
       state.qrProofEnabled = !!fv.qrProofEnabled;
+      state.shiftEnabled   = !!fv.shiftScheduleEnabled;   // 段3
     } catch(e) { /* 設定取得失敗時も打刻は継続（段1相当で続行） */ }
 
     hideLoading();
     await loadAttendanceData();
+    if (state.shiftEnabled) await initShiftSection();
   } catch(e) { showError('接続エラー','通信に失敗しました。\nWi-Fiや電波状況を確認してください。\n\n'+e.message); }
 });
 
@@ -301,6 +304,78 @@ function renderMonthly() {
       <div class="monthly-duration">${r.workMinutes?fmtMin(r.workMinutes):''}</div>
     </div>`;
   }).join('');
+}
+
+/* ══════════════════════════════════════════════════════════
+   段3・シフト希望（shiftScheduleEnabled・→ 01_商品体系.md §4-6）
+   スタッフ本人の希望シフト登録（1日1件・上書き）と当月一覧。
+   ══════════════════════════════════════════════════════════ */
+async function initShiftSection() {
+  const sec = document.getElementById('shift-section');
+  if (sec) sec.style.display = '';
+  const dateInput = document.getElementById('shift-date');
+  if (dateInput) { dateInput.min = todayStr(); if (!dateInput.value) dateInput.value = todayStr(); }
+  const addBtn = document.getElementById('shift-add-btn');
+  if (addBtn && !addBtn._bound) { addBtn.addEventListener('click', onAddShift); addBtn._bound = true; }
+  await loadShifts();
+}
+
+async function loadShifts() {
+  try {
+    const res = await callGAS('getShiftsForStaff', { staffId: state.staffId, month: todayStr().substring(0,7) });
+    state.myShifts = (res && res.shifts) || [];
+  } catch(e) { state.myShifts = []; }
+  renderShifts();
+}
+
+function renderShifts() {
+  const list = document.getElementById('shift-list');
+  if (!list) return;
+  if (!state.myShifts.length) { list.innerHTML = '<div class="monthly-empty">希望はまだありません</div>'; return; }
+  list.innerHTML = state.myShifts.map(s => {
+    const d = new Date(s.date + 'T00:00:00');
+    const time = (s.startTime || s.endTime)
+      ? `${s.startTime || '--:--'}<span class="sep">〜</span>${s.endTime || '--:--'}`
+      : '<span class="shift-allday">終日</span>';
+    const note = s.note ? `<div class="shift-note">${esc(s.note)}</div>` : '';
+    return `<div class="monthly-row">
+      <div class="monthly-date-col"><div class="monthly-date-day">${d.getDate()}</div><div class="monthly-date-wd">${WD[d.getDay()]}</div></div>
+      <div class="monthly-times"><div class="monthly-time-row">${time}</div>${note}</div>
+      <button class="shift-del-btn" type="button" onclick="onDeleteShift('${esc(s.id)}')" aria-label="削除">✕</button>
+    </div>`;
+  }).join('');
+}
+
+async function onAddShift() {
+  const date  = (document.getElementById('shift-date')  || {}).value || '';
+  const start = (document.getElementById('shift-start') || {}).value || '';
+  const end   = (document.getElementById('shift-end')   || {}).value || '';
+  const note  = ((document.getElementById('shift-note') || {}).value || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { showBanner('日付を選択してください'); return; }
+  if (start && end && end <= start) { showBanner('終了は開始より後にしてください'); return; }
+  const btn = document.getElementById('shift-add-btn');
+  if (btn) btn.disabled = true;
+  try {
+    await callGAS('saveShift', { date, staffId: state.staffId, staffName: state.staffName, startTime: start, endTime: end, note });
+    const noteEl = document.getElementById('shift-note'); if (noteEl) noteEl.value = '';
+    showBanner('希望を登録しました');
+    await loadShifts();
+  } catch(e) {
+    showBanner('⚠️ 通信エラー。もう一度試してください。');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function onDeleteShift(id) {
+  if (!confirm('この希望を削除しますか？')) return;
+  try {
+    await callGAS('deleteShift', { id, staffId: state.staffId });
+    showBanner('削除しました');
+    await loadShifts();
+  } catch(e) {
+    showBanner('⚠️ 通信エラー。もう一度試してください。');
+  }
 }
 
 function todayStr(){ const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }

@@ -29,6 +29,10 @@ let currentYear  = THIS_YEAR;
 let currentMonth = THIS_MONTH;
 let activeTab    = 'salescost';
 
+// 段3：シフト希望（shiftScheduleEnabled 時のみタブ表示）
+let shiftEnabled = false;
+let shiftItems   = [];
+
 // 修正フォーム用キャッシュ（renderのたびに再構築）
 let editableItems = []; // 売上・コスト行
 let attendItems   = []; // 入店履歴行
@@ -134,12 +138,25 @@ document.addEventListener('DOMContentLoaded', () => {
   switchTab(initialTab);
   loadAll();
   updateIpadApprovalBanner();
+  initShiftTab();
 });
+
+/* ── 段3：シフトタブの可否判定（featureVisibility.shiftScheduleEnabled）── */
+async function initShiftTab() {
+  try {
+    const data = await uzGetSettings();
+    shiftEnabled = !!(data && data.featureVisibility && data.featureVisibility.shiftScheduleEnabled);
+  } catch { shiftEnabled = false; }
+  const tab = document.getElementById('tab-shift');
+  if (tab) tab.hidden = !shiftEnabled;
+  if (shiftEnabled) loadShiftsForMonth();
+}
 
 /* ── タブ切り替え ────────────────────────────────────────── */
 function bindTabs() {
   document.getElementById('tab-salescost')?.addEventListener('click',  () => switchTab('salescost'));
   document.getElementById('tab-attendance')?.addEventListener('click', () => switchTab('attendance'));
+  document.getElementById('tab-shift')?.addEventListener('click',      () => switchTab('shift'));
 }
 
 function switchTab(tab) {
@@ -240,6 +257,9 @@ async function loadAll() {
   } finally {
     hideLoading();
   }
+
+  // 段3：シフトタブが有効なら当月の希望も更新（取引/勤怠とは独立に取得）
+  if (shiftEnabled) loadShiftsForMonth();
 }
 
 /* ── 修正ボタン（全期間・全データ修正可能） ──────────────── */
@@ -1694,6 +1714,53 @@ async function loadAttendanceOnly() {
   } catch {
     renderAttendanceError();
   }
+}
+
+/* ── 段3：シフト希望一覧（オーナー閲覧）──────────────────────
+ * 当月の全スタッフ希望を日付グルーピングで表示する。閲覧のみ（MVP）。
+ * 実績突合（予定vs実打刻）は次段階（→ 01_商品体系.md §4-6）。 */
+async function loadShiftsForMonth() {
+  shiftItems = [];
+  const monthParam = `${currentYear}-${String(currentMonth).padStart(2, '0')}`;
+  try {
+    // app.js callGAS は {status,data} を返す（未unwrap）。data.shifts を取り出す。
+    const result = await callGAS('getShifts', { month: monthParam });
+    shiftItems = (result && result.status === 'ok' && result.data && Array.isArray(result.data.shifts))
+      ? result.data.shifts : [];
+  } catch { shiftItems = []; }
+  renderOwnerShifts();
+}
+
+function renderOwnerShifts() {
+  const list = document.getElementById('shift-owner-list');
+  if (!list) return;
+  if (!shiftItems.length) {
+    list.innerHTML = '<div class="hist-empty" style="padding:24px;text-align:center;color:var(--uz-text-muted);">この月の希望はありません</div>';
+    return;
+  }
+  // 日付でグルーピング（getShifts は date→staffName 昇順済み）
+  const byDate = {};
+  shiftItems.forEach(s => { (byDate[s.date] = byDate[s.date] || []).push(s); });
+  const dates = Object.keys(byDate).sort();
+  list.innerHTML = dates.map(date => {
+    const d = new Date(date + 'T00:00:00');
+    const head = `${d.getMonth() + 1}/${d.getDate()}（${WEEKDAYS[d.getDay()]}）`;
+    const rows = byDate[date].map(s => {
+      const time = (s.startTime || s.endTime)
+        ? `${escHtml(s.startTime || '--:--')} 〜 ${escHtml(s.endTime || '--:--')}`
+        : '<span style="color:var(--uz-text-muted);">終日</span>';
+      const note = s.note ? `<span class="shift-o-note">${escHtml(s.note)}</span>` : '';
+      return `<div class="shift-o-row">
+        <span class="shift-o-name">${escHtml(s.staffName || s.staffId)}</span>
+        <span class="shift-o-time">${time}</span>
+        ${note}
+      </div>`;
+    }).join('');
+    return `<div class="shift-o-group">
+      <div class="shift-o-date">${head}<span class="shift-o-count">${byDate[date].length}名</span></div>
+      ${rows}
+    </div>`;
+  }).join('');
 }
 
 async function quickClockOut(rowIndex, staffId, staffName) {

@@ -33,6 +33,8 @@
   let _confirmedStaffIds = new Set();
   let _payrollState = {};
   let _confirmTarget = null;
+  let _shiftEnabled = false;   // 段3：shiftScheduleEnabled
+  let _shiftItems = [];
 
   /* ---------- 初期化 ---------- */
   document.addEventListener('DOMContentLoaded', async () => {
@@ -49,6 +51,9 @@
     try {
       const settings = await _callGAS('getSettings');
       _staffList = (settings.staffList || []).map(_normalizeStaff);
+      _shiftEnabled = !!(settings.featureVisibility && settings.featureVisibility.shiftScheduleEnabled);
+      const card = document.getElementById('shiftCard');
+      if (card) card.style.display = _shiftEnabled ? '' : 'none';
       await _loadMonth();
     } catch (e) {
       console.error('init error:', e);
@@ -72,6 +77,46 @@
     _buildPayrollState();
     _renderTable();
     _updateMonthLabel();
+    if (_shiftEnabled) _loadShifts();
+  }
+
+  /* ---------- 段3：シフト希望一覧（閲覧のみ・→ 01_商品体系.md §4-6）---------- */
+  async function _loadShifts() {
+    try {
+      const res = await _callGAS('getShifts', { month: _currentMonth });
+      _shiftItems = (res && res.shifts) ? res.shifts : (res && res.data && res.data.shifts) || [];
+    } catch (e) { _shiftItems = []; }
+    _renderShifts();
+  }
+
+  function _renderShifts() {
+    const list = document.getElementById('shiftOwnerList');
+    if (!list) return;
+    if (!_shiftItems.length) {
+      list.innerHTML = '<div class="att-shift-empty">この月の希望はありません</div>';
+      return;
+    }
+    const WD = ['日','月','火','水','木','金','土'];
+    const byDate = {};
+    _shiftItems.forEach(s => { (byDate[s.date] = byDate[s.date] || []).push(s); });
+    list.innerHTML = Object.keys(byDate).sort().map(date => {
+      const d = new Date(date + 'T00:00:00');
+      const head = `${d.getMonth() + 1}/${d.getDate()}（${WD[d.getDay()]}）`;
+      const rows = byDate[date].map(s => {
+        const time = (s.startTime || s.endTime)
+          ? `${_escHtml(s.startTime || '--:--')} 〜 ${_escHtml(s.endTime || '--:--')}`
+          : '終日';
+        const note = s.note ? `<span class="att-shift-note">${_escHtml(s.note)}</span>` : '';
+        return `<div class="att-shift-row">
+          <span class="att-shift-name">${_escHtml(s.staffName || s.staffId)}</span>
+          <span class="att-shift-time">${time}</span>${note}
+        </div>`;
+      }).join('');
+      return `<div class="att-shift-group">
+        <div class="att-shift-date">${head}<span class="att-shift-count">${byDate[date].length}名</span></div>
+        ${rows}
+      </div>`;
+    }).join('');
   }
 
   /* ==========================================

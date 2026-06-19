@@ -92,6 +92,23 @@
     .hist-tab-content { display: none; }
     .hist-tab-content--active { display: block; }
 
+    /* 段3 シフト希望一覧（オーナー閲覧）*/
+    .shift-o-group { border-bottom: 8px solid var(--uz-bg, #f5f5f5); }
+    .shift-o-date {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 16px; font-size: 13px; font-weight: 700;
+      background: var(--uz-surface-2, rgba(0,0,0,0.03)); color: var(--uz-text);
+      position: sticky; top: 0;
+    }
+    .shift-o-count { font-size: 11px; font-weight: 600; color: var(--uz-text-muted); }
+    .shift-o-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 16px; border-top: 1px solid var(--uz-border);
+    }
+    .shift-o-name { font-size: 14px; font-weight: 600; min-width: 88px; }
+    .shift-o-time { font-size: 13px; font-variant-numeric: tabular-nums; color: var(--uz-text); }
+    .shift-o-note { font-size: 12px; color: var(--uz-text-muted); }
+
     /* ── 月ナビ・フィルタ・新規登録ボタンは通常配置（sticky は親に委譲） ── */
     .hist-month-nav { background: var(--uz-surface); }
     .hist-filter-bar { background: var(--uz-surface); }
@@ -674,6 +691,13 @@
                   aria-selected="false" aria-controls="panel-attendance">
             勤怠
           </button>
+          <!-- 段3 シフト希望（shiftScheduleEnabled 時のみ表示）-->
+          <button id="tab-shift"
+                  class="hist-tab"
+                  type="button" role="tab"
+                  aria-selected="false" aria-controls="panel-shift" hidden>
+            シフト
+          </button>
         </div>
 
         <!-- 月選択ナビゲーター -->
@@ -744,6 +768,15 @@
           <div id="attendance-list"
                role="region"
                aria-label="出勤履歴">
+          </div>
+        </div>
+
+        <!-- タブ3：シフト希望（段3）-->
+        <div id="panel-shift" class="hist-tab-content"
+             role="tabpanel" aria-labelledby="tab-shift">
+          <div id="shift-owner-list"
+               role="region"
+               aria-label="シフト希望一覧">
           </div>
         </div>
 

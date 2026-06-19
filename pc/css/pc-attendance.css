@@ -386,3 +386,29 @@
   background: var(--uz-gold, #333333); color: var(--uz-text);
   font-size: 12px; font-weight: 700; cursor: pointer;
 }
+
+/* 段3 シフト希望一覧（PC・閲覧のみ）*/
+.att-shift-card {
+  margin-top: 16px; background: var(--uz-card, #fff);
+  border: 1px solid var(--uz-border, #e0e0e0); border-radius: 8px; overflow: hidden;
+}
+.att-shift-card__title {
+  padding: 10px 16px; font-size: 13px; font-weight: 700; color: var(--uz-text);
+  border-bottom: 1px solid var(--uz-border, #e0e0e0);
+}
+.att-shift-group { border-top: 1px solid var(--uz-border, #e0e0e0); }
+.att-shift-group:first-child { border-top: none; }
+.att-shift-date {
+  display: flex; align-items: center; gap: 8px; padding: 6px 16px;
+  font-size: 12px; font-weight: 700; color: var(--uz-text);
+  background: var(--uz-surface-2, rgba(0,0,0,0.03));
+}
+.att-shift-count { font-size: 11px; font-weight: 600; color: var(--uz-text-muted, #6B6B6B); }
+.att-shift-row {
+  display: flex; align-items: center; gap: 12px; padding: 6px 16px 6px 28px;
+  font-size: 13px;
+}
+.att-shift-name { font-weight: 600; min-width: 100px; }
+.att-shift-time { font-variant-numeric: tabular-nums; }
+.att-shift-note { color: var(--uz-text-muted, #6B6B6B); font-size: 12px; }
+.att-shift-empty { padding: 20px; text-align: center; color: var(--uz-text-muted, #6B6B6B); font-size: 13px; }
