@@ -25,12 +25,14 @@ function getServiceMaster() {
     const saved = localStorage.getItem(SERVICE_MASTER_KEY);
     const parsed = saved ? JSON.parse(saved) : null;
     const list = Array.isArray(parsed) ? parsed : DEFAULT_SERVICES;
-    const normalized = list.map(s => ({
+    // 正準化は app.js の共有関数に集約（SSOT・PC月次/pc-monthly と同方式）。
+    // 万一未ロード時のみ従来のインライン正規化にフォールバック。
+    if (typeof uzNormalizeServiceList === 'function') return uzNormalizeServiceList(list);
+    return list.map(s => ({
       code:    s.code != null ? s.code : s.id,   // GAS は id:'sv001'〜
       name:    s.name,
       taxRate: (s.taxRate != null && !isNaN(Number(s.taxRate))) ? Number(s.taxRate) : 10,
     }));
-    return normalized;
   } catch {
     return [...DEFAULT_SERVICES];
   }

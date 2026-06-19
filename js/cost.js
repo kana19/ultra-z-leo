@@ -36,17 +36,26 @@ function getDivisionItems(divCode, options) {
   let items;
   if (divCode === '1') {
     // 仕入原価：purchaseMasterList（B5）を正本とする。
-    // GAS応答 {id:'p001', name, defaultTaxRate} を内部統一形へマップする。
+    // 正準化（id→code・defaultTaxRate→taxRate・divisionCode:'1'）は app.js の
+    // 共有関数に集約（SSOT）。cost 固有の taxRow/type のみここで付与する。
     const purchase = (typeof getPurchaseMaster === 'function') ? getPurchaseMaster() : [];
-    items = purchase
+    const normalized = (typeof uzNormalizePurchaseList === 'function')
+      ? uzNormalizePurchaseList(purchase)
+      : purchase.map(p => ({
+          code: (p.id != null ? p.id : p.code),
+          name: p.name,
+          taxRate: (p.defaultTaxRate != null && !isNaN(Number(p.defaultTaxRate)))
+                     ? Number(p.defaultTaxRate)
+                     : (p.taxRate != null ? Number(p.taxRate) : 10),
+          divisionCode: '1',
+        }));
+    items = normalized
       .filter(p => p && p.name && String(p.name).trim() !== '')
       .map(p => ({
-        code:         p.id,                              // F列に格納（'p001'〜）
+        code:         p.code,                            // F列に格納（'p001'〜）
         taxRow:       null,                              // 仕入原価は青色申告行番号を持たない
         name:         p.name,
-        taxRate:      (p.defaultTaxRate != null && !isNaN(Number(p.defaultTaxRate)))
-                        ? Number(p.defaultTaxRate)
-                        : (p.taxRate != null ? Number(p.taxRate) : 10),
+        taxRate:      p.taxRate,
         type:         'purchase',
         divisionCode: '1',
       }));

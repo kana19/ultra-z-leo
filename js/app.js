@@ -1265,13 +1265,19 @@ async function uzGetSettings() {
   }
 }
 
+// 税率の正準化：数値化できない/未設定は 10% へフォールバック（NaN 混入を防ぐ）。
+function uzNormTaxRate(v) {
+  const n = Number(v);
+  return (v != null && !isNaN(n)) ? n : 10;
+}
+
 // サービスマスタ（売上区分）を正準形 {code,name,taxRate} へ。GAS生は {id,name,taxRate}。
 // id を code として扱う（option value の正本）。
 function uzNormalizeServiceList(list) {
   return (Array.isArray(list) ? list : []).map(s => ({
     code: String(s.id || s.code || s.serviceCode || ''),
     name: String(s.name || s.serviceName || ''),
-    taxRate: Number(s.taxRate != null ? s.taxRate : 10),
+    taxRate: uzNormTaxRate(s.taxRate),
   }));
 }
 
@@ -1281,7 +1287,7 @@ function uzNormalizePurchaseList(list) {
   return (Array.isArray(list) ? list : []).map(p => ({
     code: String(p.id || p.code || ''),
     name: String(p.name || ''),
-    taxRate: Number(p.defaultTaxRate != null ? p.defaultTaxRate : (p.taxRate != null ? p.taxRate : 10)),
+    taxRate: uzNormTaxRate(p.defaultTaxRate != null ? p.defaultTaxRate : p.taxRate),
     divisionCode: '1',
   }));
 }
