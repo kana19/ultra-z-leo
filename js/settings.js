@@ -13,6 +13,8 @@
 // app.js 冒頭で集約定義済み（SSOT・app.js が先に読み込まれる前提）。ここでは再定義しない。
 const STORE_NAME_KEY        = 'uz_store_name';
 const MASTER_QUOTA_KEY      = 'uz_master_quota';        // 6-G フェーズ2 新設
+const QR_LOCATIONS_KEY      = 'uz_qr_locations';        // 段2・拠点リスト（settings B6）
+const QR_PROOF_KEY          = 'uz_qr_proof_enabled';    // 段2・QR現地証明の有効可否（featureVisibility）
 
 /* ── デフォルト値 ────────────────────────────────────────── */
 const DEFAULT_STORE_NAME = '';
@@ -138,6 +140,29 @@ function _saveMasterQuota(quota) {
   localStorage.setItem(MASTER_QUOTA_KEY, JSON.stringify(quota));
 }
 
+/* ── 拠点リスト（段2・QR現地証明・settings B6）───────────────
+ * 形式：[{code:"01", label:"本店"}, ...]。納品時に -01 が初期化済み（マスタGAS）。
+ * オーナーが本画面で拠点を追加（-02, -03…）・ラベル編集・削除する（→ 04_運営ポータル.md §10）。 */
+function getQrLocations() {
+  try {
+    const saved = localStorage.getItem(QR_LOCATIONS_KEY);
+    const list = saved ? JSON.parse(saved) : [];
+    return Array.isArray(list) ? list : [];
+  } catch { return []; }
+}
+
+function _saveQrLocations(list) {
+  localStorage.setItem(QR_LOCATIONS_KEY, JSON.stringify(Array.isArray(list) ? list : []));
+}
+
+function isQrProofEnabled() {
+  try { return localStorage.getItem(QR_PROOF_KEY) === '1'; } catch { return false; }
+}
+
+function _saveQrProofEnabled(enabled) {
+  try { localStorage.setItem(QR_PROOF_KEY, enabled ? '1' : '0'); } catch { /* ignore */ }
+}
+
 /* ── GAS 同期 ────────────────────────────────────────────── */
 
 /**
@@ -148,7 +173,7 @@ async function loadSettingsFromGAS() {
   try {
     const data = await uzGetSettings();   // ②共通化：取得+{status,data}展開を app.js に集約
     if (data) {
-      const { storeName, staffList, serviceList, purchaseMasterList, masterQuota, businessHours } = data;
+      const { storeName, staffList, serviceList, purchaseMasterList, qrLocations, masterQuota, businessHours, featureVisibility } = data;
       if (storeName   != null) _saveStoreName(storeName);
       if (Array.isArray(staffList))   _saveStaffList(staffList);
       if (Array.isArray(serviceList)) _saveServiceList(serviceList);
@@ -167,11 +192,15 @@ async function loadSettingsFromGAS() {
       } else {
         try { localStorage.removeItem('uz_business_hours'); } catch { /* ignore */ }
       }
+      // 段2・拠点リスト（B6）と qrProofEnabled を保存（拠点管理セクションの表示判定に使用）
+      if (Array.isArray(qrLocations)) _saveQrLocations(qrLocations);
+      _saveQrProofEnabled(!!(featureVisibility && featureVisibility.qrProofEnabled));
       // UIを最新データで再描画
       initBasicInfo();
       renderStaffList();
       renderServiceList();
       renderPurchaseList();
+      renderQrLocations();
       updateGasStatus(true);
     } else {
       updateGasStatus(false);
@@ -253,11 +282,13 @@ document.addEventListener('DOMContentLoaded', () => {
   initStaffList();
   initServiceList();
   initPurchaseList();
+  initQrLocations();
   initCostMaster();
   initBasicInfo();
   bindStaffAdd();
   bindServiceAdd();
   bindPurchaseAdd();
+  bindQrLocationAdd();
   bindCostMasterSave();
   bindVersionTapDebug();
   // GASから最新データを取得して上書き
@@ -997,6 +1028,154 @@ function bindPurchaseAdd() {
 
   btn.addEventListener('click', doAdd);
   nameInput.addEventListener('keydown', e => { if (e.key === 'Enter') doAdd(); });
+}
+
+/* ── 拠点管理 UI（段2・QR現地証明・→ 04_運営ポータル.md §10）─────
+ * 拠点リスト（settings B6）の追加(-02,-03…)・ラベル編集・削除。保存は
+ * saveQrLocations（全件置換）。セクション自体は qrProofEnabled 時のみ表示する。
+ * QR画像は納品カードと同じ api.qrserver.com で生成（{clientId}-{NN} を埋めた打刻URL）。 */
+function initQrLocations() {
+  renderQrLocations();
+}
+
+function _qrLocStaffUrl(code) {
+  // settings.html と同ディレクトリの staff-clockin.html を指す絶対URL（?qr={clientId}-{NN}）
+  const dir = (location.pathname || '/').replace(/[^\/]*$/, '');
+  const cid = (typeof detectClientId === 'function' && detectClientId()) || '';
+  const token = (cid ? cid : '') + '-' + code;
+  return location.origin + dir + 'staff-clockin.html?qr=' + encodeURIComponent(token);
+}
+
+function _qrLocImgSrc(code) {
+  return 'https://api.qrserver.com/v1/create-qr-code/?size=160x160&data='
+       + encodeURIComponent(_qrLocStaffUrl(code));
+}
+
+function _nextQrLocCode(list) {
+  let max = 0;
+  (list || []).forEach(l => {
+    const n = parseInt(l && l.code, 10);
+    if (isFinite(n) && n > max) max = n;
+  });
+  return ('0' + (max + 1)).slice(-2);
+}
+
+function renderQrLocations() {
+  const section = document.getElementById('sec-qrloc');
+  if (section) section.hidden = !isQrProofEnabled();
+  const container = document.getElementById('qrloc-list-container');
+  if (!container) return;
+  const cid  = (typeof detectClientId === 'function' && detectClientId()) || '';
+  const list = getQrLocations();
+  container.innerHTML = list.map(l => {
+    const code   = escHtml(String(l.code || ''));
+    const token  = (cid ? escHtml(cid) : '') + '-' + code;
+    const isBase = String(l.code) === '01';
+    return `
+      <div class="qrloc-row" id="qrloc-row-${code}">
+        <img class="qrloc-qr" src="${_qrLocImgSrc(l.code)}"
+             alt="${escHtml(l.label)}のQR" width="64" height="64" loading="lazy">
+        <div class="qrloc-meta">
+          <span class="qrloc-label">${escHtml(l.label)}</span>
+          <span class="qrloc-token">${token}</span>
+        </div>
+        <button class="staff-edit-btn" type="button"
+                onclick="editQrLocation('${code}')"
+                aria-label="${escHtml(l.label)}を編集">編集</button>
+        ${isBase ? '' : `<button class="staff-delete-btn" type="button"
+                onclick="deleteQrLocation('${code}')"
+                aria-label="${escHtml(l.label)}を削除">削除</button>`}
+      </div>`;
+  }).join('');
+}
+
+async function _persistQrLocations(list, okMsg) {
+  try {
+    const res = await callGAS('saveQrLocations', { qrLocations: list });
+    if (res && res.status === 'ok' && Array.isArray(res.qrLocations)) {
+      _saveQrLocations(res.qrLocations);
+      renderQrLocations();
+      if (okMsg) showToast(okMsg, 'success');
+      return true;
+    }
+    showToast((res && res.message) || '保存に失敗しました', 'error');
+  } catch {
+    showToast('通信エラーで保存できませんでした', 'error');
+  }
+  return false;
+}
+
+function editQrLocation(code) {
+  const list = getQrLocations();
+  const loc  = list.find(l => String(l.code) === String(code));
+  if (!loc) return;
+  const row = document.getElementById(`qrloc-row-${code}`);
+  if (!row) return;
+  const cid = (typeof detectClientId === 'function' && detectClientId()) || '';
+  row.classList.add('staff-row--editing');
+  row.innerHTML = `
+    <div class="staff-edit">
+      <div class="staff-edit__line">
+        <input type="text" id="qrloc-edit-label-${code}"
+               class="settings-input staff-edit__name"
+               value="${escHtml(loc.label)}" maxlength="20" autocomplete="off"
+               placeholder="拠点名" aria-label="拠点名">
+        <span class="qrloc-token">${(cid ? escHtml(cid) : '')}-${escHtml(String(code))}</span>
+      </div>
+      <div class="staff-edit__line staff-edit__actions">
+        <button class="staff-save-btn" type="button"
+                onclick="saveEditQrLocation('${escHtml(String(code))}')" aria-label="保存">保存</button>
+        <button class="staff-cancel-btn" type="button"
+                onclick="renderQrLocations()" aria-label="キャンセル">キャンセル</button>
+      </div>
+    </div>`;
+  document.getElementById(`qrloc-edit-label-${code}`)?.focus();
+}
+
+async function saveEditQrLocation(code) {
+  const el = document.getElementById(`qrloc-edit-label-${code}`);
+  if (!el) return;
+  const label = el.value.trim();
+  if (!label) return showToast('拠点名を入力してください', 'error');
+  if (label.length > 20) return showToast('拠点名は20文字以内で入力してください', 'error');
+  const list = getQrLocations();
+  if (list.some(l => l.label === label && String(l.code) !== String(code))) {
+    return showToast('同じ名前の拠点が既に登録されています', 'error');
+  }
+  const next = list.map(l => String(l.code) === String(code) ? { code: l.code, label } : l);
+  await _persistQrLocations(next, `${label}を更新しました ✓`);
+}
+
+async function deleteQrLocation(code) {
+  if (String(code) === '01') return showToast('既定拠点（-01）は削除できません', 'error');
+  const list = getQrLocations();
+  const loc  = list.find(l => String(l.code) === String(code));
+  if (!loc) return;
+  if (!confirm(`「${loc.label}」を削除しますか？\nこの拠点のQRは無効になります（過去の打刻記録には影響しません）。`)) return;
+  const next = list.filter(l => String(l.code) !== String(code));
+  await _persistQrLocations(next, `${loc.label}を削除しました`);
+}
+
+function bindQrLocationAdd() {
+  const btn   = document.getElementById('qrloc-add-btn');
+  const input = document.getElementById('qrloc-add-label');
+  if (!btn || !input) return;
+  const doAdd = async () => {
+    const label = input.value.trim();
+    if (!label) return showToast('拠点名を入力してください', 'error');
+    if (label.length > 20) return showToast('拠点名は20文字以内で入力してください', 'error');
+    const list = getQrLocations();
+    if (list.some(l => l.label === label)) {
+      return showToast('同じ名前の拠点が既に登録されています', 'error');
+    }
+    const code = _nextQrLocCode(list);
+    btn.disabled = true;
+    const ok = await _persistQrLocations(list.concat([{ code, label }]), `${label}（-${code}）を追加しました ✓`);
+    if (ok) input.value = '';
+    btn.disabled = false;
+  };
+  btn.addEventListener('click', doAdd);
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') doAdd(); });
 }
 
 /* ── コスト科目マスタ UI ─────────────────────────────────── */

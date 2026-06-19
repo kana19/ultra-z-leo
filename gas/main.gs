@@ -26,6 +26,7 @@ function doGet(e) {
       case 'reconcile':                 result = reconcile(data);                         break;
       case 'getSettings':               result = getSettings();                           break;
       case 'saveSettings':              result = saveSettings(data);                      break;
+      case 'saveQrLocations':           result = saveQrLocations(data);                   break;
       // 6-G フェーズ2：サービス／仕入マスタ追加・更新・削除（枠超過チェック付・サーバ側ID採番）
       case 'addServiceItem':            result = addServiceItem(data);                    break;
       case 'updateServiceItem':         result = updateServiceItem(data);                 break;
@@ -569,6 +570,7 @@ function getSettings() {
   var serviceJson          = sheet.getRange('B3').getValue();
   var costMasterJson       = sheet.getRange('B4').getValue();
   var purchaseMasterJson   = sheet.getRange('B5').getValue();
+  var qrLocationsJson      = sheet.getRange('B6').getValue();
   var featureVisibilityJson = sheet.getRange('B16').getValue();
   var masterQuotaRaw       = sheet.getRange('B17').getValue();
   var businessHoursRaw     = sheet.getRange('B18').getValue();
@@ -593,6 +595,14 @@ function getSettings() {
   }
   if (!Array.isArray(purchaseMasterList)) purchaseMasterList = [];
   if (!Array.isArray(serviceList)) serviceList = [];
+  // qrLocations（段2・QR現地証明の拠点リスト・→ 03_データ仕様.md §6）。
+  // 形式：[{code:"01", label:"本店"}, ...]。未設定時は []（validateStaff は空なら accept）。
+  var qrLocations = [];
+  try { if (qrLocationsJson) qrLocations = JSON.parse(qrLocationsJson); } catch(e) {}
+  if (!Array.isArray(qrLocations)) qrLocations = [];
+  qrLocations = qrLocations
+    .filter(function(l) { return l && l.code; })
+    .map(function(l) { return { code: String(l.code), label: String(l.label || '') }; });
   // employmentType を3種化（employed_full / employed_temp / contractor）
   // 旧 'employed' および未設定は 'employed_full' に自動マイグレーション（戦略思想§3-9-3 サイクルA）
   staffList = staffList.map(function(s) {
@@ -641,6 +651,7 @@ function getSettings() {
     serviceList: serviceList,
     costMasterList: costMasterList,
     purchaseMasterList: purchaseMasterList,
+    qrLocations: qrLocations,
     featureVisibility: featureVisibility,
     masterQuota: masterQuota,
     businessHours: businessHours
@@ -703,6 +714,36 @@ function saveSettings(data) {
     }
   }
   return { status: 'ok' };
+}
+
+/**
+ * qrLocations 保存（段2・QR現地証明の拠点リスト・settings B6）
+ * オーナー拠点管理UI（→ 04_運営ポータル.md §10）から送信される。
+ *   - data.qrLocations: [{code:"01", label:"本店"}, ...]
+ *   - code は 拠点NN（"01"〜）。重複 code は先勝ちで除去。label 空は許容しない。
+ *   - 既定 -01（code:"01"）の初期化はマスタGAS（createUserSpreadsheet）が担う。
+ */
+function saveQrLocations(data) {
+  var sheet = _ss_().getSheetByName('settings');
+  if (!sheet) return { status: 'error', message: 'settingsシートが見つかりません' };
+  var input = (data && data.qrLocations) || [];
+  if (!Array.isArray(input)) return { status: 'error', message: 'qrLocations が不正です' };
+  var seen = {};
+  var list = [];
+  for (var i = 0; i < input.length; i++) {
+    var raw = input[i] || {};
+    var code = String(raw.code || '').trim();
+    var label = String(raw.label || '').trim();
+    if (!code || !label) continue;
+    // 拠点NN は 2桁ゼロ詰めに正規化（"1"→"01"）
+    if (/^\d+$/.test(code)) code = ('0' + code).slice(-2);
+    if (seen[code]) continue;
+    seen[code] = true;
+    list.push({ code: code, label: label });
+  }
+  sheet.getRange('A6').setValue('qrLocations');
+  sheet.getRange('B6').setValue(JSON.stringify(list));
+  return { status: 'ok', qrLocations: list };
 }
 
 /**

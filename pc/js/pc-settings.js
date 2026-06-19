@@ -13,6 +13,8 @@ let settings = null;
 let costMaster = [];
 let purchaseList = [];
 let masterQuota = { serviceMasterQuota: 5, purchaseMasterQuota: 3, costOptionalQuota: 5 };
+let qrLocations = [];          // 段2・拠点リスト（settings B6）
+let qrProofEnabled = false;    // 段2・QR現地証明の有効可否（featureVisibility）
 
 document.addEventListener('DOMContentLoaded', async () => {
   pcBootstrap('pc-settings.html', '設定');
@@ -24,6 +26,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (svcNameInput) svcNameInput.addEventListener('keydown', e => { if (e.key === 'Enter') addService(); });
   const purNameInput = document.getElementById('pur-add-name');
   if (purNameInput) purNameInput.addEventListener('keydown', e => { if (e.key === 'Enter') addPurchase(); });
+  const qrlocBtn = document.getElementById('qrloc-add-btn');
+  if (qrlocBtn) qrlocBtn.addEventListener('click', addQrLocation);
+  const qrlocInput = document.getElementById('qrloc-add-name');
+  if (qrlocInput) qrlocInput.addEventListener('keydown', e => { if (e.key === 'Enter') addQrLocation(); });
   bindStaffAdd();
 });
 
@@ -50,6 +56,9 @@ async function loadAll() {
   } else {
     purchaseList = [];
   }
+  // 段2：拠点リスト（B6）と qrProofEnabled を取得（拠点管理カードの表示判定に使用）
+  qrLocations = Array.isArray(settings.qrLocations) ? settings.qrLocations : [];
+  qrProofEnabled = !!(settings.featureVisibility && settings.featureVisibility.qrProofEnabled);
   // 販管費マスタは既存通り getCostMaster 経由（getSettings の costMasterList より優先）
   // GAS生データは type/divisionCode が欠落しうるため normalizeCostMasterList で正規化する（→ app.js）
   let cmRaw;
@@ -66,6 +75,7 @@ async function loadAll() {
   saveCostMasterToStorage(costMaster);
   renderServices();
   renderPurchases();
+  renderQrLocations();
   renderCM();
   renderStaff();
   renderBasicInfo();
@@ -335,6 +345,98 @@ async function deletePurchase(id) {
   } catch (e) {
     showToast('通信エラー：' + (e.message || 'unknown'), 'error');
   }
+}
+
+/* ── 拠点管理（段2・QR現地証明・→ 04_運営ポータル.md §10）─────
+ * 拠点リスト（settings B6）の追加(-02,-03…)・削除。保存は saveQrLocations（全件置換）。
+ * カードは qrProofEnabled 時のみ表示。QR画像は api.qrserver.com で生成。 */
+function _pcQrStaffUrl(code) {
+  // pc/pc-settings.html から見た親ディレクトリ（{clientId}/）の staff-clockin.html
+  const cid = (typeof detectClientId === 'function' && detectClientId()) || '';
+  const dir = (location.pathname || '/').replace(/[^\/]*$/, '').replace(/pc\/$/, '');
+  const token = (cid ? cid : '') + '-' + code;
+  return location.origin + dir + 'staff-clockin.html?qr=' + encodeURIComponent(token);
+}
+
+function _pcQrImgSrc(code) {
+  return 'https://api.qrserver.com/v1/create-qr-code/?size=160x160&data='
+       + encodeURIComponent(_pcQrStaffUrl(code));
+}
+
+function _pcNextQrCode(list) {
+  let max = 0;
+  (list || []).forEach(l => {
+    const n = parseInt(l && l.code, 10);
+    if (isFinite(n) && n > max) max = n;
+  });
+  return ('0' + (max + 1)).slice(-2);
+}
+
+function renderQrLocations() {
+  const card = document.getElementById('qrloc-card');
+  if (card) card.hidden = !qrProofEnabled;
+  const body = document.getElementById('qrloc-body');
+  if (!body) return;
+  const cid = (typeof detectClientId === 'function' && detectClientId()) || '';
+  if (!Array.isArray(qrLocations) || qrLocations.length === 0) {
+    body.innerHTML = `<tr><td colspan="4" class="text-muted" style="text-align:center;padding:20px;">登録なし</td></tr>`;
+    return;
+  }
+  body.innerHTML = qrLocations.map(l => {
+    const code   = escHtml(String(l.code || ''));
+    const token  = (cid ? escHtml(cid) : '') + '-' + code;
+    const isBase = String(l.code) === '01';
+    const delBtn = isBase
+      ? '<span class="text-muted" style="font-size:12px;">既定</span>'
+      : `<button class="pc-btn pc-btn--ghost" type="button" onclick="deleteQrLocation('${code}')">削除</button>`;
+    return `<tr>
+      <td><img src="${_pcQrImgSrc(l.code)}" alt="${escHtml(l.label)}のQR" width="56" height="56" loading="lazy" style="border:1px solid var(--uz-border);border-radius:6px;background:#fff;"></td>
+      <td>${escHtml(l.label || '')}</td>
+      <td style="font-family:var(--font-mono,monospace);font-size:12px;">${token}</td>
+      <td>${delBtn}</td>
+    </tr>`;
+  }).join('');
+}
+
+async function _pcPersistQrLocations(list, okMsg) {
+  try {
+    const res = await callGAS('saveQrLocations', { qrLocations: list });
+    if (res && res.status === 'ok' && Array.isArray(res.qrLocations)) {
+      qrLocations = res.qrLocations;
+      renderQrLocations();
+      if (okMsg) showToast(okMsg, 'success');
+      return true;
+    }
+    showToast((res && res.message) || '保存に失敗しました', 'error');
+  } catch (e) {
+    showToast('通信エラー：' + (e.message || 'unknown'), 'error');
+  }
+  return false;
+}
+
+async function addQrLocation() {
+  const input = document.getElementById('qrloc-add-name');
+  const btn   = document.getElementById('qrloc-add-btn');
+  if (!input) return;
+  const label = input.value.trim();
+  if (!label) return showToast('拠点名を入力してください', 'error');
+  if (label.length > 20) return showToast('拠点名は20文字以内で入力してください', 'error');
+  if (qrLocations.some(l => l.label === label)) {
+    return showToast('同じ名前の拠点が既に登録されています', 'error');
+  }
+  const code = _pcNextQrCode(qrLocations);
+  if (btn) btn.disabled = true;
+  const ok = await _pcPersistQrLocations(qrLocations.concat([{ code, label }]), `${label}（-${code}）を追加しました`);
+  if (ok) input.value = '';
+  if (btn) btn.disabled = false;
+}
+
+async function deleteQrLocation(code) {
+  if (String(code) === '01') return showToast('既定拠点（-01）は削除できません', 'error');
+  const loc = qrLocations.find(l => String(l.code) === String(code));
+  if (!loc) return;
+  if (!confirm(`「${loc.label}」を削除しますか？\nこの拠点のQRは無効になります（過去の打刻記録には影響しません）。`)) return;
+  await _pcPersistQrLocations(qrLocations.filter(l => String(l.code) !== String(code)), `${loc.label}を削除しました`);
 }
 
 /* ── 販管費マスタ（既存維持・販管費専用に役割明確化）─────── */

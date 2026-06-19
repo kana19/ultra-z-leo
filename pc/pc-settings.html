@@ -116,7 +116,29 @@
         </p>
       </div>
 
-      <!-- ⑤ 基本情報（読み取り専用） -->
+      <!-- ⑤ 拠点管理（段2・QR現地証明） 既定非表示・qrProofEnabled 時のみ表示 -->
+      <div class="pc-card" id="qrloc-card" hidden>
+        <div class="pc-section-title">拠点管理（出勤QR）</div>
+        <table class="pc-table" id="qrloc-table">
+          <thead><tr>
+            <th style="width:90px;">QR</th>
+            <th>拠点名</th>
+            <th style="width:160px;">QRトークン</th>
+            <th style="width:120px;">操作</th>
+          </tr></thead>
+          <tbody id="qrloc-body"></tbody>
+        </table>
+        <div id="qrloc-add-row" class="pc-form-row" style="margin-top:10px;align-items:center;gap:8px;flex-wrap:wrap;">
+          <input type="text" id="qrloc-add-name" class="pc-input" placeholder="拠点名（例：2F・別館）" maxlength="20" style="flex:2;min-width:160px;">
+          <button id="qrloc-add-btn" class="pc-btn" type="button">＋ 拠点を追加</button>
+        </div>
+        <p class="pc-note" style="margin-top:8px;color:var(--uz-muted);">
+          拠点を追加すると出勤用QR（{店舗ID}-02 …）が発行されます。スタッフは出勤時にこのQRを読み取って現地証明します。<br>
+          既定拠点（-01）は削除できません。
+        </p>
+      </div>
+
+      <!-- ⑥ 基本情報（読み取り専用） -->
       <div class="pc-card">
         <div class="pc-section-title">基本情報</div>
         <div class="info-row">

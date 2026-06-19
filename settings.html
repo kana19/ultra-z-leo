@@ -114,6 +114,47 @@
       flex-shrink: 0;
     }
 
+    /* ── 拠点管理 行（段2・QR現地証明） ── */
+    .qrloc-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 16px;
+      border-top: 1px solid var(--uz-border);
+    }
+    .qrloc-row:first-child { border-top: none; }
+    .qrloc-qr {
+      width: 64px;
+      height: 64px;
+      flex-shrink: 0;
+      border: 1px solid var(--uz-border);
+      border-radius: 6px;
+      background: #fff;
+    }
+    .qrloc-meta {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .qrloc-label {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--uz-text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .qrloc-token {
+      font-size: 11px;
+      color: var(--uz-text-muted);
+      font-family: var(--font-mono, monospace);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
     /* ── ボタン（編集／保存／削除／キャンセル） ── */
     .staff-edit-btn,
     .staff-save-btn,
@@ -358,7 +399,27 @@
     </div>
   </section>
 
-  <!-- ⑤ 基本情報（読み取り専用） -->
+  <!-- ⑤ 拠点管理（段2・QR現地証明） 既定非表示・qrProofEnabled 時のみ表示 -->
+  <section class="settings-section" id="sec-qrloc" hidden>
+    <button class="settings-section__head" type="button"
+            aria-controls="sec-qrloc-body" aria-expanded="true">
+      <span class="settings-section__title">拠点管理（出勤QR）</span>
+    </button>
+    <div class="settings-section__body" id="sec-qrloc-body">
+      <div id="qrloc-list-container"></div>
+      <div id="qrloc-add-row" class="settings-add-row">
+        <input type="text" id="qrloc-add-label" class="settings-input"
+               placeholder="拠点名（例：2F・別館）" maxlength="20" autocomplete="off">
+        <button id="qrloc-add-btn" class="settings-add-btn" type="button">＋ 拠点を追加</button>
+      </div>
+      <p class="settings-note">
+        拠点を追加すると出勤用QR（{店舗ID}-02 …）が発行されます。<br>
+        スタッフは出勤時にこのQRを読み取って現地証明します。既定拠点（-01）は削除できません。
+      </p>
+    </div>
+  </section>
+
+  <!-- ⑥ 基本情報（読み取り専用） -->
   <section class="settings-section">
     <button class="settings-section__head" type="button"
             aria-controls="sec-info-body" aria-expanded="true">
