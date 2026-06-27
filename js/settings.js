@@ -323,11 +323,15 @@ function _renderBusinessHoursRow() {
     }
   } catch { formatted = null; }
 
+  // 営業時間の役割（打刻忘れ判定の基準）を機能説明として併記。営業時間表示時のみ。
+  const hint = document.getElementById('info-business-hours-hint');
   if (formatted) {
     val.textContent = formatted;
     row.hidden = false;
+    if (hint) hint.hidden = false;
   } else {
     row.hidden = true;
+    if (hint) hint.hidden = true;
   }
 }
 
