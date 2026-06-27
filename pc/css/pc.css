@@ -6,8 +6,9 @@ body.pc-body {
   margin: 0;
   background: var(--uz-bg);
   color: var(--uz-text);
-  font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif;
-  font-size: 13px;
+  /* 課題②：スマホ/iPad（base.css var(--font-main)=Noto Sans JP）とフォントを統一 */
+  font-family: var(--font-main, 'Noto Sans JP', -apple-system, BlinkMacSystemFont, "Hiragino Sans", sans-serif);
+  font-size: 14px;
   min-height: 100vh;
 }
 
@@ -16,59 +17,61 @@ body.pc-body {
   min-height: 100vh;
 }
 
-/* ── サイドバー ────────────────────────────── */
+/* ── サイドバー（iPad nav-sidebar と設計言語を統一・課題②） ─────── */
 .pc-sidebar {
-  width: 180px;
+  width: 208px;
   background: var(--uz-surface);
   border-right: 1px solid var(--uz-border);
   display: flex;
   flex-direction: column;
   position: fixed;
   top: 0; left: 0; bottom: 0;
-  overflow: hidden;
+  overflow-y: auto;
 }
 
-/* ── 店名ロゴ（クリックで損益概観 index.html へ遷移）───── */
+/* ── 店名ロゴ（クリックで損益概観 index.html へ遷移）
+   iPad .nav-sidebar__brand に合わせ中央寄せ・ロゴ画像/店名フォールバックを主表示 ─── */
 .pc-sidebar-logo {
-  display: block;
-  padding: 16px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 30px 16px 24px;
   text-decoration: none;
   border-bottom: 1px solid var(--uz-border);
   cursor: pointer;
   letter-spacing: 0.04em;
 }
 .pc-sidebar-logo:hover { background: var(--uz-surface2); }
-.pc-sidebar-logo-text {
-  color: var(--uz-gold);
+.pc-sidebar-logo-brand { display: block; text-align: center; }
+.pc-sidebar-logo-img { height: 40px; max-width: 168px; }
+.uz-brand-text {
+  color: var(--uz-text);
   font-weight: 700;
-  font-size: 15px;
-  display: block;
-}
-.pc-sidebar-logo-sub {
-  color: var(--uz-text2);
-  font-size: 11px;
-  display: block;
-  margin-top: 2px;
+  font-size: 16px;
+  letter-spacing: 0.03em;
 }
 
-.pc-nav { padding: 8px 0; }
+.pc-nav { padding: 10px 0; }
 .pc-nav__link {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 16px;
-  color: var(--uz-text);
+  gap: 12px;
+  padding: 14px 18px;
+  color: var(--uz-text2);
   text-decoration: none;
-  font-size: 13px;
+  font-size: 14px;
+  font-weight: 600;
   border-left: 3px solid transparent;
+  transition: background 0.15s, color 0.15s;
 }
-.pc-nav__link:hover { background: var(--uz-surface2); }
+.pc-nav__link:hover { background: var(--uz-surface2); color: var(--uz-text); }
 .pc-nav__link.active {
   background: var(--uz-surface2);
-  border-left-color: var(--uz-gold);
-  color: var(--uz-gold);
+  border-left-color: var(--uz-text);
+  color: var(--uz-text);
 }
-.pc-nav__icon { font-size: 14px; line-height: 1; }
+/* Tabler 線アイコン（スマホ/iPad sidebar-item__icon と同寸） */
+.pc-nav__icon { font-size: 21px; line-height: 1; flex-shrink: 0; width: 24px; text-align: center; }
 
 .pc-recent {
   flex: 1;
@@ -102,30 +105,41 @@ body.pc-body {
 
 /* ── メイン ────────────────────────────────── */
 .pc-main {
-  margin-left: 180px;
+  margin-left: 208px;
   flex: 1;
   padding: 0;
 }
 .pc-header {
-  padding: 14px 24px;
-  background: var(--uz-surface);
+  padding: 22px 28px 18px;
+  background: var(--uz-bg);
   border-bottom: 1px solid var(--uz-border);
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: baseline;
 }
-.pc-header__title { font-size: 15px; font-weight: 600; color: var(--uz-gold); }
-.pc-header__meta  { font-size: 12px; color: var(--uz-text2); }
+.pc-header__title {
+  font-size: 19px;
+  font-weight: 700;
+  color: var(--uz-text);
+  letter-spacing: 0.04em;
+}
+.pc-header__meta  {
+  font-size: 13px;
+  color: var(--uz-text2);
+  display: flex;
+  align-items: baseline;
+}
+.pc-header__meta #pc-header-store { font-weight: 600; color: var(--uz-text); }
 
-.pc-body-inner { padding: 20px 24px 40px; }
+.pc-body-inner { padding: 24px 28px 48px; }
 
 /* ── 共通UI ────────────────────────────────── */
 .pc-card {
   background: var(--uz-surface);
   border: 1px solid var(--uz-border);
-  border-radius: 6px;
-  padding: 16px;
-  margin-bottom: 16px;
+  border-radius: var(--radius-sm, 8px);
+  padding: 18px;
+  margin-bottom: 18px;
 }
 
 .pc-btn {
@@ -273,10 +287,12 @@ body.pc-body {
 
 /* ── 設定セクション ────────────────────────── */
 .pc-section-title {
-  font-size: 13px;
-  color: var(--uz-gold);
-  margin: 20px 0 10px;
-  padding-bottom: 4px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--uz-text);
+  letter-spacing: 0.03em;
+  margin: 24px 0 12px;
+  padding-bottom: 6px;
   border-bottom: 1px solid var(--uz-border);
 }
 

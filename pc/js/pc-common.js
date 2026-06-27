@@ -2,12 +2,14 @@
 'use strict';
 
 // PC版サイドバーメニュー定義（戦略思想メモ§3-9-3 確定の4項目構造）
-// 順序・href・ラベルはここで一元管理する
+// 順序・href・ラベルはここで一元管理する。
+// 課題②：アイコンは記号直書き（○★👤⚙）を廃し、スマホ/iPadと同じ Tabler 線アイコンへ統一
+// （02_画面仕様.md §2-2「アイコンはスマホと統一」準拠・月次管理＝月 ti-moon）。
 const PC_NAV = [
-  { href: 'pc-monthly.html',    label: '月次管理',  icon: '○' },
-  { href: 'pc-projects.html',   label: '案件管理',  icon: '★' },
-  { href: 'pc-attendance.html', label: '出勤管理',  icon: '👤', visibilityKey: 'attendance_menu' },
-  { href: 'pc-settings.html',   label: '設定',      icon: '⚙' }
+  { href: 'pc-monthly.html',    label: '月次管理',  icon: 'ti-moon' },
+  { href: 'pc-projects.html',   label: '案件管理',  icon: 'ti-star' },
+  { href: 'pc-attendance.html', label: '出勤管理',  icon: 'ti-users',    visibilityKey: 'attendance_menu' },
+  { href: 'pc-settings.html',   label: '設定',      icon: 'ti-settings' }
 ];
 
 function pcRenderSidebar(activeHref) {
@@ -24,7 +26,7 @@ function pcRenderSidebar(activeHref) {
     .map(n => {
       const cls = n.href === activeHref ? 'pc-nav__link active' : 'pc-nav__link';
       const labelText = (n.uiLabelKey && uiLabels[n.uiLabelKey]) ? uiLabels[n.uiLabelKey] : n.label;
-      const iconHtml = n.icon ? `<span class="pc-nav__icon" aria-hidden="true">${n.icon}</span>` : '';
+      const iconHtml = n.icon ? `<i class="ti ${n.icon} pc-nav__icon" aria-hidden="true"></i>` : '';
       return `<a href="${n.href}" class="${cls}">${iconHtml}<span>${escHtml(labelText)}</span></a>`;
     }).join('');
 
