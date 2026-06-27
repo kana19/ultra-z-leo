@@ -53,12 +53,27 @@ function pcRenderHeader(title) {
     <header class="pc-header">
       <div class="pc-header__title">${title}</div>
       <div class="pc-header__meta">
-        <span>${escHtml(storeName)}</span>
+        <span id="pc-header-store">${escHtml(storeName)}</span>
         <span style="margin-left:16px;" id="pc-clock">${fmtDateTime(now)}</span>
       </div>
     </header>
   `;
 }
+
+/* 課題1：PCヘッダーの店名再同期。
+ * pcRenderHeader は起動時に localStorage を一度だけ読むため、settings 同期で
+ * storeName が確定（複製元＝デモなら「サンプル店舗（デモ）」）しても更新されず、
+ * 前店舗の残留店名（例：テスト0623）が表示され続けていた。
+ * スマホ/iPad のブランド再描画（uzRenderAllBrands）に相当する経路を PC にも与える。 */
+function pcSyncHeaderStore() {
+  const el = document.getElementById('pc-header-store');
+  if (!el) return;
+  const name = (typeof uzGetStoreName === 'function')
+    ? uzGetStoreName('')
+    : ((typeof localStorage !== 'undefined' && localStorage.getItem('uz_store_name')) || '');
+  el.textContent = name;
+}
+document.addEventListener('uz:settings-synced', pcSyncHeaderStore);
 
 function escHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, c =>

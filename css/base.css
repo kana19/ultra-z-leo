@@ -1344,16 +1344,20 @@ body.is-ipad .ipad-home-dashboard {
   overflow: hidden;
 }
 
-/* 左カラム：①損益＋②グラフ＋CSVを縦積み（上詰め・右カラム見出しと高さを揃える） */
+/* 左カラム：①損益＋②グラフ＋CSVを縦積み（上詰め）
+   ③b：固定高(100dvh-52px)＋overflow:hidden だと、PWA未インストールで Safari の
+   URL/タブバーが高さを食う場面で最下部の「税理士用CSV ダウンロード実行」が切れていた。
+   space-between→flex-start（上詰め）＋overflow-y:auto（必要時のみ縦スクロール）で、
+   ブラウザchromeの有無に関わらず CSV ボタンへ必ず到達できるようにする。 */
 body.is-ipad .ipad-home-left {
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 0;
   border-right: 1px solid var(--uz-border);
   padding: 28px 24px 32px;
   box-sizing: border-box;
-  overflow: hidden;
+  overflow-y: auto;
 }
 
 /* 右カラム：③直近入力（全高） */
