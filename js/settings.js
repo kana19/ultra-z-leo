@@ -27,7 +27,7 @@ const DEFAULT_STAFF = [];
 const DEFAULT_SERVICES = [];
 const DEFAULT_PURCHASES = [];  // 業種固有・ターゲット社が納品時に投入する想定（フォールバックは空）
 // 既存ユーザーで masterQuota 未投入時のフォールバック（01_商品体系.md §4-3）
-const DEFAULT_MASTER_QUOTA = { serviceMasterQuota: 5, purchaseMasterQuota: 3, costOptionalQuota: 5 };
+const DEFAULT_MASTER_QUOTA = { serviceMasterQuota: 5, purchaseMasterQuota: 5, costOptionalQuota: 5 };
 
 /* ── パスワード関連ヘルパー（スタッフ枠パスワード）──────────────
  * 戦略思想§3-7「商売の都合優先」+ システム仕様書§10-3 準拠：
