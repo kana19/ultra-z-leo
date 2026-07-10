@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#FFFFFF">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>FAX受注 — ウルトラZAIMUくん</title>
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" href="icons/icon-192.png">
+  <link rel="manifest" href="manifest.json">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/pages.css">
+  <link rel="stylesheet" href="css/forms.css">
+  <style>
+    /* FAX受注管理：確認・修正・確定は人手（知識MD 05§8-1 AI自動確定禁止）。 */
+    .fax-header { padding: 16px 16px 8px; background: var(--uz-bg, #fff); }
+    .fax-header__title { font-size: 18px; font-weight: 700; color: var(--uz-text); }
+    .fax-header__sub { font-size: 12px; color: var(--uz-muted); margin-top: 2px; }
+
+    .fax-status {
+      margin: 12px 16px; padding: 10px 12px; border-radius: 10px;
+      font-size: 12px; line-height: 1.6; border: 1px solid var(--uz-border);
+      background: var(--uz-surface); color: var(--uz-muted);
+    }
+    .fax-status--off { background: #fff7ed; border-color: #fed7aa; color: #9a3412; }
+    .fax-status b { color: var(--uz-text); font-weight: 700; }
+
+    .fax-card {
+      background: var(--uz-surface); border: 1px solid var(--uz-border);
+      border-radius: 12px; margin: 12px 16px; overflow: hidden;
+    }
+    .fax-card__head { padding: 12px 14px; font-weight: 700; font-size: 14px; border-bottom: 1px solid var(--uz-border); }
+    .fax-card__body { padding: 12px 14px; }
+
+    .fax-order { border: 1px solid var(--uz-border); border-radius: 10px; margin-bottom: 12px; overflow: hidden; }
+    .fax-order__head {
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+      padding: 10px 12px; background: var(--uz-bg, #f8fafc); border-bottom: 1px solid var(--uz-border);
+    }
+    .fax-order__id { font-weight: 700; font-size: 13px; }
+    .fax-badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; font-weight: 700; }
+    .fax-badge--draft { background: #fef9c3; color: #854d0e; }
+    .fax-badge--confirmed { background: #dcfce7; color: #166534; }
+    .fax-badge--conf { background: #e0e7ff; color: #3730a3; }
+    .fax-badge--warn { background: #fee2e2; color: #991b1b; }
+    .fax-order__meta { font-size: 11px; color: var(--uz-muted); width: 100%; }
+
+    .fax-line { display: grid; grid-template-columns: 1fr 64px 84px; gap: 6px; padding: 8px 12px; align-items: end; border-top: 1px dashed var(--uz-border); }
+    .fax-line:first-child { border-top: none; }
+    .fax-line label { font-size: 10px; color: var(--uz-muted); display: block; margin-bottom: 2px; }
+    .fax-line input { width: 100%; box-sizing: border-box; padding: 6px 8px; font-size: 13px; border: 1px solid var(--uz-border); border-radius: 8px; background: #fff; }
+    .fax-line--full { grid-template-columns: 1fr; }
+
+    .fax-actions { display: flex; gap: 8px; padding: 10px 12px; flex-wrap: wrap; }
+    .fax-btn { flex: 1; min-width: 96px; padding: 10px; border-radius: 10px; font-size: 13px; font-weight: 700; border: 1px solid var(--uz-border); background: #fff; color: var(--uz-text); cursor: pointer; }
+    .fax-btn--primary { background: var(--uz-accent, #2563eb); color: #fff; border-color: transparent; }
+    .fax-btn--danger { color: #b91c1c; border-color: #fecaca; }
+    .fax-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+    .fax-capture { display: flex; flex-direction: column; gap: 8px; }
+    .fax-capture input[type=file] { font-size: 13px; }
+    .fax-empty { text-align: center; color: var(--uz-muted); font-size: 13px; padding: 20px; }
+    .fax-note { font-size: 11px; color: var(--uz-muted); margin-top: 6px; }
+  </style>
+</head>
+<body data-page="fax">
+
+<!-- iPad サイドバーナビ（中身は app.js uzRenderSidebar が生成） -->
+<nav class="nav-sidebar" id="nav-sidebar" data-active="fax" aria-label="メインナビゲーション"></nav>
+
+<div class="page-wrapper">
+
+  <header class="fax-header">
+    <span class="fax-header__title">FAX受注管理</span>
+    <div class="fax-header__sub">受け取ったFAX注文を電子化 → 内容を確認・修正 → 確定して受注登録します。</div>
+  </header>
+
+  <div id="fax-status" class="fax-status">状態を確認中…</div>
+
+  <!-- Tier1：撮影して読み取り -->
+  <section class="fax-card" id="fax-capture-card">
+    <div class="fax-card__head">紙のFAXを撮影して取り込む</div>
+    <div class="fax-card__body">
+      <div class="fax-capture">
+        <input type="file" id="fax-file" accept="image/*" capture="environment">
+        <button type="button" id="fax-scan-btn" class="fax-btn fax-btn--primary">AIで読み取り → 下書き作成</button>
+        <div class="fax-note">※読み取り結果は下書きです。必ず内容を確認・修正してから確定してください（誤発注防止）。</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 下書き（要確認） -->
+  <section class="fax-card">
+    <div class="fax-card__head">下書き（確認・修正・確定）</div>
+    <div class="fax-card__body" id="fax-drafts">
+      <div class="fax-empty">読み込み中…</div>
+    </div>
+  </section>
+
+  <!-- 確定済み -->
+  <section class="fax-card">
+    <div class="fax-card__head">確定済み受注</div>
+    <div class="fax-card__body" id="fax-confirmed">
+      <div class="fax-empty">—</div>
+    </div>
+  </section>
+
+</div><!-- /page-wrapper -->
+
+<!-- ボトムナビゲーション（スマホ用） -->
+<nav class="bottom-nav" aria-label="メインナビゲーション">
+  <a href="index.html" class="nav-item">
+    <i class="ti ti-planet nav-item__icon" aria-hidden="true"></i>
+    <span class="nav-item__label">ホーム</span>
+  </a>
+  <a href="history.html" class="nav-item">
+    <i class="ti ti-moon nav-item__icon" aria-hidden="true"></i>
+    <span class="nav-item__label">月次管理</span>
+  </a>
+  <a href="fax-orders.html" class="nav-item nav-item--active" aria-current="page">
+    <i class="ti ti-file-invoice nav-item__icon" aria-hidden="true"></i>
+    <span class="nav-item__label">FAX受注</span>
+  </a>
+  <a href="settings.html" class="nav-item">
+    <i class="ti ti-settings nav-item__icon" aria-hidden="true"></i>
+    <span class="nav-item__label">設定</span>
+  </a>
+</nav>
+
+<div id="loading-overlay" class="loading-overlay" aria-hidden="true">
+  <div class="spinner"></div>
+</div>
+
+<script src="js/app.js"></script>
+<script src="js/fax-orders.js"></script>
+</body>
+</html>

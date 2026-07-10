@@ -318,6 +318,18 @@
     <!-- ── 左カラム（iPad）/ 通常表示（スマホ） ─── -->
     <div class="ipad-col--left">
 
+        <!-- FAX受注ランチャー（警備隊第5隊員・fax_order_ocr 有効時のみ・app.js uzApplyFeatureGates が表示制御） -->
+        <a href="fax-orders.html" class="card" data-feature="fax_order_ocr" style="display:none; text-decoration:none; margin-bottom:12px;">
+          <div class="card__body" style="display:flex; align-items:center; gap:10px;">
+            <i class="ti ti-file-invoice" style="font-size:22px; color:var(--uz-accent,#2563eb);" aria-hidden="true"></i>
+            <div>
+              <div style="font-weight:700; color:var(--uz-text);">FAX受注管理</div>
+              <div style="font-size:12px; color:var(--uz-muted);">届いたFAX注文の確認・確定はこちら</div>
+            </div>
+            <i class="ti ti-chevron-right" style="margin-left:auto; color:var(--uz-muted);" aria-hidden="true"></i>
+          </div>
+        </a>
+
         <!-- 損益パネル -->
         <div id="panel-pl" class="home-tab-panel">
           <div class="card">

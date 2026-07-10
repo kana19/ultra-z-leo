@@ -70,7 +70,36 @@ function doGet(e) {
       case 'getShiftsForStaff':         result = getShiftsForStaff(data);                 break;
       case 'saveShift':                 result = saveShift(data);                         break;
       case 'deleteShift':               result = deleteShift(data);                       break;
+      // 警備隊第5隊員 FAX注文自動管理（fax_order_ocr・→ 知識MD 05§8-7）
+      case 'getOrders':                 result = getOrders(data);                         break;
+      case 'saveOrder':                 result = saveOrder(data);                         break;
+      case 'updateOrder':               result = updateOrder(data);                       break;
+      case 'deleteOrder':               result = deleteOrder(data);                       break;
+      case 'faxOrderScanTier1':         result = faxOrderScanTier1(data);                 break;
+      case 'faxOrderPoll':              result = faxOrderGmailPoll();                     break;
+      case 'getFaxOrderConfig':         result = getFaxOrderConfig();                     break;
+      case 'setupFaxOrderTrigger':      result = setupFaxOrderTrigger();                  break;
       default: result = { status: 'error', message: '不明なアクション: ' + action };
+    }
+  } catch (err) {
+    result = { status: 'error', message: err.message };
+  }
+  return ContentService
+    .createTextOutput(JSON.stringify(result))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+// doPost：GETのURL長制限を超える大きなペイロード（Tier1のFAX撮影base64画像）用。
+// body は JSON文字列 {action, data}。Content-Type は text/plain 前提（CORSプリフライト回避）。
+function doPost(e) {
+  var result;
+  try {
+    var body = JSON.parse((e && e.postData && e.postData.contents) || '{}');
+    var action = body.action;
+    var data = body.data || {};
+    switch (action) {
+      case 'faxOrderScanTier1': result = faxOrderScanTier1(data); break;
+      default: result = { status: 'error', message: 'doPost 未対応アクション: ' + action };
     }
   } catch (err) {
     result = { status: 'error', message: err.message };
@@ -3210,4 +3239,391 @@ function getSalesCategoryRanking_(months) {
   return Array.from(counter.entries())
     .map(function(entry) { return { code: entry[0], count: entry[1] }; })
     .sort(function(a, b) { return b.count - a.count; });
+}
+
+// =====================================================================
+// 警備隊 第5隊員：FAX注文自動管理（fax_order_ocr）
+// 正本仕様＝知識MD 05§8-7 ／ データ＝03§1-6 orders シート ／ フラグ＝03§6 featureVisibility.fax_order_ocr
+// 出自＝第1隊員レシートOCR（§8-2）の複製。変えるのは (a)抽出プロンプト＝注文項目 (b)書込先＝orders。
+// 2Tier： Tier1＝紙FAXをスマホ撮影（faxOrderScanTier1）／ Tier2＝メール転送FAX自動取込（faxOrderGmailPoll）。
+// §8-1 AI自動確定禁止を堅持：取込は「下書き(draft)」まで。確認・修正・確定(confirmed)は人手。
+// =====================================================================
+
+// --- 設定（Script Properties・運営が納品時に設定） -------------------
+// CLAUDE_API_KEY   : Anthropic APIキー（ターゲット社が一括契約・§8-1 サーバー側管理／PWAに露出しない）
+// CLAUDE_MODEL     : 既定 'claude-opus-4-8'（コスト調整は運営がここで切替＝§8-1 コスト管理）
+// FAX_MONTHLY_CAP  : 月間の撮影/添付処理上限枚数（既定 500・従量課金の頭打ち）
+// FAX_NOTIFY_EMAIL : 着信通知の宛先（未設定なら実行ユーザーのアドレス）
+// FAX_GMAIL_QUERY  : Tier2 のGmail検索クエリ（既定 'has:attachment filename:pdf -label:fax-processed newer_than:14d'）
+const FAX_PROCESSED_LABEL = 'fax-processed';
+const FAX_TRIGGER_HANDLER = 'faxOrderGmailPoll';
+
+function _faxProp_(key, fallback) {
+  var v = PropertiesService.getScriptProperties().getProperty(key);
+  return (v === null || v === '') ? fallback : v;
+}
+
+function getFaxOrderConfig() {
+  var enabled = false;
+  try {
+    var fv = getSettings().featureVisibility || {};
+    enabled = fv.fax_order_ocr === true;
+  } catch (e) { /* settings 未整備時は false */ }
+  var hasTrigger = ScriptApp.getProjectTriggers().some(function(t) {
+    return t.getHandlerFunction() === FAX_TRIGGER_HANDLER;
+  });
+  var quota = _faxQuota_();
+  return {
+    status: 'ok',
+    enabled: enabled,
+    apiKeyConfigured: !!_faxProp_('CLAUDE_API_KEY', ''),
+    model: _faxProp_('CLAUDE_MODEL', 'claude-opus-4-8'),
+    tier2TriggerInstalled: hasTrigger,
+    monthlyCap: Number(_faxProp_('FAX_MONTHLY_CAP', '500')),
+    monthlyUsed: quota.used,
+    month: quota.month
+  };
+}
+
+// --- コスト上限（月次・撮影/添付枚数基準・§8-2/§8-1） ---------------
+function _faxQuota_() {
+  var month = Utilities.formatDate(new Date(), _faxTz_(), 'yyyy-MM');
+  var key = 'FAX_USED_' + month;
+  var used = Number(_faxProp_(key, '0')) || 0;
+  return { month: month, key: key, used: used };
+}
+function _faxTz_() {
+  try { return _ss_().getSpreadsheetTimeZone() || 'Asia/Tokyo'; } catch (e) { return 'Asia/Tokyo'; }
+}
+function _faxConsumeQuota_(n) {
+  var cap = Number(_faxProp_('FAX_MONTHLY_CAP', '500')) || 0;
+  var q = _faxQuota_();
+  if (cap > 0 && q.used + n > cap) {
+    throw new Error('FAX注文の月間処理上限（' + cap + '枚）に達しました。上限は運営(FAX_MONTHLY_CAP)で調整できます。');
+  }
+  PropertiesService.getScriptProperties().setProperty(q.key, String(q.used + n));
+}
+
+// --- Claude API 本実装（§8-1：APIキーはGAS側・フロント非露出） -------
+// attachments: [{ base64, mimeType }] （image/* は image ブロック・application/pdf は document ブロック）
+// 応答テキスト（JSON文字列）を返す。呼び出し側でパースする。
+function callClaudeAPI(promptText, attachments) {
+  var apiKey = _faxProp_('CLAUDE_API_KEY', '');
+  if (!apiKey) throw new Error('CLAUDE_API_KEY が未設定です（運営がScript Propertiesに設定してください）。');
+  var model = _faxProp_('CLAUDE_MODEL', 'claude-opus-4-8');
+
+  var content = [];
+  (attachments || []).forEach(function(att) {
+    var mime = att.mimeType || 'image/jpeg';
+    if (mime === 'application/pdf') {
+      content.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: att.base64 } });
+    } else {
+      content.push({ type: 'image', source: { type: 'base64', media_type: mime, data: att.base64 } });
+    }
+  });
+  content.push({ type: 'text', text: promptText });
+
+  var payload = {
+    model: model,
+    max_tokens: 4096,
+    messages: [{ role: 'user', content: content }]
+  };
+
+  var resp = UrlFetchApp.fetch('https://api.anthropic.com/v1/messages', {
+    method: 'post',
+    contentType: 'application/json',
+    muteHttpExceptions: true,
+    headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+    payload: JSON.stringify(payload)
+  });
+
+  var code = resp.getResponseCode();
+  if (code !== 200) {
+    throw new Error('Claude API エラー HTTP ' + code + ': ' + resp.getContentText().slice(0, 300));
+  }
+  var body = JSON.parse(resp.getContentText());
+  if (body.stop_reason === 'refusal') {
+    throw new Error('Claude API が応答を拒否しました（refusal）。');
+  }
+  var textBlock = (body.content || []).filter(function(b) { return b.type === 'text'; })[0];
+  return textBlock ? textBlock.text : '';
+}
+
+// --- 抽出（プロンプト＋パース） -------------------------------------
+function _faxExtractPrompt_() {
+  return [
+    'あなたはFAX注文書を読み取る事務アシスタントです。',
+    '添付は1件の受注FAX（PDFまたは画像）です。記載された注文内容を構造化JSONで返してください。',
+    '出力は次のJSONのみ（前後に説明文やコードブロック記号を付けない）：',
+    '{',
+    '  "supplierName": "発注元(取引先)名。読み取れなければ空文字",',
+    '  "senderFax": "先方FAX番号。読み取れなければ空文字",',
+    '  "desiredDeliveryDate": "納品希望日 YYYY-MM-DD。読み取れなければ空文字",',
+    '  "items": [ { "productName":"商品名", "quantity":数量(数値), "unitPrice":単価(数値・不明は0), "note":"備考" } ],',
+    '  "confidence": 0.0〜1.0 の読取り信頼度,',
+    '  "memo": "全体の注記（判読不能箇所など）"',
+    '}',
+    '数量・単価は数値のみ（カンマ・単位を除く）。判読できない項目は空文字か0にし、推測で埋めないこと。'
+  ].join('\n');
+}
+
+function extractFaxOrder(base64, mimeType) {
+  _faxConsumeQuota_(1);
+  var raw = callClaudeAPI(_faxExtractPrompt_(), [{ base64: base64, mimeType: mimeType }]);
+  var jsonText = _faxStripToJson_(raw);
+  var parsed;
+  try { parsed = JSON.parse(jsonText); }
+  catch (e) { throw new Error('AI応答のJSON解析に失敗しました。手入力での登録をご利用ください。'); }
+  parsed.items = Array.isArray(parsed.items) ? parsed.items : [];
+  parsed.confidence = Number(parsed.confidence) || 0;
+  return parsed;
+}
+
+function _faxStripToJson_(text) {
+  if (!text) return '{}';
+  var s = String(text).replace(/```json/gi, '').replace(/```/g, '').trim();
+  var a = s.indexOf('{'); var b = s.lastIndexOf('}');
+  return (a >= 0 && b > a) ? s.slice(a, b + 1) : s;
+}
+
+// --- orders シート（03§1-6・存在時作成） ---------------------------
+function _faxOrdersSheet_() {
+  var ss = _ss_();
+  var sh = ss.getSheetByName('orders');
+  if (!sh) {
+    sh = ss.insertSheet('orders');
+    sh.getRange('A1:Q1').setValues([[
+      '受注ID', '明細No', '顧客ID', '発注元', '先方FAX番号', '商品名', '数量', '単価', '金額',
+      '納品希望日', '取込Tier', '状態', 'confidence', 'ソース', 'メモ', '登録日時', '確定日時'
+    ]]).setFontWeight('bold');
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+
+function _faxGenerateOrderId_(date) {
+  var ymd = Utilities.formatDate(date || new Date(), _faxTz_(), 'yyyyMMdd');
+  var sh = _faxOrdersSheet_();
+  var last = sh.getLastRow();
+  var prefix = 'fo-' + ymd;
+  var n = 0;
+  if (last >= 2) {
+    var ids = sh.getRange(2, 1, last - 1, 1).getValues();
+    var seen = {};
+    ids.forEach(function(r) {
+      var id = String(r[0] || '');
+      if (id.indexOf(prefix) === 0) seen[id] = true;
+    });
+    n = Object.keys(seen).length;
+  }
+  return prefix + ('0000' + (n + 1)).slice(-4);
+}
+
+// 抽出結果を下書き(draft)として orders に書き込む（§8-1：確定はしない）
+function _faxSaveDraft_(extracted, meta) {
+  meta = meta || {};
+  var sh = _faxOrdersSheet_();
+  var now = new Date();
+  var orderId = _faxGenerateOrderId_(now);
+  var senderFax = extracted.senderFax || meta.senderFax || '';
+  var customerId = _faxMatchCustomerByFax_(senderFax);
+  var items = (extracted.items && extracted.items.length) ? extracted.items : [{ productName: '', quantity: '', unitPrice: 0, note: '' }];
+  var rows = items.map(function(it, i) {
+    var qty = Number(it.quantity) || 0;
+    var price = Number(it.unitPrice) || 0;
+    return [
+      orderId, i + 1, customerId, extracted.supplierName || '', senderFax,
+      it.productName || '', qty, price, qty * price,
+      extracted.desiredDeliveryDate || '', meta.tier || '', 'draft',
+      extracted.confidence || 0, meta.source || '', it.note || extracted.memo || '', now, ''
+    ];
+  });
+  sh.getRange(sh.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
+  return { orderId: orderId, customerId: customerId, lineCount: rows.length, confidence: extracted.confidence || 0 };
+}
+
+// 先方FAX番号 → 顧客ID 照合（customers シートに「先方FAX番号」列がある前提・無ければ空）
+function _faxMatchCustomerByFax_(faxNumber) {
+  if (!faxNumber) return '';
+  var digits = String(faxNumber).replace(/[^0-9]/g, '');
+  if (!digits) return '';
+  var ss = _ss_();
+  var sh = ss.getSheetByName('customers');
+  if (!sh || sh.getLastRow() < 2) return '';
+  var values = sh.getDataRange().getValues();
+  var header = values[0].map(function(h) { return String(h).trim(); });
+  var idCol = header.indexOf('顧客No'); if (idCol < 0) idCol = 0;
+  var faxCol = header.indexOf('先方FAX番号');
+  if (faxCol < 0) faxCol = header.indexOf('FAX番号');
+  if (faxCol < 0) return '';
+  for (var i = 1; i < values.length; i++) {
+    var rowFax = String(values[i][faxCol] || '').replace(/[^0-9]/g, '');
+    if (rowFax && rowFax === digits) return String(values[i][idCol] || '');
+  }
+  return '';
+}
+
+// --- Tier1：スマホ撮影（PWAから base64 で受領） --------------------
+function faxOrderScanTier1(data) {
+  data = data || {};
+  if (!data.imageBase64) throw new Error('画像データ(imageBase64)がありません。');
+  var mime = data.mimeType || 'image/jpeg';
+  var extracted = extractFaxOrder(data.imageBase64, mime);
+  var saved = _faxSaveDraft_(extracted, { tier: 'tier1', source: 'tier1-photo' });
+  return { status: 'ok', draft: saved, extracted: extracted };
+}
+
+// --- Tier2：メール転送FAX 自動取込（時間主導トリガーで実行） --------
+function faxOrderGmailPoll() {
+  var query = _faxProp_('FAX_GMAIL_QUERY', 'has:attachment filename:pdf -label:' + FAX_PROCESSED_LABEL + ' newer_than:14d');
+  var label = _faxEnsureLabel_(FAX_PROCESSED_LABEL);
+  var threads = GmailApp.search(query, 0, 20);
+  var processed = 0, drafts = 0, errors = 0;
+  threads.forEach(function(thread) {
+    try {
+      thread.getMessages().forEach(function(msg) {
+        var atts = msg.getAttachments({ includeInlineImages: false });
+        atts.forEach(function(att) {
+          if (att.getContentType() !== 'application/pdf') return;
+          var extracted = extractFaxOrder(Utilities.base64Encode(att.getBytes()), 'application/pdf');
+          var saved = _faxSaveDraft_(extracted, {
+            tier: 'tier2', source: 'gmail:' + msg.getId(),
+            senderFax: _faxSenderFaxFromEmail_(msg)
+          });
+          drafts++;
+          _faxNotify_(
+            '【FAX受注・下書き作成】' + (extracted.supplierName || '発注元不明'),
+            'FAX注文を自動取込し、下書きを作成しました。内容を確認・修正のうえ確定してください。\n' +
+            '受注ID: ' + saved.orderId + '\n明細数: ' + saved.lineCount +
+            '\n信頼度: ' + Math.round((extracted.confidence || 0) * 100) + '%\n' +
+            (saved.customerId ? '照合顧客ID: ' + saved.customerId : '※先方FAX番号が顧客マスタと一致せず未紐付け') +
+            '\n件名: ' + msg.getSubject()
+          );
+        });
+      });
+      thread.addLabel(label);
+      processed++;
+    } catch (e) {
+      errors++;
+      _faxNotify_('【FAX受注・取込エラー】', 'スレッド「' + thread.getFirstMessageSubject() + '」の取込に失敗: ' + e.message);
+    }
+  });
+  return { status: 'ok', threads: processed, drafts: drafts, errors: errors };
+}
+
+function _faxSenderFaxFromEmail_(msg) {
+  // 件名・本文からFAX番号らしき数字列を拾う（インターネットFAXは件名に発信番号を載せることが多い）
+  var text = (msg.getSubject() || '') + ' ' + (msg.getPlainBody() || '').slice(0, 500);
+  var m = text.match(/0\d{1,3}[-\s]?\d{2,4}[-\s]?\d{3,4}/);
+  return m ? m[0] : '';
+}
+
+function _faxEnsureLabel_(name) {
+  return GmailApp.getUserLabelByName(name) || GmailApp.createLabel(name);
+}
+
+function _faxNotify_(subject, body) {
+  var to = _faxProp_('FAX_NOTIFY_EMAIL', '');
+  if (!to) { try { to = Session.getEffectiveUser().getEmail(); } catch (e) { to = ''; } }
+  if (!to) return;
+  try { MailApp.sendEmail(to, subject, body); } catch (e) { /* 通知失敗は本処理を止めない */ }
+}
+
+// Tier2 の時間主導トリガー設置（納品手順・冪等） -------------------
+function setupFaxOrderTrigger() {
+  var exists = ScriptApp.getProjectTriggers().some(function(t) {
+    return t.getHandlerFunction() === FAX_TRIGGER_HANDLER;
+  });
+  if (!exists) {
+    ScriptApp.newTrigger(FAX_TRIGGER_HANDLER).timeBased().everyMinutes(15).create();
+  }
+  _faxEnsureLabel_(FAX_PROCESSED_LABEL);
+  return { status: 'ok', triggerInstalled: true, everyMinutes: 15 };
+}
+
+function removeFaxOrderTrigger() {
+  ScriptApp.getProjectTriggers().forEach(function(t) {
+    if (t.getHandlerFunction() === FAX_TRIGGER_HANDLER) ScriptApp.deleteTrigger(t);
+  });
+  return { status: 'ok', triggerInstalled: false };
+}
+
+// --- 確認UI用アクション（一覧・確定・修正・削除） -----------------
+function getOrders(data) {
+  data = data || {};
+  var sh = _faxOrdersSheet_();
+  var last = sh.getLastRow();
+  if (last < 2) return { status: 'ok', orders: [] };
+  var values = sh.getRange(2, 1, last - 1, 17).getValues();
+  var tz = _faxTz_();
+  var rows = values.map(function(r, i) {
+    return {
+      rowIndex: i + 2,
+      orderId: r[0], lineNo: r[1], customerId: r[2], supplierName: r[3], senderFax: r[4],
+      productName: r[5], quantity: r[6], unitPrice: r[7], amount: r[8], desiredDeliveryDate: r[9],
+      tier: r[10], state: r[11], confidence: r[12], source: r[13], memo: r[14],
+      createdAt: r[15] instanceof Date ? Utilities.formatDate(r[15], tz, 'yyyy-MM-dd HH:mm') : r[15],
+      confirmedAt: r[16] instanceof Date ? Utilities.formatDate(r[16], tz, 'yyyy-MM-dd HH:mm') : r[16]
+    };
+  });
+  if (data.state) rows = rows.filter(function(o) { return o.state === data.state; });
+  return { status: 'ok', orders: rows };
+}
+
+// 明細行の修正（rowIndex 指定）
+function updateOrder(data) {
+  data = data || {};
+  var sh = _faxOrdersSheet_();
+  var idx = Number(data.rowIndex);
+  if (!idx || idx < 2 || idx > sh.getLastRow()) throw new Error('対象行が不正です。');
+  var map = { customerId: 3, supplierName: 4, senderFax: 5, productName: 6, quantity: 7, unitPrice: 8, desiredDeliveryDate: 10, memo: 15 };
+  Object.keys(map).forEach(function(k) {
+    if (data[k] !== undefined) sh.getRange(idx, map[k]).setValue(data[k]);
+  });
+  // 金額は数量×単価で再計算
+  var qty = Number(sh.getRange(idx, 7).getValue()) || 0;
+  var price = Number(sh.getRange(idx, 8).getValue()) || 0;
+  sh.getRange(idx, 9).setValue(qty * price);
+  return { status: 'ok', rowIndex: idx };
+}
+
+// 確定（§8-1：人手の明示操作で draft → confirmed）。orderId 単位で全明細を確定
+function saveOrder(data) {
+  data = data || {};
+  var orderId = String(data.orderId || '');
+  if (!orderId) throw new Error('orderId が必要です。');
+  var sh = _faxOrdersSheet_();
+  var last = sh.getLastRow();
+  if (last < 2) throw new Error('受注データがありません。');
+  var range = sh.getRange(2, 1, last - 1, 17);
+  var values = range.getValues();
+  var now = new Date();
+  var n = 0;
+  values.forEach(function(r) {
+    if (String(r[0]) === orderId) { r[11] = 'confirmed'; r[16] = now; n++; }
+  });
+  if (!n) throw new Error('該当する受注が見つかりません: ' + orderId);
+  range.setValues(values);
+  return { status: 'ok', orderId: orderId, confirmedLines: n };
+}
+
+// 削除（rowIndex 単一行 or orderId 全明細）
+function deleteOrder(data) {
+  data = data || {};
+  var sh = _faxOrdersSheet_();
+  if (data.rowIndex) {
+    var idx = Number(data.rowIndex);
+    if (idx < 2 || idx > sh.getLastRow()) throw new Error('対象行が不正です。');
+    sh.deleteRow(idx);
+    return { status: 'ok', deleted: 1 };
+  }
+  var orderId = String(data.orderId || '');
+  if (!orderId) throw new Error('rowIndex または orderId が必要です。');
+  var last = sh.getLastRow();
+  var values = sh.getRange(2, 1, last - 1, 1).getValues();
+  var deleted = 0;
+  for (var i = values.length - 1; i >= 0; i--) {
+    if (String(values[i][0]) === orderId) { sh.deleteRow(i + 2); deleted++; }
+  }
+  return { status: 'ok', deleted: deleted };
 }

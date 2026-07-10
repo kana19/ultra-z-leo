@@ -104,9 +104,10 @@ document.addEventListener('DOMContentLoaded', function() {
    後続の uzRenderAllBrands / uzLoadSidebarTimer / uzInitSidebarDateTime より
    先に実行する必要があるため、最優先の DOMContentLoaded リスナとして本関数を最初に登録する。 */
 const UZ_SIDEBAR_ITEMS = [
-  { key: 'home',     href: 'index.html',    icon: 'ti-planet',   label: 'ホーム'   },
-  { key: 'monthly',  href: 'history.html',  icon: 'ti-moon',     label: '月次管理' },
-  { key: 'settings', href: 'settings.html', icon: 'ti-settings', label: '設定'     }
+  { key: 'home',     href: 'index.html',      icon: 'ti-planet',        label: 'ホーム'   },
+  { key: 'monthly',  href: 'history.html',    icon: 'ti-moon',          label: '月次管理' },
+  { key: 'fax',      href: 'fax-orders.html', icon: 'ti-file-invoice',  label: 'FAX受注', feature: 'fax_order_ocr' },
+  { key: 'settings', href: 'settings.html',   icon: 'ti-settings',      label: '設定'     }
 ];
 
 function uzRenderSidebar() {
@@ -117,10 +118,12 @@ function uzRenderSidebar() {
 
   const itemsHtml = UZ_SIDEBAR_ITEMS.map(function (it) {
     const isActive = it.key === active;
+    // feature 付き項目は既定で隠し、uzApplyFeatureGates が有効時のみ表示する。
+    const gated = it.feature ? (' data-feature="' + it.feature + '" style="display:none"') : '';
     return (
       '<a href="' + it.href + '" class="sidebar-item' +
         (isActive ? ' sidebar-item--active' : '') + '"' +
-        (isActive ? ' aria-current="page"' : '') + '>' +
+        (isActive ? ' aria-current="page"' : '') + gated + '>' +
         '<i class="ti ' + it.icon + ' sidebar-item__icon" aria-hidden="true"></i>' +
         '<span>' + it.label + '</span>' +
       '</a>'
@@ -269,6 +272,38 @@ async function callGAS(action, data = {}) {
   }
   return json;
 }
+
+/* 大きなペイロード用POST（Tier1 FAX撮影のbase64画像等）。
+   text/plain 送信で GAS の CORS プリフライトを回避する（doPost が JSON.parse する）。 */
+async function callGASPost(action, data = {}) {
+  if (UZ_DEMO) return uzDemoResponse(action, data);
+  const res = await fetch(GAS_URL, {
+    method: 'POST',
+    body: JSON.stringify({ action, data })
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const json = await res.json();
+  if (json && json.status === 'error' && typeof json.message === 'string'
+      && json.message.indexOf('__SPREADSHEET_ID__') !== -1) {
+    UZ_DEMO = true;
+    return uzDemoResponse(action, data);
+  }
+  return json;
+}
+
+/* 機能ゲート：featureVisibility が有効な機能のリンク/カード（[data-feature]）だけ表示する。
+   サイドバー等は既定で display:none。fax_order_ocr の実値は getFaxOrderConfig（GAS）を正とする。 */
+async function uzApplyFeatureGates() {
+  const gated = document.querySelectorAll('[data-feature="fax_order_ocr"]');
+  if (!gated.length) return;
+  let enabled = false;
+  try {
+    const res = await callGAS('getFaxOrderConfig');
+    enabled = !!(res && res.enabled);
+  } catch (e) { enabled = false; }
+  gated.forEach(function (el) { el.style.display = enabled ? '' : 'none'; });
+}
+document.addEventListener('DOMContentLoaded', uzApplyFeatureGates);
 
 /* ══════════════════════════════════════════════════════════
    データ層（共通）
