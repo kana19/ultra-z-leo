@@ -76,6 +76,7 @@ function doGet(e) {
       case 'updateOrder':               result = updateOrder(data);                       break;
       case 'deleteOrder':               result = deleteOrder(data);                       break;
       case 'faxOrderScanTier1':         result = faxOrderScanTier1(data);                 break;
+      case 'previewFaxOrder':           result = previewFaxOrder(data);                   break;
       case 'faxOrderPoll':              result = faxOrderGmailPoll();                     break;
       case 'getFaxOrderConfig':         result = getFaxOrderConfig();                     break;
       case 'setupFaxOrderTrigger':      result = setupFaxOrderTrigger();                  break;
@@ -99,6 +100,7 @@ function doPost(e) {
     var data = body.data || {};
     switch (action) {
       case 'faxOrderScanTier1': result = faxOrderScanTier1(data); break;
+      case 'previewFaxOrder':   result = previewFaxOrder(data);   break;
       default: result = { status: 'error', message: 'doPost 未対応アクション: ' + action };
     }
   } catch (err) {
@@ -3363,10 +3365,12 @@ function callClaudeAPI(promptText, attachments) {
 }
 
 // --- 抽出（プロンプト＋パース） -------------------------------------
-// ひな形（faxPatterns）は「取引先ごとのAI読み取り指示書」。発注書は各社で書式が千差万別
-// （1ブロック1注文の産直ギフト／商品行×店舗列のマトリクス発注 等）のため、固定の座標
-// マッピングではなく、取引先ごとの自由記述の指示＋展開ルール＋商品名エイリアスをプロンプトへ
-// 注入し、あらゆるパターンをClaudeに読ませる（→ 05§8-7）。納品時に admin が初期設定する。
+// ひな形（faxPatterns）は「取引先ごとの読み取り方＝readingSpec」。発注書は各社で書式が千差万別
+// （1ブロック1注文の産直ギフト／商品行×店舗列のマトリクス発注 等）だが、取引先ごとに毎回同じ書式
+// なので、サンプル1枚から確定した readingSpec（自由文）＋商品名エイリアスをプロンプトへ注入し、
+// あらゆるパターンをClaudeに読ませる（固定座標マッピングは採らない・→ 05§8-7）。
+// レイアウト種別/展開ルールの人手指定は廃止（サンプルから読み方を確定＝readingSpec に内包）。
+// _faxExpansionText_ は旧データ(expansion)の後方互換表示にのみ残す。
 function _faxExpansionText_(code) {
   switch (String(code)) {
     case 'per_block':    return '1ブロック（明細区切り）＝1注文として読む';
@@ -3390,32 +3394,38 @@ function _faxExtractPrompt_(patterns) {
     '  "confidence": 0.0〜1.0 の読取り信頼度,',
     '  "memo": "全体の注記（判読不能箇所など）"',
     '}',
-    '数量・単価は数値のみ（カンマ・単位を除く）。判読できない項目は空文字か0にし、推測で埋めないこと。'
+    '数量・単価は数値のみ（カンマ・単位を除く）。判読できない項目は空文字か0にし、推測で埋めないこと。',
+    '表が「商品行×店舗列」のマトリクス形式なら、数量が入った各セルを1明細に展開し、その店舗名を storeName に入れてください（数量0・空欄の店舗は作らない）。'
   ];
   var enabled = (patterns || []).filter(function(p) { return p && p.enabled !== false; });
   if (enabled.length) {
     lines.push('');
-    lines.push('■ 既知の取引先ひな形（発注書は取引先ごとに書式が異なります。このFAXが下記のどれに該当するか判定し、該当すればその「読み取り指示」に厳密に従ってください）：');
+    lines.push('■ 既知の取引先ひな形（各取引先のサンプル発注書から確定した「読み取り方」です。このFAXが下記のどれに該当するか判定し、該当すればその読み取り方に厳密に従ってください）：');
     enabled.forEach(function(p, i) {
       lines.push('--- ひな形 ---');
       lines.push('ID: ' + (p.id || ('pat-' + (i + 1))));
       lines.push('取引先名: ' + (p.supplierName || ''));
-      if (p.senderFax)    lines.push('先方FAX番号: ' + p.senderFax);
-      if (p.layoutType)   lines.push('レイアウト種別: ' + p.layoutType);
-      if (p.instructions) lines.push('読み取り指示: ' + p.instructions);
-      if (p.expansion)    lines.push('明細の展開ルール: ' + _faxExpansionText_(p.expansion));
-      if (p.aliases)      lines.push('商品名の読み替え（「表記 => 商品マスタの名称/コード」。抽出後に必ず置換して productName に入れる）:\n' + p.aliases);
+      if (p.senderFax) lines.push('先方FAX番号: ' + p.senderFax);
+      // readingSpec を正とし、旧 instructions は後方互換で流用。旧 expansion があれば読み方へ畳み込む。
+      var spec = p.readingSpec || p.instructions || '';
+      if (p.expansion && p.expansion !== 'auto') spec += (spec ? '\n' : '') + '（展開ルール）' + _faxExpansionText_(p.expansion);
+      if (spec) lines.push('読み取り方: ' + spec);
+      if (p.aliases) lines.push('商品名の読み替え（「表記 => 商品マスタの名称/コード」。抽出後に必ず置換して productName に入れる）:\n' + p.aliases);
     });
     lines.push('--- 以上 ---');
-    lines.push('該当したひな形のIDを matchedPatternId に入れてください。どのひな形にも該当しなければ matchedPatternId は空文字とし、汎用として最善で読み取ってください。');
+    lines.push('該当したひな形のIDを matchedPatternId に入れてください。どのひな形にも該当しなければ matchedPatternId は空文字とし、汎用として最善で読み取ってください（この場合は confidence を控えめにし、人の確認を促してください）。');
   }
   return lines.join('\n');
 }
 
-function extractFaxOrder(base64, mimeType) {
+function extractFaxOrder(base64, mimeType, patternsOverride) {
   _faxConsumeQuota_(1);
-  var patterns = [];
-  try { var s = getSettings(); patterns = (s && s.data && s.data.faxPatterns) || []; } catch (e) {}
+  // patternsOverride があれば優先（admin初期設定で未保存のreadingSpecを試写するため）。
+  var patterns = Array.isArray(patternsOverride) ? patternsOverride : null;
+  if (!patterns) {
+    patterns = [];
+    try { var s = getSettings(); patterns = (s && s.data && s.data.faxPatterns) || []; } catch (e) {}
+  }
   var raw = callClaudeAPI(_faxExtractPrompt_(patterns), [{ base64: base64, mimeType: mimeType }]);
   var jsonText = _faxStripToJson_(raw);
   var parsed;
@@ -3526,6 +3536,32 @@ function faxOrderScanTier1(data) {
   var extracted = extractFaxOrder(data.imageBase64, mime);
   var saved = _faxSaveDraft_(extracted, { tier: 'tier1', source: 'tier1-photo' });
   return { status: 'ok', draft: saved, extracted: extracted };
+}
+
+// --- プレビュー抽出（書き込みなし・検証ハーネスの中核） ----------------
+// 最新コードの抽出結果を orders に一切残さず返す。用途は3つ（→ 05§8-7 検証ハーネス）：
+//   ① ひな形の初期設定：サンプル発注書をアップロードして readingSpec の効きをその場で確認。
+//   ② 複製元デモ／dev検証店：新規店を作らず「最新の状態」を試し読み（データを汚さない）。
+//   ③ 日常の「試し読み」：確定前に読み取り結果だけ先に見たいとき。
+function previewFaxOrder(data) {
+  data = data || {};
+  if (!data.imageBase64) throw new Error('画像データ(imageBase64)がありません。');
+  var mime = data.mimeType || 'image/jpeg';
+  // data.patterns（admin初期設定で編集中の未保存ひな形）があればそれで試写する。
+  var extracted = extractFaxOrder(data.imageBase64, mime, Array.isArray(data.patterns) ? data.patterns : undefined);
+  return { status: 'ok', preview: extracted };
+}
+
+// 【GASエディタ実行用】Drive上のサンプルPDF/画像をIDで指定し、最新の抽出結果を Logger に出す。
+// PWAも店舗生成も不要の"最速の検証ループ"（ordersへは一切書かない・→ 05§8-7 検証ハーネス）。
+// 使い方：fileId を実発注書のDriveファイルIDに置換して実行 → 「実行ログ」で JSON を確認。
+function _faxTestExtract_(fileId) {
+  fileId = fileId || 'ここにDriveのサンプルファイルIDを貼る';
+  var blob = DriveApp.getFileById(fileId).getBlob();
+  var base64 = Utilities.base64Encode(blob.getBytes());
+  var extracted = extractFaxOrder(base64, blob.getContentType());
+  Logger.log(JSON.stringify(extracted, null, 2));
+  return extracted;
 }
 
 // --- Tier2：メール転送FAX 自動取込（時間主導トリガーで実行） --------

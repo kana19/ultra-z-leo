@@ -236,6 +236,36 @@ function uzDemoSummaryForMonth(month) {
   return { sales: 0, cogs: 0, grossProfit: 0, sga: 0, operatingProfit: 0 };
 }
 
+/* FAX受注（第5隊員）のデモ応答。複製元で店舗を作らず「サンプル→プレビュー→修正→確定」の
+   フローを検証できるようにする（→ 05§8-7 検証ハーネス）。getFaxOrderConfig/getOrders/
+   previewFaxOrder は GAS 側が data ラップしない平坦な形なので、ここで同形を返す。 */
+var UZ_DEMO_FAX_PREVIEW = {
+  supplierName: '藤徳物産（デモ）', senderFax: '086-281-9562', desiredDeliveryDate: _uzDemoDate(27),
+  matchedPatternId: '', confidence: 0.62,
+  items: [
+    { productName: '男うどん 冷凍きつねうどん', quantity: 6, unitPrice: 0, storeName: '', note: 'JAN:4595056535096' },
+    { productName: '男うどん 冷凍肉うどん',     quantity: 6, unitPrice: 0, storeName: '', note: 'JAN:4595056535102' }
+  ],
+  memo: 'デモ：これは複製元のダミー抽出です（実際のAI読み取りではありません）。'
+};
+function uzDemoFaxOrders() {
+  // 下書き2件（うち1件は本部発注書＝マトリクス展開の例）＋確定1件
+  return [
+    { orderId:'fo-demo-0001', rowIndex:2, productName:'男うどん 冷凍きつねうどん', quantity:6, unitPrice:0, amount:0,
+      customerId:'', supplierName:'藤徳物産（デモ）', senderFax:'086-281-9562', desiredDeliveryDate:_uzDemoDate(27),
+      tier:'tier2', state:'draft', confidence:0.62, createdAt:_uzDemoDate(24), memo:'JAN:4595056535096' },
+    { orderId:'fo-demo-0001', rowIndex:3, productName:'男うどん 冷凍肉うどん', quantity:6, unitPrice:0, amount:0,
+      customerId:'', supplierName:'藤徳物産（デモ）', senderFax:'086-281-9562', desiredDeliveryDate:_uzDemoDate(27),
+      tier:'tier2', state:'draft', confidence:0.62, createdAt:_uzDemoDate(24), memo:'JAN:4595056535102' },
+    { orderId:'fo-demo-0002', rowIndex:4, productName:'冷凍牛すじ煮込みカレーうどん', quantity:12, unitPrice:0, amount:0,
+      customerId:'', supplierName:'本部発注書EOS（デモ・マトリクス）', senderFax:'', desiredDeliveryDate:_uzDemoDate(9),
+      tier:'tier1', state:'draft', confidence:0.78, createdAt:_uzDemoDate(7), memo:'店舗:玉島' },
+    { orderId:'fo-demo-0003', rowIndex:5, productName:'F335 ウドン3コセット', quantity:1, unitPrice:0, amount:0,
+      customerId:'', supplierName:'シャディ株式会社（デモ）', senderFax:'028-633-1664', desiredDeliveryDate:'',
+      tier:'tier2', state:'confirmed', confidence:0.9, createdAt:_uzDemoDate(7), confirmedAt:_uzDemoDate(8), memo:'お届け先:小菅 篤子' }
+  ];
+}
+
 function uzDemoResponse(action, data) {
   if (action === 'getSummary') {
     return { status: 'ok', data: uzDemoSummaryForMonth(data && data.month) };
@@ -244,10 +274,22 @@ function uzDemoResponse(action, data) {
     // 正規化前の素のデフォルト（getCostMaster側で正規化される）
     return { status: 'ok', data: (typeof DEFAULT_COST_MASTER !== 'undefined') ? DEFAULT_COST_MASTER : [] };
   }
+  // FAX受注（第5隊員）：GAS側と同じ平坦な形で返す
+  if (action === 'getFaxOrderConfig') {
+    return { status: 'ok', enabled: true, apiKeyConfigured: true, model: 'claude-opus-4-8（デモ）',
+             tier2TriggerInstalled: false, monthlyCap: 500, monthlyUsed: 3, month: _uzDemoMonth(), demo: true };
+  }
+  if (action === 'getOrders') {
+    return { status: 'ok', orders: uzDemoFaxOrders(), demo: true };
+  }
+  if (action === 'previewFaxOrder' || action === 'faxOrderScanTier1') {
+    return { status: 'ok', preview: UZ_DEMO_FAX_PREVIEW,
+             draft: { orderId: 'fo-demo-0001', customerId: '', lineCount: 2, confidence: 0.62 }, demo: true };
+  }
   if (Object.prototype.hasOwnProperty.call(UZ_DEMO_DATA, action)) {
     return { status: 'ok', data: UZ_DEMO_DATA[action] };
   }
-  // 書き込み系（addSales/saveCostMaster等）はデモでは成功を装って何もしない
+  // 書き込み系（addSales/saveCostMaster/updateOrder/saveOrder等）はデモでは成功を装って何もしない
   return { status: 'ok', data: null, demo: true };
 }
 

@@ -77,26 +77,14 @@
 
   <header class="fax-header">
     <span class="fax-header__title">FAX受注管理</span>
-    <div class="fax-header__sub">受け取ったFAX注文を電子化 → 内容を確認・修正 → 確定して受注登録します。</div>
+    <div class="fax-header__sub">メールに届いたFAX注文を自動で取り込み、下書きにします。内容を確認・修正 → 確定で受注登録します。</div>
   </header>
 
   <div id="fax-status" class="fax-status">状態を確認中…</div>
 
-  <!-- Tier1：撮影して読み取り -->
-  <section class="fax-card" id="fax-capture-card">
-    <div class="fax-card__head">紙のFAXを撮影して取り込む</div>
-    <div class="fax-card__body">
-      <div class="fax-capture">
-        <input type="file" id="fax-file" accept="image/*" capture="environment">
-        <button type="button" id="fax-scan-btn" class="fax-btn fax-btn--primary">AIで読み取り → 下書き作成</button>
-        <div class="fax-note">※読み取り結果は下書きです。必ず内容を確認・修正してから確定してください（誤発注防止）。</div>
-      </div>
-    </div>
-  </section>
-
-  <!-- 下書き（要確認） -->
+  <!-- 主役：メール受信からの自動下書き（Tier2）の確認・修正・確定 -->
   <section class="fax-card">
-    <div class="fax-card__head">下書き（確認・修正・確定）</div>
+    <div class="fax-card__head">メールで届いたFAX注文（自動取込・要確認）</div>
     <div class="fax-card__body" id="fax-drafts">
       <div class="fax-empty">読み込み中…</div>
     </div>
@@ -107,6 +95,18 @@
     <div class="fax-card__head">確定済み受注</div>
     <div class="fax-card__body" id="fax-confirmed">
       <div class="fax-empty">—</div>
+    </div>
+  </section>
+
+  <!-- 補助：メール未着の紙FAXを手動で撮影取込（Tier1・従） -->
+  <section class="fax-card" id="fax-capture-card">
+    <div class="fax-card__head">紙で届いた分を撮影して取り込む（補助）</div>
+    <div class="fax-card__body">
+      <div class="fax-capture">
+        <input type="file" id="fax-file" accept="image/*,application/pdf" capture="environment">
+        <button type="button" id="fax-scan-btn" class="fax-btn fax-btn--primary">AIで読み取り → 下書き作成</button>
+        <div class="fax-note">※メールで自動取込できない紙FAX用の手動取込です。読み取り結果は下書きになるので、必ず内容を確認・修正してから確定してください（誤発注防止）。</div>
+      </div>
     </div>
   </section>
 

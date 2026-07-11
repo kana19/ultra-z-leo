@@ -34,6 +34,10 @@
     var captureCard = document.getElementById('fax-capture-card');
     var scanBtn = document.getElementById('fax-scan-btn');
     try {
+      // 複製元判定を先に確定：getSettings は複製元テンプレGASで __SPREADSHEET_ID__ シグナルを返し
+      // callGAS が UZ_DEMO を立てる。getFaxOrderConfig はこのシグナルを握り潰すため先に踏む。
+      // ネットワーク失敗（実店舗のオフライン等）でFAX設定取得自体を妨げないよう非致命に握る。
+      try { await callGAS('getSettings'); } catch (e) { /* demo判定用の先読みのみ */ }
       var cfg = await callGAS('getFaxOrderConfig');
       if (!cfg || cfg.status !== 'ok') throw new Error('設定取得エラー');
       if (!cfg.enabled) {
@@ -168,7 +172,13 @@
 
       draftBox.innerHTML = '';
       if (!drafts.length) draftBox.appendChild(el('div', 'fax-empty', '確認待ちの下書きはありません。'));
-      else groupByOrder(drafts).forEach(function (g) { draftBox.appendChild(renderDraftGroup(g)); });
+      else {
+        // §8-1：AI自動確定禁止。プレビューと同時に「正しくなければ修正」を明示する。
+        var notice = el('div', 'fax-note', '⚠ これはAIの読み取り結果（下書き）です。AI読み取りが正しくない場合は修正してから「確定する」を押してください。');
+        notice.style.cssText = 'margin:0 0 12px;padding:8px 10px;background:#fef9c3;color:#854d0e;border-radius:8px;';
+        draftBox.appendChild(notice);
+        groupByOrder(drafts).forEach(function (g) { draftBox.appendChild(renderDraftGroup(g)); });
+      }
 
       confBox.innerHTML = '';
       if (!confirmed.length) confBox.appendChild(el('div', 'fax-empty', '—'));
@@ -262,6 +272,9 @@
       loading(false);
     }
   }
+
+  // ※「試し読み（保存しない・previewFaxOrder）」は納品時の初期設定＝運営(admin §6)の作業へ移設。
+  //   ユーザーPWAは「メール自動取込された下書きの確認・修正・確定」と補助の撮影取込のみを担う。
 
   document.addEventListener('DOMContentLoaded', function () {
     var btn = document.getElementById('fax-scan-btn');
