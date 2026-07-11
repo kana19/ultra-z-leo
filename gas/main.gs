@@ -608,6 +608,7 @@ function getSettings() {
   var featureVisibilityJson = sheet.getRange('B16').getValue();
   var masterQuotaRaw       = sheet.getRange('B17').getValue();
   var businessHoursRaw     = sheet.getRange('B18').getValue();
+  var faxPatternsJson      = sheet.getRange('B19').getValue();
   var staffList = [], serviceList = [], costMasterList = [], purchaseMasterList = [];
   try { if (staffJson)            staffList            = JSON.parse(staffJson);          } catch(e) {}
   try { if (serviceJson)          serviceList          = JSON.parse(serviceJson);        } catch(e) {}
@@ -679,6 +680,11 @@ function getSettings() {
       }
     }
   } catch(e) { businessHours = null; }
+  // faxPatterns（第5隊員 FAX注文自動管理の取引先ひな形・→ 05§8-7 / 03§6）。
+  // 形式：[{id, supplierName, senderFax, layoutType, instructions, expansion, aliases, enabled, updatedAt}, ...]
+  var faxPatterns = [];
+  try { if (faxPatternsJson) faxPatterns = JSON.parse(faxPatternsJson); } catch(e) {}
+  if (!Array.isArray(faxPatterns)) faxPatterns = [];
   return { status: 'ok', data: {
     storeName: storeName || '',
     staffList: staffList,
@@ -688,7 +694,8 @@ function getSettings() {
     qrLocations: qrLocations,
     featureVisibility: featureVisibility,
     masterQuota: masterQuota,
-    businessHours: businessHours
+    businessHours: businessHours,
+    faxPatterns: faxPatterns
   }};
 }
 
@@ -746,6 +753,11 @@ function saveSettings(data) {
     } else {
       sheet.getRange('B18').setValue('');
     }
+  }
+  // faxPatterns は運営ポータルから送信された場合のみ更新（納品時設定原則・→ 05§8-7）
+  if (data.faxPatterns !== undefined) {
+    sheet.getRange('A19').setValue('faxPatterns');
+    sheet.getRange('B19').setValue(JSON.stringify(data.faxPatterns || []));
   }
   return { status: 'ok' };
 }
@@ -3266,7 +3278,8 @@ function _faxProp_(key, fallback) {
 function getFaxOrderConfig() {
   var enabled = false;
   try {
-    var fv = getSettings().featureVisibility || {};
+    var s = getSettings();
+    var fv = (s && s.data && s.data.featureVisibility) || {};
     enabled = fv.fax_order_ocr === true;
   } catch (e) { /* settings 未整備時は false */ }
   var hasTrigger = ScriptApp.getProjectTriggers().some(function(t) {
@@ -3350,8 +3363,21 @@ function callClaudeAPI(promptText, attachments) {
 }
 
 // --- 抽出（プロンプト＋パース） -------------------------------------
-function _faxExtractPrompt_() {
-  return [
+// ひな形（faxPatterns）は「取引先ごとのAI読み取り指示書」。発注書は各社で書式が千差万別
+// （1ブロック1注文の産直ギフト／商品行×店舗列のマトリクス発注 等）のため、固定の座標
+// マッピングではなく、取引先ごとの自由記述の指示＋展開ルール＋商品名エイリアスをプロンプトへ
+// 注入し、あらゆるパターンをClaudeに読ませる（→ 05§8-7）。納品時に admin が初期設定する。
+function _faxExpansionText_(code) {
+  switch (String(code)) {
+    case 'per_block':    return '1ブロック（明細区切り）＝1注文として読む';
+    case 'per_row':      return '表の各行＝1明細として読む';
+    case 'matrix_store': return '店舗マトリクス：商品行×店舗列の数量セルごとに明細を1件ずつ展開し、storeName に店舗名を入れる（数量0・空欄の店舗は作らない）';
+    default:             return '書式に応じて自動判定';
+  }
+}
+
+function _faxExtractPrompt_(patterns) {
+  var lines = [
     'あなたはFAX注文書を読み取る事務アシスタントです。',
     '添付は1件の受注FAX（PDFまたは画像）です。記載された注文内容を構造化JSONで返してください。',
     '出力は次のJSONのみ（前後に説明文やコードブロック記号を付けない）：',
@@ -3359,17 +3385,38 @@ function _faxExtractPrompt_() {
     '  "supplierName": "発注元(取引先)名。読み取れなければ空文字",',
     '  "senderFax": "先方FAX番号。読み取れなければ空文字",',
     '  "desiredDeliveryDate": "納品希望日 YYYY-MM-DD。読み取れなければ空文字",',
-    '  "items": [ { "productName":"商品名", "quantity":数量(数値), "unitPrice":単価(数値・不明は0), "note":"備考" } ],',
+    '  "matchedPatternId": "下記の既知ひな形に該当すればそのID。なければ空文字",',
+    '  "items": [ { "productName":"商品名", "quantity":数量(数値), "unitPrice":単価(数値・不明は0), "storeName":"店舗/お届け先名(該当時のみ)", "note":"備考(規格・JAN・のし等の付随情報)" } ],',
     '  "confidence": 0.0〜1.0 の読取り信頼度,',
     '  "memo": "全体の注記（判読不能箇所など）"',
     '}',
     '数量・単価は数値のみ（カンマ・単位を除く）。判読できない項目は空文字か0にし、推測で埋めないこと。'
-  ].join('\n');
+  ];
+  var enabled = (patterns || []).filter(function(p) { return p && p.enabled !== false; });
+  if (enabled.length) {
+    lines.push('');
+    lines.push('■ 既知の取引先ひな形（発注書は取引先ごとに書式が異なります。このFAXが下記のどれに該当するか判定し、該当すればその「読み取り指示」に厳密に従ってください）：');
+    enabled.forEach(function(p, i) {
+      lines.push('--- ひな形 ---');
+      lines.push('ID: ' + (p.id || ('pat-' + (i + 1))));
+      lines.push('取引先名: ' + (p.supplierName || ''));
+      if (p.senderFax)    lines.push('先方FAX番号: ' + p.senderFax);
+      if (p.layoutType)   lines.push('レイアウト種別: ' + p.layoutType);
+      if (p.instructions) lines.push('読み取り指示: ' + p.instructions);
+      if (p.expansion)    lines.push('明細の展開ルール: ' + _faxExpansionText_(p.expansion));
+      if (p.aliases)      lines.push('商品名の読み替え（「表記 => 商品マスタの名称/コード」。抽出後に必ず置換して productName に入れる）:\n' + p.aliases);
+    });
+    lines.push('--- 以上 ---');
+    lines.push('該当したひな形のIDを matchedPatternId に入れてください。どのひな形にも該当しなければ matchedPatternId は空文字とし、汎用として最善で読み取ってください。');
+  }
+  return lines.join('\n');
 }
 
 function extractFaxOrder(base64, mimeType) {
   _faxConsumeQuota_(1);
-  var raw = callClaudeAPI(_faxExtractPrompt_(), [{ base64: base64, mimeType: mimeType }]);
+  var patterns = [];
+  try { var s = getSettings(); patterns = (s && s.data && s.data.faxPatterns) || []; } catch (e) {}
+  var raw = callClaudeAPI(_faxExtractPrompt_(patterns), [{ base64: base64, mimeType: mimeType }]);
   var jsonText = _faxStripToJson_(raw);
   var parsed;
   try { parsed = JSON.parse(jsonText); }
@@ -3431,11 +3478,17 @@ function _faxSaveDraft_(extracted, meta) {
   var rows = items.map(function(it, i) {
     var qty = Number(it.quantity) || 0;
     var price = Number(it.unitPrice) || 0;
+    // 取引先ごとの付随情報（店舗名・規格・JAN・のし等）は 拡張列を持たない現行 orders では
+    // メモへ集約する（→ 05§8-7・将来は専用列へ昇格可）。
+    var noteParts = [];
+    if (it.storeName) noteParts.push('店舗:' + it.storeName);
+    if (it.note) noteParts.push(String(it.note));
+    var lineNote = noteParts.join(' / ') || extracted.memo || '';
     return [
       orderId, i + 1, customerId, extracted.supplierName || '', senderFax,
       it.productName || '', qty, price, qty * price,
       extracted.desiredDeliveryDate || '', meta.tier || '', 'draft',
-      extracted.confidence || 0, meta.source || '', it.note || extracted.memo || '', now, ''
+      extracted.confidence || 0, meta.source || '', lineNote, now, ''
     ];
   });
   sh.getRange(sh.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
@@ -3452,7 +3505,9 @@ function _faxMatchCustomerByFax_(faxNumber) {
   if (!sh || sh.getLastRow() < 2) return '';
   var values = sh.getDataRange().getValues();
   var header = values[0].map(function(h) { return String(h).trim(); });
-  var idCol = header.indexOf('顧客No'); if (idCol < 0) idCol = 0;
+  var idCol = header.indexOf('顧客No');
+  if (idCol < 0) idCol = header.indexOf('customerId');
+  if (idCol < 0) idCol = 0;
   var faxCol = header.indexOf('先方FAX番号');
   if (faxCol < 0) faxCol = header.indexOf('FAX番号');
   if (faxCol < 0) return '';
