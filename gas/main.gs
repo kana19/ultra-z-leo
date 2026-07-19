@@ -117,6 +117,12 @@ function doPost(e) {
     switch (action) {
       case 'faxOrderScanTier1': result = faxOrderScanTier1(data); break;
       case 'previewFaxOrder':   result = previewFaxOrder(data);   break;
+      // 書類発行＋商品マスタ（doc_automation・§8-5）：運営ポータル(admin)は master プロキシ
+      // 経由の POST でユーザーGASへ届く。商品マスタは admin が納品時に一括投入するため
+      // getProducts（読込）／saveProducts（業種雛形の一括置換）を doPost にも公開する。
+      // ※日常の個別 CRUD（addProduct 等）はユーザーPWAが doGet で使う（Phase4）。
+      case 'getProducts':       result = getProducts();          break;
+      case 'saveProducts':      result = saveProducts(data);     break;
       default: result = { status: 'error', message: 'doPost 未対応アクション: ' + action };
     }
   } catch (err) {
