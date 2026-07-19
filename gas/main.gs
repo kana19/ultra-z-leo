@@ -80,6 +80,22 @@ function doGet(e) {
       case 'faxOrderPoll':              result = faxOrderGmailPoll();                     break;
       case 'getFaxOrderConfig':         result = getFaxOrderConfig();                     break;
       case 'setupFaxOrderTrigger':      result = setupFaxOrderTrigger();                  break;
+      // 警備隊第4隊員 書類発行自動化＋商品マスタ（doc_automation・→ 知識MD 05§8-5）
+      case 'migrateDocAutomationSchema': result = migrateDocAutomationSchema();           break;
+      case 'getProducts':               result = getProducts();                           break;
+      case 'addProduct':                result = addProduct(data);                        break;
+      case 'updateProduct':             result = updateProduct(data);                     break;
+      case 'deleteProduct':             result = deleteProduct(data);                     break;
+      case 'saveProducts':              result = saveProducts(data);                      break;
+      case 'getCustomers':              result = getCustomers();                          break;
+      case 'addCustomer':               result = addCustomer(data);                       break;
+      case 'updateCustomer':            result = updateCustomer(data);                    break;
+      case 'deleteCustomer':            result = deleteCustomer(data);                    break;
+      case 'issueDocument':             result = issueDocument(data);                     break;
+      case 'getDocuments':              result = getDocuments(data);                      break;
+      case 'getInvoicesUnpaid':         result = getInvoicesUnpaid();                     break;
+      case 'recordPayment':             result = recordPayment(data);                     break;
+      case 'getDocSummary':             result = getDocSummary(data);                     break;
       default: result = { status: 'error', message: '不明なアクション: ' + action };
     }
   } catch (err) {
@@ -607,6 +623,7 @@ function getSettings() {
   var costMasterJson       = sheet.getRange('B4').getValue();
   var purchaseMasterJson   = sheet.getRange('B5').getValue();
   var qrLocationsJson      = sheet.getRange('B6').getValue();
+  var invoiceSettingsJson  = sheet.getRange('B7').getValue();
   var featureVisibilityJson = sheet.getRange('B16').getValue();
   var masterQuotaRaw       = sheet.getRange('B17').getValue();
   var businessHoursRaw     = sheet.getRange('B18').getValue();
@@ -687,6 +704,10 @@ function getSettings() {
   var faxPatterns = [];
   try { if (faxPatternsJson) faxPatterns = JSON.parse(faxPatternsJson); } catch(e) {}
   if (!Array.isArray(faxPatterns)) faxPatterns = [];
+  // invoiceSettings（第4隊員 書類発行の敬称デフォルト等・settings B7・→ 05§8-5）
+  var invoiceSettings = { honorificDefault: '御中' };
+  try { if (invoiceSettingsJson) invoiceSettings = JSON.parse(invoiceSettingsJson); } catch(e) {}
+  if (!invoiceSettings || typeof invoiceSettings !== 'object') invoiceSettings = { honorificDefault: '御中' };
   return { status: 'ok', data: {
     storeName: storeName || '',
     staffList: staffList,
@@ -697,7 +718,8 @@ function getSettings() {
     featureVisibility: featureVisibility,
     masterQuota: masterQuota,
     businessHours: businessHours,
-    faxPatterns: faxPatterns
+    faxPatterns: faxPatterns,
+    invoiceSettings: invoiceSettings
   }};
 }
 
@@ -760,6 +782,11 @@ function saveSettings(data) {
   if (data.faxPatterns !== undefined) {
     sheet.getRange('A19').setValue('faxPatterns');
     sheet.getRange('B19').setValue(JSON.stringify(data.faxPatterns || []));
+  }
+  // invoiceSettings（敬称デフォルト等・第4隊員 書類発行・→ 05§8-5）は送信時のみ更新
+  if (data.invoiceSettings !== undefined) {
+    sheet.getRange('A7').setValue('invoiceSettings');
+    sheet.getRange('B7').setValue(JSON.stringify(data.invoiceSettings || {}));
   }
   return { status: 'ok' };
 }
@@ -1474,55 +1501,15 @@ function initCostMaster() {
 }
 
 // =============================================================
-// Phase A セットアップ
+// Phase A セットアップ（廃止・無害化）
+//   旧 setupPhaseA は settings B5 に「住所」を書く等、現行スキーマ（B5=purchaseMasterList・
+//   B7=invoiceSettings）と衝突する死んだレガシーだった（顧客/請求/見積も旧JP列で作成）。
+//   誤実行で settings を破壊し得るため本体を撤去し、正しい migrateDocAutomationSchema
+//   （products/customers12列/帳票3シート/invoiceSettings・v0.9.0 準拠）へ委譲する。
 // =============================================================
 
 function setupPhaseA() {
-  var ss = _ss_();
-
-  var settings = ss.getSheetByName('settings');
-  if (!settings) {
-    settings = ss.insertSheet('settings');
-  }
-  settings.getRange('B5').setValue('');        // 住所
-  settings.getRange('B6').setValue('');        // 電話番号
-  settings.getRange('B7').setValue(false);     // インボイス発行事業者フラグ
-  settings.getRange('B8').setValue('');        // T番号
-  settings.getRange('B9').setValue('[]');      // bankAccounts(JSON)
-  settings.getRange('B10').setValue('');       // ロゴ画像
-  settings.getRange('B11').setValue('none');   // 支払期限デフォルトルール
-
-  var customers = ss.getSheetByName('customers');
-  if (!customers) {
-    customers = ss.insertSheet('customers');
-    customers.getRange('A1:F1').setValues([[
-      '顧客No', '顧客名', '住所', 'メールアドレス', '作成日時', '更新日時'
-    ]]);
-    customers.setFrozenRows(1);
-    customers.hideColumns(1);
-  }
-
-  var invoices = ss.getSheetByName('invoices');
-  if (!invoices) {
-    invoices = ss.insertSheet('invoices');
-    invoices.getRange('A1:K1').setValues([[
-      '請求書番号', '発行日', '顧客No', '請求金額(税込)', '対象売上行ID',
-      '支払期限', '振込先ID', '備考', 'ステータス', 'PDF URL', '作成日時'
-    ]]);
-    invoices.setFrozenRows(1);
-  }
-
-  var estimates = ss.getSheetByName('estimates');
-  if (!estimates) {
-    estimates = ss.insertSheet('estimates');
-    estimates.getRange('A1:J1').setValues([[
-      '見積書番号', '発行日', '顧客No', '有効期限', '見積金額(税込)',
-      '明細(JSON)', '備考', 'ステータス', '変換先請求書番号', '作成日時'
-    ]]);
-    estimates.setFrozenRows(1);
-  }
-
-  Logger.log('Phase A セットアップ完了');
+  return migrateDocAutomationSchema();
 }
 
 // =============================================================
@@ -3658,6 +3645,11 @@ function getOrders(data) {
     };
   });
   if (data.state) rows = rows.filter(function(o) { return o.state === data.state; });
+  // 受注一覧の絞込（→ 05§8-5 一覧ビュー）：発注元・顧客・期間（登録日 createdAt の yyyy-MM-dd で比較）
+  if (data.supplierName) rows = rows.filter(function(o) { return String(o.supplierName || '').indexOf(data.supplierName) >= 0; });
+  if (data.customerId) rows = rows.filter(function(o) { return String(o.customerId) === String(data.customerId); });
+  if (data.dateFrom) rows = rows.filter(function(o) { return String(o.createdAt || '').slice(0, 10) >= data.dateFrom; });
+  if (data.dateTo) rows = rows.filter(function(o) { return String(o.createdAt || '').slice(0, 10) <= data.dateTo; });
   return { status: 'ok', orders: rows };
 }
 
@@ -3717,4 +3709,400 @@ function deleteOrder(data) {
     if (String(values[i][0]) === orderId) { sh.deleteRow(i + 2); deleted++; }
   }
   return { status: 'ok', deleted: deleted };
+}
+
+// =============================================================
+// 警備隊第4隊員 書類発行自動化＋商品マスタ（doc_automation・▲前倒し）
+//   正本＝知識MD 05§8-5 / 03§1-6。台帳＝products（商品マスタ・3段カテゴリ）＋
+//   customers（顧客マスタ・帳票宛名/OCR照合）。帳票＝invoices/estimates/deliveries。
+//   一覧＝受注一覧(getOrders)・未納一覧(getInvoicesUnpaid)・集計(getDocSummary)。
+//   マスタGAS v0.9.0 の createUserSpreadsheet と同一スキーマ。既存店は
+//   migrateDocAutomationSchema で不足シート・列を後付けする（doc_automation 有効化時）。
+// =============================================================
+
+var DOC_SHEET_SPECS_ = {
+  products:   ['productCode', '大分類', '中分類', '小分類', 'productName', 'unitPrice', 'taxRate', 'unit', 'aliases', 'enabled'],
+  invoices:   ['invoiceId', 'customerId', '発行日', '支払期限', '明細JSON', '小計', '消費税', '合計', 'ステータス', '入金日', '入金額', 'メモ', 'createdAt', 'updatedAt'],
+  estimates:  ['estimateId', 'customerId', '発行日', '有効期限', '明細JSON', '小計', '消費税', '合計', 'ステータス', '変換先invoiceId', 'メモ', 'createdAt'],
+  deliveries: ['deliveryId', 'customerId', '発行日', '明細JSON', '小計', '消費税', '合計', 'ステータス', '変換先invoiceId', 'メモ', 'createdAt']
+};
+// customers は既存6列＋帳票宛名6列を末尾追加＝位置保存（→ 03§1-6）。
+var CUSTOMERS_HEADERS_ = ['customerId', 'name', 'type', 'memo', 'createdAt', '先方FAX番号', '郵便番号', '住所', '電話番号', 'email', '担当者', 'updatedAt'];
+
+function _docSheet_(name) {
+  var ss = _ss_();
+  var sh = ss.getSheetByName(name);
+  var headers = DOC_SHEET_SPECS_[name];
+  if (!sh) {
+    sh = ss.insertSheet(name);
+    sh.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+
+// customers を12列へ（既存列位置を保ち不足列だけ末尾追加＝旧データ・稼働照合を壊さない）。
+function _customersSheet_() {
+  var ss = _ss_();
+  var sh = ss.getSheetByName('customers');
+  if (!sh) {
+    sh = ss.insertSheet('customers');
+    sh.getRange(1, 1, 1, CUSTOMERS_HEADERS_.length).setValues([CUSTOMERS_HEADERS_]).setFontWeight('bold');
+    sh.setFrozenRows(1);
+    return sh;
+  }
+  var header = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(function(h){ return String(h).trim(); });
+  CUSTOMERS_HEADERS_.forEach(function(key) {
+    if (header.indexOf(key) < 0) {
+      sh.getRange(1, sh.getLastColumn() + 1).setValue(key).setFontWeight('bold');
+      header.push(key);
+    }
+  });
+  return sh;
+}
+
+// 明示マイグレーション（doc_automation 有効化時に admin/ユーザーが1回実行）。冪等。
+function migrateDocAutomationSchema() {
+  _docSheet_('products');
+  _customersSheet_();
+  _docSheet_('invoices');
+  _docSheet_('estimates');
+  _docSheet_('deliveries');
+  var s = _ss_().getSheetByName('settings');
+  if (s && !String(s.getRange('B7').getValue() || '')) {
+    s.getRange('A7').setValue('invoiceSettings');
+    s.getRange('B7').setValue(JSON.stringify({ honorificDefault: '御中' }));
+  }
+  return { status: 'ok', migrated: ['products', 'customers', 'invoices', 'estimates', 'deliveries', 'invoiceSettings'] };
+}
+
+// ヘッダー行 → { 見出し: 0基点index } マップ
+function _headerMap_(sh) {
+  var header = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+  var map = {};
+  header.forEach(function(h, i) { map[String(h).trim()] = i; });
+  return map;
+}
+
+// 列値（1基点col）または rowIndex で対象行を特定（見つからねば 0）
+function _findRowByCol_(sh, col, value, rowIndex) {
+  if (rowIndex) { var ri = Number(rowIndex); if (ri >= 2 && ri <= sh.getLastRow()) return ri; }
+  if (value === undefined || value === '' || value === null) return 0;
+  var last = sh.getLastRow();
+  if (last < 2) return 0;
+  var ids = sh.getRange(2, col, last - 1, 1).getValues();
+  for (var i = 0; i < ids.length; i++) {
+    if (String(ids[i][0]) === String(value)) return i + 2;
+  }
+  return 0;
+}
+
+// ----- 商品マスタ products CRUD -----
+function getProducts() {
+  var sh = _docSheet_('products');
+  var last = sh.getLastRow();
+  if (last < 2) return { status: 'ok', products: [] };
+  var values = sh.getRange(2, 1, last - 1, 10).getValues();
+  var rows = values.map(function(r, i) {
+    return {
+      rowIndex: i + 2, productCode: r[0], categoryL1: r[1], categoryL2: r[2], categoryL3: r[3],
+      productName: r[4], unitPrice: Number(r[5]) || 0, taxRate: Number(r[6]) || 0,
+      unit: r[7], aliases: r[8], enabled: r[9] === '' ? true : !!r[9]
+    };
+  });
+  return { status: 'ok', products: rows };
+}
+
+function _nextProductCode_(sh) {
+  var last = sh.getLastRow();
+  var max = 0;
+  if (last >= 2) {
+    sh.getRange(2, 1, last - 1, 1).getValues().forEach(function(r) {
+      var m = String(r[0] || '').match(/^pr(\d+)$/);
+      if (m) max = Math.max(max, Number(m[1]));
+    });
+  }
+  return 'pr' + ('000' + (max + 1)).slice(-3);
+}
+
+function addProduct(data) {
+  data = data || {};
+  var sh = _docSheet_('products');
+  var code = String(data.productCode || '') || _nextProductCode_(sh);
+  var row = [
+    code, data.categoryL1 || '', data.categoryL2 || '', data.categoryL3 || '',
+    data.productName || '', Number(data.unitPrice) || 0, Number(data.taxRate) || 0,
+    data.unit || '', data.aliases || '', data.enabled === false ? false : true
+  ];
+  sh.getRange(sh.getLastRow() + 1, 1, 1, row.length).setValues([row]);
+  return { status: 'ok', productCode: code };
+}
+
+function updateProduct(data) {
+  data = data || {};
+  var sh = _docSheet_('products');
+  var idx = _findRowByCol_(sh, 1, data.productCode, data.rowIndex);
+  if (!idx) throw new Error('対象商品が見つかりません。');
+  var map = { categoryL1: 2, categoryL2: 3, categoryL3: 4, productName: 5, unitPrice: 6, taxRate: 7, unit: 8, aliases: 9, enabled: 10 };
+  Object.keys(map).forEach(function(k) {
+    if (data[k] !== undefined) sh.getRange(idx, map[k]).setValue(data[k]);
+  });
+  return { status: 'ok', rowIndex: idx };
+}
+
+function deleteProduct(data) {
+  data = data || {};
+  var sh = _docSheet_('products');
+  var idx = _findRowByCol_(sh, 1, data.productCode, data.rowIndex);
+  if (!idx) throw new Error('対象商品が見つかりません。');
+  sh.deleteRow(idx);
+  return { status: 'ok', deleted: 1 };
+}
+
+// admin 一括投入（業種雛形）：products を丸ごと置換（→ 05§8-5 納品時初期投入）
+function saveProducts(data) {
+  data = data || {};
+  var list = Array.isArray(data.products) ? data.products : [];
+  var sh = _docSheet_('products');
+  var last = sh.getLastRow();
+  if (last >= 2) sh.getRange(2, 1, last - 1, 10).clearContent();
+  if (list.length) {
+    var rows = list.map(function(p, i) {
+      var code = String(p.productCode || '') || ('pr' + ('000' + (i + 1)).slice(-3));
+      return [code, p.categoryL1 || '', p.categoryL2 || '', p.categoryL3 || '', p.productName || '',
+              Number(p.unitPrice) || 0, Number(p.taxRate) || 0, p.unit || '', p.aliases || '',
+              p.enabled === false ? false : true];
+    });
+    sh.getRange(2, 1, rows.length, 10).setValues(rows);
+  }
+  return { status: 'ok', count: list.length };
+}
+
+// ----- 顧客マスタ customers CRUD（ヘッダー名で読み書き＝位置保存に追随） -----
+function getCustomers() {
+  var sh = _customersSheet_();
+  var last = sh.getLastRow();
+  if (last < 2) return { status: 'ok', customers: [] };
+  var map = _headerMap_(sh);
+  var values = sh.getRange(2, 1, last - 1, sh.getLastColumn()).getValues();
+  var rows = values.map(function(r, i) {
+    function g(key) { return map[key] !== undefined ? r[map[key]] : ''; }
+    return {
+      rowIndex: i + 2, customerId: g('customerId'), name: g('name'), type: g('type'), memo: g('memo'),
+      senderFax: g('先方FAX番号'), postalCode: g('郵便番号'), address: g('住所'),
+      tel: g('電話番号'), email: g('email'), contactPerson: g('担当者')
+    };
+  });
+  return { status: 'ok', customers: rows };
+}
+
+function _nextCustomerId_(sh, map) {
+  var last = sh.getLastRow();
+  var col = (map['customerId'] !== undefined ? map['customerId'] : 0) + 1;
+  var max = 0;
+  if (last >= 2) {
+    sh.getRange(2, col, last - 1, 1).getValues().forEach(function(r) {
+      var m = String(r[0] || '').match(/^cs(\d+)$/);
+      if (m) max = Math.max(max, Number(m[1]));
+    });
+  }
+  return 'cs' + ('000' + (max + 1)).slice(-3);
+}
+
+function addCustomer(data) {
+  data = data || {};
+  var sh = _customersSheet_();
+  var map = _headerMap_(sh);
+  var id = String(data.customerId || '') || _nextCustomerId_(sh, map);
+  var now = new Date();
+  var obj = {
+    customerId: id, name: data.name || '', type: data.type || '', memo: data.memo || '',
+    createdAt: now, '先方FAX番号': data.senderFax || '', '郵便番号': data.postalCode || '',
+    '住所': data.address || '', '電話番号': data.tel || '', email: data.email || '',
+    '担当者': data.contactPerson || '', updatedAt: now
+  };
+  var width = sh.getLastColumn();
+  var row = [];
+  for (var c = 0; c < width; c++) row.push('');
+  Object.keys(obj).forEach(function(k) { if (map[k] !== undefined) row[map[k]] = obj[k]; });
+  sh.getRange(sh.getLastRow() + 1, 1, 1, width).setValues([row]);
+  return { status: 'ok', customerId: id };
+}
+
+function updateCustomer(data) {
+  data = data || {};
+  var sh = _customersSheet_();
+  var map = _headerMap_(sh);
+  var col = (map['customerId'] !== undefined ? map['customerId'] : 0) + 1;
+  var idx = _findRowByCol_(sh, col, data.customerId, data.rowIndex);
+  if (!idx) throw new Error('対象顧客が見つかりません。');
+  var fieldMap = { name: 'name', type: 'type', memo: 'memo', senderFax: '先方FAX番号', postalCode: '郵便番号', address: '住所', tel: '電話番号', email: 'email', contactPerson: '担当者' };
+  Object.keys(fieldMap).forEach(function(k) {
+    var h = fieldMap[k];
+    if (data[k] !== undefined && map[h] !== undefined) sh.getRange(idx, map[h] + 1).setValue(data[k]);
+  });
+  if (map['updatedAt'] !== undefined) sh.getRange(idx, map['updatedAt'] + 1).setValue(new Date());
+  return { status: 'ok', rowIndex: idx };
+}
+
+function deleteCustomer(data) {
+  data = data || {};
+  var sh = _customersSheet_();
+  var map = _headerMap_(sh);
+  var col = (map['customerId'] !== undefined ? map['customerId'] : 0) + 1;
+  var idx = _findRowByCol_(sh, col, data.customerId, data.rowIndex);
+  if (!idx) throw new Error('対象顧客が見つかりません。');
+  sh.deleteRow(idx);
+  return { status: 'ok', deleted: 1 };
+}
+
+// ----- 帳票発行（見積/請求/納品・→ 05§8-5） -----
+function _genDocId_(sh, prefix, date) {
+  var ymd = Utilities.formatDate(date || new Date(), _faxTz_(), 'yyyyMMdd');
+  var head = prefix + '-' + ymd + '-';
+  var last = sh.getLastRow();
+  var n = 0;
+  if (last >= 2) {
+    sh.getRange(2, 1, last - 1, 1).getValues().forEach(function(r) {
+      if (String(r[0] || '').indexOf(head) === 0) n++;
+    });
+  }
+  return head + ('000' + (n + 1)).slice(-3);
+}
+
+// 発行：docType=estimate|invoice|delivery。明細は products の productCode を参照。
+// 金額は明細の 単価×数量（税抜）を合計し、税率別に消費税を算出する。
+function issueDocument(data) {
+  data = data || {};
+  var docType = String(data.docType || 'invoice');
+  var sheetName = ({ estimate: 'estimates', invoice: 'invoices', delivery: 'deliveries' })[docType];
+  if (!sheetName) throw new Error('docType が不正です（estimate/invoice/delivery）。');
+  var items = Array.isArray(data.items) ? data.items : [];
+  if (!items.length) throw new Error('明細がありません。');
+  var subtotal = 0, taxTotal = 0;
+  var lines = items.map(function(it) {
+    var qty = Number(it.quantity) || 0;
+    var price = Number(it.unitPrice) || 0;
+    var rate = Number(it.taxRate) || 0;
+    var amount = qty * price;
+    subtotal += amount;
+    taxTotal += Math.floor(amount * rate / 100);
+    return { productCode: it.productCode || '', productName: it.productName || '', quantity: qty, unitPrice: price, taxRate: rate, amount: amount };
+  });
+  var total = subtotal + taxTotal;
+  var now = new Date();
+  var issueDate = data.issueDate || Utilities.formatDate(now, _faxTz_(), 'yyyy-MM-dd');
+  var detailJson = JSON.stringify(lines);
+  var memo = data.memo || '';
+  var sh = _docSheet_(sheetName);
+  var docId, row;
+  if (docType === 'invoice') {
+    docId = _genDocId_(sh, 'inv', now);
+    row = [docId, data.customerId || '', issueDate, data.dueDate || '', detailJson, subtotal, taxTotal, total, '発行済', '', '', memo, now, now];
+  } else if (docType === 'estimate') {
+    docId = _genDocId_(sh, 'est', now);
+    row = [docId, data.customerId || '', issueDate, data.validUntil || '', detailJson, subtotal, taxTotal, total, '発行済', '', memo, now];
+  } else {
+    docId = _genDocId_(sh, 'dlv', now);
+    row = [docId, data.customerId || '', issueDate, detailJson, subtotal, taxTotal, total, '発行済', '', memo, now];
+  }
+  sh.getRange(sh.getLastRow() + 1, 1, 1, row.length).setValues([row]);
+  return { status: 'ok', docType: docType, docId: docId, subtotal: subtotal, tax: taxTotal, total: total };
+}
+
+// 帳票一覧（docType 指定・customerId/status で絞込・明細JSONは配列にして返す）
+function getDocuments(data) {
+  data = data || {};
+  var docType = String(data.docType || 'invoice');
+  var sheetName = ({ estimate: 'estimates', invoice: 'invoices', delivery: 'deliveries' })[docType];
+  if (!sheetName) throw new Error('docType が不正です。');
+  var sh = _docSheet_(sheetName);
+  var last = sh.getLastRow();
+  if (last < 2) return { status: 'ok', documents: [] };
+  var headers = DOC_SHEET_SPECS_[sheetName];
+  var values = sh.getRange(2, 1, last - 1, headers.length).getValues();
+  var tz = _faxTz_();
+  var docs = values.map(function(r, i) {
+    var o = { rowIndex: i + 2 };
+    headers.forEach(function(h, ci) {
+      var v = r[ci];
+      if (h === '明細JSON') { try { o.items = JSON.parse(v || '[]'); } catch (e) { o.items = []; } return; }
+      if (v instanceof Date) v = Utilities.formatDate(v, tz, 'yyyy-MM-dd HH:mm');
+      o[h] = v;
+    });
+    return o;
+  });
+  if (data.customerId) docs = docs.filter(function(d) { return String(d.customerId) === String(data.customerId); });
+  if (data.status) docs = docs.filter(function(d) { return d['ステータス'] === data.status; });
+  return { status: 'ok', documents: docs };
+}
+
+// ----- 未納一覧（発行済み請求書の未入金・→ 05§8-5。既存 getUnpaid とは別軸） -----
+function getInvoicesUnpaid() {
+  var sh = _docSheet_('invoices');
+  var last = sh.getLastRow();
+  if (last < 2) return { status: 'ok', invoices: [] };
+  var values = sh.getRange(2, 1, last - 1, DOC_SHEET_SPECS_.invoices.length).getValues();
+  var tz = _faxTz_();
+  var today = new Date();
+  var rows = [];
+  values.forEach(function(r, i) {
+    if (r[8] === '入金済') return;
+    var due = r[3];
+    var dd = null;
+    if (due instanceof Date) dd = due;
+    else if (due) { var p = new Date(String(due).slice(0, 10)); if (!isNaN(p.getTime())) dd = p; }
+    rows.push({
+      rowIndex: i + 2, invoiceId: r[0], customerId: r[1],
+      issueDate: r[2] instanceof Date ? Utilities.formatDate(r[2], tz, 'yyyy-MM-dd') : r[2],
+      dueDate: dd ? Utilities.formatDate(dd, tz, 'yyyy-MM-dd') : (due || ''),
+      total: Number(r[7]) || 0, status: r[8] || '発行済',
+      daysOverdue: dd ? Math.floor((today - dd) / 86400000) : ''
+    });
+  });
+  return { status: 'ok', invoices: rows };
+}
+
+// 消込（入金記録）：invoiceId or rowIndex 指定でステータス=入金済・入金日/額を記録
+function recordPayment(data) {
+  data = data || {};
+  var sh = _docSheet_('invoices');
+  var idx = _findRowByCol_(sh, 1, data.invoiceId, data.rowIndex);
+  if (!idx) throw new Error('対象請求書が見つかりません。');
+  var now = new Date();
+  sh.getRange(idx, 10).setValue(data.paidDate || Utilities.formatDate(now, _faxTz_(), 'yyyy-MM-dd'));
+  sh.getRange(idx, 11).setValue(data.paidAmount !== undefined ? Number(data.paidAmount) : (Number(sh.getRange(idx, 8).getValue()) || 0));
+  sh.getRange(idx, 9).setValue('入金済');
+  sh.getRange(idx, 14).setValue(now);
+  return { status: 'ok', rowIndex: idx };
+}
+
+// ----- 集計（顧客別＝請求ベース／商品別・カテゴリ別＝確定受注ベース・products で名寄せ） -----
+function getDocSummary(data) {
+  data = data || {};
+  var byCustomer = {}, byProduct = {}, byCategory = {};
+  var inv = _docSheet_('invoices');
+  var il = inv.getLastRow();
+  if (il >= 2) {
+    inv.getRange(2, 1, il - 1, DOC_SHEET_SPECS_.invoices.length).getValues().forEach(function(r) {
+      var cid = String(r[1] || '（未指定）');
+      byCustomer[cid] = (byCustomer[cid] || 0) + (Number(r[7]) || 0);
+    });
+  }
+  var prodMap = {};
+  getProducts().products.forEach(function(p) { prodMap[p.productName] = p; });
+  var ord = _faxOrdersSheet_();
+  var ol = ord.getLastRow();
+  if (ol >= 2) {
+    ord.getRange(2, 1, ol - 1, 17).getValues().forEach(function(r) {
+      if (r[11] !== 'confirmed') return;
+      var pname = String(r[5] || '');
+      var amt = Number(r[8]) || 0;
+      byProduct[pname] = (byProduct[pname] || 0) + amt;
+      var p = prodMap[pname];
+      var cat = p ? [p.categoryL1, p.categoryL2, p.categoryL3].filter(function(x) { return !!x; }).join(' / ') : '（未分類）';
+      byCategory[cat] = (byCategory[cat] || 0) + amt;
+    });
+  }
+  return { status: 'ok', byCustomer: byCustomer, byProduct: byProduct, byCategory: byCategory };
 }
