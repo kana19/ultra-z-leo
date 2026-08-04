@@ -1547,3 +1547,89 @@ async function downloadTaxCSVByRange(fromMonth, toMonth, btnEl) {
     if (btnEl) { btnEl.disabled = false; btnEl.textContent = origText; }
   }
 }
+
+/* ══════════════════════════════════════════════════════════════════
+ * PWA：Service Worker 登録 ＋ iOS「ホーム画面に追加」導線
+ * app.js は主アプリ全ページの共通ブートストラップ＝ここへ集約すれば
+ * テンプレートを継ぐ新規生成店すべてに自動で入る。
+ * ══════════════════════════════════════════════════════════════════ */
+
+/* ── アプリルート（sw.js の置き場＝店舗ルート）を現在パスから算出 ──
+ * 通常ページは店舗ルート直下（…/index.html 等）、pc配下は …/pc/*。
+ * どちらでも scope＝店舗ルートに揃える（sw.js は店舗ルートに1つ）。 */
+function uzAppRootPath() {
+  let base = (location.pathname || '/').replace(/[^/]*$/, ''); // 現ページのディレクトリ（末尾 /）
+  if (/\/pc\/$/.test(base)) base = base.replace(/pc\/$/, '');    // pc配下 → 店舗ルートへ
+  return base;
+}
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    const base = uzAppRootPath();
+    navigator.serviceWorker.register(base + 'sw.js', { scope: base })
+      .catch((err) => console.warn('[uz] Service Worker 登録失敗:', err));
+  });
+}
+
+/* ── iOS 向け「ホーム画面に追加」ガイド ──────────────────────────
+ * iOS/iPadOS は自動インストール（beforeinstallprompt）非対応＝Safariの
+ * 共有→ホーム画面に追加でのみアプリ化する。プロンプトを出せないので、
+ * 未インストール(standaloneでない)時に手順バナーを1度だけ案内する。 */
+(function uzIosInstallGuide() {
+  const ua = navigator.userAgent || '';
+  const isIOS = /iPad|iPhone|iPod/.test(ua) ||
+    (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1); // iPadOS（Mac偽装）
+  if (!isIOS) return;
+
+  const isStandalone = (window.navigator.standalone === true) ||
+    (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+  if (isStandalone) return; // 既にホーム画面アプリとして起動中
+
+  const DISMISS_KEY = 'uz_ios_a2hs_dismissed';
+  try { if (localStorage.getItem(DISMISS_KEY) === '1') return; } catch (e) {}
+
+  // iOS上でホーム画面追加が可能なのは Safari のみ。他ブラウザ/アプリ内は要案内。
+  const isSafari = /Safari/.test(ua) &&
+    !/(CriOS|FxiOS|EdgiOS|OPiOS|Line|FBAN|FBAV|Instagram)/.test(ua);
+
+  const msg = isSafari
+    ? '共有ボタン → 「ホーム画面に追加」でアプリとして使えます'
+    : 'Safariで開いてから、共有 → 「ホーム画面に追加」でアプリになります';
+
+  window.addEventListener('load', () => {
+    const bar = document.createElement('div');
+    bar.setAttribute('role', 'note');
+    bar.style.cssText = [
+      'position:fixed', 'left:12px', 'right:12px', 'bottom:calc(12px + env(safe-area-inset-bottom))',
+      'z-index:9999', 'display:flex', 'align-items:center', 'gap:10px',
+      'padding:12px 14px', 'border-radius:12px',
+      'background:var(--uz-surface,#fff)', 'color:var(--uz-text,#1a1a1a)',
+      'border:1px solid var(--uz-gold,#d4af37)',
+      'box-shadow:0 6px 24px rgba(0,0,0,0.18)',
+      'font-family:var(--font-main,inherit)', 'font-size:13px', 'font-weight:600',
+    ].join(';');
+
+    const text = document.createElement('div');
+    text.style.cssText = 'flex:1; line-height:1.4;';
+    text.innerHTML =
+      '<span style="display:block; font-weight:700; margin-bottom:2px;">アプリとして追加</span>' + msg;
+
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.textContent = '✕';
+    close.setAttribute('aria-label', '閉じる');
+    close.style.cssText = [
+      'flex-shrink:0', 'width:28px', 'height:28px', 'border-radius:6px',
+      'border:none', 'background:transparent', 'color:var(--uz-muted,#888)',
+      'font-size:15px', 'cursor:pointer',
+    ].join(';');
+    close.addEventListener('click', () => {
+      bar.remove();
+      try { localStorage.setItem(DISMISS_KEY, '1'); } catch (e) {}
+    });
+
+    bar.appendChild(text);
+    bar.appendChild(close);
+    document.body.appendChild(bar);
+  });
+})();
