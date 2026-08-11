@@ -396,9 +396,11 @@ document.addEventListener('DOMContentLoaded', () => {
   // タブ初期表示（損益）
   switchHomeTab('pl', true);
 
-  // localStorageで即時描画 → GASで上書き
-  renderStaffFromLocalStorage();
-  loadAttendance();
+  // 勤怠が有効なときのみ出勤データを取得（レオ版は既定OFF＝出勤状況→最近の入力に置換）
+  if (typeof uzAttendanceEnabled !== 'function' || uzAttendanceEnabled()) {
+    renderStaffFromLocalStorage(); // localStorageで即時描画 → GASで上書き
+    loadAttendance();
+  }
   loadAlerts();
   loadPL();
 
@@ -475,8 +477,10 @@ async function initIpadHome() {
   // 月次損益グラフ（タブ連動：初期=月次損益→当月の日次推移）
   _renderIpadPLChart();
 
-  // iPad出勤状況を左カラムに表示
-  _renderIpadAttendance();
+  // iPad出勤状況（勤怠有効時のみ・レオ版は既定OFF）
+  if (typeof uzAttendanceEnabled !== 'function' || uzAttendanceEnabled()) {
+    _renderIpadAttendance();
+  }
 }
 
 function _initMonthSelect(currentMonth) {
@@ -922,32 +926,73 @@ async function loadSidebarRecent() {
 
 /**
  * タブ切替
- * tab: 'pl' | 'attendance'
+ * tab: 'pl' | 'recent'
  * auto: true=自動判定（強制上書きしない）
+ * ※ 勤怠撤廃に伴い「出勤状況」タブは「最近の入力」タブに置換（§2-2）。
  */
 function switchHomeTab(tab, auto) {
-  const tabPl   = document.getElementById('tab-pl');
-  const tabAtt  = document.getElementById('tab-attendance');
-  const panelPl = document.getElementById('panel-pl');
-  const panelAt = document.getElementById('panel-attendance');
-  if (!tabPl || !tabAtt || !panelPl || !panelAt) return;
+  const tabPl     = document.getElementById('tab-pl');
+  const tabRecent = document.getElementById('tab-recent');
+  const panelPl   = document.getElementById('panel-pl');
+  const panelRec  = document.getElementById('panel-recent');
+  if (!tabPl || !tabRecent || !panelPl || !panelRec) return;
 
   // 自動判定はユーザーが手動選択済みのときのみ従う（システム既定 'pl' は上書き可）
   if (auto && _userPickedHomeTab) return;
   if (!auto) _userPickedHomeTab = true;
 
-  if (tab === 'pl') {
-    tabPl.classList.add('active');
-    tabAtt.classList.remove('active');
-    panelPl.style.display = '';
-    panelAt.style.display = 'none';
-  } else {
-    tabAtt.classList.add('active');
+  if (tab === 'recent') {
+    tabRecent.classList.add('active');
     tabPl.classList.remove('active');
-    panelAt.style.display = '';
+    panelRec.style.display = '';
     panelPl.style.display = 'none';
+    renderHomeRecent(); // タブ表示のたび最新を取得（登録直後の反映漏れを防ぐ）
+  } else {
+    tabPl.classList.add('active');
+    tabRecent.classList.remove('active');
+    panelPl.style.display = '';
+    panelRec.style.display = 'none';
   }
 }
+
+/* ホーム「最近の入力」リスト（スマホ）。iPad 版 _renderIpadRecentEntries と同じ
+   getRecentEntries を用い、モバイル向けのコンパクト行で描画する。 */
+async function renderHomeRecent() {
+  const container = document.getElementById('home-recent-list');
+  const empty     = document.getElementById('home-recent-empty');
+  if (!container) return;
+  try {
+    const res  = await callGAS('getRecentEntries', { limit: 15 }).catch(() => null);
+    const data = (res && res.status === 'ok' && Array.isArray(res.data)) ? res.data : [];
+    const items = data.map(_recentItem);
+    items.sort((a, b) => (b.sortKey - a.sortKey) || b.date.localeCompare(a.date));
+    const top = items.slice(0, 15);
+
+    if (top.length === 0) {
+      container.innerHTML = '';
+      if (empty) empty.hidden = false;
+      return;
+    }
+    if (empty) empty.hidden = true;
+
+    container.innerHTML = top.map(it => `<div class="home-recent-row">
+        <div class="home-recent-row__main">
+          <div class="home-recent-row__top">
+            <span class="home-recent-row__reg">${it.regMd}</span>
+            ${it.opBadge}
+            ${it.divBadge}
+          </div>
+          <div class="home-recent-row__name">${escapeHtml(it.name)}</div>
+          ${it.memo ? `<div class="home-recent-row__memo">${escapeHtml(it.memo)}</div>` : ''}
+        </div>
+        <span class="home-recent-row__amt ${it.amtCls}">${formatYen(it.amount)}</span>
+      </div>`).join('');
+  } catch {
+    container.innerHTML = '';
+    if (empty) empty.hidden = false;
+  }
+}
+window.renderHomeRecent = renderHomeRecent;
 
 /**
  * 出勤データ取得後に自動タブ判定

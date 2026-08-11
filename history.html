@@ -677,8 +677,8 @@
            sticky を1階層に集約することで実機での挙動を安定化（A-9整流化） -->
       <div class="hist-fixed-top">
 
-        <!-- タブナビゲーション -->
-        <div class="hist-tabs" role="tablist">
+        <!-- タブナビゲーション（勤怠撤廃で既定非表示＝取引の単一ビュー。attendance ON 時のみ表示） -->
+        <div class="hist-tabs" role="tablist" data-feature="attendance" style="display:none">
           <button id="tab-salescost"
                   class="hist-tab hist-tab--active"
                   type="button" role="tab"
@@ -711,11 +711,7 @@
           </button>
         </div>
 
-        <!-- 取引タブ：売上/コスト追加（ホーム倣い・取引タブ時のみ表示／iPadは右カラム入力のため非表示） -->
-        <div id="fixed-salescost-add" class="hist-sc-add">
-          <button type="button" class="hist-sc-add__btn hist-sc-add__btn--sales" onclick="openSalesModal()">売上を追加</button>
-          <button type="button" class="hist-sc-add__btn hist-sc-add__btn--cost" onclick="openCostModal()">コストを追加</button>
-        </div>
+        <!-- 売上を追加/コストを追加はホームの入力ボタンと重複のため撤去（入力はホームに集約・発生日も選択可）。 -->
 
         <!-- フィルタバー（売上・コストタブ時のみ表示） -->
         <div id="fixed-filter-bar" class="hist-filter-bar">

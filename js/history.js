@@ -134,7 +134,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // A-9：初期表示時に必ず switchTab を呼び、上段固定エリア内のフィルタバー/新規登録ボタンの
   // 表示状態を確定させる（呼ばないと出勤履歴タブでもフィルタバーが見えてしまうバグの修正）
-  const initialTab = (location.hash === '#attendance') ? 'attendance' : 'salescost';
+  // 勤怠撤廃時（レオ既定）は #attendance ハッシュでも取引ビューへ固定する。
+  const _attendOn = (typeof uzAttendanceEnabled !== 'function') || uzAttendanceEnabled();
+  const initialTab = (_attendOn && location.hash === '#attendance') ? 'attendance' : 'salescost';
   switchTab(initialTab);
   loadAll();
   updateIpadApprovalBanner();
@@ -143,6 +145,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
 /* ── 段3：シフトタブの可否判定（featureVisibility.shiftScheduleEnabled）── */
 async function initShiftTab() {
+  // 勤怠撤廃時（レオ既定）はシフトも撤廃（勤怠の下位機能）。
+  if (typeof uzAttendanceEnabled === 'function' && !uzAttendanceEnabled()) {
+    shiftEnabled = false;
+    const t = document.getElementById('tab-shift');
+    if (t) t.hidden = true;
+    return;
+  }
   try {
     const data = await uzGetSettings();
     shiftEnabled = !!(data && data.featureVisibility && data.featureVisibility.shiftScheduleEnabled);
@@ -229,11 +238,12 @@ async function loadAll() {
   attendItems   = [];
 
   const monthParam = `${currentYear}-${String(currentMonth).padStart(2, '0')}`;
+  const attendOn = (typeof uzAttendanceEnabled !== 'function') || uzAttendanceEnabled();
 
   try {
     const [histResult, attendResult] = await Promise.allSettled([
       uzFetchHistory(monthParam),
-      callGAS('getAttendanceByMonth', { month: monthParam }),
+      attendOn ? callGAS('getAttendanceByMonth', { month: monthParam }) : Promise.resolve(null),
     ]);
 
     if (histResult.status === 'fulfilled' && Array.isArray(histResult.value)) {
@@ -242,12 +252,15 @@ async function loadAll() {
       renderSalesCostError();
     }
 
-    if (attendResult.status === 'fulfilled' &&
-        attendResult.value?.status === 'ok' &&
-        Array.isArray(attendResult.value.data)) {
-      renderAttendance(attendResult.value.data);
-    } else {
-      renderAttendanceError();
+    // 勤怠撤廃時（レオ既定）は出勤履歴を取得・描画しない（取引の単一ビュー）。
+    if (attendOn) {
+      if (attendResult.status === 'fulfilled' &&
+          attendResult.value?.status === 'ok' &&
+          Array.isArray(attendResult.value.data)) {
+        renderAttendance(attendResult.value.data);
+      } else {
+        renderAttendanceError();
+      }
     }
 
   } catch (e) {

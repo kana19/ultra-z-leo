@@ -10,14 +10,28 @@
  *    ＝財務データ・API応答をキャッシュしない（常にネットワーク）。
  *  - 非GET（POST等のGAS書込）は傍受しない。
  *  - CACHE_VERSION を上げるたび旧キャッシュを activate で一掃。
+ *  - バージョン反映は「選択式」：新バージョンは install 後に待機（waiting）し、
+ *    自動では有効化しない。ページ側が更新バナーを出し、利用者が「更新」を選んだとき
+ *    （SKIP_WAITING メッセージ受信時）だけ skipWaiting で切替える＝運用中PWAを無言で
+ *    書き換えない。デプロイのたび CACHE_VERSION を上げると更新検知が発火する。
+ *    ※ fetch は network-first のため本文（HTML/JS）はリロードで最新になる。運用店を
+ *      更新まで完全に旧バージョンへ固定したい場合はシェルを cache-first へ切替える
+ *      （将来対応・別途判断）。
  */
 'use strict';
 
-const CACHE_VERSION = 'uz-shell-v1';
+const CACHE_VERSION = 'uz-shell-v2';
 
 self.addEventListener('install', (event) => {
-  // 新バージョンを即時有効化（開発中は更新の反映を待たせない）
-  self.skipWaiting();
+  // 旧実装は self.skipWaiting() で即時・無言に自動更新していた。
+  // 新実装は自動有効化せず waiting のまま待機し、利用者の選択（下の message）を待つ。
+});
+
+// ページからの更新指示（利用者が「更新」を選択）でのみ待機中の新SWを有効化する。
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener('activate', (event) => {

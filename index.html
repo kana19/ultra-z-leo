@@ -155,6 +155,53 @@
     box-shadow: 0 4px 16px var(--uz-border2);
   }
   #home-attendance-banner.show { top: 12px; }
+
+  /* ── 最近の入力リスト（ホーム・スマホ） ───────────────────── */
+  .home-recent-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--uz-border);
+  }
+  .home-recent-row:last-child { border-bottom: none; }
+  .home-recent-row__main { flex: 1; min-width: 0; }
+  .home-recent-row__top {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 2px;
+  }
+  .home-recent-row__reg { font-size: 11px; color: var(--uz-muted); font-variant-numeric: tabular-nums; }
+  .home-recent-row__name {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--uz-text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .home-recent-row__memo {
+    font-size: 12px;
+    color: var(--uz-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .home-recent-row__amt {
+    flex-shrink: 0;
+    font-size: 14px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  .home-recent-row__amt.recent-sales { color: var(--uz-gold, #d4af37); }
+  .home-recent-row__amt.recent-cost  { color: var(--uz-red, #e05050); }
+  .home-recent-empty {
+    padding: 20px 14px;
+    text-align: center;
+    font-size: 13px;
+    color: var(--uz-muted);
+  }
   </style>
 </head>
 <body data-page="home">
@@ -213,9 +260,9 @@
         <i class="ti ti-chart-bar home-tab__icon" aria-hidden="true"></i>
         <span class="home-tab__label">今月の損益</span>
       </button>
-      <button class="home-tab" id="tab-attendance" onclick="switchHomeTab('attendance')" type="button">
-        <i class="ti ti-users home-tab__icon" aria-hidden="true"></i>
-        <span class="home-tab__label">出勤状況</span>
+      <button class="home-tab" id="tab-recent" onclick="switchHomeTab('recent')" type="button">
+        <i class="ti ti-list-details home-tab__icon" aria-hidden="true"></i>
+        <span class="home-tab__label">最近の入力</span>
       </button>
     </div>
 
@@ -288,7 +335,7 @@
         <div class="ipad-dash-section ipad-dash-section--full">
           <div class="ipad-pl-tabs" id="ipad-right-tabs">
             <button type="button" class="ipad-pl-tab active" id="ipad-rt-tab-recent" onclick="switchIpadRightTab('recent')">直近の入力</button>
-            <button type="button" class="ipad-pl-tab" id="ipad-rt-tab-attend" onclick="switchIpadRightTab('attend')">出勤状況</button>
+            <button type="button" class="ipad-pl-tab" id="ipad-rt-tab-attend" data-feature="attendance" style="display:none" onclick="switchIpadRightTab('attend')">出勤状況</button>
           </div>
           <div id="ipad-rt-panel-recent">
             <table class="ipad-dash-table ipad-recent-table" id="ipad-recent-table">
@@ -395,17 +442,18 @@
           </div>
         </div>
 
-        <!-- 出勤状況パネル -->
-        <div id="panel-attendance" class="home-tab-panel" style="display:none">
+        <!-- 最近の入力パネル（出勤状況タブを置換・§2-2 直近入力をスマホホームにも） -->
+        <div id="panel-recent" class="home-tab-panel" style="display:none">
           <div class="card">
             <div class="card__body" style="padding:0;">
-              <div id="staff-list">
-                <!-- home.js が描画 -->
+              <div id="home-recent-list">
+                <!-- home.js renderHomeRecent が描画 -->
               </div>
+              <div id="home-recent-empty" class="home-recent-empty" hidden>今月の記録はありません</div>
             </div>
           </div>
           <div style="text-align:right; padding:6px 4px 0;">
-            <a href="history.html#attendance" style="font-size:12px; color:var(--uz-muted); text-decoration:none;">出勤記録へ ›</a>
+            <a href="history.html" style="font-size:12px; color:var(--uz-muted); text-decoration:none;">月次管理で見る ›</a>
           </div>
         </div>
 

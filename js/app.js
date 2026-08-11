@@ -334,8 +334,20 @@ async function callGASPost(action, data = {}) {
 }
 
 /* 機能ゲート：featureVisibility が有効な機能のリンク/カード（[data-feature]）だけ表示する。
-   サイドバー等は既定で display:none。fax_order_ocr の実値は getFaxOrderConfig（GAS）を正とする。 */
+   サイドバー等は既定で display:none。
+   - attendance：getFeatureVisibility().attendance_menu（同期・固定値）を正とする。
+   - fax_order_ocr：getFaxOrderConfig（GAS・非同期）を正とする。 */
 async function uzApplyFeatureGates() {
+  // 勤怠（同期）：レオ版は既定 OFF。ON のときだけ [data-feature="attendance"] を表示に戻す。
+  try {
+    const fv = (typeof getFeatureVisibility === 'function') ? getFeatureVisibility() : {};
+    const attendOn = fv.attendance_menu !== false;
+    document.querySelectorAll('[data-feature="attendance"]').forEach(function (el) {
+      el.style.display = attendOn ? '' : 'none';
+    });
+  } catch (e) { /* getFeatureVisibility 未定義でも他ゲートは続行 */ }
+
+  // FAX受注（非同期・GAS正）
   const gated = document.querySelectorAll('[data-feature="fax_order_ocr"]');
   if (!gated.length) return;
   let enabled = false;
@@ -344,6 +356,14 @@ async function uzApplyFeatureGates() {
     enabled = !!(res && res.enabled);
   } catch (e) { enabled = false; }
   gated.forEach(function (el) { el.style.display = enabled ? '' : 'none'; });
+}
+/* 勤怠フィーチャーの真偽（各画面のロード分岐用の単一ソース） */
+function uzAttendanceEnabled() {
+  try {
+    return (typeof getFeatureVisibility === 'function')
+      ? getFeatureVisibility().attendance_menu !== false
+      : true;
+  } catch (e) { return true; }
 }
 document.addEventListener('DOMContentLoaded', uzApplyFeatureGates);
 
@@ -1003,11 +1023,14 @@ function employmentTypeLabel(value) {
 }
 
 /* ── 機能表示フラグ（featureVisibility）─────────────────────
- * 固定値を返す。clockin_menu=true / payroll_menu=false。
+ * 固定値を返す。attendance_menu=false（レオ版で勤怠管理を撤廃＝フィーチャーゲートOFF）。
+ * 勤怠系UI（ホーム出勤状況・月次管理の勤怠/シフトタブ・PC出勤管理・拠点QR）は
+ * すべて attendance_menu を単一スイッチとし、[data-feature="attendance"] を uzApplyFeatureGates が
+ * この値で出し分ける（PC版は pc-common.js が PC_NAV.visibilityKey='attendance_menu' で参照）。
  * ターゲット社が運営ポータル経由で settings B16 を書き換える運用に対応する（運営ポータル実装時）。
  */
 function getFeatureVisibility() {
-  return { clockin_menu: true, payroll_menu: false };
+  return { clockin_menu: false, payroll_menu: false, attendance_menu: false };
 }
 
 
@@ -1564,10 +1587,63 @@ function uzAppRootPath() {
 }
 
 if ('serviceWorker' in navigator) {
+  let _uzSwRefreshing = false;
+  // 利用者が「更新」を選択→新SWが有効化（controllerchange）したら1度だけリロードして新版へ。
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (_uzSwRefreshing) return;
+    _uzSwRefreshing = true;
+    window.location.reload();
+  });
+
   window.addEventListener('load', () => {
     const base = uzAppRootPath();
     navigator.serviceWorker.register(base + 'sw.js', { scope: base })
+      .then((reg) => {
+        // 起動時点で待機中の新バージョンがあれば即バナー（前回「後で」を選んだ場合等）。
+        if (reg.waiting && navigator.serviceWorker.controller) {
+          uzShowUpdateBanner(reg.waiting);
+        }
+        // 以後の更新検知：installing → installed（既存controllerあり＝更新）でバナー。
+        reg.addEventListener('updatefound', () => {
+          const nw = reg.installing;
+          if (!nw) return;
+          nw.addEventListener('statechange', () => {
+            if (nw.state === 'installed' && navigator.serviceWorker.controller) {
+              uzShowUpdateBanner(nw);
+            }
+          });
+        });
+      })
       .catch((err) => console.warn('[uz] Service Worker 登録失敗:', err));
+  });
+}
+
+/* 更新バナー：新バージョン検知時に「更新」を利用者へ選ばせる（運用中PWAを無言で書き換えない）。
+   「更新」タップ→待機中SWへ SKIP_WAITING→SW有効化→controllerchange→リロードで新版へ。
+   「後で」タップ→今回は据え置き（次回起動時に再提示）。 */
+function uzShowUpdateBanner(worker) {
+  if (!worker || document.getElementById('uz-update-banner')) return; // 二重表示防止
+  const bar = document.createElement('div');
+  bar.id = 'uz-update-banner';
+  bar.setAttribute('role', 'status');
+  bar.style.cssText = [
+    'position:fixed', 'left:12px', 'right:12px',
+    'bottom:calc(env(safe-area-inset-bottom,0px) + 74px)',
+    'z-index:2000', 'background:var(--uz-text,#222)', 'color:#fff',
+    'border-radius:12px', 'padding:12px 14px', 'display:flex',
+    'align-items:center', 'gap:12px', 'box-shadow:0 6px 20px rgba(0,0,0,0.28)',
+    'font-size:13px', 'font-weight:600'
+  ].join(';');
+  bar.innerHTML =
+    '<span style="flex:1;line-height:1.4;">新しいバージョンがあります</span>' +
+    '<button type="button" id="uz-update-later" style="background:none;border:none;color:#cfcfcf;font:inherit;cursor:pointer;padding:6px;">後で</button>' +
+    '<button type="button" id="uz-update-now" style="background:#fff;color:#222;border:none;border-radius:8px;padding:7px 14px;font:inherit;font-weight:700;cursor:pointer;">更新</button>';
+  document.body.appendChild(bar);
+  document.getElementById('uz-update-later')?.addEventListener('click', () => bar.remove());
+  document.getElementById('uz-update-now')?.addEventListener('click', () => {
+    const btn = document.getElementById('uz-update-now');
+    if (btn) btn.textContent = '更新中…';
+    worker.postMessage({ type: 'SKIP_WAITING' });
   });
 }
 
