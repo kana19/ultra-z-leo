@@ -116,6 +116,7 @@ document.addEventListener('DOMContentLoaded', function() {
 const UZ_SIDEBAR_ITEMS = [
   { key: 'home',     href: 'index.html',      icon: 'ti-planet',        label: 'ホーム'   },
   { key: 'monthly',  href: 'history.html',    icon: 'ti-moon',          label: '月次管理' },
+  { key: 'invoice',  href: 'invoice.html',    icon: 'ti-receipt',       label: '書類発行', feature: 'doc_automation' },
   { key: 'fax',      href: 'fax-orders.html', icon: 'ti-file-invoice',  label: 'FAX受注', feature: 'fax_order_ocr' },
   { key: 'settings', href: 'settings.html',   icon: 'ti-settings',      label: '設定'     }
 ];
@@ -188,6 +189,10 @@ const UZ_DEMO_DATA = {
   getSettings: {
     storeName: 'サンプル店舗（デモ）',
     businessHours: { open: '09:00', close: '21:00', closeNextDay: false },
+    /* 第4隊員 書類発行（doc_automation）を複製元で確認できるよう ON・敬称既定。
+       ※attendance_menu はローカル getFeatureVisibility 側が正のため、ここには置かない。 */
+    featureVisibility: { doc_automation: true },
+    invoiceSettings: { honorificDefault: '御中' },
     serviceList: [
       { code: 'sv001', name: '店内売上',     taxRate: 10 },
       { code: 'sv002', name: 'テイクアウト', taxRate: 8  },
@@ -276,9 +281,45 @@ function uzDemoFaxOrders() {
   ];
 }
 
+/* 書類発行（第4隊員 doc_automation）のデモデータ。複製元で店舗を作らず
+   「商品SKU（商品名×分類）→宛先→明細→発行→プレビュー印刷」を確認できるようにする。
+   分類ちがいの同名SKU（店内/テイクアウト）＝チャネル区分の見本を含める。 */
+var UZ_DEMO_PRODUCTS = [
+  { rowIndex: 2, productCode: 'pr001', categoryL1: '店内',       categoryL2: '', categoryL3: '', productName: 'ブレンドコーヒー',     unitPrice: 500,  taxRate: 10, unit: '杯', aliases: '', enabled: true },
+  { rowIndex: 3, productCode: 'pr002', categoryL1: 'テイクアウト', categoryL2: '', categoryL3: '', productName: 'ブレンドコーヒー',     unitPrice: 480,  taxRate: 8,  unit: '杯', aliases: '', enabled: true },
+  { rowIndex: 4, productCode: 'pr003', categoryL1: '卸し',       categoryL2: '', categoryL3: '', productName: '自家焙煎豆 200g',       unitPrice: 1200, taxRate: 8,  unit: '袋', aliases: '', enabled: true },
+  { rowIndex: 5, productCode: 'pr004', categoryL1: '物販',       categoryL2: '', categoryL3: '', productName: 'オリジナルマグカップ', unitPrice: 1800, taxRate: 10, unit: '個', aliases: '', enabled: true }
+];
+var UZ_DEMO_CUSTOMERS = [
+  { rowIndex: 2, customerId: 'cs001', name: '株式会社さくら商事', type: '', memo: '', senderFax: '03-1234-5678', postalCode: '100-0001', address: '東京都千代田区丸の内1-1-1', tel: '03-1234-5670', email: '', contactPerson: '佐藤' },
+  { rowIndex: 3, customerId: 'cs002', name: 'こまち珈琲 卸販売部', type: '', memo: '', senderFax: '', postalCode: '700-0000', address: '岡山県岡山市北区表町2-2', tel: '086-000-0000', email: '', contactPerson: '田中' }
+];
+function uzDemoDocuments(docType) {
+  if (docType === 'invoice') {
+    return [
+      { rowIndex: 2, invoiceId: 'inv-' + _uzDemoMonth().replace('-', '') + '01-001', customerId: 'cs001',
+        '発行日': _uzDemoDate(5), '支払期限': _uzDemoDate(28), '小計': 5000, '消費税': 500, '合計': 5500,
+        'ステータス': '発行済', 'メモ': 'お振込は月末までにお願いします。',
+        items: [{ productCode: 'pr001', productName: 'ブレンドコーヒー', quantity: 10, unitPrice: 500, taxRate: 10, amount: 5000 }] }
+    ];
+  }
+  return [];
+}
+
 function uzDemoResponse(action, data) {
   if (action === 'getSummary') {
     return { status: 'ok', data: uzDemoSummaryForMonth(data && data.month) };
+  }
+  // 書類発行（第4隊員 doc_automation）：GAS と同じ平坦な形で返す
+  if (action === 'getProducts')  return { status: 'ok', products: UZ_DEMO_PRODUCTS, demo: true };
+  if (action === 'getCustomers') return { status: 'ok', customers: UZ_DEMO_CUSTOMERS, demo: true };
+  if (action === 'getDocuments') return { status: 'ok', documents: uzDemoDocuments(data && data.docType), demo: true };
+  if (action === 'issueDocument') {
+    var items = (data && Array.isArray(data.items)) ? data.items : [];
+    var sub = 0, tax = 0;
+    items.forEach(function (it) { var a = (Number(it.quantity) || 0) * (Number(it.unitPrice) || 0); sub += a; tax += Math.floor(a * (Number(it.taxRate) || 0) / 100); });
+    var pfx = ({ estimate: 'est', invoice: 'inv', delivery: 'dlv' })[data && data.docType] || 'inv';
+    return { status: 'ok', docType: data && data.docType, docId: pfx + '-DEMO-' + String(Date.now()).slice(-4), subtotal: sub, tax: tax, total: sub + tax, demo: true };
   }
   if (action === 'getCostMaster') {
     // 正規化前の素のデフォルト（getCostMaster側で正規化される）
