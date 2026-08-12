@@ -270,6 +270,19 @@
       color: var(--uz-text);
     }
 
+    /* ── 書類マスタ（商品／顧客）追加フォーム：複数行スタック ── */
+    .settings-add-row--stack { flex-direction: column; align-items: stretch; gap: 8px; }
+    .mdoc-cat-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; width: 100%; }
+    .mdoc-cat { min-width: 0; }
+    /* 一覧行の副次情報（カテゴリ・価格・FAX等） */
+    .mdoc-row { display: block; padding: 10px 16px; border-top: 1px solid var(--uz-border); }
+    .mdoc-row:first-child { border-top: none; }
+    .mdoc-row__top { display: flex; align-items: center; gap: 8px; }
+    .mdoc-row__name { flex: 1; min-width: 0; font-size: 14px; font-weight: 600; color: var(--uz-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .mdoc-sub { font-size: 12px; color: var(--uz-muted); margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .mdoc-cat-badge { font-size: 11px; padding: 2px 8px; border-radius: 20px; background: rgba(0,0,0,0.05); color: var(--uz-muted); white-space: nowrap; flex-shrink: 0; }
+    .mdoc-empty { padding: 16px; text-align: center; font-size: 13px; color: var(--uz-muted); }
+
     .settings-footer {
       text-align: center;
       color: var(--uz-muted);
@@ -399,6 +412,101 @@
     </div>
   </section>
 
+  <!-- ④-2 商品マスタ（書類発行・FAX受注の土台／doc_automation ON時のみ表示） -->
+  <section class="settings-section" data-feature="doc_automation" style="display:none">
+    <button class="settings-section__head" type="button"
+            aria-controls="sec-products-body" aria-expanded="true">
+      <span class="settings-section__title">商品マスタ
+        <span id="products-count-badge" class="settings-count-badge" hidden></span>
+      </span>
+    </button>
+    <div class="settings-section__body" id="sec-products-body">
+      <div id="products-list-container"></div>
+      <div id="products-add-row" class="settings-add-row settings-add-row--stack">
+        <!-- カテゴリ（単一所属・3段カスケード。既存から選ぶか新しい分類名を入力＝空欄可） -->
+        <div class="mdoc-cat-row">
+          <input type="text" id="product-add-cat1" class="settings-input mdoc-cat" list="mdoc-cat1-list"
+                 placeholder="大分類" maxlength="20" autocomplete="off">
+          <input type="text" id="product-add-cat2" class="settings-input mdoc-cat" list="mdoc-cat2-list"
+                 placeholder="中分類" maxlength="20" autocomplete="off">
+          <input type="text" id="product-add-cat3" class="settings-input mdoc-cat" list="mdoc-cat3-list"
+                 placeholder="小分類" maxlength="20" autocomplete="off">
+        </div>
+        <datalist id="mdoc-cat1-list"></datalist>
+        <datalist id="mdoc-cat2-list"></datalist>
+        <datalist id="mdoc-cat3-list"></datalist>
+        <div class="mdoc-cat-row">
+          <input type="text" id="product-add-name" class="settings-input"
+                 placeholder="商品名（正規名）" maxlength="40" autocomplete="off">
+        </div>
+        <div class="mdoc-cat-row">
+          <input type="number" id="product-add-price" class="settings-input" style="max-width:160px;"
+                 placeholder="標準単価(税抜)" min="0" inputmode="numeric" autocomplete="off">
+          <select id="product-add-tax" class="form-select" style="width:120px;flex-shrink:0;">
+            <option value="10">10%</option>
+            <option value="8">8%（軽減）</option>
+            <option value="0">0%（非課税）</option>
+          </select>
+          <input type="text" id="product-add-unit" class="settings-input" style="max-width:120px;"
+                 placeholder="単位(個/箱…)" maxlength="8" autocomplete="off">
+        </div>
+        <div class="mdoc-cat-row">
+          <input type="text" id="product-add-aliases" class="settings-input"
+                 placeholder="別名（FAX表記ゆれ・カンマ区切り・任意）" maxlength="120" autocomplete="off">
+          <button id="product-add-btn" class="settings-add-btn" type="button">＋ 追加</button>
+        </div>
+      </div>
+      <p class="settings-note">
+        見積・請求・納品書の明細と、FAX受注の名寄せに使う商品台帳です。1商品は1つのカテゴリ（大→中→小）に属します（金額集計の骨）。カテゴリは既存から選ぶか、新しい分類名を入力すると追加されます（空欄可＝未分類）。
+      </p>
+    </div>
+  </section>
+
+  <!-- ④-3 顧客マスタ（得意先・ユーザー主権／doc_automation ON時のみ表示） -->
+  <section class="settings-section" data-feature="doc_automation" style="display:none">
+    <button class="settings-section__head" type="button"
+            aria-controls="sec-customers-body" aria-expanded="true">
+      <span class="settings-section__title">顧客マスタ（得意先）
+        <span id="customers-count-badge" class="settings-count-badge" hidden></span>
+      </span>
+    </button>
+    <div class="settings-section__body" id="sec-customers-body">
+      <div id="customers-list-container"></div>
+      <div id="customers-add-row" class="settings-add-row settings-add-row--stack">
+        <div class="mdoc-cat-row">
+          <input type="text" id="customer-add-name" class="settings-input"
+                 placeholder="顧客名（正式宛名）" maxlength="40" autocomplete="off">
+        </div>
+        <div class="mdoc-cat-row">
+          <input type="text" id="customer-add-fax" class="settings-input"
+                 placeholder="先方FAX番号（受注照合・複数可）" maxlength="60" autocomplete="off">
+          <input type="text" id="customer-add-tel" class="settings-input"
+                 placeholder="電話番号" maxlength="20" autocomplete="off">
+        </div>
+        <div class="mdoc-cat-row">
+          <input type="text" id="customer-add-postal" class="settings-input" style="max-width:140px;"
+                 placeholder="郵便番号" maxlength="8" autocomplete="off">
+          <input type="text" id="customer-add-address" class="settings-input"
+                 placeholder="住所（請求書/納品書の宛名）" maxlength="80" autocomplete="off">
+        </div>
+        <div class="mdoc-cat-row">
+          <input type="text" id="customer-add-email" class="settings-input"
+                 placeholder="メール（帳票送付・任意）" maxlength="60" autocomplete="off">
+          <input type="text" id="customer-add-contact" class="settings-input"
+                 placeholder="担当者（任意）" maxlength="20" autocomplete="off">
+        </div>
+        <div class="mdoc-cat-row">
+          <input type="text" id="customer-add-memo" class="settings-input"
+                 placeholder="メモ（任意）" maxlength="60" autocomplete="off">
+          <button id="customer-add-btn" class="settings-add-btn" type="button">＋ 追加</button>
+        </div>
+      </div>
+      <p class="settings-note">
+        請求書・納品書の宛名と、FAX受注の発注元照合に使う取引先台帳です（お店の資産＝日々追加できます）。先方FAX番号は、届いたFAXを自動で発注元に結び付けるための照合キーです。
+      </p>
+    </div>
+  </section>
+
   <!-- ⑤ 拠点管理（段2・QR現地証明） 既定非表示・qrProofEnabled 時のみ表示 -->
   <section class="settings-section" id="sec-qrloc" hidden>
     <button class="settings-section__head" type="button"
@@ -496,5 +604,6 @@
 
 <script src="js/app.js"></script>
 <script src="js/settings.js"></script>
+<script src="js/masters-doc.js"></script>
 </body>
 </html>

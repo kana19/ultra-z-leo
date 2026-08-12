@@ -357,6 +357,14 @@ async function uzApplyFeatureGates() {
     });
   } catch (e) { /* getFeatureVisibility 未定義でも他ゲートは続行 */ }
 
+  // 書類発行/商品・顧客マスタ（非同期・GAS正＝settings.featureVisibility.doc_automation）
+  const docGated = document.querySelectorAll('[data-feature="doc_automation"]');
+  if (docGated.length) {
+    let docOn = false;
+    try { docOn = await uzDocAutomationEnabled(); } catch (e) { docOn = false; }
+    docGated.forEach(function (el) { el.style.display = docOn ? '' : 'none'; });
+  }
+
   // FAX受注（非同期・GAS正）
   const gated = document.querySelectorAll('[data-feature="fax_order_ocr"]');
   if (!gated.length) return;
@@ -1396,6 +1404,21 @@ async function uzGetSettings() {
   } catch {
     return null;
   }
+}
+
+/* settings を1回だけ取得してメモ化（doc_automation ゲート等が重複GAS呼び出しを避けるための共有）。
+   featureVisibility.doc_automation の判定に用いる。値はページ寿命内で不変とみなす。 */
+let _uzSettingsOncePromise = null;
+function uzGetSettingsOnce() {
+  if (!_uzSettingsOncePromise) _uzSettingsOncePromise = uzGetSettings();
+  return _uzSettingsOncePromise;
+}
+/* 書類発行/商品・顧客マスタ（第4隊員 doc_automation）の有効判定。settings.featureVisibility.doc_automation を正とする。 */
+async function uzDocAutomationEnabled() {
+  try {
+    const s = await uzGetSettingsOnce();
+    return !!(s && s.featureVisibility && s.featureVisibility.doc_automation);
+  } catch (e) { return false; }
 }
 
 // 税率の正準化：数値化できない/未設定は 10% へフォールバック（NaN 混入を防ぐ）。
