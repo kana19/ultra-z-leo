@@ -429,10 +429,12 @@
         <div class="mdoc-cat-row">
           <input type="text" id="product-add-cat" class="settings-input mdoc-cat" list="mdoc-cat-list"
                  placeholder="分類（例:店内/テイクアウト/卸し・任意）" maxlength="20" autocomplete="off">
-          <input type="text" id="product-add-name" class="settings-input"
-                 placeholder="商品名（正規名）" maxlength="40" autocomplete="off">
+          <input type="text" id="product-add-name" class="settings-input" list="mdoc-name-list"
+                 placeholder="商品名（既存は選択・新規は入力）" maxlength="40" autocomplete="off">
         </div>
         <datalist id="mdoc-cat-list"></datalist>
+        <datalist id="mdoc-name-list"></datalist>
+        <p id="product-name-hint" class="mdoc-price-hint" hidden></p>
         <div class="mdoc-cat-row">
           <input type="number" id="product-add-price" class="settings-input" style="max-width:160px;"
                  placeholder="標準単価(税抜)" min="0" inputmode="numeric" autocomplete="off">

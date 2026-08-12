@@ -49,7 +49,7 @@ async function mdocLoadProducts() {
     _mdocProducts = (res && res.status === 'ok' && Array.isArray(res.products)) ? res.products : [];
   } catch (e) { _mdocProducts = []; }
   mdocRenderProducts();
-  _mdocRebuildCatLists();
+  _mdocRebuildLists();
 }
 
 function mdocRenderProducts() {
@@ -90,44 +90,86 @@ function _mdocFillList(id, values) {
   if (!dl) return;
   dl.innerHTML = values.map(function (v) { return '<option value="' + _mdocEsc(v) + '"></option>'; }).join('');
 }
-/* 分類（categoryL1）の候補 datalist を既存商品から再構築。単一分類＝値リスト自由拡張
-   （既存から選ぶ or 新しい分類名を入力＝分類追加）。L2/L3 はスキーマに温存し当UIでは使わない。 */
-function _mdocRebuildCatLists() {
+/* 分類（categoryL1）と商品名の候補 datalist を既存商品から再構築。
+   分類＝単一・値リスト自由拡張。商品名＝既存を選べば表記ゆれ/重複を防ぎ、別分類で価格違いも足せる。
+   L2/L3 はスキーマに温存し当UIでは使わない。 */
+function _mdocRebuildLists() {
   _mdocFillList('mdoc-cat-list', _mdocDistinct(_mdocProducts.map(function (p) { return p.categoryL1; })));
+  _mdocFillList('mdoc-name-list', _mdocDistinct(_mdocProducts.map(function (p) { return p.productName; })));
 }
 
-/* 同分類の既存商品から標準単価・税率のデフォルトをサジェスト（最後の一致＝最新）。無ければ null。 */
-function _mdocSuggestForCat(cat) {
-  cat = String(cat == null ? '' : cat).trim();
+/* 同一商品名の全バリアント（分類ちがい）を返す。 */
+function _mdocProductVariants(name) {
+  name = String(name == null ? '' : name).trim();
+  if (!name) return [];
+  return _mdocProducts.filter(function (p) { return String(p.productName || '').trim() === name; });
+}
+/* (商品名, 分類) の重複を探す（excludeCode は自分自身を除外）。 */
+function _mdocFindByNameCat(name, cat, excludeCode) {
+  name = String(name || '').trim();
+  cat = String(cat || '').trim();
+  return _mdocProducts.filter(function (p) {
+    return String(p.productName || '').trim() === name
+        && String(p.categoryL1 || '').trim() === cat
+        && String(p.productCode) !== String(excludeCode || '');
+  })[0] || null;
+}
+/* 分類の代表税率（同分類の最新＝軽減税率等に連動）。無ければ null。 */
+function _mdocTaxForCat(cat) {
+  cat = String(cat || '').trim();
   if (!cat) return null;
-  var match = null;
-  _mdocProducts.forEach(function (p) { if (String(p.categoryL1 || '').trim() === cat) match = p; });
-  return match ? { unitPrice: Number(match.unitPrice) || 0, taxRate: Number(match.taxRate) || 0 } : null;
+  var t = null;
+  _mdocProducts.forEach(function (p) { if (String(p.categoryL1 || '').trim() === cat) t = Number(p.taxRate) || 0; });
+  return t;
+}
+
+/* 商品名を確定した時：既存商品名なら共有属性（単位・別名）を空欄のとき引き継ぎ、
+   登録済みの分類バリアントをヒント表示（「別分類の価格違いを足す」と運用者に分かるように）。 */
+function _mdocNameHint(nameId, unitId, aliasId, hintId) {
+  var name = (_mdocVal(nameId) || '').trim();
+  var hint = document.getElementById(hintId);
+  var variants = _mdocProductVariants(name);
+  if (!name || !variants.length) { if (hint) { hint.hidden = true; hint.textContent = ''; } return; }
+  var src = variants[variants.length - 1];
+  var unitEl = document.getElementById(unitId);
+  var aliasEl = document.getElementById(aliasId);
+  if (unitEl && !String(unitEl.value || '').trim() && src.unit) unitEl.value = src.unit;
+  if (aliasEl && !String(aliasEl.value || '').trim() && src.aliases) aliasEl.value = src.aliases;
+  var cats = variants.map(function (p) { return String(p.categoryL1 || '').trim() || '未分類'; });
+  if (hint) {
+    hint.hidden = false;
+    hint.textContent = '「' + name + '」は登録済み（分類: ' + cats.join('・') + '）。別の分類を選べば価格違いで追加できます（単位・別名を引き継ぎました）。';
+  }
 }
 
 /* 分類確定時に標準単価・税率の確認をうながす（分類は金額・税率に連動しやすい＝軽減税率等）。
-   ・同分類の例があればヒント表示＋（単価が空のとき＝新規入力時のみ）単価・税率を補完（既入力は尊重）。
-   ・初出の分類なら確認ヒントのみ（単価欄へフォーカス）。 */
-function _mdocCatPriceConfirm(catId, priceId, taxId, hintId) {
+   ・単価は「同じ商品名の別分類バリアント」を起点にサジェスト（商品に紐づく＝別商品の価格は使わない）。
+   ・税率は「その分類の代表税率」をサジェスト（軽減税率＝店内10/テイクアウト8 等）。
+   ・補完は単価が空のとき（新規入力時）のみ・既入力は尊重。ヒントは常に確認をうながす。 */
+function _mdocCatPriceConfirm(catId, priceId, taxId, hintId, nameId) {
   var cat = (_mdocVal(catId) || '').trim();
   var hint = document.getElementById(hintId);
   var priceEl = document.getElementById(priceId);
   var taxEl = document.getElementById(taxId);
   if (!cat) { if (hint) { hint.hidden = true; hint.textContent = ''; } return; }
-  var sug = _mdocSuggestForCat(cat);
+  var name = nameId ? (_mdocVal(nameId) || '').trim() : '';
   var priceEmpty = priceEl && !String(priceEl.value || '').trim();
+  var taxSug = _mdocTaxForCat(cat);
+  var otherVariants = _mdocProductVariants(name).filter(function (p) { return String(p.categoryL1 || '').trim() !== cat; });
+  var priceSug = otherVariants.length ? (Number(otherVariants[otherVariants.length - 1].unitPrice) || 0) : null;
+  if (priceEmpty) {
+    if (priceSug != null && priceEl) priceEl.value = String(priceSug);
+    if (taxSug != null && taxEl) taxEl.value = String(taxSug);
+  }
   if (hint) {
+    var parts = ['分類「' + cat + '」'];
+    if (priceSug != null) parts.push('同じ商品の別分類は¥' + priceSug.toLocaleString('ja-JP'));
+    if (taxSug != null) parts.push('この分類の税率は通常' + taxSug + '%');
+    parts.push('標準単価と税率をご確認ください。');
     hint.hidden = false;
-    hint.textContent = sug
-      ? '分類「' + cat + '」：同分類の例＝¥' + sug.unitPrice.toLocaleString('ja-JP') + '／税' + sug.taxRate + '%。標準単価と税率をご確認ください。'
-      : '分類「' + cat + '」：この分類は初めてです。標準単価と税率をご確認ください（分類で金額が変わることがあります）。';
+    hint.textContent = parts.join('　');
   }
-  if (sug && priceEmpty) {
-    if (priceEl) priceEl.value = String(sug.unitPrice);
-    if (taxEl) taxEl.value = String(sug.taxRate);
-  } else if (!sug && priceEmpty && priceEl) {
-    priceEl.focus();
-  }
+  if (priceEmpty && priceSug == null && priceEl) priceEl.focus();
 }
 
 function _mdocTaxSelect(id, rate) {
@@ -147,8 +189,12 @@ function _mdocBindProductAdd() {
   var btn = document.getElementById('product-add-btn');
   if (!btn) return;
   var cat = document.getElementById('product-add-cat');
+  var nameEl = document.getElementById('product-add-name');
+  if (nameEl) nameEl.addEventListener('change', function () {
+    _mdocNameHint('product-add-name', 'product-add-unit', 'product-add-aliases', 'product-name-hint');
+  });
   if (cat) cat.addEventListener('change', function () {
-    _mdocCatPriceConfirm('product-add-cat', 'product-add-price', 'product-add-tax', 'product-price-hint');
+    _mdocCatPriceConfirm('product-add-cat', 'product-add-price', 'product-add-tax', 'product-price-hint', 'product-add-name');
   });
   btn.addEventListener('click', _mdocDoAddProduct);
 }
@@ -156,8 +202,13 @@ function _mdocBindProductAdd() {
 async function _mdocDoAddProduct() {
   var name = (_mdocVal('product-add-name') || '').trim();
   if (!name) return _mdocToast('商品名を入力してください', 'error');
+  var cat = (_mdocVal('product-add-cat') || '').trim();
+  // (商品名×分類) の重複ガード：同じ組み合わせは1件（別分類なら追加可＝価格違いバリアント）。
+  if (_mdocFindByNameCat(name, cat)) {
+    return _mdocToast('「' + name + (cat ? '・' + cat : '') + '」は既に登録済みです', 'error');
+  }
   var payload = {
-    categoryL1: (_mdocVal('product-add-cat') || '').trim(),  // 単一分類（L2/L3 は当UIでは未使用）
+    categoryL1: cat,  // 単一分類（L2/L3 は当UIでは未使用）
     categoryL2: '',
     categoryL3: '',
     productName: name,
@@ -174,6 +225,7 @@ async function _mdocDoAddProduct() {
       _mdocClear(['product-add-cat', 'product-add-name', 'product-add-price', 'product-add-unit', 'product-add-aliases']);
       var tax = document.getElementById('product-add-tax'); if (tax) tax.value = '10';
       var ph = document.getElementById('product-price-hint'); if (ph) { ph.hidden = true; ph.textContent = ''; }
+      var nh = document.getElementById('product-name-hint'); if (nh) { nh.hidden = true; nh.textContent = ''; }
       _mdocToast(name + 'を追加しました ✓', 'success');
       await mdocLoadProducts();
     } else {
@@ -194,7 +246,7 @@ function mdocEditProduct(code) {
   row.innerHTML =
     '<div class="mdoc-cat-row">' +
       _mdocCatInput('pe-cat-' + c, 'mdoc-cat-list', '分類（任意）', p.categoryL1) +
-      '<input type="text" id="pe-name-' + c + '" class="settings-input" value="' + _mdocEsc(p.productName) + '" maxlength="40" placeholder="商品名（正規名）">' +
+      '<input type="text" id="pe-name-' + c + '" class="settings-input" list="mdoc-name-list" value="' + _mdocEsc(p.productName) + '" maxlength="40" placeholder="商品名（正規名）">' +
     '</div>' +
     '<div class="mdoc-cat-row">' +
       '<input type="number" id="pe-price-' + c + '" class="settings-input" style="max-width:160px;" value="' + (Number(p.unitPrice) || 0) + '" min="0" placeholder="標準単価(税抜)">' +
@@ -211,16 +263,20 @@ function mdocEditProduct(code) {
     '</div>';
   var catEl = document.getElementById('pe-cat-' + c);
   if (catEl) catEl.addEventListener('change', function () {
-    _mdocCatPriceConfirm('pe-cat-' + c, 'pe-price-' + c, 'pe-tax-' + c, 'pe-price-hint-' + c);
+    _mdocCatPriceConfirm('pe-cat-' + c, 'pe-price-' + c, 'pe-tax-' + c, 'pe-price-hint-' + c, 'pe-name-' + c);
   });
 }
 
 async function mdocSaveProduct(code) {
   var name = (_mdocVal('pe-name-' + code) || '').trim();
   if (!name) return _mdocToast('商品名を入力してください', 'error');
+  var cat = (_mdocVal('pe-cat-' + code) || '').trim();
+  if (_mdocFindByNameCat(name, cat, code)) {
+    return _mdocToast('「' + name + (cat ? '・' + cat : '') + '」は既に登録済みです', 'error');
+  }
   var payload = {
     productCode: String(code),
-    categoryL1: (_mdocVal('pe-cat-' + code) || '').trim(),  // 単一分類。L2/L3 は送らず既存値を温存
+    categoryL1: cat,  // 単一分類。L2/L3 は送らず既存値を温存
     productName: name,
     unitPrice: Number(_mdocVal('pe-price-' + code)) || 0,
     taxRate: parseInt(_mdocVal('pe-tax-' + code), 10) || 0,
