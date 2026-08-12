@@ -282,6 +282,8 @@
     .mdoc-sub { font-size: 12px; color: var(--uz-muted); margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .mdoc-cat-badge { font-size: 11px; padding: 2px 8px; border-radius: 20px; background: rgba(0,0,0,0.05); color: var(--uz-muted); white-space: nowrap; flex-shrink: 0; }
     .mdoc-empty { padding: 16px; text-align: center; font-size: 13px; color: var(--uz-muted); }
+    /* 分類確定時の金額・税率確認ヒント（分類で金額が変わりやすいため） */
+    .mdoc-price-hint { font-size: 12px; line-height: 1.5; color: var(--uz-text); background: var(--uz-amber-bg, rgba(229,185,57,0.14)); border-radius: 8px; padding: 8px 12px; margin: 0; }
 
     .settings-footer {
       text-align: center;
@@ -423,22 +425,14 @@
     <div class="settings-section__body" id="sec-products-body">
       <div id="products-list-container"></div>
       <div id="products-add-row" class="settings-add-row settings-add-row--stack">
-        <!-- カテゴリ（単一所属・3段カスケード。既存から選ぶか新しい分類名を入力＝空欄可） -->
+        <!-- 分類（単一所属・値リスト自由拡張。既存から選ぶか新しい分類名を入力＝分類追加・空欄可） -->
         <div class="mdoc-cat-row">
-          <input type="text" id="product-add-cat1" class="settings-input mdoc-cat" list="mdoc-cat1-list"
-                 placeholder="大分類" maxlength="20" autocomplete="off">
-          <input type="text" id="product-add-cat2" class="settings-input mdoc-cat" list="mdoc-cat2-list"
-                 placeholder="中分類" maxlength="20" autocomplete="off">
-          <input type="text" id="product-add-cat3" class="settings-input mdoc-cat" list="mdoc-cat3-list"
-                 placeholder="小分類" maxlength="20" autocomplete="off">
-        </div>
-        <datalist id="mdoc-cat1-list"></datalist>
-        <datalist id="mdoc-cat2-list"></datalist>
-        <datalist id="mdoc-cat3-list"></datalist>
-        <div class="mdoc-cat-row">
+          <input type="text" id="product-add-cat" class="settings-input mdoc-cat" list="mdoc-cat-list"
+                 placeholder="分類（例:店内/テイクアウト/卸し・任意）" maxlength="20" autocomplete="off">
           <input type="text" id="product-add-name" class="settings-input"
                  placeholder="商品名（正規名）" maxlength="40" autocomplete="off">
         </div>
+        <datalist id="mdoc-cat-list"></datalist>
         <div class="mdoc-cat-row">
           <input type="number" id="product-add-price" class="settings-input" style="max-width:160px;"
                  placeholder="標準単価(税抜)" min="0" inputmode="numeric" autocomplete="off">
@@ -450,6 +444,7 @@
           <input type="text" id="product-add-unit" class="settings-input" style="max-width:120px;"
                  placeholder="単位(個/箱…)" maxlength="8" autocomplete="off">
         </div>
+        <p id="product-price-hint" class="mdoc-price-hint" hidden></p>
         <div class="mdoc-cat-row">
           <input type="text" id="product-add-aliases" class="settings-input"
                  placeholder="別名（FAX表記ゆれ・カンマ区切り・任意）" maxlength="120" autocomplete="off">
@@ -457,7 +452,7 @@
         </div>
       </div>
       <p class="settings-note">
-        見積・請求・納品書の明細と、FAX受注の名寄せに使う商品台帳です。1商品は1つのカテゴリ（大→中→小）に属します（金額集計の骨）。カテゴリは既存から選ぶか、新しい分類名を入力すると追加されます（空欄可＝未分類）。
+        見積・請求・納品書の明細と、FAX受注の名寄せに使う商品台帳です。1商品＝1分類（金額集計の骨）。分類は既存から選ぶか、新しい分類名を入力すれば追加できます（分類追加・空欄可）。分類は金額・税率に連動しやすいため、分類を確定すると標準単価と税率の確認をうながします。同じ商品を店内／テイクアウト等で売り分ける場合は、売上入力側でチャネルを区分します。
       </p>
     </div>
   </section>
