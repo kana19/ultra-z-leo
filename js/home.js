@@ -309,18 +309,23 @@ async function loadPL() {
   const month = String(now.getMonth() + 1).padStart(2, '0');
   const monthStr = `${year}-${month}`;
 
+  // 対策A：前回の当月サマリーがあれば即描画（GASコールド約19秒の「読み込み中/¥—」空白を消す）。
+  const cached = uzSummaryCacheGet(monthStr);
+  if (cached) _renderPLValues(cached);
+
   try {
     const [summary] = await Promise.all([
       uzFetchSummary(monthStr),
       _loadBreakdown(monthStr),   /* 内訳を並行取得（データ層） */
     ]);
     if (summary) {
-      _renderPLValues(summary);
-    } else {
-      _renderPLError();
+      _renderPLValues(summary);        // GAS応答で上書き（保存は uzFetchSummary が担当）
+    } else if (!cached) {
+      _renderPLError();                // キャッシュも無い初回のみエラー表示
     }
+    /* summary無し＋cachedあり → 前回値をそのまま維持（勤怠と同型・GAS失敗で数字を消さない） */
   } catch {
-    _renderPLError();
+    if (!cached) _renderPLError();     // キャッシュがあれば前回値を維持
   }
 }
 
@@ -465,10 +470,13 @@ async function initIpadHome() {
     downloadTaxCSVByRange(from, to, document.getElementById('ipad-tax-dl-exec'));
   });
 
-  // 当月損益を表示
+  // 当月損益を表示（対策A：前回値を即描画 → GAS応答で上書き）
+  const cachedSummary = uzSummaryCacheGet(currentMonth);
+  if (cachedSummary) _renderIpadPLRows(cachedSummary);
   const summary = await callGAS('getSummary', { month: currentMonth }).catch(() => null);
   if (summary && summary.status === 'ok' && summary.data) {
     _renderIpadPLRows(summary.data);
+    uzSummaryCacheSave(currentMonth, summary.data);   // iPad経路でも当月キャッシュを更新
   }
 
   // 直近入力を右カラムに表示

@@ -15,6 +15,9 @@ function doGet(e) {
   let result;
   try {
     switch (action) {
+      // 対策B：キープウォーム用の軽量応答（スプレッドシート非接触＝最速）。
+      // 5分ごとの自己ping（keepWarm）がここを叩き、Webアプリを常時ウォームに保つ。
+      case 'ping':                      result = { status: 'ok', pong: Date.now() };      break;
       case 'addSales':                  result = addSales(data);                          break;
       case 'addCost':                   result = addCost(data);                           break;
       case 'getSummary':                result = getSummary(data.month);                  break;
@@ -104,6 +107,54 @@ function doGet(e) {
   return ContentService
     .createTextOutput(JSON.stringify(result))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+// ============================================================
+// キープウォーム（対策B：GASコールドスタート約19秒の抑止）
+// Apps Script のWebアプリはアイドルでスピンダウンし、久しぶりの起動で最初の
+// データ応答に約19秒かかる。5分ごとに自分の /exec?action=ping を叩いて
+// インスタンスを常時ウォームに保ち、実ユーザーの起動を常に高速側にする。
+// 前提：Webアプリのアクセス権が「全員（匿名）」＝PWAが無認証でfetchするのと同条件。
+//   有効化：Apps Scriptエディタで下記を1度だけ実行（UrlFetch/トリガー権限を承認）
+//           installKeepWarm('https://script.google.com/macros/s/…/exec')
+//           ※ 実exec URL（PWAのGAS_URLと同一）を渡すのが確実。省略時は自動取得を試みる。
+//   無効化：uninstallKeepWarm() を実行。
+// ============================================================
+function keepWarm() {
+  try {
+    var url = _keepWarmUrl_();
+    if (!url) return;
+    UrlFetchApp.fetch(url + (url.indexOf('?') === -1 ? '?' : '&') + 'action=ping', {
+      method: 'get', muteHttpExceptions: true
+    });
+  } catch (e) { /* 失敗しても次回トリガーで再試行 */ }
+}
+
+function _keepWarmUrl_() {
+  var props = PropertiesService.getScriptProperties();
+  var url = props.getProperty('WEB_APP_EXEC_URL');
+  if (url) return url;
+  try {
+    var u = ScriptApp.getService().getUrl();   // 公開Webアプリの /exec を返す（環境により未取得）
+    if (u) { props.setProperty('WEB_APP_EXEC_URL', u); return u; }
+  } catch (e) { /* getUrl不可時は下でnull */ }
+  return null;
+}
+
+function installKeepWarm(execUrl) {
+  var props = PropertiesService.getScriptProperties();
+  if (execUrl) props.setProperty('WEB_APP_EXEC_URL', execUrl);
+  else _keepWarmUrl_();          // 自動取得を試み保存
+  uninstallKeepWarm();           // 既存の keepWarm トリガーを掃除（重複防止）
+  ScriptApp.newTrigger('keepWarm').timeBased().everyMinutes(5).create();
+  return { status: 'ok', url: props.getProperty('WEB_APP_EXEC_URL'), everyMinutes: 5 };
+}
+
+function uninstallKeepWarm() {
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === 'keepWarm') ScriptApp.deleteTrigger(t);
+  });
+  return { status: 'ok' };
 }
 
 // doPost：GETのURL長制限を超える大きなペイロード（Tier1のFAX撮影base64画像）用。

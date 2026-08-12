@@ -17,6 +17,15 @@ const COST_MASTER_KEY     = 'uz_cost_master';
 const PURCHASE_MASTER_KEY = 'uz_purchase_master';
 const STAFF_MASTER_KEY    = 'uz_staff_master';
 
+/* ── 当月P/Lサマリーの即時描画キャッシュ（対策A） ─────────────
+ * GAS（Apps Script）はアイドルでスピンダウンし、久しぶりの起動では最初のデータ
+ * 応答に約19秒かかる（コールドスタート）。その間ホームの損益が「読み込み中/¥—」で
+ * 固まるのが体感遅延の主因。前回GASから取れた「当月」サマリーをここに保存し、次回
+ * 起動時にまず前回値を即描画 → GAS応答で上書きする（勤怠のlocalStorage即描画と同型）。
+ * 当月のみ保存（YTD等で過去月をfetchしても上書きしない）。店舗切替時は下記
+ * MASTER_CACHE_KEYS に含めることで破棄し、別店舗の数字が一瞬出る事故を防ぐ。 */
+const PL_SUMMARY_CACHE_KEY = 'uz_pl_summary_cache';
+
 /* ── 店舗分離（clientId ベースのマスタキャッシュ破棄・トップレベル同期実行） ──
  * localStorage はブラウザ単位で共有されるため、別店舗（別 clientId）のアプリを
  * 同一ブラウザで開くと、前店舗のサービス・販管費・仕入・スタッフ等が起動直後に
@@ -36,6 +45,7 @@ const MASTER_CACHE_KEYS = [
   STAFF_MASTER_KEY,     // uz_staff_master（settings.js/sales.js/history.js が読む正本）
   'uz_store_name',
   'uz_business_hours',
+  PL_SUMMARY_CACHE_KEY, // uz_pl_summary_cache（対策A・別店舗の損益が一瞬出るのを防ぐ）
 ];
 
 function detectClientId() {
@@ -410,11 +420,34 @@ async function uzFetchSummary(month) {
     const res  = await callGAS('getSummary', { month });
     const data = (res && res.status === 'ok' && res.data) ? res.data : null;
     _uzSummaryCache[month] = data;
+    // 対策A：当月サマリーだけ localStorage に残し、次回起動の即時描画に使う。
+    if (data && month === uzCurrentMonthStr()) uzSummaryCacheSave(month, data);
     return data;
   } catch {
     _uzSummaryCache[month] = null;
     return null;
   }
+}
+
+/* ── 当月P/Lサマリーの即時描画キャッシュ 読み書き（対策A） ─────────
+ * 描画サイト（home.js の loadPL / initIpadHome）は await 前に uzSummaryCacheGet で
+ * 前回値を同期取得して即描画する。保存は uzFetchSummary 成功時に当月のみ行う。 */
+function uzCurrentMonthStr() {
+  const n = new Date();
+  return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`;
+}
+function uzSummaryCacheSave(month, summary) {
+  try {
+    localStorage.setItem(PL_SUMMARY_CACHE_KEY, JSON.stringify({ month, summary, ts: Date.now() }));
+  } catch (e) { /* 保存不可環境は無視 */ }
+}
+function uzSummaryCacheGet(month) {
+  try {
+    const raw = localStorage.getItem(PL_SUMMARY_CACHE_KEY);
+    if (!raw) return null;
+    const o = JSON.parse(raw);
+    return (o && o.month === month && o.summary) ? o.summary : null;
+  } catch (e) { return null; }
 }
 
 /**
