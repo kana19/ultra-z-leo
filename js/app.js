@@ -117,6 +117,7 @@ const UZ_SIDEBAR_ITEMS = [
   { key: 'home',     href: 'index.html',      icon: 'ti-planet',        label: 'ホーム'   },
   { key: 'monthly',  href: 'history.html',    icon: 'ti-moon',          label: '月次管理' },
   { key: 'invoice',  href: 'invoice.html',    icon: 'ti-receipt',       label: '書類発行', feature: 'doc_automation' },
+  { key: 'ledger',   href: 'ledger.html',     icon: 'ti-clipboard-list', label: '取引管理', feature: 'doc_automation' },
   { key: 'fax',      href: 'fax-orders.html', icon: 'ti-file-invoice',  label: 'FAX受注', feature: 'fax_order_ocr' },
   { key: 'settings', href: 'settings.html',   icon: 'ti-settings',      label: '設定'     }
 ];
@@ -320,6 +321,20 @@ function uzDemoResponse(action, data) {
     items.forEach(function (it) { var a = (Number(it.quantity) || 0) * (Number(it.unitPrice) || 0); sub += a; tax += Math.floor(a * (Number(it.taxRate) || 0) / 100); });
     var pfx = ({ estimate: 'est', invoice: 'inv', delivery: 'dlv' })[data && data.docType] || 'inv';
     return { status: 'ok', docType: data && data.docType, docId: pfx + '-DEMO-' + String(Date.now()).slice(-4), subtotal: sub, tax: tax, total: sub + tax, demo: true };
+  }
+  // 取引管理（Slice3）：未納一覧・集計。受注一覧は getOrders（上のFAXデモ）を流用。
+  if (action === 'getInvoicesUnpaid') {
+    return { status: 'ok', invoices: [
+      { rowIndex: 2, invoiceId: 'inv-' + _uzDemoMonth().replace('-', '') + '01-001', customerId: 'cs001', issueDate: _uzDemoDate(1),  dueDate: _uzDemoDate(10), total: 5500, status: '発行済', daysOverdue: 6 },
+      { rowIndex: 3, invoiceId: 'inv-' + _uzDemoMonth().replace('-', '') + '05-002', customerId: 'cs002', issueDate: _uzDemoDate(5),  dueDate: _uzDemoDate(28), total: 13200, status: '発行済', daysOverdue: -12 }
+    ], demo: true };
+  }
+  if (action === 'getDocSummary') {
+    return { status: 'ok',
+      byCustomer: { cs001: 55000, cs002: 13200 },
+      byProduct: { 'ブレンドコーヒー': 24000, '自家焙煎豆 200g': 18000, 'オリジナルマグカップ': 9000 },
+      byCategory: { '店内': 24000, '卸し': 18000, '物販': 9000 },
+      demo: true };
   }
   if (action === 'getCostMaster') {
     // 正規化前の素のデフォルト（getCostMaster側で正規化される）

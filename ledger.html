@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#FFFFFF">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>取引管理 — ウルトラZAIMUくん</title>
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" href="icons/icon-192.png">
+  <link rel="manifest" href="manifest.json">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/pages.css">
+  <link rel="stylesheet" href="css/forms.css">
+  <style>
+    /* 取引管理（第4隊員 doc_automation・→ 05§8-5 一覧・集計ビュー）：発行後のデータを「見る・追う」。
+       未納一覧（請求・入金管理＝消込）／受注一覧（orders・§8-7取込も集約）／売掛・受注集計。
+       3デバイス共通・密度可変・集計/消込はPC主戦場（02§1）。lg- 接頭辞で衝突回避。 */
+    .lg-header { padding: 16px 16px 8px; background: var(--uz-bg, #fff); }
+    .lg-header__title { font-size: 18px; font-weight: 700; color: var(--uz-text); }
+    .lg-header__sub { font-size: 12px; color: var(--uz-muted); margin-top: 2px; }
+
+    .lg-off {
+      margin: 12px 16px; padding: 14px 16px; border-radius: 10px; font-size: 13px; line-height: 1.7;
+      background: #fff7ed; border: 1px solid #fed7aa; color: #9a3412;
+    }
+    .lg-off b { color: var(--uz-text); }
+
+    .lg-tabs { display: flex; gap: 6px; padding: 12px 16px 0; }
+    .lg-tab {
+      flex: 1; padding: 10px 6px; border-radius: 10px 10px 0 0; font-size: 13px; font-weight: 700;
+      border: 1px solid var(--uz-border); border-bottom: none; background: #fff; color: var(--uz-muted); cursor: pointer;
+    }
+    .lg-tab--active { background: var(--uz-accent, #2563eb); color: #fff; border-color: transparent; }
+
+    .lg-card {
+      background: var(--uz-surface, #fff); border: 1px solid var(--uz-border);
+      border-radius: 0 0 12px 12px; margin: 0 16px 12px; overflow: hidden;
+    }
+    .lg-card__body { padding: 12px 14px; }
+
+    .lg-panel { display: none; }
+    .lg-panel--active { display: block; }
+
+    .lg-summary-bar {
+      display: flex; gap: 12px; flex-wrap: wrap; padding: 10px 14px; margin: 0; font-size: 13px;
+      background: var(--uz-bg, #f8fafc); border-bottom: 1px solid var(--uz-border);
+    }
+    .lg-summary-bar b { color: var(--uz-text); font-weight: 700; }
+    .lg-summary-bar .lg-amt { color: var(--uz-accent, #2563eb); font-weight: 700; }
+
+    .lg-filter { display: flex; gap: 8px; flex-wrap: wrap; padding: 12px 14px 0; align-items: center; }
+    .lg-filter label { font-size: 12px; color: var(--uz-muted); }
+    .lg-select, .lg-input {
+      padding: 8px 10px; font-size: 13px; border: 1px solid var(--uz-border); border-radius: 8px; background: #fff; color: var(--uz-text);
+    }
+
+    /* 行 */
+    .lg-row { display: flex; align-items: center; gap: 8px; padding: 11px 4px; border-top: 1px solid var(--uz-border); }
+    .lg-row:first-child { border-top: none; }
+    .lg-row__main { flex: 1; min-width: 0; }
+    .lg-row__name { font-size: 14px; font-weight: 600; color: var(--uz-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .lg-row__meta { font-size: 11px; color: var(--uz-muted); margin-top: 2px; }
+    .lg-row__amt { font-size: 14px; font-weight: 700; color: var(--uz-text); white-space: nowrap; text-align: right; }
+    .lg-badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; font-weight: 700; white-space: nowrap; }
+    .lg-badge--overdue { background: #fee2e2; color: #991b1b; }
+    .lg-badge--soon { background: #fef9c3; color: #854d0e; }
+    .lg-badge--ok { background: #e0e7ff; color: #3730a3; }
+    .lg-badge--draft { background: #fef9c3; color: #854d0e; }
+    .lg-badge--confirmed { background: #dcfce7; color: #166534; }
+    .lg-btn {
+      padding: 8px 12px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer;
+      border: 1px solid var(--uz-accent, #2563eb); background: var(--uz-accent, #2563eb); color: #fff; white-space: nowrap;
+    }
+    .lg-btn--ghost { background: #fff; color: var(--uz-accent, #2563eb); }
+    .lg-empty { text-align: center; color: var(--uz-muted); font-size: 13px; padding: 24px 8px; }
+
+    /* 消込インライン */
+    .lg-pay { padding: 10px 4px 12px; border-top: 1px dashed var(--uz-border); display: none; }
+    .lg-pay--open { display: block; }
+    .lg-pay__row { display: flex; gap: 8px; flex-wrap: wrap; align-items: end; }
+    .lg-pay__field label { display: block; font-size: 10px; color: var(--uz-muted); margin-bottom: 2px; }
+    .lg-pay__actions { display: flex; gap: 8px; margin-top: 8px; }
+
+    /* 集計テーブル */
+    .lg-sum-block { margin-bottom: 18px; }
+    .lg-sum-block h3 { font-size: 13px; font-weight: 700; color: var(--uz-text); margin: 0 0 6px; }
+    .lg-sum-table { width: 100%; border-collapse: collapse; }
+    .lg-sum-table td { padding: 8px 6px; font-size: 13px; border-top: 1px solid var(--uz-border); }
+    .lg-sum-table tr:first-child td { border-top: none; }
+    .lg-sum-table td.num { text-align: right; white-space: nowrap; font-weight: 600; color: var(--uz-text); }
+    .lg-sum-table td.name { color: var(--uz-text); }
+    .lg-sum-total { display: flex; justify-content: space-between; font-weight: 700; font-size: 14px; padding: 8px 6px; border-top: 2px solid var(--uz-border); margin-top: 2px; }
+    .lg-note { font-size: 11px; color: var(--uz-muted); margin: 10px 14px; line-height: 1.6; }
+  </style>
+</head>
+<body data-page="ledger">
+
+<!-- iPad サイドバーナビ（中身は app.js uzRenderSidebar が生成） -->
+<nav class="nav-sidebar" id="nav-sidebar" data-active="ledger" aria-label="メインナビゲーション"></nav>
+
+<div class="page-wrapper">
+
+  <header class="lg-header">
+    <span class="lg-header__title">取引管理</span>
+    <div class="lg-header__sub">発行した請求の入金管理（消込）、受注の一覧、売上の集計をまとめて確認します。</div>
+  </header>
+
+  <!-- doc_automation OFF 時の案内 -->
+  <div id="lg-off" class="lg-off" hidden>
+    <b>取引管理はこのお店では無効です。</b><br>
+    ご利用には運営側での有効化（doc_automation）が必要です。担当者へお問い合わせください。
+  </div>
+
+  <!-- 本体（doc_automation ON 時のみ表示） -->
+  <div id="lg-main" hidden>
+
+    <div class="lg-tabs" role="tablist" aria-label="取引管理の表示">
+      <button type="button" class="lg-tab lg-tab--active" data-tab="unpaid" role="tab" aria-selected="true">未納</button>
+      <button type="button" class="lg-tab" data-tab="orders" role="tab">受注</button>
+      <button type="button" class="lg-tab" data-tab="summary" role="tab">集計</button>
+    </div>
+
+    <!-- 未納一覧 -->
+    <div class="lg-card lg-panel lg-panel--active" id="lg-panel-unpaid" role="tabpanel">
+      <div class="lg-summary-bar" id="lg-unpaid-summary">—</div>
+      <div class="lg-card__body" id="lg-unpaid-list"><div class="lg-empty">読み込み中…</div></div>
+    </div>
+
+    <!-- 受注一覧 -->
+    <div class="lg-card lg-panel" id="lg-panel-orders" role="tabpanel" hidden>
+      <div class="lg-filter">
+        <label for="lg-order-state">状態</label>
+        <select id="lg-order-state" class="lg-select">
+          <option value="">すべて</option>
+          <option value="draft">下書き</option>
+          <option value="confirmed">確定</option>
+        </select>
+        <input type="text" id="lg-order-supplier" class="lg-input" placeholder="発注元で絞り込み" maxlength="40" style="flex:1;min-width:120px;">
+      </div>
+      <div class="lg-summary-bar" id="lg-orders-summary">—</div>
+      <div class="lg-card__body" id="lg-orders-list"><div class="lg-empty">読み込み中…</div></div>
+      <p class="lg-note">受注は「FAX受注」で取り込んだ注文を集約します。FAX受注が無効、または取込がまだない場合は空欄になります。</p>
+    </div>
+
+    <!-- 集計 -->
+    <div class="lg-card lg-panel" id="lg-panel-summary" role="tabpanel" hidden>
+      <div class="lg-card__body" id="lg-summary-body"><div class="lg-empty">読み込み中…</div></div>
+      <p class="lg-note">顧客別＝発行済み請求書の合計、商品別・カテゴリ別＝確定した受注の合計です。分類（カテゴリ）は商品マスタの単一分類で集計します。</p>
+    </div>
+
+  </div><!-- /#lg-main -->
+
+</div><!-- /page-wrapper -->
+
+<!-- ボトムナビゲーション（スマホ用） -->
+<nav class="bottom-nav" aria-label="メインナビゲーション">
+  <a href="index.html" class="nav-item">
+    <i class="ti ti-planet nav-item__icon" aria-hidden="true"></i>
+    <span class="nav-item__label">ホーム</span>
+  </a>
+  <a href="invoice.html" class="nav-item">
+    <i class="ti ti-receipt nav-item__icon" aria-hidden="true"></i>
+    <span class="nav-item__label">書類発行</span>
+  </a>
+  <a href="ledger.html" class="nav-item nav-item--active" aria-current="page">
+    <i class="ti ti-clipboard-list nav-item__icon" aria-hidden="true"></i>
+    <span class="nav-item__label">取引管理</span>
+  </a>
+  <a href="settings.html" class="nav-item">
+    <i class="ti ti-settings nav-item__icon" aria-hidden="true"></i>
+    <span class="nav-item__label">設定</span>
+  </a>
+</nav>
+
+<div id="loading-overlay" class="loading-overlay" aria-hidden="true">
+  <div class="spinner"></div>
+</div>
+
+<script src="js/app.js"></script>
+<script src="js/ledger.js"></script>
+</body>
+</html>
