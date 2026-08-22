@@ -366,17 +366,8 @@
     <!-- ── 左カラム（iPad）/ 通常表示（スマホ） ─── -->
     <div class="ipad-col--left">
 
-        <!-- 書類発行ランチャー（警備隊第4隊員・doc_automation 有効時のみ・app.js uzApplyFeatureGates が表示制御） -->
-        <a href="invoice.html" class="card" data-feature="doc_automation" style="display:none; text-decoration:none; margin-bottom:12px;">
-          <div class="card__body" style="display:flex; align-items:center; gap:10px;">
-            <i class="ti ti-receipt" style="font-size:22px; color:var(--uz-accent,#2563eb);" aria-hidden="true"></i>
-            <div>
-              <div style="font-weight:700; color:var(--uz-text);">書類発行</div>
-              <div style="font-size:12px; color:var(--uz-muted);">見積・請求・納品書の発行はこちら</div>
-            </div>
-            <i class="ti ti-chevron-right" style="margin-left:auto; color:var(--uz-muted);" aria-hidden="true"></i>
-          </div>
-        </a>
+        <!-- 書類発行（見積/請求の作成＋PDF）はPC版に集約＝スマホ/iPadは閲覧・確認（05§8-5 2026-08-13）。
+             ここには置かない。スマホ/iPadの doc_automation 導線は「取引管理」（閲覧/消込/受注→売上反映）。 -->
 
         <!-- 取引管理ランチャー（警備隊第4隊員・doc_automation 有効時のみ・未納/受注/集計） -->
         <a href="ledger.html" class="card" data-feature="doc_automation" style="display:none; text-decoration:none; margin-bottom:12px;">

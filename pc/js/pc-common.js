@@ -8,26 +8,25 @@
 const PC_NAV = [
   { href: 'pc-monthly.html',    label: '月次管理',  icon: 'ti-moon' },
   { href: 'pc-projects.html',   label: '案件管理',  icon: 'ti-star' },
+  { href: 'pc-invoice.html',    label: '書類発行',  icon: 'ti-receipt',  visibilityKey: 'doc_automation' },
   { href: 'pc-attendance.html', label: '出勤管理',  icon: 'ti-users',    visibilityKey: 'attendance_menu' },
   { href: 'pc-settings.html',   label: '設定',      icon: 'ti-settings' }
 ];
 
 function pcRenderSidebar(activeHref) {
-  // featureVisibility 取得（app.js の getFeatureVisibility を参照）
-  const fv = (typeof getFeatureVisibility === 'function')
-    ? getFeatureVisibility()
-    : { clockin_menu: true, payroll_menu: false };
-
   // 業態別ラベル取得（app.js の deriveUILabels を参照）
   const uiLabels = (typeof deriveUILabels === 'function') ? deriveUILabels() : {};
 
+  // ①オプション判定は settings 駆動（getFeatureVisibility＝唯一源・2026-08-13 一本化）。
+  // gated 項目（visibilityKey）は既定 display:none で描画し、pcApplyNavGates が settings 確定後に
+  // 同じ源で doc_automation/attendance_menu を出し分ける（オフの機能はナビに出さない）。
   const navHtml = PC_NAV
-    .filter(n => !n.visibilityKey || fv[n.visibilityKey] !== false)
     .map(n => {
       const cls = n.href === activeHref ? 'pc-nav__link active' : 'pc-nav__link';
       const labelText = (n.uiLabelKey && uiLabels[n.uiLabelKey]) ? uiLabels[n.uiLabelKey] : n.label;
       const iconHtml = n.icon ? `<i class="ti ${n.icon} pc-nav__icon" aria-hidden="true"></i>` : '';
-      return `<a href="${n.href}" class="${cls}">${iconHtml}<span>${escHtml(labelText)}</span></a>`;
+      const gated = n.visibilityKey ? ` data-vis="${n.visibilityKey}" style="display:none"` : '';
+      return `<a href="${n.href}" class="${cls}"${gated}>${iconHtml}<span>${escHtml(labelText)}</span></a>`;
     }).join('');
 
   // 店名ロゴ（クリックで損益概観 index.html へ遷移）
@@ -98,6 +97,18 @@ function pcStartClock() {
   }, 30000);
 }
 
+/* ①オプション（doc_automation/attendance_menu 等）を settings 駆動で出し分け（一本化 2026-08-13）。
+   getFeatureVisibility（settings.featureVisibility）を唯一源とし、gated ナビを表示/非表示する。
+   settings 確定は非同期のため、ブート時（キャッシュ値）と settings-synced 時の2度評価する。 */
+function pcApplyNavGates() {
+  const fv = (typeof getFeatureVisibility === 'function') ? getFeatureVisibility() : {};
+  document.querySelectorAll('.pc-nav__link[data-vis]').forEach(function (a) {
+    const key = a.getAttribute('data-vis');
+    a.style.display = (fv[key] === true) ? '' : 'none';
+  });
+}
+document.addEventListener('uz:settings-synced', pcApplyNavGates);
+
 /* ── PC版ページブート ──────────────────────── */
 function pcBootstrap(activeHref, title) {
   const app = document.getElementById('pc-app');
@@ -106,6 +117,7 @@ function pcBootstrap(activeHref, title) {
   const main = document.getElementById('pc-main');
   if (main) main.insertAdjacentHTML('afterbegin', pcRenderHeader(title));
   pcStartClock();
+  pcApplyNavGates();   // ①オプションのナビ出し分け（キャッシュ値→settings-synced で再評価）
   // 課題1：サイドバー/ヘッダー挿入後にブランド（店舗ロゴ／店舗名）を描画。
   // app.js の DOMContentLoaded 描画より後に DOM 挿入されるため明示的に呼ぶ。
   if (typeof uzRenderAllBrands === 'function') uzRenderAllBrands();

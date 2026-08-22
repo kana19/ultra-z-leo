@@ -212,6 +212,11 @@ function _lgRenderOrders() {
     if (o.quantity != null) meta.push('数量' + o.quantity);
     if (o.desiredDeliveryDate) meta.push('納期' + _lgEsc(o.desiredDeliveryDate));
     if (o.createdAt) meta.push(_lgEsc(String(o.createdAt).slice(0, 10)));
+    // 受注→売上に反映（受注→売上→請求書の一本道・05§8-5/§8-7）。反映済みは印を出し二重起票を防ぐ。
+    var reflected = String(o.memo || '').indexOf('売上反映済') >= 0;
+    var action = reflected
+      ? '<span class="lg-badge lg-badge--ok">売上反映済</span>'
+      : '<button type="button" class="lg-btn lg-btn--ghost" onclick="_lgReflectToSales(' + Number(o.rowIndex) + ',\'' + _lgEsc(o.orderId) + '\')">売上に反映</button>';
     return '' +
       '<div class="lg-row">' +
         '<div class="lg-row__main">' +
@@ -220,8 +225,26 @@ function _lgRenderOrders() {
         '</div>' +
         '<span class="lg-badge ' + st.c + '">' + st.t + '</span>' +
         '<span class="lg-row__amt">' + _lgYen(o.amount) + '</span>' +
+        action +
       '</div>';
   }).join('');
+}
+
+/* 受注を売上へ反映（受注→売上→請求書の一本道・→ 05§8-5/§8-7）。
+   二重起票防止＝確認ダイアログ＋GAS側の反映済み印。反映後は一覧を再取得して印を表示する。 */
+async function _lgReflectToSales(rowIndex, orderId) {
+  if (!window.confirm('この受注を売上に反映します。よろしいですか？\n（反映後、請求書は「取引管理→売上から」で作成できます）')) return;
+  try {
+    var res = await callGAS('orderToSales', { rowIndex: rowIndex, orderId: orderId });
+    if (res && res.status === 'ok') {
+      _lgToast('売上に反映しました ✓', 'success');
+      _lgLoadOrders();   // 再取得＝反映済み表示へ
+    } else {
+      _lgToast((res && res.message) || '反映に失敗しました', 'error');
+    }
+  } catch (e) {
+    _lgToast('通信エラーで反映できませんでした', 'error');
+  }
 }
 
 /* ══════════════════════════════════════════════════════════

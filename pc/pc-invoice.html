@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>書類発行 | ウルトラZAIMUくん PC版</title>
+<link rel="icon" type="image/png" href="../icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.9.0/dist/tabler-icons.min.css">
+<link rel="stylesheet" href="../css/base.css">
+<link rel="stylesheet" href="css/pc.css">
+<style>
+  /* 書類発行（PC限定・詳細版・→ 05§8-5 2026-08-13）：見積/請求の作成＋PDF出力。
+     発行は"作り込み・出力"＝PC事務作業（給与計算と同格）。pcinv- 接頭辞で衝突回避。 */
+  .pcinv-off { margin:16px 0; padding:16px 18px; border-radius:10px; font-size:13px; line-height:1.7;
+    background:#fff7ed; border:1px solid #fed7aa; color:#9a3412; }
+  .pcinv-off b { color:var(--uz-text); }
+
+  .pcinv-grid { display:grid; grid-template-columns: minmax(0,1.35fr) minmax(0,1fr); gap:16px; align-items:start; }
+  @media (max-width:1100px){ .pcinv-grid { grid-template-columns:1fr; } }
+
+  .pcinv-tabs { display:flex; gap:8px; margin-bottom:14px; }
+  .pcinv-tab { padding:9px 18px; border-radius:9px; font-size:14px; font-weight:700; cursor:pointer;
+    border:1px solid var(--uz-border); background:#fff; color:var(--uz-text2,#64748b); }
+  .pcinv-tab--active { background:var(--uz-accent,#2563eb); color:#fff; border-color:transparent; }
+
+  .pcinv-field { margin-bottom:12px; }
+  .pcinv-field > label { display:block; font-size:12px; font-weight:600; color:var(--uz-text2,#64748b); margin-bottom:4px; }
+  .pcinv-row { display:flex; gap:10px; flex-wrap:wrap; }
+  .pcinv-row > .pcinv-field { flex:1; min-width:150px; margin-bottom:0; }
+  .pcinv-input, .pcinv-select { width:100%; box-sizing:border-box; padding:9px 10px; font-size:14px;
+    border:1px solid var(--uz-border); border-radius:8px; background:#fff; color:var(--uz-text); }
+  .pcinv-honorific { max-width:110px; }
+
+  /* 請求の取込ソース */
+  .pcinv-src { border:1px dashed var(--uz-border); border-radius:10px; padding:12px; margin-bottom:14px; background:var(--uz-bg,#f8fafc); }
+  .pcinv-src__tabs { display:flex; gap:8px; margin-bottom:10px; }
+  .pcinv-src__tab { padding:6px 12px; border-radius:8px; font-size:12px; font-weight:700; cursor:pointer;
+    border:1px solid var(--uz-border); background:#fff; color:var(--uz-text2,#64748b); }
+  .pcinv-src__tab--active { background:#334155; color:#fff; border-color:transparent; }
+  .pcinv-src__panel { display:none; } .pcinv-src__panel--active { display:block; }
+  /* 売上から＝複数選択チェックリスト（同月の複数行を1枚にまとめる） */
+  .pcinv-sales-list { display:flex; flex-direction:column; gap:4px; margin:8px 0; max-height:230px; overflow-y:auto; }
+  .pcinv-sales-row { display:flex; align-items:center; gap:8px; padding:6px 8px; border:1px solid var(--uz-border); border-radius:8px; background:#fff; font-size:12px; cursor:pointer; }
+  .pcinv-sales-row__name { flex:1; min-width:0; font-weight:600; color:var(--uz-text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .pcinv-sales-row__meta { color:var(--uz-text2,#64748b); white-space:nowrap; }
+  .pcinv-sales-row__amt { font-weight:700; color:var(--uz-text); white-space:nowrap; }
+  .pcinv-sales-bar { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:6px; }
+  .pcinv-sales-all { font-size:12px; font-weight:700; color:var(--uz-text); display:flex; align-items:center; gap:4px; cursor:pointer; }
+
+  /* 明細 */
+  .pcinv-lines { display:flex; flex-direction:column; gap:8px; }
+  .pcinv-line { border:1px solid var(--uz-border); border-radius:10px; padding:10px; background:var(--uz-bg,#f8fafc);
+    display:grid; grid-template-columns:1fr; gap:8px; }
+  .pcinv-line__nums { display:grid; grid-template-columns:1.4fr 90px 110px 96px 42px; gap:6px; align-items:end; }
+  .pcinv-line__nums label { font-size:10px; color:var(--uz-text2,#64748b); display:block; margin-bottom:2px; }
+  .pcinv-line__amount { grid-column:1/-1; text-align:right; font-weight:700; color:var(--uz-text); }
+  .pcinv-line__del { height:38px; border:1px solid #fecaca; color:#b91c1c; background:#fff; border-radius:8px; cursor:pointer; font-size:16px; }
+  .pcinv-line__pick select { font-size:12px; color:var(--uz-text2,#64748b); }
+  .pcinv-addline { width:100%; padding:10px; border-radius:10px; font-size:13px; font-weight:700; margin-top:8px;
+    border:1px dashed var(--uz-border); background:#fff; color:var(--uz-accent,#2563eb); cursor:pointer; }
+
+  .pcinv-totals { margin-top:12px; padding-top:10px; border-top:1px solid var(--uz-border); }
+  .pcinv-total-row { display:flex; justify-content:space-between; font-size:13px; color:var(--uz-text2,#64748b); padding:3px 0; }
+  .pcinv-total-row--grand { font-size:18px; font-weight:700; color:var(--uz-text); border-top:1px solid var(--uz-border); margin-top:6px; padding-top:8px; }
+
+  .pcinv-actions { display:flex; gap:10px; margin-top:14px; }
+  .pcinv-issue-btn { flex:1; padding:13px; border-radius:10px; font-size:15px; font-weight:700; border:none;
+    background:var(--uz-accent,#2563eb); color:#fff; cursor:pointer; }
+  .pcinv-issue-btn:disabled { opacity:.5; cursor:not-allowed; }
+  .pcinv-cancel-btn { padding:13px 16px; border-radius:10px; font-size:14px; font-weight:700; cursor:pointer;
+    border:1px solid var(--uz-border); background:#fff; color:var(--uz-text2,#64748b); }
+  .pcinv-editing { font-size:12px; font-weight:700; color:#b45309; margin-bottom:8px; display:none; }
+  .pcinv-editing--on { display:block; }
+  .pcinv-note { font-size:11px; color:var(--uz-text2,#64748b); margin-top:8px; line-height:1.6; }
+
+  /* 顧客別一覧 */
+  .pcinv-doc-row { display:flex; align-items:center; gap:8px; padding:10px 4px; border-top:1px solid var(--uz-border); }
+  .pcinv-doc-row:first-child { border-top:none; }
+  .pcinv-doc-row__main { flex:1; min-width:0; cursor:pointer; }
+  .pcinv-doc-row__name { font-size:14px; font-weight:600; color:var(--uz-text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .pcinv-doc-row__meta { font-size:11px; color:var(--uz-text2,#64748b); margin-top:2px; }
+  .pcinv-doc-row__amt { font-size:14px; font-weight:700; color:var(--uz-text); white-space:nowrap; }
+  .pcinv-mini { padding:6px 10px; border-radius:7px; font-size:12px; font-weight:700; cursor:pointer;
+    border:1px solid var(--uz-accent,#2563eb); background:#fff; color:var(--uz-accent,#2563eb); white-space:nowrap; }
+  .pcinv-empty { text-align:center; color:var(--uz-text2,#64748b); font-size:13px; padding:20px; }
+
+  /* プレビュー（印刷用A4書面） */
+  .pcinv-modal { position:fixed; inset:0; background:rgba(15,23,42,.55); z-index:1000; display:none;
+    align-items:flex-start; justify-content:center; padding:24px; overflow:auto; }
+  .pcinv-modal--open { display:flex; }
+  .pcinv-modal__panel { background:#fff; border-radius:12px; width:100%; max-width:780px; overflow:hidden; }
+  .pcinv-modal__bar { display:flex; gap:8px; padding:10px 12px; border-bottom:1px solid var(--uz-border); }
+  .pcinv-modal__bar button { padding:9px 14px; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer;
+    border:1px solid var(--uz-border); background:#fff; color:var(--uz-text); }
+  .pcinv-modal__bar .pcinv-print { background:var(--uz-accent,#2563eb); color:#fff; border-color:transparent; margin-left:auto; }
+
+  #pcinv-print-area { padding:28px; color:#111; font-size:13px; }
+  .pcinv-doc__title { text-align:center; font-size:26px; font-weight:700; letter-spacing:.3em; margin-bottom:20px; }
+  .pcinv-doc__subject { text-align:center; font-size:15px; margin:-10px 0 18px; color:#333; }
+  .pcinv-doc__top { display:flex; justify-content:space-between; gap:16px; margin-bottom:18px; }
+  .pcinv-doc__to { flex:1; }
+  .pcinv-doc__to-name { font-size:18px; font-weight:700; border-bottom:2px solid #111; padding-bottom:4px; display:inline-block; min-width:60%; }
+  .pcinv-doc__to-addr { font-size:12px; color:#444; margin-top:6px; }
+  .pcinv-doc__from { text-align:right; font-size:12px; color:#333; white-space:nowrap; }
+  .pcinv-doc__meta { font-size:12px; color:#333; margin-top:6px; }
+  .pcinv-doc__grand { border:2px solid #111; padding:8px 14px; font-size:16px; font-weight:700; display:inline-block; margin-bottom:14px; }
+  .pcinv-doc__table { width:100%; border-collapse:collapse; margin-bottom:14px; }
+  .pcinv-doc__table th, .pcinv-doc__table td { border:1px solid #999; padding:7px 8px; font-size:12px; }
+  .pcinv-doc__table th { background:#f1f5f9; font-weight:700; }
+  .pcinv-doc__table td.num { text-align:right; white-space:nowrap; }
+  .pcinv-doc__sums { width:280px; margin-left:auto; }
+  .pcinv-doc__sum-row { display:flex; justify-content:space-between; padding:4px 0; font-size:13px; }
+  .pcinv-doc__sum-row--grand { font-weight:700; font-size:15px; border-top:2px solid #111; margin-top:4px; padding-top:6px; }
+  .pcinv-doc__terms { margin-top:14px; font-size:12px; color:#333; }
+  .pcinv-doc__memo { margin-top:12px; font-size:12px; color:#333; white-space:pre-wrap; border-top:1px dashed #999; padding-top:8px; }
+
+  @media print {
+    body * { visibility:hidden !important; }
+    #pcinv-print-area, #pcinv-print-area * { visibility:visible !important; }
+    #pcinv-print-area { position:absolute; left:0; top:0; width:100%; padding:0; }
+    .pcinv-modal { position:static; background:none; padding:0; display:block; }
+    .pcinv-modal__bar { display:none !important; }
+    .pcinv-modal__panel { max-width:none; box-shadow:none; }
+  }
+</style>
+</head>
+<body class="pc-body">
+<div id="pc-app" class="pc-layout">
+  <main class="pc-main" id="pc-main">
+    <div class="pc-body-inner">
+
+      <!-- doc_automation OFF 時 -->
+      <div id="pcinv-off" class="pcinv-off" hidden>
+        <b>書類発行はこのお店では無効です。</b><br>
+        ご利用には運営側での有効化（doc_automation）が必要です。担当者へお問い合わせください。
+      </div>
+
+      <div id="pcinv-main" hidden>
+        <div class="pcinv-tabs" role="tablist" aria-label="書類の種類">
+          <button type="button" class="pcinv-tab pcinv-tab--active" data-type="estimate" role="tab" aria-selected="true">見積書</button>
+          <button type="button" class="pcinv-tab" data-type="invoice" role="tab">請求書</button>
+        </div>
+
+        <div class="pcinv-grid">
+          <!-- 左：発行フォーム -->
+          <section class="pc-card">
+            <div class="pcinv-editing" id="pcinv-editing">編集中（保存すると上書きされます）</div>
+
+            <!-- 請求の取込ソース（請求書タブのみ表示） -->
+            <div class="pcinv-src" id="pcinv-src" hidden>
+              <div class="pcinv-src__tabs">
+                <button type="button" class="pcinv-src__tab pcinv-src__tab--active" data-src="manual">手入力</button>
+                <button type="button" class="pcinv-src__tab" data-src="estimate">見積書から</button>
+                <button type="button" class="pcinv-src__tab" data-src="sales">売上から</button>
+              </div>
+              <div class="pcinv-src__panel pcinv-src__panel--active" data-src-panel="manual">
+                <div class="pcinv-note">明細を直接入力して請求書を作ります。</div>
+              </div>
+              <div class="pcinv-src__panel" data-src-panel="estimate">
+                <div class="pcinv-row">
+                  <div class="pcinv-field"><label for="pcinv-src-est">見積書を選ぶ</label>
+                    <select id="pcinv-src-est" class="pcinv-select"><option value="">— 見積書を選択 —</option></select></div>
+                  <div class="pcinv-field" style="flex:0 0 auto;"><label>&nbsp;</label>
+                    <button type="button" class="pcinv-mini" id="pcinv-src-est-apply">反映</button></div>
+                </div>
+                <div class="pcinv-note">選んだ見積書の明細・件名・宛先をこのフォームへ流し込みます。</div>
+              </div>
+              <div class="pcinv-src__panel" data-src-panel="sales">
+                <div class="pcinv-row">
+                  <div class="pcinv-field"><label for="pcinv-src-from">期間（自）</label><input type="date" id="pcinv-src-from" class="pcinv-input"></div>
+                  <div class="pcinv-field"><label for="pcinv-src-to">期間（至）</label><input type="date" id="pcinv-src-to" class="pcinv-input"></div>
+                  <div class="pcinv-field"><label for="pcinv-src-cc">顧客コード（任意）</label><input type="text" id="pcinv-src-cc" class="pcinv-input" placeholder="会計の取引先コード" maxlength="40"></div>
+                  <div class="pcinv-field" style="flex:0 0 auto;"><label>&nbsp;</label><button type="button" class="pcinv-mini" id="pcinv-src-sales-fetch">売上を検索</button></div>
+                </div>
+                <div id="pcinv-sales-list" class="pcinv-sales-list"></div>
+                <div class="pcinv-sales-bar" id="pcinv-sales-bar" hidden>
+                  <label class="pcinv-sales-all"><input type="checkbox" id="pcinv-sales-all" checked> 全選択</label>
+                  <span class="pcinv-note" id="pcinv-sales-count" style="margin:0;"></span>
+                  <button type="button" class="pcinv-mini" id="pcinv-src-sales-apply">選択を明細にまとめる</button>
+                </div>
+                <div class="pcinv-note">期間内の売上から請求する行を選び、明細にまとめます（宛先は下で顧客マスタから選択）。同じ月の複数行をまとめて1枚の請求書にできます。</div>
+              </div>
+            </div>
+
+            <div class="pcinv-row">
+              <div class="pcinv-field"><label for="pcinv-customer">宛先（顧客マスタ）</label>
+                <select id="pcinv-customer" class="pcinv-select"><option value="">読み込み中…</option></select></div>
+              <div class="pcinv-field" style="flex:0 0 auto;"><label for="pcinv-honorific">敬称</label>
+                <select id="pcinv-honorific" class="pcinv-select pcinv-honorific">
+                  <option value="御中">御中</option><option value="様">様</option><option value="">（なし）</option>
+                </select></div>
+            </div>
+
+            <div class="pcinv-field"><label for="pcinv-subject">件名</label>
+              <input type="text" id="pcinv-subject" class="pcinv-input" maxlength="80" placeholder="例：〇〇工事一式 / △月分ご請求"></div>
+
+            <div class="pcinv-row">
+              <div class="pcinv-field"><label for="pcinv-issue-date">発行日</label><input type="date" id="pcinv-issue-date" class="pcinv-input"></div>
+              <div class="pcinv-field" id="pcinv-date2-wrap"><label for="pcinv-date2" id="pcinv-date2-label">有効期限</label><input type="date" id="pcinv-date2" class="pcinv-input"></div>
+              <div class="pcinv-field"><label for="pcinv-delivery">納期</label><input type="date" id="pcinv-delivery" class="pcinv-input"></div>
+            </div>
+
+            <div class="pcinv-field"><label for="pcinv-terms">支払条件</label>
+              <input type="text" id="pcinv-terms" class="pcinv-input" maxlength="80" placeholder="例：月末締め翌月末払い / 銀行振込"></div>
+
+            <div class="pcinv-field">
+              <label>明細（品名は自由入力可＝マスタ外の品目・役務もそのまま記載。マスタSKUは「＋ マスタから選ぶ」で単価・税率を補完）</label>
+              <div class="pcinv-lines" id="pcinv-lines"></div>
+              <button type="button" id="pcinv-addline-btn" class="pcinv-addline">＋ 明細を追加</button>
+            </div>
+
+            <div class="pcinv-field"><label for="pcinv-memo">備考（任意）</label>
+              <input type="text" id="pcinv-memo" class="pcinv-input" maxlength="200" placeholder="お振込先・納品条件など（任意）"></div>
+
+            <div class="pcinv-totals">
+              <div class="pcinv-total-row"><span>小計（税抜）</span><span id="pcinv-subtotal">¥0</span></div>
+              <div class="pcinv-total-row"><span>消費税</span><span id="pcinv-tax">¥0</span></div>
+              <div class="pcinv-total-row pcinv-total-row--grand"><span>合計</span><span id="pcinv-total">¥0</span></div>
+            </div>
+
+            <div class="pcinv-actions">
+              <button type="button" id="pcinv-issue-btn" class="pcinv-issue-btn">見積書を発行</button>
+              <button type="button" id="pcinv-cancel-edit" class="pcinv-cancel-btn" hidden>編集をやめる</button>
+            </div>
+            <p class="pcinv-note">発行するとPDF用プレビューが開きます（「印刷 / PDF保存」でPDF保存できます）。</p>
+          </section>
+
+          <!-- 右：顧客別一覧 -->
+          <section class="pc-card">
+            <div class="pcinv-row" style="margin-bottom:8px;">
+              <div class="pcinv-field" style="margin-bottom:0;"><label for="pcinv-list-customer" id="pcinv-list-title-label">発行済みの見積書</label>
+                <select id="pcinv-list-customer" class="pcinv-select"><option value="">すべての顧客</option></select></div>
+            </div>
+            <div id="pcinv-docs-list"><div class="pcinv-empty">—</div></div>
+            <p class="pcinv-note" id="pcinv-list-note">見積書は「複製」で他の得意先へ流用、「編集」で内容を上書きできます。</p>
+          </section>
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<!-- プレビュー（印刷用書面） -->
+<div class="pcinv-modal" id="pcinv-preview" aria-hidden="true" role="dialog" aria-label="書類プレビュー">
+  <div class="pcinv-modal__panel">
+    <div class="pcinv-modal__bar">
+      <button type="button" id="pcinv-preview-close">閉じる</button>
+      <button type="button" class="pcinv-print" id="pcinv-preview-print">印刷 / PDF保存</button>
+    </div>
+    <div id="pcinv-print-area"></div>
+  </div>
+</div>
+
+<script src="../js/app.js"></script>
+<script src="js/pc-common.js"></script>
+<script src="js/pc-invoice.js"></script>
+</body>
+</html>

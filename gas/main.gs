@@ -99,6 +99,9 @@ function doGet(e) {
       case 'getInvoicesUnpaid':         result = getInvoicesUnpaid();                     break;
       case 'recordPayment':             result = recordPayment(data);                     break;
       case 'getDocSummary':             result = getDocSummary(data);                     break;
+      case 'updateDocument':            result = updateDocument(data);                    break;
+      case 'getSalesForInvoice':        result = getSalesForInvoice(data);                break;
+      case 'orderToSales':              result = orderToSales(data);                      break;
       default: result = { status: 'error', message: '不明なアクション: ' + action };
     }
   } catch (err) {
@@ -3777,10 +3780,12 @@ function deleteOrder(data) {
 //   migrateDocAutomationSchema で不足シート・列を後付けする（doc_automation 有効化時）。
 // =============================================================
 
+// 帳票は見積・請求の2種（納品書は撤廃・→ 05§8-5 2026-08-13更新／deliveries は互換のため定義のみ残す）。
+// 件名/納期/支払条件は末尾追加＝既存列位置・位置参照コード（getInvoicesUnpaid/recordPayment/getDocSummary）を壊さない。
 var DOC_SHEET_SPECS_ = {
   products:   ['productCode', '大分類', '中分類', '小分類', 'productName', 'unitPrice', 'taxRate', 'unit', 'aliases', 'enabled'],
-  invoices:   ['invoiceId', 'customerId', '発行日', '支払期限', '明細JSON', '小計', '消費税', '合計', 'ステータス', '入金日', '入金額', 'メモ', 'createdAt', 'updatedAt'],
-  estimates:  ['estimateId', 'customerId', '発行日', '有効期限', '明細JSON', '小計', '消費税', '合計', 'ステータス', '変換先invoiceId', 'メモ', 'createdAt'],
+  invoices:   ['invoiceId', 'customerId', '発行日', '支払期限', '明細JSON', '小計', '消費税', '合計', 'ステータス', '入金日', '入金額', 'メモ', 'createdAt', 'updatedAt', '件名', '納期', '支払条件'],
+  estimates:  ['estimateId', 'customerId', '発行日', '有効期限', '明細JSON', '小計', '消費税', '合計', 'ステータス', '変換先invoiceId', 'メモ', 'createdAt', '件名', '納期', '支払条件'],
   deliveries: ['deliveryId', 'customerId', '発行日', '明細JSON', '小計', '消費税', '合計', 'ステータス', '変換先invoiceId', 'メモ', 'createdAt']
 };
 // customers は既存6列＋帳票宛名6列を末尾追加＝位置保存（→ 03§1-6）。
@@ -3794,7 +3799,17 @@ function _docSheet_(name) {
     sh = ss.insertSheet(name);
     sh.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
     sh.setFrozenRows(1);
+    return sh;
   }
+  // 既存シートは不足列だけ末尾追加＝列位置を保ち旧データ・位置参照コードを壊さない
+  // （件名/納期/支払条件 等の後付けを doc_automation 利用時に自己修復・冪等・_customersSheet_ と同作法）。
+  var header = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(function(h){ return String(h).trim(); });
+  headers.forEach(function(key) {
+    if (header.indexOf(key) < 0) {
+      sh.getRange(1, sh.getLastColumn() + 1).setValue(key).setFontWeight('bold');
+      header.push(key);
+    }
+  });
   return sh;
 }
 
@@ -4051,20 +4066,58 @@ function issueDocument(data) {
   var issueDate = data.issueDate || Utilities.formatDate(now, _faxTz_(), 'yyyy-MM-dd');
   var detailJson = JSON.stringify(lines);
   var memo = data.memo || '';
+  var subject = data.subject || '';        // 件名（見積/請求）
+  var deliveryDate = data.deliveryDate || ''; // 納期（希望納品日）
+  var paymentTerms = data.paymentTerms || ''; // 支払条件
   var sh = _docSheet_(sheetName);
   var docId, row;
   if (docType === 'invoice') {
     docId = _genDocId_(sh, 'inv', now);
-    row = [docId, data.customerId || '', issueDate, data.dueDate || '', detailJson, subtotal, taxTotal, total, '発行済', '', '', memo, now, now];
+    row = [docId, data.customerId || '', issueDate, data.dueDate || '', detailJson, subtotal, taxTotal, total, '発行済', '', '', memo, now, now, subject, deliveryDate, paymentTerms];
   } else if (docType === 'estimate') {
     docId = _genDocId_(sh, 'est', now);
-    row = [docId, data.customerId || '', issueDate, data.validUntil || '', detailJson, subtotal, taxTotal, total, '発行済', '', memo, now];
+    row = [docId, data.customerId || '', issueDate, data.validUntil || '', detailJson, subtotal, taxTotal, total, '発行済', '', memo, now, subject, deliveryDate, paymentTerms];
   } else {
     docId = _genDocId_(sh, 'dlv', now);
     row = [docId, data.customerId || '', issueDate, detailJson, subtotal, taxTotal, total, '発行済', '', memo, now];
   }
   sh.getRange(sh.getLastRow() + 1, 1, 1, row.length).setValues([row]);
   return { status: 'ok', docType: docType, docId: docId, subtotal: subtotal, tax: taxTotal, total: total };
+}
+
+// 既存の見積/請求を上書き編集（見積の「編集」・→ 05§8-5）。docId or rowIndex で特定。
+// 明細から小計/消費税/合計を再計算し、宛先/日付/件名/納期/支払条件/メモを更新する（docId・createdAt は保つ）。
+// 位置参照を避け _headerMap_（見出し→列）で書くので、列順が変わっても壊れない。
+function updateDocument(data) {
+  data = data || {};
+  var docType = String(data.docType || 'estimate');
+  var sheetName = ({ estimate: 'estimates', invoice: 'invoices' })[docType];
+  if (!sheetName) throw new Error('docType が不正です（estimate/invoice）。');
+  var sh = _docSheet_(sheetName);
+  var idx = _findRowByCol_(sh, 1, data.docId, data.rowIndex);
+  if (!idx) throw new Error('対象書類が見つかりません。');
+  var items = Array.isArray(data.items) ? data.items : [];
+  if (!items.length) throw new Error('明細がありません。');
+  var subtotal = 0, taxTotal = 0;
+  var lines = items.map(function(it) {
+    var qty = Number(it.quantity) || 0, price = Number(it.unitPrice) || 0, rate = Number(it.taxRate) || 0;
+    var amount = qty * price;
+    subtotal += amount; taxTotal += Math.floor(amount * rate / 100);
+    return { productCode: it.productCode || '', productName: it.productName || '', quantity: qty, unitPrice: price, taxRate: rate, amount: amount };
+  });
+  var total = subtotal + taxTotal;
+  var map = _headerMap_(sh);
+  function set(key, val) { if (map[key] !== undefined) sh.getRange(idx, map[key] + 1).setValue(val); }
+  set('customerId', data.customerId || '');
+  if (data.issueDate !== undefined) set('発行日', data.issueDate);
+  if (docType === 'estimate' && data.validUntil !== undefined) set('有効期限', data.validUntil);
+  if (docType === 'invoice' && data.dueDate !== undefined) set('支払期限', data.dueDate);
+  set('明細JSON', JSON.stringify(lines));
+  set('小計', subtotal); set('消費税', taxTotal); set('合計', total);
+  set('件名', data.subject || ''); set('納期', data.deliveryDate || ''); set('支払条件', data.paymentTerms || '');
+  if (data.memo !== undefined) set('メモ', data.memo);
+  if (map['updatedAt'] !== undefined) set('updatedAt', new Date());
+  return { status: 'ok', docType: docType, docId: sh.getRange(idx, 1).getValue(), subtotal: subtotal, tax: taxTotal, total: total, rowIndex: idx };
 }
 
 // 帳票一覧（docType 指定・customerId/status で絞込・明細JSONは配列にして返す）
@@ -4132,6 +4185,66 @@ function recordPayment(data) {
   sh.getRange(idx, 9).setValue('入金済');
   sh.getRange(idx, 14).setValue(now);
   return { status: 'ok', rowIndex: idx };
+}
+
+// ----- 請求書＝売上から反映（自由入力取込・→ 05§8-5 2026-08-13） -----
+// 売上シートを期間（＋任意の顧客コード）で読み、明細（品名/数量/単価=税抜/税率）を返す。
+// 帳票の customerId とは独立（会計マスタ⇄帳票マスタの対応表は作らない）。宛先はフロントで顧客マスタから選ぶ。
+function getSalesForInvoice(data) {
+  data = data || {};
+  var sh = _ss_().getSheetByName('売上');
+  if (!sh) return { status: 'ok', sales: [] };
+  var last = sh.getLastRow();
+  if (last < 2) return { status: 'ok', sales: [] };
+  var vals = sh.getRange(2, 1, last - 1, 21).getValues();
+  var tz = _faxTz_();
+  var from = data.fromDate ? String(data.fromDate).slice(0, 10) : '';
+  var to = data.toDate ? String(data.toDate).slice(0, 10) : '';
+  var cc = data.customerCode ? String(data.customerCode) : '';
+  var out = [];
+  vals.forEach(function(r, i) {
+    var d = r[0];
+    var ymd = (d instanceof Date) ? Utilities.formatDate(d, tz, 'yyyy-MM-dd') : String(d || '').slice(0, 10);
+    if (from && ymd < from) return;
+    if (to && ymd > to) return;
+    if (cc && String(r[3] || '') !== cc) return;
+    var name = String(r[6] || r[4] || r[7] || '売上');   // サービス / 売上対象 / 諸口品目名
+    var ex = Number(r[8]) || 0, rate = Number(r[9]) || 0, inc = Number(r[11]) || 0;
+    out.push({
+      rowIndex: i + 2, date: ymd, customerCode: String(r[3] || ''), productName: name,
+      quantity: 1, unitPrice: ex, taxRate: rate, taxExcluded: ex, taxIncluded: inc, memo: String(r[12] || '')
+    });
+  });
+  return { status: 'ok', sales: out };
+}
+
+// ----- 受注（FAX受注/orders）を売上へ反映（受注→売上→請求書の一本道・→ 05§8-5/§8-7 2026-08-13） -----
+// 受注→帳票の直結を廃し、現場確認した受注を売上に落として以後の帳票へ渡す。二重起票防止＝
+// orders のメモ列に反映済み印を付け、再実行を拒否する。会計マスタ（顧客コード/税率）は受注に無いため
+// 空/既定で起票し、金額・税率は売上編集で仕上げる（自由入力取込・宛先/明細はフロントで整える）。
+function orderToSales(data) {
+  data = data || {};
+  var sh = _faxOrdersSheet_();
+  var idx = 0;
+  if (data.rowIndex) { var ri = Number(data.rowIndex); if (ri >= 2 && ri <= sh.getLastRow()) idx = ri; }
+  if (!idx) idx = _findRowByCol_(sh, 1, data.orderId, 0);
+  if (!idx) throw new Error('対象の受注が見つかりません。');
+  var memoCell = sh.getRange(idx, 15);   // orders メモ列（15）
+  var curMemo = String(memoCell.getValue() || '');
+  if (curMemo.indexOf('売上反映済') >= 0) return { status: 'error', message: 'この受注は既に売上へ反映済みです。' };
+  var productName = String(sh.getRange(idx, 6).getValue() || '');            // productName（列6）
+  var qty = Number(sh.getRange(idx, 7).getValue()) || 0;                     // quantity（列7）
+  var unitPrice = Number(sh.getRange(idx, 8).getValue()) || 0;              // unitPrice（列8）
+  var amount = Number(sh.getRange(idx, 9).getValue()) || (qty * unitPrice);  // amount（列9）
+  var supplier = String(sh.getRange(idx, 4).getValue() || '');              // supplierName（列4）
+  var today = Utilities.formatDate(new Date(), _faxTz_(), 'yyyy-MM-dd');
+  var res = addSales({
+    date: today, customerCode: '', serviceName: productName || '（FAX受注）',
+    amountInTax: amount, taxRate: (data.taxRate !== undefined ? data.taxRate : 10),
+    memo: 'FAX受注' + (supplier ? '（' + supplier + '）' : '') + (qty ? ' 数量' + qty : '')
+  });
+  memoCell.setValue((curMemo ? curMemo + ' ｜ ' : '') + '売上反映済:' + (res.salesRowId || today));
+  return { status: 'ok', salesRowId: res.salesRowId, rowIndex: idx };
 }
 
 // ----- 集計（顧客別＝請求ベース／商品別・カテゴリ別＝確定受注ベース・products で名寄せ） -----

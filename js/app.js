@@ -116,7 +116,7 @@ document.addEventListener('DOMContentLoaded', function() {
 const UZ_SIDEBAR_ITEMS = [
   { key: 'home',     href: 'index.html',      icon: 'ti-planet',        label: 'ホーム'   },
   { key: 'monthly',  href: 'history.html',    icon: 'ti-moon',          label: '月次管理' },
-  { key: 'invoice',  href: 'invoice.html',    icon: 'ti-receipt',       label: '書類発行', feature: 'doc_automation' },
+  // 書類発行（見積/請求の作成＋PDF）はPC版に集約＝スマホ/iPadのサイドバーには置かない（05§8-5 2026-08-13）。
   { key: 'ledger',   href: 'ledger.html',     icon: 'ti-clipboard-list', label: '取引管理', feature: 'doc_automation' },
   { key: 'fax',      href: 'fax-orders.html', icon: 'ti-file-invoice',  label: 'FAX受注', feature: 'fax_order_ocr' },
   { key: 'settings', href: 'settings.html',   icon: 'ti-settings',      label: '設定'     }
@@ -190,9 +190,9 @@ const UZ_DEMO_DATA = {
   getSettings: {
     storeName: 'サンプル店舗（デモ）',
     businessHours: { open: '09:00', close: '21:00', closeNextDay: false },
-    /* 第4隊員 書類発行（doc_automation）を複製元で確認できるよう ON・敬称既定。
-       ※attendance_menu はローカル getFeatureVisibility 側が正のため、ここには置かない。 */
-    featureVisibility: { doc_automation: true },
+    /* ①オプションは settings.featureVisibility が唯一源（getFeatureVisibility がここを読む・2026-08-13一本化）。
+       複製元デモ＝書類発行ON・勤怠OFF（レオ既定）。勤怠を試すなら attendance_menu:true を足す。 */
+    featureVisibility: { doc_automation: true, attendance_menu: false },
     invoiceSettings: { honorificDefault: '御中' },
     serviceList: [
       { code: 'sv001', name: '店内売上',     taxRate: 10 },
@@ -300,8 +300,20 @@ function uzDemoDocuments(docType) {
     return [
       { rowIndex: 2, invoiceId: 'inv-' + _uzDemoMonth().replace('-', '') + '01-001', customerId: 'cs001',
         '発行日': _uzDemoDate(5), '支払期限': _uzDemoDate(28), '小計': 5000, '消費税': 500, '合計': 5500,
-        'ステータス': '発行済', 'メモ': 'お振込は月末までにお願いします。',
+        'ステータス': '発行済', 'メモ': 'お振込は月末までにお願いします。', '件名': '8月分 コーヒー納品', '納期': '', '支払条件': '月末締め翌月末払い',
         items: [{ productCode: 'pr001', productName: 'ブレンドコーヒー', quantity: 10, unitPrice: 500, taxRate: 10, amount: 5000 }] }
+    ];
+  }
+  if (docType === 'estimate') {
+    return [
+      { rowIndex: 2, estimateId: 'est-' + _uzDemoMonth().replace('-', '') + '01-001', customerId: 'cs001',
+        '発行日': _uzDemoDate(3), '有効期限': _uzDemoDate(33), '小計': 24000, '消費税': 2400, '合計': 26400,
+        'ステータス': '発行済', 'メモ': '', '件名': '開店祝い ドリップギフト一式', '納期': _uzDemoDate(20), '支払条件': '検収後 翌月末払い',
+        items: [{ productCode: 'pr003', productName: '自家焙煎豆 200g', quantity: 20, unitPrice: 1200, taxRate: 8, amount: 24000 }] },
+      { rowIndex: 3, estimateId: 'est-' + _uzDemoMonth().replace('-', '') + '02-002', customerId: 'cs002',
+        '発行日': _uzDemoDate(6), '有効期限': _uzDemoDate(36), '小計': 18000, '消費税': 1440, '合計': 19440,
+        'ステータス': '発行済', 'メモ': '', '件名': '卸し 定期便お見積り', '納期': '', '支払条件': '月末締め翌月末払い',
+        items: [{ productCode: 'pr003', productName: '自家焙煎豆 200g', quantity: 15, unitPrice: 1200, taxRate: 8, amount: 18000 }] }
     ];
   }
   return [];
@@ -321,6 +333,24 @@ function uzDemoResponse(action, data) {
     items.forEach(function (it) { var a = (Number(it.quantity) || 0) * (Number(it.unitPrice) || 0); sub += a; tax += Math.floor(a * (Number(it.taxRate) || 0) / 100); });
     var pfx = ({ estimate: 'est', invoice: 'inv', delivery: 'dlv' })[data && data.docType] || 'inv';
     return { status: 'ok', docType: data && data.docType, docId: pfx + '-DEMO-' + String(Date.now()).slice(-4), subtotal: sub, tax: tax, total: sub + tax, demo: true };
+  }
+  // 見積の編集（上書き）：デモは合計だけ再計算して成功を返す
+  if (action === 'updateDocument') {
+    var uit = (data && Array.isArray(data.items)) ? data.items : [];
+    var us = 0, ut = 0;
+    uit.forEach(function (it) { var a = (Number(it.quantity) || 0) * (Number(it.unitPrice) || 0); us += a; ut += Math.floor(a * (Number(it.taxRate) || 0) / 100); });
+    return { status: 'ok', docType: data && data.docType, docId: (data && data.docId) || '', subtotal: us, tax: ut, total: us + ut, demo: true };
+  }
+  // 請求書＝売上から反映：期間の売上明細（自由入力取込の見本）を返す
+  if (action === 'getSalesForInvoice') {
+    return { status: 'ok', sales: [
+      { rowIndex: 2, date: _uzDemoDate(2), customerCode: 'C001', productName: 'コーヒー豆 卸し', quantity: 1, unitPrice: 8000, taxRate: 8, taxExcluded: 8000, taxIncluded: 8640, memo: '' },
+      { rowIndex: 3, date: _uzDemoDate(9), customerCode: 'C001', productName: 'ドリップバッグ 卸し', quantity: 1, unitPrice: 12000, taxRate: 8, taxExcluded: 12000, taxIncluded: 12960, memo: '' }
+    ], demo: true };
+  }
+  // 受注→売上に反映：デモは成功のみ（実際は addSales 起票）
+  if (action === 'orderToSales') {
+    return { status: 'ok', salesRowId: 's-DEMO-' + String(Date.now()).slice(-4), demo: true };
   }
   // 取引管理（Slice3）：未納一覧・集計。受注一覧は getOrders（上のFAXデモ）を流用。
   if (action === 'getInvoicesUnpaid') {
@@ -440,6 +470,8 @@ function uzAttendanceEnabled() {
   } catch (e) { return true; }
 }
 document.addEventListener('DOMContentLoaded', uzApplyFeatureGates);
+// settings 同期後に再評価（featureVisibility はキャッシュ確定が非同期のため・①判定一本化 2026-08-13）。
+document.addEventListener('uz:settings-synced', uzApplyFeatureGates);
 
 /* ══════════════════════════════════════════════════════════
    データ層（共通）
@@ -679,6 +711,12 @@ async function syncSettingsAtStartup() {
       localStorage.setItem('uz_business_hours', JSON.stringify(d.businessHours));
     } else {
       localStorage.removeItem('uz_business_hours');
+    }
+
+    // featureVisibility 同期（①オプション判定の唯一源・→ 01§1・02§勤怠ゲート・03§6）。
+    // 店ごとの settings.B16（納品時にグレード＝タイムカード数で設定）。getFeatureVisibility() がここから読む。
+    if (d.featureVisibility && typeof d.featureVisibility === 'object' && !Array.isArray(d.featureVisibility)) {
+      localStorage.setItem('uz_feature_visibility', JSON.stringify(d.featureVisibility));
     }
 
     // settings 同期完了イベント発火
@@ -1119,15 +1157,25 @@ function employmentTypeLabel(value) {
   }
 }
 
-/* ── 機能表示フラグ（featureVisibility）─────────────────────
- * 固定値を返す。attendance_menu=false（レオ版で勤怠管理を撤廃＝フィーチャーゲートOFF）。
- * 勤怠系UI（ホーム出勤状況・月次管理の勤怠/シフトタブ・PC出勤管理・拠点QR）は
- * すべて attendance_menu を単一スイッチとし、[data-feature="attendance"] を uzApplyFeatureGates が
- * この値で出し分ける（PC版は pc-common.js が PC_NAV.visibilityKey='attendance_menu' で参照）。
- * ターゲット社が運営ポータル経由で settings B16 を書き換える運用に対応する（運営ポータル実装時）。
- */
+/* ── 機能表示フラグ（featureVisibility）＝①オプション判定の唯一源（2026-08-13 一本化）──────
+ * 店ごとの settings.featureVisibility（B16・納品時にグレード＝タイムカード数で設定）を正とし、
+ * syncSettingsAtStartup が localStorage 'uz_feature_visibility' へキャッシュしたものを同期で読む。
+ * strict boolean・未設定は既定 OFF（opt-in）。ハードコード固定値をやめ、勤怠・書類発行・FAX受注を
+ * 同じ源で判定する（uzApplyFeatureGates・PC_NAV いずれもここを見る＝グレード別ON/OFFがフラグ1つで効く）。
+ *  - attendance_menu：タイムカード数≠0（レオ）で ON＝給与計算・出勤管理が標準搭載（→ 01§4-1）。
+ *  - doc_automation ：書類発行（PC）・取引管理・商品/顧客マスタ。
+ * 値はターゲット社が運営ポータル経由で settings B16 を書き換えて反映（再デプロイ不要）。 */
 function getFeatureVisibility() {
-  return { clockin_menu: false, payroll_menu: false, attendance_menu: false };
+  var fv = {};
+  try { fv = JSON.parse((typeof localStorage !== 'undefined' && localStorage.getItem('uz_feature_visibility')) || '{}'); } catch (e) { fv = {}; }
+  if (!fv || typeof fv !== 'object' || Array.isArray(fv)) fv = {};
+  return {
+    attendance_menu: fv.attendance_menu === true,
+    clockin_menu:    fv.clockin_menu === true,
+    payroll_menu:    fv.payroll_menu === true,
+    doc_automation:  fv.doc_automation === true,
+    fax_order_ocr:   fv.fax_order_ocr === true
+  };
 }
 
 
