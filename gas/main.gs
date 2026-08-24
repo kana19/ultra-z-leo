@@ -21,6 +21,7 @@ function doGet(e) {
       case 'addSales':                  result = addSales(data);                          break;
       case 'addCost':                   result = addCost(data);                           break;
       case 'getSummary':                result = getSummary(data.month);                  break;
+      case 'getCategoryBreakdown':      result = getCategoryBreakdown(data.month);        break;
       case 'getUnpaid':                 result = getUnpaid();                             break;
       case 'getUncollected':            result = getUnpaid();                             break;
       case 'getHistory':                result = getHistory(data.month);                  break;
@@ -475,6 +476,66 @@ function getSummary(month) {
     month: month, sales: sales, cogs: cogs,
     grossProfit: sales - cogs, sga: sga,
     operatingProfit: sales - cogs - sga
+  }};
+}
+
+/**
+ * 科目別内訳をカテゴリ単位でグルーピングして返す（サービス分類 payoff・07_命名は無関係）。
+ *   売上 → serviceList の category で集計（r[5]=serviceCode→settings B3）
+ *   仕入原価（区分1）→ purchaseMasterList の category で集計（r[5]=costCode→settings B5）
+ *   販管費（区分2）→ 青色申告科目名で集計（固定コード＝ユーザー分類なし・r[6]=科目名）
+ * 列は getSummary と同一実スキーマ（r[1]年 r[2]月 r[3]区分 r[5]コード r[6]科目名 r[11]税込）。
+ */
+function getCategoryBreakdown(month) {
+  var ss = _ss_();
+  var parts = String(month || '').split('-');
+  var year = Number(parts[0]);
+  var mon  = Number(parts[1]);
+  var settings = ss.getSheetByName('settings');
+  function parseList(cell) {
+    try { var v = settings ? settings.getRange(cell).getValue() : ''; return v ? JSON.parse(v) : []; }
+    catch (e) { return []; }
+  }
+  var svcCat = {}, purCat = {};
+  parseList('B3').forEach(function (s) { if (s && s.id) svcCat[String(s.id)] = String(s.category || '').trim(); });
+  parseList('B5').forEach(function (p) { if (p && p.id) purCat[String(p.id)] = String(p.category || '').trim(); });
+
+  var UNCAT = '未分類';
+  var salesByCat = {}, cogsByCat = {}, sgaBySubject = {};
+
+  var salesSheet = ss.getSheetByName('売上');
+  if (salesSheet && salesSheet.getLastRow() > 1) {
+    salesSheet.getDataRange().getValues().slice(1).forEach(function (r) {
+      if (!r[0]) return;
+      if (Number(r[1]) !== year || Number(r[2]) !== mon) return;
+      var cat = svcCat[String(r[5] || '')] || UNCAT;
+      salesByCat[cat] = (salesByCat[cat] || 0) + (Number(r[11]) || 0);
+    });
+  }
+  var costSheet = ss.getSheetByName('コスト');
+  if (costSheet && costSheet.getLastRow() > 1) {
+    costSheet.getDataRange().getValues().slice(1).forEach(function (r) {
+      if (!r[0]) return;
+      if (Number(r[1]) !== year || Number(r[2]) !== mon) return;
+      var amt = Number(r[11]) || 0;
+      if (String(r[3]) === '1') {
+        var cat = purCat[String(r[5] || '')] || UNCAT;
+        cogsByCat[cat] = (cogsByCat[cat] || 0) + amt;
+      } else {
+        var name = String(r[6] || '不明');
+        sgaBySubject[name] = (sgaBySubject[name] || 0) + amt;
+      }
+    });
+  }
+  function toArr(obj) {
+    return Object.keys(obj).map(function (k) { return { label: k, amount: obj[k] }; })
+      .sort(function (a, b) { return b.amount - a.amount; });
+  }
+  return { status: 'ok', data: {
+    month: month,
+    salesByCategory: toArr(salesByCat),
+    cogsByCategory: toArr(cogsByCat),
+    sgaBySubject: toArr(sgaBySubject)
   }};
 }
 
