@@ -580,6 +580,17 @@ async function uzFetchHistory(month) {
 async function uzFetchBreakdown(month) {
   if (_uzBreakdownCache[month] !== undefined) return _uzBreakdownCache[month];
   const rows = await uzFetchHistory(month);
+  // 分類マップ（サービス名→category／仕入科目名→category）を settings マスタから引く。
+  // categoryは 03§1-1/§1-3 の任意フィールド（旧データは空＝'未分類'扱い）。
+  const nameToCat = { sv: {}, pur: {} };
+  try {
+    const svc = JSON.parse(localStorage.getItem(SERVICE_MASTER_KEY) || '[]');
+    svc.forEach(s => { if (s && s.name) nameToCat.sv[String(s.name)] = String(s.category || '').trim(); });
+  } catch (_e) {}
+  try {
+    const pur = JSON.parse(localStorage.getItem(PURCHASE_MASTER_KEY) || '[]');
+    pur.forEach(p => { if (p && p.name) nameToCat.pur[String(p.name)] = String(p.category || '').trim(); });
+  } catch (_e) {}
   const salesMap = {}, cogsMap = {}, sgaMap = {};
   rows.forEach(r => {
     const amt = Number(r.amount) || 0;
@@ -595,10 +606,16 @@ async function uzFetchBreakdown(month) {
       }
     }
   });
-  const toArr = map => Object.entries(map)
-    .map(([name, amt]) => ({ name, amt }))
+  // {name,amt,category} を返し、pl.js/home.js の展開層で分類グルーピング可能に。
+  // categoryは serviceList/purchaseMasterList から引く。販管費は青色申告固定＝category常に空。
+  const toArr = (map, catMap) => Object.entries(map)
+    .map(([name, amt]) => ({ name, amt, category: (catMap && catMap[name]) || '' }))
     .sort((a, b) => b.amt - a.amt);
-  const result = { sales: toArr(salesMap), cogs: toArr(cogsMap), sga: toArr(sgaMap) };
+  const result = {
+    sales: toArr(salesMap, nameToCat.sv),
+    cogs:  toArr(cogsMap,  nameToCat.pur),
+    sga:   toArr(sgaMap,   null)
+  };
   _uzBreakdownCache[month] = result;
   return result;
 }
@@ -644,12 +661,43 @@ function togglePlAccordion(key) {
     detail.innerHTML =
       '<div class="pl-detail-row" style="color:var(--uz-text3);font-size:12px;padding:4px 0;">内訳データなし</div>';
   } else {
-    detail.innerHTML = items.map(it =>
-      `<div class="pl-detail-row">
-        <span class="pl-detail-row__name">${uzEscHtml(it.name)}</span>
-        <span class="pl-detail-row__val">${formatYen(it.amt)}</span>
-      </div>`
-    ).join('');
+    // 分類グルーピング：itemsに category があれば分類で束ねる（03§1-1/§1-3 サービス分類 payoff）。
+    // 全itemが category='' なら従来通り（販管費＝青色申告固定・分類なし）。
+    const hasAnyCategory = items.some(it => it.category && it.category.length);
+    if (!hasAnyCategory) {
+      detail.innerHTML = items.map(it =>
+        `<div class="pl-detail-row">
+          <span class="pl-detail-row__name">${uzEscHtml(it.name)}</span>
+          <span class="pl-detail-row__val">${formatYen(it.amt)}</span>
+        </div>`
+      ).join('');
+    } else {
+      const groups = {};
+      items.forEach(it => {
+        const g = it.category && it.category.length ? it.category : '未分類';
+        if (!groups[g]) groups[g] = { total: 0, items: [] };
+        groups[g].total += it.amt;
+        groups[g].items.push(it);
+      });
+      // 合計降順で分類を並べる（未分類は常に最後）。
+      const order = Object.keys(groups).sort((a, b) => {
+        if (a === '未分類') return 1;
+        if (b === '未分類') return -1;
+        return groups[b].total - groups[a].total;
+      });
+      detail.innerHTML = order.map(g => `
+        <div class="pl-detail-row" style="font-weight:600;background:var(--uz-bg2,#f5f5f5);">
+          <span class="pl-detail-row__name">${uzEscHtml(g)}</span>
+          <span class="pl-detail-row__val">${formatYen(groups[g].total)}</span>
+        </div>
+        ${groups[g].items.map(it => `
+          <div class="pl-detail-row" style="padding-left:16px;">
+            <span class="pl-detail-row__name" style="color:var(--uz-text2,#666);font-size:13px;">${uzEscHtml(it.name)}</span>
+            <span class="pl-detail-row__val" style="color:var(--uz-text2,#666);font-size:13px;">${formatYen(it.amt)}</span>
+          </div>
+        `).join('')}
+      `).join('');
+    }
   }
   detail.hidden = false;
   chev?.classList.add('pl-chevron--open');
