@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>未納・消込 | ウルトラZAIMUくん PC版</title>
+<link rel="icon" type="image/png" href="../icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.9.0/dist/tabler-icons.min.css">
+<link rel="stylesheet" href="../css/base.css">
+<link rel="stylesheet" href="css/pc.css">
+<style>
+  /* PC版 未納・消込（書類発行の回収側・→ 04§9 未納集計 / getUnpaid・reconcile）。
+     売掛(売上のI列=未収)＋買掛(コストのI列=未払)を一覧→集計→消込までPC事務作業として一本化。
+     pcldg- 接頭辞で pc-invoice の pcinv- と衝突回避。 */
+  .pcldg-off { margin:16px 0; padding:16px 18px; border-radius:10px; font-size:13px; line-height:1.7;
+    background:#fff7ed; border:1px solid #fed7aa; color:#9a3412; }
+  .pcldg-off b { color:var(--uz-text); }
+  .pcldg-grid { display:grid; grid-template-columns: minmax(0,1.6fr) minmax(0,1fr); gap:16px; align-items:start; }
+  @media (max-width:1100px){ .pcldg-grid { grid-template-columns:1fr; } }
+
+  .pcldg-tabs { display:flex; gap:8px; margin-bottom:14px; }
+  .pcldg-tab { padding:9px 18px; border-radius:9px; font-size:14px; font-weight:700; cursor:pointer;
+    border:1px solid var(--uz-border); background:#fff; color:var(--uz-text2,#64748b); }
+  .pcldg-tab--active { background:var(--uz-accent,#2563eb); color:#fff; border-color:transparent; }
+
+  .pcldg-table { width:100%; border-collapse:collapse; font-size:13px; }
+  .pcldg-table th, .pcldg-table td { border-bottom:1px solid var(--uz-border); padding:8px 6px; text-align:left; }
+  .pcldg-table th { background:#f8fafc; font-weight:700; color:var(--uz-text2,#64748b); font-size:12px; position:sticky; top:0; }
+  .pcldg-table td.num { text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
+  .pcldg-badge { display:inline-block; padding:2px 8px; border-radius:99px; font-size:11px; font-weight:700; }
+  .pcldg-badge--recv { background:#dbeafe; color:#1d4ed8; }  /* 売掛 */
+  .pcldg-badge--pay  { background:#fee2e2; color:#b91c1c; }  /* 買掛 */
+  .pcldg-mini { padding:5px 10px; font-size:12px; font-weight:700; border-radius:7px; cursor:pointer;
+    border:1px solid var(--uz-accent,#2563eb); background:#fff; color:var(--uz-accent,#2563eb); }
+  .pcldg-mini:hover { background:var(--uz-accent,#2563eb); color:#fff; }
+  .pcldg-mini--danger { border-color:#b91c1c; color:#b91c1c; }
+  .pcldg-mini--danger:hover { background:#b91c1c; color:#fff; }
+
+  .pcldg-sum { padding:14px; }
+  .pcldg-sum h3 { margin:0 0 12px; font-size:14px; color:var(--uz-text2,#64748b); }
+  .pcldg-sum__row { display:flex; justify-content:space-between; align-items:baseline; padding:6px 0; border-bottom:1px dashed var(--uz-border); font-size:14px; }
+  .pcldg-sum__row:last-child { border-bottom:none; }
+  .pcldg-sum__row--grand { font-weight:700; font-size:16px; border-top:2px solid var(--uz-text); border-bottom:none; margin-top:6px; padding-top:10px; }
+  .pcldg-sum__label { color:var(--uz-text2,#64748b); }
+  .pcldg-sum__val { font-variant-numeric:tabular-nums; }
+  .pcldg-empty { padding:24px; text-align:center; color:var(--uz-text3); font-size:13px; }
+
+  .pcldg-modal { position:fixed; inset:0; background:rgba(15,23,42,.6); display:none; align-items:center; justify-content:center; z-index:100; }
+  .pcldg-modal[aria-hidden="false"] { display:flex; }
+  .pcldg-modal__panel { background:#fff; border-radius:12px; padding:20px; max-width:420px; width:92%; }
+  .pcldg-modal__title { margin:0 0 14px; font-size:16px; font-weight:700; }
+  .pcldg-field { margin-bottom:12px; }
+  .pcldg-field > label { display:block; font-size:12px; font-weight:600; color:var(--uz-text2,#64748b); margin-bottom:4px; }
+  .pcldg-input { width:100%; box-sizing:border-box; padding:9px 10px; font-size:14px;
+    border:1px solid var(--uz-border); border-radius:8px; background:#fff; color:var(--uz-text); }
+  .pcldg-modal__actions { display:flex; gap:8px; justify-content:flex-end; margin-top:8px; }
+</style>
+</head>
+<body class="pc-body">
+<div id="pc-app" class="pc-layout">
+  <main class="pc-main" id="pc-main">
+    <div class="pc-body-inner">
+
+      <div id="pcldg-main">
+        <div class="pcldg-tabs" role="tablist" aria-label="未納の種別">
+          <button type="button" class="pcldg-tab pcldg-tab--active" data-kind="all" role="tab" aria-selected="true">すべて</button>
+          <button type="button" class="pcldg-tab" data-kind="recv" role="tab">売掛（未入金）</button>
+          <button type="button" class="pcldg-tab" data-kind="pay" role="tab">買掛（未払）</button>
+        </div>
+
+        <div class="pcldg-grid">
+          <section class="pc-card">
+            <div style="max-height:70vh; overflow-y:auto;">
+              <table class="pcldg-table" id="pcldg-table">
+                <thead>
+                  <tr>
+                    <th>種別</th><th>日付</th><th>項目</th>
+                    <th class="num">金額</th><th>備考</th><th></th>
+                  </tr>
+                </thead>
+                <tbody id="pcldg-tbody">
+                  <tr><td colspan="6" class="pcldg-empty">読み込み中…</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="pc-card pcldg-sum">
+            <h3>集計</h3>
+            <div class="pcldg-sum__row"><span class="pcldg-sum__label">売掛（未入金）</span><span class="pcldg-sum__val" id="pcldg-sum-recv">¥0</span></div>
+            <div class="pcldg-sum__row"><span class="pcldg-sum__label">買掛（未払）</span><span class="pcldg-sum__val" id="pcldg-sum-pay">¥0</span></div>
+            <div class="pcldg-sum__row pcldg-sum__row--grand"><span class="pcldg-sum__label">差引</span><span class="pcldg-sum__val" id="pcldg-sum-net">¥0</span></div>
+            <p style="margin-top:14px; font-size:12px; color:var(--uz-text2,#64748b); line-height:1.6;">
+              「消込」で入金/支払を確定します。金額を変更した消込にも対応（一部入金/過入金）。<br>
+              「削除」は入力ミスの取消などに使用（記録は元シートに残ります）。
+            </p>
+          </section>
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<div class="pcldg-modal" id="pcldg-modal" aria-hidden="true" role="dialog" aria-label="消込">
+  <div class="pcldg-modal__panel">
+    <h4 class="pcldg-modal__title" id="pcldg-modal-title">消込</h4>
+    <div class="pcldg-field"><label>対象</label><div id="pcldg-modal-target" style="font-size:13px;color:var(--uz-text2,#64748b);"></div></div>
+    <div class="pcldg-field"><label for="pcldg-paid-date">実行日</label><input type="date" id="pcldg-paid-date" class="pcldg-input"></div>
+    <div class="pcldg-field"><label for="pcldg-paid-amount">実行額</label><input type="number" id="pcldg-paid-amount" class="pcldg-input" min="0" step="1"></div>
+    <div class="pcldg-modal__actions">
+      <button type="button" class="pcldg-mini" id="pcldg-modal-cancel">キャンセル</button>
+      <button type="button" class="pcldg-mini" id="pcldg-modal-confirm">確定</button>
+    </div>
+  </div>
+</div>
+
+<script src="../js/app.js"></script>
+<script src="js/pc-common.js"></script>
+<script src="js/pc-ledger.js"></script>
+</body>
+</html>

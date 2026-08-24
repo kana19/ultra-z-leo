@@ -9,6 +9,7 @@ const PC_NAV = [
   { href: 'pc-monthly.html',    label: '月次管理',  icon: 'ti-moon' },
   { href: 'pc-projects.html',   label: '案件管理',  icon: 'ti-star' },
   { href: 'pc-invoice.html',    label: '書類発行',  icon: 'ti-receipt',  visibilityKey: 'doc_automation' },
+  { href: 'pc-ledger.html',     label: '未納・消込', icon: 'ti-cash',    visibilityKey: 'doc_automation' },
   { href: 'pc-attendance.html', label: '出勤管理',  icon: 'ti-users',    visibilityKey: 'attendance_menu' },
   { href: 'pc-settings.html',   label: '設定',      icon: 'ti-settings' }
 ];
