@@ -3434,10 +3434,13 @@ function _faxConsumeQuota_(n) {
 // --- Claude API 本実装（§8-1：APIキーはGAS側・フロント非露出） -------
 // attachments: [{ base64, mimeType }] （image/* は image ブロック・application/pdf は document ブロック）
 // 応答テキスト（JSON文字列）を返す。呼び出し側でパースする。
-function callClaudeAPI(promptText, attachments) {
+function callClaudeAPI(promptText, attachments, modelOverride) {
   var apiKey = _faxProp_('CLAUDE_API_KEY', '');
   if (!apiKey) throw new Error('CLAUDE_API_KEY が未設定です（運営がScript Propertiesに設定してください）。');
-  var model = _faxProp_('CLAUDE_MODEL', 'claude-opus-4-8');
+  // modelOverride があればそれを、無ければ CLAUDE_MODEL（既定 opus-4-8）を使う。
+  // 03_FAX一次OCR Haiku＋フォールバック（従量40円/件の月額成立を支える技術前提・05§8-7）：
+  // 呼び出し側 extractFaxOrder が primary→fallback で使い分ける。
+  var model = modelOverride || _faxProp_('CLAUDE_MODEL', 'claude-opus-4-8');
 
   var content = [];
   (attachments || []).forEach(function(att) {
@@ -3538,14 +3541,47 @@ function extractFaxOrder(base64, mimeType, patternsOverride) {
     patterns = [];
     try { var s = getSettings(); patterns = (s && s.data && s.data.faxPatterns) || []; } catch (e) {}
   }
-  var raw = callClaudeAPI(_faxExtractPrompt_(patterns), [{ base64: base64, mimeType: mimeType }]);
-  var jsonText = _faxStripToJson_(raw);
-  var parsed;
-  try { parsed = JSON.parse(jsonText); }
-  catch (e) { throw new Error('AI応答のJSON解析に失敗しました。手入力での登録をご利用ください。'); }
-  parsed.items = Array.isArray(parsed.items) ? parsed.items : [];
-  parsed.confidence = Number(parsed.confidence) || 0;
-  return parsed;
+  var prompt = _faxExtractPrompt_(patterns);
+  var attach = [{ base64: base64, mimeType: mimeType }];
+
+  // ── 二段OCR：primary=Haiku（安・第1パス）→ fallback=Opus/Sonnet（賢・確信度低時のみ） ──
+  //   ・従量課金(40円/件)で月額プランを回すため、通常はHaikuで完結させる（API原価≒$0.005/件）。
+  //   ・confidence < FAX_CONFIDENCE_THRESHOLD もしくは items 空 or JSON解析失敗ならfallbackへ。
+  //   ・ScriptProperties で運営が調整可能（CLAUDE_MODEL_PRIMARY / CLAUDE_MODEL_FALLBACK / FAX_CONFIDENCE_THRESHOLD）。
+  var primary  = _faxProp_('CLAUDE_MODEL_PRIMARY',  'claude-haiku-4-5-20251001');
+  var fallback = _faxProp_('CLAUDE_MODEL_FALLBACK', _faxProp_('CLAUDE_MODEL', 'claude-opus-4-8'));
+  var threshold = Number(_faxProp_('FAX_CONFIDENCE_THRESHOLD', '0.7')) || 0.7;
+
+  function _tryExtract(model) {
+    var raw = callClaudeAPI(prompt, attach, model);
+    var jsonText = _faxStripToJson_(raw);
+    var parsed;
+    try { parsed = JSON.parse(jsonText); } catch (e) { return { _parseError: true, _model: model }; }
+    parsed.items = Array.isArray(parsed.items) ? parsed.items : [];
+    parsed.confidence = Number(parsed.confidence) || 0;
+    parsed._model = model;
+    return parsed;
+  }
+
+  var first = _tryExtract(primary);
+  var needsFallback = first._parseError || first.items.length === 0 || first.confidence < threshold;
+
+  if (!needsFallback || primary === fallback) {
+    first._ocrTier = 'primary';
+    return first;
+  }
+  // fallback 実行。fallback も失敗したら primary の結果を返す（人の確認を促す運用）。
+  var second = _tryExtract(fallback);
+  if (second._parseError) {
+    if (first._parseError) {
+      throw new Error('AI応答のJSON解析に失敗しました。手入力での登録をご利用ください。');
+    }
+    first._ocrTier = 'primary_only(fallback_parse_error)';
+    return first;
+  }
+  second._ocrTier = 'fallback';
+  second._primaryConfidence = first.confidence;
+  return second;
 }
 
 function _faxStripToJson_(text) {
