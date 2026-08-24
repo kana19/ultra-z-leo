@@ -948,7 +948,7 @@ function addServiceItem(data) {
   }
   if (!newId) return { status: 'error', message: 'サービスID の採番に失敗しました（sv999 まで埋まっています）' };
 
-  var newItem = { id: newId, name: name, taxRate: taxRate };
+  var newItem = { id: newId, name: name, taxRate: taxRate, category: String(data.category || '').trim() };
   list.push(newItem);
   sheet.getRange('A3').setValue('serviceList');
   sheet.getRange('B3').setValue(JSON.stringify(list));
@@ -1017,7 +1017,7 @@ function addPurchaseItem(data) {
   }
   if (!newId) return { status: 'error', message: '仕入科目ID の採番に失敗しました（p999 まで埋まっています）' };
 
-  var newItem = { id: newId, name: name, defaultTaxRate: rate };
+  var newItem = { id: newId, name: name, defaultTaxRate: rate, category: String(data.category || '').trim() };
   list.push(newItem);
   sheet.getRange('A5').setValue('purchaseMasterList');
   sheet.getRange('B5').setValue(JSON.stringify(list));
@@ -1100,6 +1100,7 @@ function updateServiceItem(data) {
   var id = String(data.id || '');
   var name = (data.name !== undefined) ? String(data.name).trim() : undefined;
   var taxRate = (data.taxRate !== undefined) ? Number(data.taxRate) : undefined;
+  var category = (data.category !== undefined) ? String(data.category).trim() : undefined;
   if (!id) return { status: 'error', message: 'id が指定されていません' };
   if (name !== undefined && (name === '' || name.length > 30)) {
     return { status: 'error', message: 'サービス名は 1〜30 文字で入力してください' };
@@ -1122,6 +1123,7 @@ function updateServiceItem(data) {
       found = true;
       if (name !== undefined) it.name = name;
       if (taxRate !== undefined) it.taxRate = taxRate;
+      if (category !== undefined) it.category = category;
     }
     return it;
   });
@@ -1139,6 +1141,7 @@ function updatePurchaseItem(data) {
   data = data || {};
   var id = String(data.id || '');
   var name = (data.name !== undefined) ? String(data.name).trim() : undefined;
+  var category = (data.category !== undefined) ? String(data.category).trim() : undefined;
   // 受口フィールド名は defaultTaxRate（taxRate でも受け取る）
   var rate;
   if (data.defaultTaxRate !== undefined) rate = Number(data.defaultTaxRate);
@@ -1165,6 +1168,7 @@ function updatePurchaseItem(data) {
       found = true;
       if (name !== undefined) it.name = name;
       if (rate !== undefined) it.defaultTaxRate = rate;
+      if (category !== undefined) it.category = category;
     }
     return it;
   });

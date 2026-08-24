@@ -661,6 +661,7 @@ function renderServiceList() {
     return `
       <div class="staff-row" id="service-row-${escHtml(idKey)}">
         <span class="staff-row__name">${escHtml(s.name)}</span>
+        ${s.category ? `<span class="service-tax-badge">${escHtml(s.category)}</span>` : ''}
         <span class="service-tax-badge">税率 ${s.taxRate}%</span>
         <button class="staff-edit-btn"
                 type="button"
@@ -674,7 +675,8 @@ function renderServiceList() {
     `;
   }).join('');
 
-  container.innerHTML = html;
+  const cats = [...new Set(list.map(s => String(s.category || '').trim()).filter(Boolean))];
+  container.innerHTML = html + `<datalist id="service-cat-options">${cats.map(c => `<option value="${escHtml(c)}"></option>`).join('')}</datalist>`;
 
   // 件数バッジ表示（運営付与枠 vs 現使用件数・無制限時は件数のみ）
   const badge = document.getElementById('service-count-badge');
@@ -744,6 +746,16 @@ function editService(id) {
           <option value="8"${Number(rate) === 8 ? ' selected' : ''}>8%（軽減）</option>
           <option value="0"${Number(rate) === 0 ? ' selected' : ''}>0%（非課税）</option>
         </select>
+        <input type="text"
+               id="service-edit-cat-${id}"
+               class="settings-input"
+               style="width:130px;flex-shrink:0;"
+               value="${escHtml(svc.category || '')}"
+               maxlength="20"
+               list="service-cat-options"
+               autocomplete="off"
+               placeholder="分類（任意）"
+               aria-label="分類">
       </div>
       <div class="staff-edit__line staff-edit__actions">
         <button class="staff-save-btn" type="button"
@@ -763,9 +775,11 @@ function editService(id) {
 async function saveEditService(id) {
   const nameEl = document.getElementById(`service-edit-name-${id}`);
   const taxEl  = document.getElementById(`service-edit-tax-${id}`);
+  const catEl  = document.getElementById(`service-edit-cat-${id}`);
   if (!nameEl) return;
   const name    = nameEl.value.trim();
   const taxRate = parseInt(taxEl.value, 10);
+  const category = catEl ? catEl.value.trim() : '';
   if (!name) return showToast('サービス名を入力してください', 'error');
   if (name.length > 30) return showToast('サービス名は30文字以内で入力してください', 'error');
   const list = getServiceList();
@@ -773,7 +787,7 @@ async function saveEditService(id) {
     return showToast('同じ名前のサービスが既に登録されています', 'error');
   }
   try {
-    const res = await callGAS('updateServiceItem', { id: String(id), name, taxRate });
+    const res = await callGAS('updateServiceItem', { id: String(id), name, taxRate, category });
     if (res && res.status === 'ok' && Array.isArray(res.serviceList)) {
       _saveServiceList(res.serviceList);
       renderServiceList();
@@ -790,11 +804,13 @@ function bindServiceAdd() {
   const btn       = document.getElementById('service-add-btn');
   const nameInput = document.getElementById('service-add-name');
   const taxSelect = document.getElementById('service-add-tax');
+  const catInput  = document.getElementById('service-add-cat');
   if (!btn || !nameInput || !taxSelect) return;
 
   const doAdd = async () => {
     const name    = nameInput.value.trim();
     const taxRate = parseInt(taxSelect.value);
+    const category = catInput ? catInput.value.trim() : '';
 
     if (!name) return showToast('サービス名を入力してください', 'error');
     if (name.length > 30) return showToast('サービス名は30文字以内で入力してください', 'error');
@@ -812,11 +828,12 @@ function bindServiceAdd() {
     // サーバ側で sv001〜採番＋枠超過チェック＋保存
     btn.disabled = true;
     try {
-      const res = await callGAS('addServiceItem', { name, taxRate });
+      const res = await callGAS('addServiceItem', { name, taxRate, category });
       if (res && res.status === 'ok' && Array.isArray(res.serviceList)) {
         _saveServiceList(res.serviceList);
         nameInput.value = '';
         taxSelect.value = '10';
+        if (catInput) catInput.value = '';
         renderServiceList();
         showToast(`${name}を追加しました ✓`, 'success');
       } else if (res && res.code === 'quota_exceeded') {
@@ -861,6 +878,7 @@ function renderPurchaseList() {
     return `
       <div class="staff-row" id="purchase-row-${escHtml(idKey)}">
         <span class="staff-row__name">${escHtml(p.name)}</span>
+        ${p.category ? `<span class="service-tax-badge">${escHtml(p.category)}</span>` : ''}
         <span class="service-tax-badge">税率 ${rate}%</span>
         <button class="staff-edit-btn"
                 type="button"
@@ -874,7 +892,8 @@ function renderPurchaseList() {
     `;
   }).join('');
 
-  container.innerHTML = html;
+  const cats = [...new Set(list.map(p => String(p.category || '').trim()).filter(Boolean))];
+  container.innerHTML = html + `<datalist id="purchase-cat-options">${cats.map(c => `<option value="${escHtml(c)}"></option>`).join('')}</datalist>`;
 
   const badge = document.getElementById('purchase-count-badge');
   if (badge) {
@@ -939,6 +958,16 @@ function editPurchase(id) {
           <option value="8"${Number(rate) === 8 ? ' selected' : ''}>8%（軽減）</option>
           <option value="0"${Number(rate) === 0 ? ' selected' : ''}>0%（非課税）</option>
         </select>
+        <input type="text"
+               id="purchase-edit-cat-${id}"
+               class="settings-input"
+               style="width:130px;flex-shrink:0;"
+               value="${escHtml(p.category || '')}"
+               maxlength="20"
+               list="purchase-cat-options"
+               autocomplete="off"
+               placeholder="分類（任意）"
+               aria-label="分類">
       </div>
       <div class="staff-edit__line staff-edit__actions">
         <button class="staff-save-btn" type="button"
@@ -958,9 +987,11 @@ function editPurchase(id) {
 async function saveEditPurchase(id) {
   const nameEl = document.getElementById(`purchase-edit-name-${id}`);
   const taxEl  = document.getElementById(`purchase-edit-tax-${id}`);
+  const catEl  = document.getElementById(`purchase-edit-cat-${id}`);
   if (!nameEl) return;
   const name    = nameEl.value.trim();
   const taxRate = parseInt(taxEl.value, 10);
+  const category = catEl ? catEl.value.trim() : '';
   if (!name) return showToast('科目名を入力してください', 'error');
   if (name.length > 30) return showToast('科目名は30文字以内で入力してください', 'error');
   const list = getPurchaseList();
@@ -968,7 +999,7 @@ async function saveEditPurchase(id) {
     return showToast('同じ名前の科目が既に登録されています', 'error');
   }
   try {
-    const res = await callGAS('updatePurchaseItem', { id: String(id), name, defaultTaxRate: taxRate });
+    const res = await callGAS('updatePurchaseItem', { id: String(id), name, defaultTaxRate: taxRate, category });
     if (res && res.status === 'ok' && Array.isArray(res.purchaseMasterList)) {
       _savePurchaseList(res.purchaseMasterList);
       renderPurchaseList();
@@ -985,11 +1016,13 @@ function bindPurchaseAdd() {
   const btn       = document.getElementById('purchase-add-btn');
   const nameInput = document.getElementById('purchase-add-name');
   const taxSelect = document.getElementById('purchase-add-tax');
+  const catInput  = document.getElementById('purchase-add-cat');
   if (!btn || !nameInput || !taxSelect) return;
 
   const doAdd = async () => {
     const name = nameInput.value.trim();
     const taxRate = parseInt(taxSelect.value);
+    const category = catInput ? catInput.value.trim() : '';
 
     if (!name) return showToast('科目名を入力してください', 'error');
     if (name.length > 30) return showToast('科目名は30文字以内で入力してください', 'error');
@@ -1005,11 +1038,12 @@ function bindPurchaseAdd() {
 
     btn.disabled = true;
     try {
-      const res = await callGAS('addPurchaseItem', { name, defaultTaxRate: taxRate });
+      const res = await callGAS('addPurchaseItem', { name, defaultTaxRate: taxRate, category });
       if (res && res.status === 'ok' && Array.isArray(res.purchaseMasterList)) {
         _savePurchaseList(res.purchaseMasterList);
         nameInput.value = '';
         taxSelect.value = '10';
+        if (catInput) catInput.value = '';
         renderPurchaseList();
         showToast(`${name}を追加しました ✓`, 'success');
       } else if (res && res.code === 'quota_exceeded') {
