@@ -103,6 +103,24 @@ function doGet(e) {
       case 'updateDocument':            result = updateDocument(data);                    break;
       case 'getSalesForInvoice':        result = getSalesForInvoice(data);                break;
       case 'orderToSales':              result = orderToSales(data);                      break;
+      // 大分類マスタ（2026-08-27・→ 03§1-1-2 serviceChannelList / §1-3-2 purchaseCategoryList）
+      case 'addServiceChannel':         result = addServiceChannel(data);                 break;
+      case 'updateServiceChannel':      result = updateServiceChannel(data);              break;
+      case 'deleteServiceChannel':      result = deleteServiceChannel(data);              break;
+      case 'addPurchaseCategory':       result = addPurchaseCategory(data);               break;
+      case 'updatePurchaseCategory':    result = updatePurchaseCategory(data);            break;
+      case 'deletePurchaseCategory':    result = deletePurchaseCategory(data);            break;
+      // 仕入先マスタ（2026-08-27・→ 03§1-6-2 suppliers）
+      case 'getSuppliers':              result = getSuppliers();                          break;
+      case 'addSupplier':               result = addSupplier(data);                       break;
+      case 'updateSupplier':            result = updateSupplier(data);                    break;
+      case 'deleteSupplier':            result = deleteSupplier(data);                    break;
+      case 'getSupplierAggregate':      result = getSupplierAggregate(data);              break;
+      // 得意先マスタ CSV I/O（2026-08-27・→ 03§1-6-1）
+      case 'importCustomersCSV':        result = importCustomersCSV(data);                break;
+      case 'exportCustomersCSV':        result = exportCustomersCSV();                    break;
+      // 新マスタ土台の一括マイグレーション（suppliers シート＋settings B8/B9 の自己修復）
+      case 'migrateNewMastersSchema':   result = migrateNewMastersSchema();               break;
       default: result = { status: 'error', message: '不明なアクション: ' + action };
     }
   } catch (err) {
@@ -745,6 +763,8 @@ function getSettings() {
   var purchaseMasterJson   = sheet.getRange('B5').getValue();
   var qrLocationsJson      = sheet.getRange('B6').getValue();
   var invoiceSettingsJson  = sheet.getRange('B7').getValue();
+  var serviceChannelJson    = sheet.getRange('B8').getValue();
+  var purchaseCategoryJson  = sheet.getRange('B9').getValue();
   var featureVisibilityJson = sheet.getRange('B16').getValue();
   var masterQuotaRaw       = sheet.getRange('B17').getValue();
   var businessHoursRaw     = sheet.getRange('B18').getValue();
@@ -789,7 +809,7 @@ function getSettings() {
   try { if (featureVisibilityJson) featureVisibility = JSON.parse(featureVisibilityJson); } catch(e) {}
   if (!featureVisibility || typeof featureVisibility !== 'object') featureVisibility = {};
   // masterQuota は JSON 文字列。パース失敗・未設定時は null を返す（6-G フェーズ2）
-  // 形式：{serviceMasterQuota:number, purchaseMasterQuota:number, costOptionalQuota:number}
+  // 形式：{serviceMasterQuota, serviceChannelQuota, purchaseMasterQuota, purchaseCategoryQuota, costOptionalQuota}
   var masterQuota = null;
   try {
     if (masterQuotaRaw) {
@@ -799,12 +819,22 @@ function getSettings() {
           && typeof mqParsed.purchaseMasterQuota === 'number') {
         masterQuota = {
           serviceMasterQuota: Math.max(1, Math.floor(Number(mqParsed.serviceMasterQuota) || 5)),
+          serviceChannelQuota: Math.max(1, Math.floor(Number(mqParsed.serviceChannelQuota) || 5)),
           purchaseMasterQuota: Math.max(1, Math.floor(Number(mqParsed.purchaseMasterQuota) || 3)),
+          purchaseCategoryQuota: Math.max(1, Math.floor(Number(mqParsed.purchaseCategoryQuota) || 3)),
           costOptionalQuota: Math.max(1, Math.floor(Number(mqParsed.costOptionalQuota) || 5))
         };
       }
     }
   } catch(e) { masterQuota = null; }
+  // serviceChannelList / purchaseCategoryList（大分類マスタ・任意設定・→ 03§1-1-2 / §1-3-2）
+  // 空配列で無害運転＝設定なしでも既存動作を壊さない後方互換
+  var serviceChannelList = [];
+  try { if (serviceChannelJson) serviceChannelList = JSON.parse(serviceChannelJson); } catch(e) {}
+  if (!Array.isArray(serviceChannelList)) serviceChannelList = [];
+  var purchaseCategoryList = [];
+  try { if (purchaseCategoryJson) purchaseCategoryList = JSON.parse(purchaseCategoryJson); } catch(e) {}
+  if (!Array.isArray(purchaseCategoryList)) purchaseCategoryList = [];
   // businessHours は JSON 文字列。パース失敗・未設定時は null を返す（A-9：出勤履歴の打刻状態判定で使用）
   // 形式：{open:"HH:MM", close:"HH:MM", closeNextDay:boolean}
   var businessHours = null;
@@ -833,8 +863,10 @@ function getSettings() {
     storeName: storeName || '',
     staffList: staffList,
     serviceList: serviceList,
+    serviceChannelList: serviceChannelList,
     costMasterList: costMasterList,
     purchaseMasterList: purchaseMasterList,
+    purchaseCategoryList: purchaseCategoryList,
     qrLocations: qrLocations,
     featureVisibility: featureVisibility,
     masterQuota: masterQuota,
@@ -908,6 +940,16 @@ function saveSettings(data) {
   if (data.invoiceSettings !== undefined) {
     sheet.getRange('A7').setValue('invoiceSettings');
     sheet.getRange('B7').setValue(JSON.stringify(data.invoiceSettings || {}));
+  }
+  // serviceChannelList（販売チャネル大分類・任意設定・→ 03§1-1-2）
+  if (data.serviceChannelList !== undefined) {
+    sheet.getRange('A8').setValue('serviceChannelList');
+    sheet.getRange('B8').setValue(JSON.stringify(data.serviceChannelList || []));
+  }
+  // purchaseCategoryList（仕入原価大分類・任意設定・→ 03§1-3-2）
+  if (data.purchaseCategoryList !== undefined) {
+    sheet.getRange('A9').setValue('purchaseCategoryList');
+    sheet.getRange('B9').setValue(JSON.stringify(data.purchaseCategoryList || []));
   }
   return { status: 'ok' };
 }
@@ -4376,4 +4418,494 @@ function getDocSummary(data) {
     });
   }
   return { status: 'ok', byCustomer: byCustomer, byProduct: byProduct, byCategory: byCategory };
+}
+
+// ============================================================
+// 大分類マスタ・仕入先マスタ・得意先CSV I/O（2026-08-27 新規実装）
+// → 03_データ仕様.md §1-1-2 / §1-3-2 / §1-6-1 / §1-6-2
+// → 引き継ぎ.md ★次セッション設計項目 (G) 新マスタ設計
+// ============================================================
+
+// ----- 大分類マスタ 共通ヘルパ -----
+function _readListCell_(cellAddr) {
+  var sheet = _ss_().getSheetByName('settings');
+  if (!sheet) return { sheet: null, list: [] };
+  var json = sheet.getRange(cellAddr).getValue();
+  var list = [];
+  try { if (json) list = JSON.parse(json); } catch(e) {}
+  if (!Array.isArray(list)) list = [];
+  return { sheet: sheet, list: list };
+}
+
+function _writeListCell_(sheet, keyCellAddr, keyName, valueCellAddr, list) {
+  sheet.getRange(keyCellAddr).setValue(keyName);
+  sheet.getRange(valueCellAddr).setValue(JSON.stringify(list || []));
+}
+
+function _quotaForKey_(key, fallback) {
+  var sheet = _ss_().getSheetByName('settings');
+  if (!sheet) return null;
+  var raw = sheet.getRange('B17').getValue();
+  try {
+    if (raw) {
+      var p = (typeof raw === 'string') ? JSON.parse(raw) : raw;
+      if (p && typeof p[key] === 'number') return Math.max(1, Math.floor(p[key]));
+    }
+  } catch(e) {}
+  return fallback;
+}
+
+function _nextIdWithPrefix_(list, prefix) {
+  var used = {};
+  list.forEach(function(it) { if (it && it.id) used[String(it.id)] = true; });
+  for (var n = 1; n <= 999; n++) {
+    var cand = prefix + ('000' + n).slice(-3);
+    if (!used[cand]) return cand;
+  }
+  return '';
+}
+
+// ----- サービス販売チャネル大分類 serviceChannelList（B8・→ §1-1-2） -----
+function addServiceChannel(data) {
+  data = data || {};
+  var name = String(data.name || '').trim();
+  var taxRate = Number(data.taxRate);
+  if (!name) return { status: 'error', message: '大分類名が空です' };
+  if (name.length > 30) return { status: 'error', message: '大分類名は30文字以内で入力してください' };
+  if ([0, 8, 10].indexOf(taxRate) < 0) return { status: 'error', message: '税率は 0 / 8 / 10 のいずれかを指定してください' };
+  var ctx = _readListCell_('B8');
+  if (!ctx.sheet) return { status: 'error', message: 'settingsシートが見つかりません' };
+  var quota = _quotaForKey_('serviceChannelQuota', 5);
+  if (quota !== null && ctx.list.length >= quota) {
+    return { status: 'error', code: 'quota_exceeded',
+      message: '件数枠の上限（' + quota + '件）に達しています。追加するにはターゲット社にご相談ください。',
+      currentCount: ctx.list.length, quota: quota };
+  }
+  var id = _nextIdWithPrefix_(ctx.list, 'sc');
+  if (!id) return { status: 'error', message: 'サービス大分類ID の採番に失敗しました（sc999 まで埋まっています）' };
+  var item = { id: id, name: name, taxRate: taxRate };
+  ctx.list.push(item);
+  _writeListCell_(ctx.sheet, 'A8', 'serviceChannelList', 'B8', ctx.list);
+  return { status: 'ok', item: item, serviceChannelList: ctx.list };
+}
+
+function updateServiceChannel(data) {
+  data = data || {};
+  var id = String(data.id || '');
+  if (!id) return { status: 'error', message: 'id が指定されていません' };
+  var name = (data.name !== undefined) ? String(data.name).trim() : undefined;
+  var taxRate = (data.taxRate !== undefined) ? Number(data.taxRate) : undefined;
+  if (name !== undefined && (name === '' || name.length > 30)) {
+    return { status: 'error', message: '大分類名は 1〜30 文字で入力してください' };
+  }
+  if (taxRate !== undefined && [0, 8, 10].indexOf(taxRate) < 0) {
+    return { status: 'error', message: '税率は 0 / 8 / 10 のいずれかを指定してください' };
+  }
+  var ctx = _readListCell_('B8');
+  if (!ctx.sheet) return { status: 'error', message: 'settingsシートが見つかりません' };
+  var found = false;
+  ctx.list = ctx.list.map(function(it) {
+    if (it && String(it.id) === id) {
+      found = true;
+      if (name !== undefined) it.name = name;
+      if (taxRate !== undefined) it.taxRate = taxRate;
+    }
+    return it;
+  });
+  if (!found) return { status: 'error', message: '指定された id のサービス大分類が見つかりません: ' + id };
+  _writeListCell_(ctx.sheet, 'A8', 'serviceChannelList', 'B8', ctx.list);
+  return { status: 'ok', serviceChannelList: ctx.list };
+}
+
+function deleteServiceChannel(data) {
+  data = data || {};
+  var id = String(data.id || '');
+  if (!id) return { status: 'error', message: 'id が指定されていません' };
+  var ctx = _readListCell_('B8');
+  if (!ctx.sheet) return { status: 'error', message: 'settingsシートが見つかりません' };
+  var filtered = ctx.list.filter(function(it) { return String(it && it.id) !== id; });
+  if (filtered.length === ctx.list.length) {
+    return { status: 'error', message: '指定された id のサービス大分類が見つかりません: ' + id };
+  }
+  _writeListCell_(ctx.sheet, 'A8', 'serviceChannelList', 'B8', filtered);
+  return { status: 'ok', serviceChannelList: filtered };
+}
+
+// ----- 仕入原価大分類 purchaseCategoryList（B9・→ §1-3-2） -----
+function addPurchaseCategory(data) {
+  data = data || {};
+  var name = String(data.name || '').trim();
+  if (!name) return { status: 'error', message: '大分類名が空です' };
+  if (name.length > 30) return { status: 'error', message: '大分類名は30文字以内で入力してください' };
+  var ctx = _readListCell_('B9');
+  if (!ctx.sheet) return { status: 'error', message: 'settingsシートが見つかりません' };
+  var quota = _quotaForKey_('purchaseCategoryQuota', 3);
+  if (quota !== null && ctx.list.length >= quota) {
+    return { status: 'error', code: 'quota_exceeded',
+      message: '件数枠の上限（' + quota + '件）に達しています。追加するにはターゲット社にご相談ください。',
+      currentCount: ctx.list.length, quota: quota };
+  }
+  var id = _nextIdWithPrefix_(ctx.list, 'pc');
+  if (!id) return { status: 'error', message: '仕入原価大分類ID の採番に失敗しました（pc999 まで埋まっています）' };
+  var item = { id: id, name: name };
+  ctx.list.push(item);
+  _writeListCell_(ctx.sheet, 'A9', 'purchaseCategoryList', 'B9', ctx.list);
+  return { status: 'ok', item: item, purchaseCategoryList: ctx.list };
+}
+
+function updatePurchaseCategory(data) {
+  data = data || {};
+  var id = String(data.id || '');
+  if (!id) return { status: 'error', message: 'id が指定されていません' };
+  var name = (data.name !== undefined) ? String(data.name).trim() : undefined;
+  if (name !== undefined && (name === '' || name.length > 30)) {
+    return { status: 'error', message: '大分類名は 1〜30 文字で入力してください' };
+  }
+  var ctx = _readListCell_('B9');
+  if (!ctx.sheet) return { status: 'error', message: 'settingsシートが見つかりません' };
+  var found = false;
+  ctx.list = ctx.list.map(function(it) {
+    if (it && String(it.id) === id) {
+      found = true;
+      if (name !== undefined) it.name = name;
+    }
+    return it;
+  });
+  if (!found) return { status: 'error', message: '指定された id の仕入原価大分類が見つかりません: ' + id };
+  _writeListCell_(ctx.sheet, 'A9', 'purchaseCategoryList', 'B9', ctx.list);
+  return { status: 'ok', purchaseCategoryList: ctx.list };
+}
+
+function deletePurchaseCategory(data) {
+  data = data || {};
+  var id = String(data.id || '');
+  if (!id) return { status: 'error', message: 'id が指定されていません' };
+  var ctx = _readListCell_('B9');
+  if (!ctx.sheet) return { status: 'error', message: 'settingsシートが見つかりません' };
+  var filtered = ctx.list.filter(function(it) { return String(it && it.id) !== id; });
+  if (filtered.length === ctx.list.length) {
+    return { status: 'error', message: '指定された id の仕入原価大分類が見つかりません: ' + id };
+  }
+  _writeListCell_(ctx.sheet, 'A9', 'purchaseCategoryList', 'B9', filtered);
+  // 品目側 purchaseMasterList の categoryId 参照を空文字化（03§3-1 delete 仕様）
+  var pmSheet = _ss_().getSheetByName('settings');
+  var pmJson = pmSheet.getRange('B5').getValue();
+  var pmList = [];
+  try { if (pmJson) pmList = JSON.parse(pmJson); } catch(e) {}
+  if (Array.isArray(pmList)) {
+    var touched = false;
+    pmList.forEach(function(it) {
+      if (it && String(it.category) === id) { it.category = ''; touched = true; }
+      if (it && String(it.categoryId) === id) { it.categoryId = ''; touched = true; }
+    });
+    if (touched) {
+      pmSheet.getRange('A5').setValue('purchaseMasterList');
+      pmSheet.getRange('B5').setValue(JSON.stringify(pmList));
+    }
+  }
+  return { status: 'ok', purchaseCategoryList: filtered };
+}
+
+// ============================================================
+// 仕入先マスタ suppliers（新規台帳・→ 03§1-6-2・14列）
+// I列 支払サイトは列だけ確保・仕様は §8-4 実装時に確定
+// ============================================================
+var SUPPLIERS_HEADERS_ = ['supplierId', 'name', 'aliases', '郵便番号', '住所', '電話番号', 'fax', 'email', '支払サイト', '銀行口座', 'インボイス番号', 'memo', 'createdAt', 'updatedAt'];
+
+function _suppliersSheet_() {
+  var ss = _ss_();
+  var sh = ss.getSheetByName('suppliers');
+  if (!sh) {
+    sh = ss.insertSheet('suppliers');
+    sh.getRange(1, 1, 1, SUPPLIERS_HEADERS_.length).setValues([SUPPLIERS_HEADERS_]).setFontWeight('bold');
+    sh.setFrozenRows(1);
+    return sh;
+  }
+  var header = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(function(h){ return String(h).trim(); });
+  SUPPLIERS_HEADERS_.forEach(function(key) {
+    if (header.indexOf(key) < 0) {
+      sh.getRange(1, sh.getLastColumn() + 1).setValue(key).setFontWeight('bold');
+      header.push(key);
+    }
+  });
+  return sh;
+}
+
+function getSuppliers() {
+  var sh = _suppliersSheet_();
+  var last = sh.getLastRow();
+  if (last < 2) return { status: 'ok', suppliers: [] };
+  var map = _headerMap_(sh);
+  var values = sh.getRange(2, 1, last - 1, sh.getLastColumn()).getValues();
+  var rows = values.map(function(r, i) {
+    function g(key) { return map[key] !== undefined ? r[map[key]] : ''; }
+    return {
+      rowIndex: i + 2, supplierId: g('supplierId'), name: g('name'), aliases: g('aliases'),
+      postalCode: g('郵便番号'), address: g('住所'), tel: g('電話番号'),
+      fax: g('fax'), email: g('email'), paymentTerms: g('支払サイト'),
+      bankAccount: g('銀行口座'), invoiceRegNo: g('インボイス番号'), memo: g('memo')
+    };
+  });
+  return { status: 'ok', suppliers: rows };
+}
+
+function _nextSupplierId_(sh, map) {
+  var last = sh.getLastRow();
+  var col = (map['supplierId'] !== undefined ? map['supplierId'] : 0) + 1;
+  var max = 0;
+  if (last >= 2) {
+    sh.getRange(2, col, last - 1, 1).getValues().forEach(function(r) {
+      var m = String(r[0] || '').match(/^sp(\d+)$/);
+      if (m) max = Math.max(max, Number(m[1]));
+    });
+  }
+  return 'sp' + ('000' + (max + 1)).slice(-3);
+}
+
+function addSupplier(data) {
+  data = data || {};
+  var sh = _suppliersSheet_();
+  var map = _headerMap_(sh);
+  var id = String(data.supplierId || '') || _nextSupplierId_(sh, map);
+  var now = new Date();
+  var obj = {
+    supplierId: id, name: data.name || '', aliases: data.aliases || '',
+    '郵便番号': data.postalCode || '', '住所': data.address || '', '電話番号': data.tel || '',
+    fax: data.fax || '', email: data.email || '',
+    '支払サイト': data.paymentTerms || '', '銀行口座': data.bankAccount || '',
+    'インボイス番号': data.invoiceRegNo || '', memo: data.memo || '',
+    createdAt: now, updatedAt: now
+  };
+  var width = sh.getLastColumn();
+  var row = [];
+  for (var c = 0; c < width; c++) row.push('');
+  Object.keys(obj).forEach(function(k) { if (map[k] !== undefined) row[map[k]] = obj[k]; });
+  sh.getRange(sh.getLastRow() + 1, 1, 1, width).setValues([row]);
+  return { status: 'ok', supplierId: id };
+}
+
+function updateSupplier(data) {
+  data = data || {};
+  var sh = _suppliersSheet_();
+  var map = _headerMap_(sh);
+  var col = (map['supplierId'] !== undefined ? map['supplierId'] : 0) + 1;
+  var idx = _findRowByCol_(sh, col, data.supplierId, data.rowIndex);
+  if (!idx) throw new Error('対象仕入先が見つかりません。');
+  var fieldMap = { name: 'name', aliases: 'aliases', postalCode: '郵便番号', address: '住所',
+    tel: '電話番号', fax: 'fax', email: 'email', paymentTerms: '支払サイト',
+    bankAccount: '銀行口座', invoiceRegNo: 'インボイス番号', memo: 'memo' };
+  Object.keys(fieldMap).forEach(function(k) {
+    var h = fieldMap[k];
+    if (data[k] !== undefined && map[h] !== undefined) sh.getRange(idx, map[h] + 1).setValue(data[k]);
+  });
+  if (map['updatedAt'] !== undefined) sh.getRange(idx, map['updatedAt'] + 1).setValue(new Date());
+  return { status: 'ok', rowIndex: idx };
+}
+
+function deleteSupplier(data) {
+  data = data || {};
+  var sh = _suppliersSheet_();
+  var map = _headerMap_(sh);
+  var col = (map['supplierId'] !== undefined ? map['supplierId'] : 0) + 1;
+  var idx = _findRowByCol_(sh, col, data.supplierId, data.rowIndex);
+  if (!idx) throw new Error('対象仕入先が見つかりません。');
+  sh.deleteRow(idx);
+  return { status: 'ok', deleted: 1 };
+}
+
+// 仕入先別の集計（月次仕入額／累計仕入額／直近取引履歴）＝マスタ管理画面表示用
+// コストシート D列='1'（仕入原価）かつ M列（取引先名）が supplier.name/aliases と一致する行で SUMIFS
+function getSupplierAggregate(data) {
+  data = data || {};
+  var supplierId = String(data.supplierId || '');
+  if (!supplierId) return { status: 'error', message: 'supplierId が指定されていません' };
+  var sh = _suppliersSheet_();
+  var map = _headerMap_(sh);
+  var col = (map['supplierId'] !== undefined ? map['supplierId'] : 0) + 1;
+  var idx = _findRowByCol_(sh, col, supplierId, null);
+  if (!idx) throw new Error('対象仕入先が見つかりません。');
+  var row = sh.getRange(idx, 1, 1, sh.getLastColumn()).getValues()[0];
+  var name = String(row[map['name']] || '').trim();
+  var aliasesRaw = String(row[map['aliases']] || '');
+  var names = [name].concat(aliasesRaw.split(/\r?\n/).map(function(s){ return s.trim(); })).filter(function(x){ return !!x; });
+  var nameSet = {};
+  names.forEach(function(n) { nameSet[n] = true; });
+
+  var monthKey = data.month ? String(data.month) : null; // 'YYYY-MM'
+  var cs = _ss_().getSheetByName('コスト');
+  var lifetime = 0, monthly = 0;
+  var history = [];
+  if (cs && cs.getLastRow() >= 2) {
+    var values = cs.getRange(2, 1, cs.getLastRow() - 1, 22).getValues();
+    values.forEach(function(r, i) {
+      var division = String(r[3] || ''); // D列 区分コード
+      if (division !== '1') return; // 仕入原価のみ
+      var vendorName = String(r[12] || '').trim(); // M列 取引先名
+      if (!nameSet[vendorName]) return;
+      var amount = Number(r[4]) || 0; // E列 金額(税込)
+      lifetime += amount;
+      var dateVal = r[0];
+      var ym = '';
+      if (dateVal instanceof Date) {
+        ym = Utilities.formatDate(dateVal, Session.getScriptTimeZone() || 'Asia/Tokyo', 'yyyy-MM');
+      } else if (typeof dateVal === 'string' && dateVal.length >= 7) {
+        ym = dateVal.substring(0, 7);
+      }
+      if (monthKey && ym === monthKey) monthly += amount;
+      if (history.length < 20) {
+        history.push({
+          date: dateVal, amount: amount, itemName: String(r[1] || ''),
+          memo: String(r[7] || ''), rowIndex: i + 2
+        });
+      }
+    });
+  }
+  return {
+    status: 'ok', supplierId: supplierId, name: name,
+    lifetime: lifetime, monthly: monthly, month: monthKey, history: history
+  };
+}
+
+// ============================================================
+// 得意先マスタ CSV I/O（→ 03§1-6-1）
+// ============================================================
+function _csvEscape_(v) {
+  if (v === null || v === undefined) return '';
+  var s = String(v);
+  if (/[",\r\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+  return s;
+}
+
+function _parseCsvLine_(line) {
+  var out = [];
+  var cur = '';
+  var inQuote = false;
+  for (var i = 0; i < line.length; i++) {
+    var ch = line[i];
+    if (inQuote) {
+      if (ch === '"') {
+        if (line[i + 1] === '"') { cur += '"'; i++; }
+        else inQuote = false;
+      } else cur += ch;
+    } else {
+      if (ch === ',') { out.push(cur); cur = ''; }
+      else if (ch === '"') inQuote = true;
+      else cur += ch;
+    }
+  }
+  out.push(cur);
+  return out;
+}
+
+function exportCustomersCSV() {
+  var sh = _customersSheet_();
+  var last = sh.getLastRow();
+  var header = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+  var lines = [header.map(_csvEscape_).join(',')];
+  if (last >= 2) {
+    var values = sh.getRange(2, 1, last - 1, sh.getLastColumn()).getValues();
+    values.forEach(function(r) { lines.push(r.map(_csvEscape_).join(',')); });
+  }
+  var csv = '﻿' + lines.join('\r\n');
+  return { status: 'ok', csv: csv, count: Math.max(0, last - 1) };
+}
+
+function importCustomersCSV(data) {
+  data = data || {};
+  var csv = String(data.csv || '');
+  var duplicateBehavior = String(data.duplicateBehavior || 'warn'); // skip / warn / force
+  if (!csv) return { status: 'error', message: 'csv が空です' };
+  // BOM 除去
+  if (csv.charCodeAt(0) === 0xFEFF) csv = csv.substring(1);
+  var lines = csv.split(/\r?\n/).filter(function(l) { return l.length > 0; });
+  if (lines.length < 2) return { status: 'error', message: 'CSV にヘッダー行＋データ行が必要です' };
+  var header = _parseCsvLine_(lines[0]).map(function(h){ return String(h).trim(); });
+  var sh = _customersSheet_();
+  var sheetMap = _headerMap_(sh);
+  var report = { imported: 0, updated: 0, skipped: 0, warnings: [] };
+
+  // 既存 name+電話 マップ（重複検出用）
+  var existingMap = {};
+  if (sh.getLastRow() >= 2) {
+    var existing = sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getValues();
+    existing.forEach(function(r, i) {
+      var name = String(r[sheetMap['name']] || '').trim();
+      var tel = String(r[sheetMap['電話番号']] || '').trim();
+      if (name) existingMap[name + '|' + tel] = { rowIndex: i + 2, customerId: r[sheetMap['customerId']] };
+    });
+  }
+
+  for (var li = 1; li < lines.length; li++) {
+    var cols = _parseCsvLine_(lines[li]);
+    var rec = {};
+    header.forEach(function(h, hi) { rec[h] = cols[hi] !== undefined ? String(cols[hi]).trim() : ''; });
+
+    // customerId 空→新規採番／値あり→upsert
+    var cid = rec['customerId'] || '';
+    if (!cid) {
+      // 重複ガード（name+電話）
+      var dupKey = (rec['name'] || '') + '|' + (rec['電話番号'] || '');
+      if (rec['name'] && existingMap[dupKey]) {
+        if (duplicateBehavior === 'skip') { report.skipped++; report.warnings.push('L' + (li+1) + ': 既存と重複しスキップ ' + rec['name']); continue; }
+        if (duplicateBehavior === 'warn') { report.warnings.push('L' + (li+1) + ': 重複疑い（強制取込しない場合は force 指定） ' + rec['name']); report.skipped++; continue; }
+        // force のみ通過
+      }
+      var addRes = addCustomer({
+        name: rec['name'], type: rec['type'], memo: rec['memo'],
+        senderFax: rec['先方FAX番号'], postalCode: rec['郵便番号'], address: rec['住所'],
+        tel: rec['電話番号'], email: rec['email'], contactPerson: rec['担当者']
+      });
+      if (addRes.status === 'ok') report.imported++;
+    } else {
+      var upRes = updateCustomer({
+        customerId: cid,
+        name: rec['name'], type: rec['type'], memo: rec['memo'],
+        senderFax: rec['先方FAX番号'], postalCode: rec['郵便番号'], address: rec['住所'],
+        tel: rec['電話番号'], email: rec['email'], contactPerson: rec['担当者']
+      });
+      if (upRes.status === 'ok') report.updated++;
+      else {
+        // 存在しない customerId → 新規として追加
+        var addRes2 = addCustomer({
+          name: rec['name'], type: rec['type'], memo: rec['memo'],
+          senderFax: rec['先方FAX番号'], postalCode: rec['郵便番号'], address: rec['住所'],
+          tel: rec['電話番号'], email: rec['email'], contactPerson: rec['担当者']
+        });
+        if (addRes2.status === 'ok') report.imported++;
+      }
+    }
+  }
+  return { status: 'ok', report: report };
+}
+
+// ============================================================
+// 新マスタ土台の一括マイグレーション（既存店で1度実行・冪等）
+// - suppliers シート生成（自己修復）
+// - settings B8/B9 に空配列で初期化
+// - masterQuota に serviceChannelQuota / purchaseCategoryQuota が無ければ既定追加
+// ============================================================
+function migrateNewMastersSchema() {
+  _suppliersSheet_();
+  var s = _ss_().getSheetByName('settings');
+  if (!s) return { status: 'error', message: 'settingsシートが見つかりません' };
+  if (!String(s.getRange('B8').getValue() || '')) {
+    s.getRange('A8').setValue('serviceChannelList');
+    s.getRange('B8').setValue('[]');
+  }
+  if (!String(s.getRange('B9').getValue() || '')) {
+    s.getRange('A9').setValue('purchaseCategoryList');
+    s.getRange('B9').setValue('[]');
+  }
+  var quotaRaw = s.getRange('B17').getValue();
+  var mq = {};
+  try { if (quotaRaw) mq = (typeof quotaRaw === 'string') ? JSON.parse(quotaRaw) : quotaRaw; } catch(e) {}
+  if (!mq || typeof mq !== 'object') mq = {};
+  if (typeof mq.serviceChannelQuota !== 'number') mq.serviceChannelQuota = 5;
+  if (typeof mq.purchaseCategoryQuota !== 'number') mq.purchaseCategoryQuota = 3;
+  if (typeof mq.serviceMasterQuota !== 'number') mq.serviceMasterQuota = 5;
+  if (typeof mq.purchaseMasterQuota !== 'number') mq.purchaseMasterQuota = 3;
+  if (typeof mq.costOptionalQuota !== 'number') mq.costOptionalQuota = 5;
+  s.getRange('A17').setValue('masterQuota');
+  s.getRange('B17').setValue(JSON.stringify(mq));
+  return { status: 'ok', migrated: ['suppliers', 'serviceChannelList(B8)', 'purchaseCategoryList(B9)', 'masterQuota'] };
 }

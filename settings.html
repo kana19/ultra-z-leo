@@ -406,6 +406,55 @@
     </div>
   </section>
 
+  <!-- ③-2 サービス販売チャネル大分類（任意設定・→ 03§1-1-2） -->
+  <section class="settings-section">
+    <button class="settings-section__head" type="button"
+            aria-controls="sec-schannel-body" aria-expanded="false">
+      <span class="settings-section__title">サービス販売チャネル（大分類・任意）
+        <span id="schannel-count-badge" class="settings-count-badge" hidden></span>
+      </span>
+    </button>
+    <div class="settings-section__body" id="sec-schannel-body">
+      <div id="schannel-list-container"></div>
+      <div id="schannel-add-row" class="settings-add-row">
+        <input type="text" id="schannel-add-name" class="settings-input"
+               placeholder="チャネル名（例：店内・テイクアウト・卸し）" maxlength="30" autocomplete="off">
+        <select id="schannel-add-tax" class="form-select" style="width:120px;flex-shrink:0;">
+          <option value="10">10%</option>
+          <option value="8">8%（軽減）</option>
+          <option value="0">0%（非課税）</option>
+        </select>
+        <button id="schannel-add-btn" class="settings-add-btn" type="button">＋ 追加</button>
+      </div>
+      <p id="schannel-limit-hint" class="settings-note" hidden></p>
+      <p class="settings-note">
+        同じ商品を「店内・テイクアウト・卸し」など違うチャネル・違う税率で売り分ける時の大分類です。設定すると売上入力で選択でき、税率は大分類が優先されます。空欄でも動きます（設定なし＝従来通り）。
+      </p>
+    </div>
+  </section>
+
+  <!-- ③-3 仕入原価大分類（任意設定・→ 03§1-3-2） -->
+  <section class="settings-section">
+    <button class="settings-section__head" type="button"
+            aria-controls="sec-pcat-body" aria-expanded="false">
+      <span class="settings-section__title">仕入原価大分類（グルーピング・任意）
+        <span id="pcat-count-badge" class="settings-count-badge" hidden></span>
+      </span>
+    </button>
+    <div class="settings-section__body" id="sec-pcat-body">
+      <div id="pcat-list-container"></div>
+      <div id="pcat-add-row" class="settings-add-row">
+        <input type="text" id="pcat-add-name" class="settings-input"
+               placeholder="大分類名（例：食材・酒類・包材）" maxlength="30" autocomplete="off">
+        <button id="pcat-add-btn" class="settings-add-btn" type="button">＋ 追加</button>
+      </div>
+      <p id="pcat-limit-hint" class="settings-note" hidden></p>
+      <p class="settings-note">
+        仕入原価品目を大分類でまとめる時に使います（食材／酒類／包材など）。PC月次管理で大分類別の集計が見られます。品目の税率は品目側で保持します。空欄でも動きます（設定なし＝従来通り）。
+      </p>
+    </div>
+  </section>
+
   <!-- ④ 販管費マスタ（コスト科目マスタ） -->
   <section class="settings-section">
     <button class="settings-section__head" type="button"
@@ -502,8 +551,72 @@
           <button id="customer-add-btn" class="settings-add-btn" type="button">＋ 追加</button>
         </div>
       </div>
+      <div class="mdoc-cat-row" style="gap:8px;margin-top:8px;">
+        <button id="customers-export-csv-btn" class="settings-save-btn" type="button" style="flex:0 0 auto;">CSV エクスポート</button>
+        <label for="customers-import-csv-file" class="settings-add-btn" style="cursor:pointer;flex:0 0 auto;">CSV インポート</label>
+        <input type="file" id="customers-import-csv-file" accept=".csv,text/csv" style="display:none;">
+        <select id="customers-import-mode" class="form-select" style="width:140px;flex-shrink:0;">
+          <option value="warn">重複時：警告</option>
+          <option value="skip">重複時：スキップ</option>
+          <option value="force">重複時：強制取込</option>
+        </select>
+      </div>
+      <p id="customers-import-report" class="settings-note" hidden></p>
       <p class="settings-note">
-        請求書・納品書の宛名と、FAX受注の発注元照合に使う取引先台帳です（お店の資産＝日々追加できます）。先方FAX番号は、届いたFAXを自動で発注元に結び付けるための照合キーです。
+        請求書・納品書の宛名と、FAX受注の発注元照合に使う取引先台帳です（お店の資産＝日々追加できます）。先方FAX番号は、届いたFAXを自動で発注元に結び付けるための照合キーです。CSV でまとめて取込／書出も可能です。
+      </p>
+    </div>
+  </section>
+
+  <!-- ④-4 仕入先マスタ（新規台帳・→ 03§1-6-2） -->
+  <section class="settings-section">
+    <button class="settings-section__head" type="button"
+            aria-controls="sec-suppliers-body" aria-expanded="false">
+      <span class="settings-section__title">仕入先マスタ
+        <span id="suppliers-count-badge" class="settings-count-badge" hidden></span>
+      </span>
+    </button>
+    <div class="settings-section__body" id="sec-suppliers-body">
+      <div id="suppliers-list-container"></div>
+      <div id="suppliers-add-row" class="settings-add-row settings-add-row--stack">
+        <div class="mdoc-cat-row">
+          <input type="text" id="supplier-add-name" class="settings-input"
+                 placeholder="仕入先名（正式名）" maxlength="40" autocomplete="off">
+        </div>
+        <div class="mdoc-cat-row">
+          <input type="text" id="supplier-add-tel" class="settings-input"
+                 placeholder="電話番号" maxlength="20" autocomplete="off">
+          <input type="text" id="supplier-add-fax" class="settings-input"
+                 placeholder="FAX番号" maxlength="20" autocomplete="off">
+        </div>
+        <div class="mdoc-cat-row">
+          <input type="text" id="supplier-add-postal" class="settings-input" style="max-width:140px;"
+                 placeholder="郵便番号" maxlength="8" autocomplete="off">
+          <input type="text" id="supplier-add-address" class="settings-input"
+                 placeholder="住所" maxlength="80" autocomplete="off">
+        </div>
+        <div class="mdoc-cat-row">
+          <input type="text" id="supplier-add-email" class="settings-input"
+                 placeholder="メール（任意）" maxlength="60" autocomplete="off">
+          <input type="text" id="supplier-add-invoice" class="settings-input"
+                 placeholder="インボイス番号（任意）" maxlength="20" autocomplete="off">
+        </div>
+        <div class="mdoc-cat-row">
+          <input type="text" id="supplier-add-bank" class="settings-input"
+                 placeholder="振込先（任意）" maxlength="60" autocomplete="off">
+        </div>
+        <div class="mdoc-cat-row">
+          <input type="text" id="supplier-add-aliases" class="settings-input"
+                 placeholder="表記ゆれ別名（レシートOCR名寄せ・改行区切り）" maxlength="120" autocomplete="off">
+        </div>
+        <div class="mdoc-cat-row">
+          <input type="text" id="supplier-add-memo" class="settings-input"
+                 placeholder="メモ（任意）" maxlength="60" autocomplete="off">
+          <button id="supplier-add-btn" class="settings-add-btn" type="button">＋ 追加</button>
+        </div>
+      </div>
+      <p class="settings-note">
+        レシートOCRの名寄せ先・コスト入力の取引先選択候補になる仕入先の台帳です。行をタップすると当月／累計仕入額と直近履歴が表示されます（コストシートの取引先名と自動照合）。支払サイトは列だけ確保し、買掛支払期日カレンダー実装時に運用します。
       </p>
     </div>
   </section>

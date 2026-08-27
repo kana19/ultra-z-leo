@@ -56,6 +56,8 @@ let _salesInModal       = false;   // SheetModal 経由で開いているか
 /* ── SheetModal 版 売上入力 state（S3g-3f） ────────────── */
 let _smSelectedServiceCode = null;
 let _smSelectedTaxRate     = null;
+let _smSelectedChannelId   = null; // 販売チャネル大分類（→ 03§1-1-2・任意）
+let _smSelectedCustomerId  = null; // 顧客タグ（→ 03§1-6 customers・任意）
 
 /* ── 初期化（sales.html ページ専用） ─────────────────────── */
 document.addEventListener('DOMContentLoaded', () => {
@@ -435,6 +437,11 @@ function _buildSalesFormBodyHTML() {
       <div class="sales-sm-section">
         <label class="sales-sm-label">サービスを選択</label>
         <div id="sm-sales-cards" class="sales-sm-cards"></div>
+        <!-- 販売チャネル大分類（→ 03§1-1-2 serviceChannelList・任意設定・空なら非表示） -->
+        <div id="sm-sales-channel-wrap" hidden style="margin-top:10px;">
+          <label class="sales-sm-label" style="font-size:12px;color:var(--uz-muted);">販売チャネル（任意・選ぶと税率上書き）</label>
+          <div class="sm-taxrate-chips" id="sm-sales-channel-chips" role="group" aria-label="販売チャネル選択"></div>
+        </div>
         <div class="sm-taxrate-chips" id="sm-sales-taxrate-chips" role="group" aria-label="税率選択">
           <button type="button" class="sm-taxrate-chip" data-rate="10">10%</button>
           <button type="button" class="sm-taxrate-chip" data-rate="8">8%</button>
@@ -450,6 +457,12 @@ function _buildSalesFormBodyHTML() {
           <span class="sales-sm-yen">円</span>
         </div>
         <div id="sm-sales-tax-display" class="sm-tax-memo">内消費税 0 円</div>
+      </div>
+
+      <!-- 顧客タグ（→ 03§1-6 customers・任意設定・空なら非表示） -->
+      <div class="sales-sm-section" id="sm-sales-customer-wrap" hidden>
+        <label class="sales-sm-label">顧客（任意タグ）</label>
+        <div class="sm-taxrate-chips" id="sm-sales-customer-chips" role="group" aria-label="顧客選択" style="overflow-x:auto;flex-wrap:wrap;"></div>
       </div>
 
       <div class="sales-sm-section">
@@ -479,13 +492,19 @@ async function _initSalesFormInModal() {
   // state を完全初期化（次回オープン時の保証）
   _smSelectedServiceCode = null;
   _smSelectedTaxRate     = null;
+  _smSelectedChannelId   = null;
+  _smSelectedCustomerId  = null;
 
   document.getElementById('sm-sales-date').value = todayStr();
 
   await _renderSalesCards();
+  _renderSalesChannelChips();  // 販売チャネル大分類（→ 03§1-1-2・任意）
+  _renderSalesCustomerChips(); // 顧客タグ（→ 03§1-6・任意）
 
   _bindSalesAmountFormatting();
   _bindTaxRateChips();
+  _bindSalesChannelChips();
+  _bindSalesCustomerChips();
   _bindSalesAmountTaxRecalc();
 
   document.getElementById('sm-sales-submit')
@@ -495,6 +514,8 @@ async function _initSalesFormInModal() {
     ?.addEventListener('click', _smHandleCardTap);
 
   _smUpdateTaxChipUI();
+  _smUpdateChannelChipUI();
+  _smUpdateCustomerChipUI();
   _smRefreshTaxDisplay();
 }
 
@@ -517,6 +538,111 @@ function _bindSalesAmountTaxRecalc() {
   if (!el) return;
   el.addEventListener('input', _smRefreshTaxDisplay);
 }
+
+/* ── 販売チャネル大分類（→ 03§1-1-2 serviceChannelList・任意設定・空なら非表示） ── */
+function _getServiceChannelListSafe_() {
+  try {
+    if (typeof getServiceChannelList === 'function') return getServiceChannelList();
+    const s = localStorage.getItem('uz_service_channel_list');
+    const l = s ? JSON.parse(s) : [];
+    return Array.isArray(l) ? l : [];
+  } catch { return []; }
+}
+
+function _renderSalesChannelChips() {
+  const wrap = document.getElementById('sm-sales-channel-wrap');
+  const chips = document.getElementById('sm-sales-channel-chips');
+  if (!wrap || !chips) return;
+  const list = _getServiceChannelListSafe_();
+  if (!list.length) { wrap.hidden = true; chips.innerHTML = ''; return; }
+  wrap.hidden = false;
+  chips.innerHTML = list.map(ch => `
+    <button type="button" class="sm-taxrate-chip" data-channel-id="${uzEscHtml(String(ch.id))}" data-tax-rate="${uzEscHtml(String(ch.taxRate))}">
+      ${uzEscHtml(ch.name)}<span style="opacity:.6;margin-left:4px;">(${uzEscHtml(String(ch.taxRate))}%)</span>
+    </button>
+  `).join('');
+}
+
+function _bindSalesChannelChips() {
+  const chips = document.getElementById('sm-sales-channel-chips');
+  if (!chips) return;
+  chips.addEventListener('click', e => {
+    const btn = e.target.closest('.sm-taxrate-chip');
+    if (!btn) return;
+    const id = btn.dataset.channelId;
+    const rate = parseInt(btn.dataset.taxRate, 10);
+    // トグル：同じチャネルを再タップで解除（税率は品目のデフォルトへ戻す）
+    if (_smSelectedChannelId === id) {
+      _smSelectedChannelId = null;
+      const svc = getServiceMaster().find(s => s.code === _smSelectedServiceCode);
+      _smSelectedTaxRate = (svc && [0,8,10].indexOf(svc.taxRate) >= 0) ? svc.taxRate : _smSelectedTaxRate;
+    } else {
+      _smSelectedChannelId = id;
+      if (Number.isFinite(rate) && [0,8,10].indexOf(rate) >= 0) _smSelectedTaxRate = rate;
+    }
+    _smUpdateChannelChipUI();
+    _smUpdateTaxChipUI();
+    _smRefreshTaxDisplay();
+  });
+}
+
+function _smUpdateChannelChipUI() {
+  document.querySelectorAll('#sm-sales-channel-chips .sm-taxrate-chip').forEach(btn => {
+    btn.classList.toggle('is-active', _smSelectedChannelId != null && btn.dataset.channelId === _smSelectedChannelId);
+  });
+}
+
+/* ── 顧客タグ（→ 03§1-6 customers・任意設定・空なら非表示） ── */
+function _getCustomersListSafe_() {
+  try {
+    const s = localStorage.getItem('uz_customers_list');
+    const l = s ? JSON.parse(s) : [];
+    return Array.isArray(l) ? l : [];
+  } catch { return []; }
+}
+
+function _renderSalesCustomerChips() {
+  const wrap = document.getElementById('sm-sales-customer-wrap');
+  const chips = document.getElementById('sm-sales-customer-chips');
+  if (!wrap || !chips) return;
+  const list = _getCustomersListSafe_();
+  if (!list.length) { wrap.hidden = true; chips.innerHTML = ''; return; }
+  wrap.hidden = false;
+  chips.innerHTML = list.map(c => `
+    <button type="button" class="sm-taxrate-chip" data-customer-id="${uzEscHtml(String(c.customerId || ''))}">
+      ${uzEscHtml(c.name || '')}
+    </button>
+  `).join('');
+}
+
+function _bindSalesCustomerChips() {
+  const chips = document.getElementById('sm-sales-customer-chips');
+  if (!chips) return;
+  chips.addEventListener('click', e => {
+    const btn = e.target.closest('.sm-taxrate-chip');
+    if (!btn) return;
+    const id = btn.dataset.customerId;
+    // トグル：同じ顧客再タップで解除
+    if (_smSelectedCustomerId === id) {
+      _smSelectedCustomerId = null;
+    } else {
+      _smSelectedCustomerId = id;
+    }
+    _smUpdateCustomerChipUI();
+  });
+}
+
+function _smUpdateCustomerChipUI() {
+  document.querySelectorAll('#sm-sales-customer-chips .sm-taxrate-chip').forEach(btn => {
+    btn.classList.toggle('is-active', _smSelectedCustomerId != null && btn.dataset.customerId === _smSelectedCustomerId);
+  });
+}
+
+// masters-synced 完了時に顧客チップを再描画（起動直後は customers が空でも後から届く）
+document.addEventListener('uz:masters-synced', () => {
+  _renderSalesCustomerChips();
+  _smUpdateCustomerChipUI();
+});
 
 function _smUpdateTaxChipUI() {
   document.querySelectorAll('#sm-sales-taxrate-chips .sm-taxrate-chip').forEach(btn => {
@@ -626,6 +752,9 @@ function _smHandleCardTap(e) {
   } else {
     _smSelectedTaxRate = null;
   }
+  // 新しい品目を選んだらチャネルもリセット（チャネルは品目×チャネルの掛け算・都度選ぶ）
+  _smSelectedChannelId = null;
+  _smUpdateChannelChipUI();
   _smUpdateTaxChipUI();
   _smRefreshTaxDisplay();
 
@@ -665,6 +794,22 @@ async function _smHandleSalesSubmit() {
   const taxRate = _smSelectedTaxRate;
   const { taxExcluded, tax } = calcTax(amount, taxRate);
 
+  // 販売チャネル大分類（→ 03§1-1-2・任意設定）と顧客タグ（→ 03§1-6・任意設定）が
+  // 選ばれていれば memo 先頭に付記する。保存構造は既存の memo 列（H列）を使い、
+  // 売上シート列は不変（→ 03§1-0 列不変原則）。付記順は [チャネル][顧客] メモ。
+  let memoWithTags = memo;
+  const tagPrefixParts = [];
+  if (_smSelectedChannelId) {
+    const ch = _getServiceChannelListSafe_().find(c => String(c.id) === String(_smSelectedChannelId));
+    if (ch && ch.name) tagPrefixParts.push(`[${ch.name}]`);
+  }
+  if (_smSelectedCustomerId) {
+    const cust = _getCustomersListSafe_().find(c => String(c.customerId) === String(_smSelectedCustomerId));
+    if (cust && cust.name) tagPrefixParts.push(`[${cust.name}]`);
+  }
+  if (tagPrefixParts.length) {
+    memoWithTags = tagPrefixParts.join('') + (memo ? ' ' + memo : '');
+  }
 
   btn.disabled = true;
   btn.textContent = '送信中...';
@@ -678,7 +823,7 @@ async function _smHandleSalesSubmit() {
       taxRate,
       tax,
       amountInTax:  amount,
-      memo,
+      memo:         memoWithTags,
       uncollected:  document.getElementById('uncollected-toggle')?.checked ? 1 : 0,
     });
 

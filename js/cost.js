@@ -502,6 +502,7 @@ function _costScEsc(s) {
 let _smCostSelectedDivisionCode = '2';   // 初期値 = 販管費
 let _smCostSelectedItemCode     = null;
 let _smCostSelectedTaxRate      = null;
+let _smCostSelectedSupplierId   = null; // 仕入先タグ（→ 03§1-6-2 suppliers・任意・仕入原価タブのみ）
 let _smCostUnpaid               = false;
 
 // ── モーダル起動 ───────────────────────
@@ -564,6 +565,11 @@ function _smCostBuildFormBodyHTML() {
       <section class="cost-sm-section">
         <label class="cost-sm-label">科目を選択</label>
         <div id="sm-cost-item-cards" class="cost-sm-cards"></div>
+        <!-- 仕入先タグ（→ 03§1-6-2 suppliers・任意設定・仕入原価タブ選択時のみ表示） -->
+        <div id="sm-cost-supplier-wrap" hidden style="margin-top:10px;">
+          <label class="cost-sm-label" style="font-size:12px;color:var(--uz-muted);">仕入先（任意タグ）</label>
+          <div class="sm-taxrate-chips" id="sm-cost-supplier-chips" role="group" aria-label="仕入先選択" style="overflow-x:auto;flex-wrap:wrap;"></div>
+        </div>
       </section>
 
       <section class="cost-sm-section">
@@ -631,14 +637,17 @@ function _smCostInitFormInModal() {
   _smCostSelectedDivisionCode = '2';
   _smCostSelectedItemCode     = null;
   _smCostSelectedTaxRate      = null;
+  _smCostSelectedSupplierId   = null;
   _smCostUnpaid               = false;
 
   // 2. 科目カードの初期レンダリング（販管費＝divisionCode:'2'）
   _smCostRenderItemCards('2');
+  _smCostRenderSupplierChips();  // 仕入先タグ（→ 03§1-6-2・仕入原価タブ選択時のみ表示）
 
   // 3. 各要素のイベントバインド
   _smCostBindDivisionTabs();
   _smCostBindTaxChips();
+  _smCostBindSupplierChips();
   _smCostBindAmountInput();
   _smCostBindSubmit();
   _smCostBindMemoInput();
@@ -664,6 +673,7 @@ function _smCostBindDivisionTabs() {
 function _smCostSelectDivision(divisionCode) {
   // 1. state 更新
   _smCostSelectedDivisionCode = divisionCode;
+  _smCostSelectedSupplierId = null;   // 区分切替で仕入先タグをクリア（仕入先は仕入原価専用）
 
   // 2. 区分タブの --active 付け替え
   document.querySelectorAll('.cost-sm-division-tab').forEach(tab => {
@@ -672,6 +682,7 @@ function _smCostSelectDivision(divisionCode) {
       tab.dataset.divisionCode === divisionCode
     );
   });
+  _smCostRenderSupplierChips();  // 仕入原価タブ選択時のみ仕入先チップを表示
 
   // 3. 科目選択と税率選択をリセット（区分切替で選択を持ち越さない）
   _smCostSelectedItemCode = null;
@@ -886,6 +897,16 @@ async function _smCostHandleSubmit() {
   // 3. 税額計算
   const { taxExcluded, tax } = calcTax(amountInTax, _smCostSelectedTaxRate);
 
+  // 仕入先タグ（→ 03§1-6-2 suppliers・仕入原価タブのみ・任意設定）が選ばれていれば
+  // memo 先頭に付記する。保存構造は既存の memo 列を使い、コストシート列は不変（→ 03§1-0-2）。
+  let memoWithTags = memoVal;
+  if (_smCostSelectedSupplierId && _smCostSelectedDivisionCode === '1') {
+    const sup = _getSuppliersListSafe_().find(s => String(s.supplierId) === String(_smCostSelectedSupplierId));
+    if (sup && sup.name) {
+      memoWithTags = `[${sup.name}]` + (memoVal ? ' ' + memoVal : '');
+    }
+  }
+
   // 4. payload 組立（clientId は箱だけ用意・現フェーズでは空文字固定）
   //   全科目で総額（税込）入力に統一する。
   //   人件費系科目（20/21/25）も科目選択して金額入力できるが、スタッフ紐付けは持たない。
@@ -901,7 +922,7 @@ async function _smCostHandleSubmit() {
     taxRate:           _smCostSelectedTaxRate,
     tax:               tax,
     taxIncluded:       amountInTax,
-    memo:              memoVal,
+    memo:              memoWithTags,
     unpaid:            unpaidVal,
     clientId:          '',   // 管理ポータル実装時に実値を入れる・現時点は空
   };
@@ -958,6 +979,59 @@ function _smCostShowToast(message) {
 
   setTimeout(() => toast.remove(), 3000);
 }
+
+/* ── 仕入先タグ（→ 03§1-6-2 suppliers・任意設定・仕入原価タブ選択時のみ） ── */
+function _getSuppliersListSafe_() {
+  try {
+    const s = localStorage.getItem('uz_suppliers_list');
+    const l = s ? JSON.parse(s) : [];
+    return Array.isArray(l) ? l : [];
+  } catch { return []; }
+}
+
+function _smCostRenderSupplierChips() {
+  const wrap = document.getElementById('sm-cost-supplier-wrap');
+  const chips = document.getElementById('sm-cost-supplier-chips');
+  if (!wrap || !chips) return;
+  // 販管費タブ時は非表示（仕入先は仕入原価専用）
+  if (_smCostSelectedDivisionCode !== '1') { wrap.hidden = true; chips.innerHTML = ''; return; }
+  const list = _getSuppliersListSafe_();
+  if (!list.length) { wrap.hidden = true; chips.innerHTML = ''; return; }
+  wrap.hidden = false;
+  chips.innerHTML = list.map(s => `
+    <button type="button" class="sm-taxrate-chip" data-supplier-id="${uzEscHtml(String(s.supplierId || ''))}">
+      ${uzEscHtml(s.name || '')}
+    </button>
+  `).join('');
+  _smCostUpdateSupplierChipUI();
+}
+
+function _smCostBindSupplierChips() {
+  const chips = document.getElementById('sm-cost-supplier-chips');
+  if (!chips) return;
+  chips.addEventListener('click', e => {
+    const btn = e.target.closest('.sm-taxrate-chip');
+    if (!btn) return;
+    const id = btn.dataset.supplierId;
+    if (_smCostSelectedSupplierId === id) {
+      _smCostSelectedSupplierId = null;
+    } else {
+      _smCostSelectedSupplierId = id;
+    }
+    _smCostUpdateSupplierChipUI();
+  });
+}
+
+function _smCostUpdateSupplierChipUI() {
+  document.querySelectorAll('#sm-cost-supplier-chips .sm-taxrate-chip').forEach(btn => {
+    btn.classList.toggle('is-active', _smCostSelectedSupplierId != null && btn.dataset.supplierId === _smCostSelectedSupplierId);
+  });
+}
+
+// masters-synced 完了時に仕入先チップを再描画
+document.addEventListener('uz:masters-synced', () => {
+  _smCostRenderSupplierChips();
+});
 
 function _smCostBindSubmit() {
   const btn = document.getElementById('sm-cost-submit');

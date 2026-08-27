@@ -99,6 +99,97 @@
         <p id="pur-limit-hint" class="pc-note" style="margin-top:6px;color:var(--uz-muted);" hidden></p>
       </div>
 
+      <!-- ③-2 サービス販売チャネル大分類（任意設定・→ 03§1-1-2） -->
+      <div class="pc-card">
+        <div class="pc-section-title">サービス販売チャネル大分類（任意） <span id="pc-schannel-count-badge" class="pc-count-badge" hidden></span></div>
+        <p class="pc-note" style="color:var(--uz-muted);margin-bottom:10px;">
+          同じサービスを店内・テイクアウト・卸し等の違うチャネル・違う税率で売り分ける時の大分類です。設定するとスマホ売上入力で選択でき、税率は大分類が優先。空欄で無害運転（既存動作を壊さない）。
+        </p>
+        <table class="pc-table" id="pc-schannel-table">
+          <thead><tr><th style="width:90px;">ID</th><th>チャネル名</th><th style="width:90px;">税率</th><th style="width:90px;">操作</th></tr></thead>
+          <tbody id="pc-schannel-body"></tbody>
+        </table>
+        <div id="pc-schannel-add-row" class="pc-form-row" style="margin-top:10px;align-items:center;gap:8px;flex-wrap:wrap;">
+          <input type="text" id="pc-schannel-add-name" class="pc-input" placeholder="チャネル名（例：店内）" maxlength="30" style="flex:2;min-width:160px;">
+          <select id="pc-schannel-add-tax" class="pc-select" style="width:120px;">
+            <option value="10">10%</option>
+            <option value="8">8%（軽減）</option>
+            <option value="0">0%（非課税）</option>
+          </select>
+          <button id="pc-schannel-add-btn" class="pc-btn" type="button">＋ 追加</button>
+        </div>
+        <p id="pc-schannel-limit-hint" class="pc-note" style="margin-top:6px;color:var(--uz-muted);" hidden></p>
+      </div>
+
+      <!-- ③-3 仕入原価大分類（任意設定・→ 03§1-3-2） -->
+      <div class="pc-card">
+        <div class="pc-section-title">仕入原価大分類（任意・グルーピング） <span id="pc-pcat-count-badge" class="pc-count-badge" hidden></span></div>
+        <p class="pc-note" style="color:var(--uz-muted);margin-bottom:10px;">
+          仕入原価品目を大分類でまとめます（食材／酒類／包材など）。品目マスタで categoryId 紐付け＝入力時は品目選択で自動決定（モーダルにタグは出ません）。税率は品目側 defaultTaxRate が正。
+        </p>
+        <table class="pc-table" id="pc-pcat-table">
+          <thead><tr><th style="width:90px;">ID</th><th>大分類名</th><th style="width:90px;">操作</th></tr></thead>
+          <tbody id="pc-pcat-body"></tbody>
+        </table>
+        <div id="pc-pcat-add-row" class="pc-form-row" style="margin-top:10px;align-items:center;gap:8px;flex-wrap:wrap;">
+          <input type="text" id="pc-pcat-add-name" class="pc-input" placeholder="大分類名（例：食材）" maxlength="30" style="flex:2;min-width:160px;">
+          <button id="pc-pcat-add-btn" class="pc-btn" type="button">＋ 追加</button>
+        </div>
+        <p id="pc-pcat-limit-hint" class="pc-note" style="margin-top:6px;color:var(--uz-muted);" hidden></p>
+      </div>
+
+      <!-- ③-4 仕入先マスタ（新規台帳・→ 03§1-6-2） -->
+      <div class="pc-card">
+        <div class="pc-section-title">仕入先マスタ <span id="pc-suppliers-count-badge" class="pc-count-badge" hidden></span></div>
+        <p class="pc-note" style="color:var(--uz-muted);margin-bottom:10px;">
+          レシートOCRの名寄せ先・コスト入力の取引先選択候補になる仕入先の台帳です。仕入先名をクリックすると当月／累計仕入額と直近履歴が表示されます（コストシートの取引先名と自動照合）。支払サイトは列だけ確保、買掛支払期日カレンダー実装時に運用。
+        </p>
+        <table class="pc-table" id="pc-suppliers-table">
+          <thead><tr><th>仕入先名</th><th style="width:130px;">電話</th><th style="width:130px;">FAX</th><th style="width:120px;">操作</th></tr></thead>
+          <tbody id="pc-suppliers-body"></tbody>
+        </table>
+        <div id="pc-supplier-add-row" class="pc-form-row" style="margin-top:10px;gap:8px;flex-wrap:wrap;flex-direction:column;">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <input type="text" id="pc-supplier-add-name" class="pc-input" placeholder="仕入先名（正式名）" maxlength="40" style="flex:2;min-width:180px;">
+            <input type="text" id="pc-supplier-add-tel" class="pc-input" placeholder="電話" maxlength="20" style="flex:1;min-width:120px;">
+            <input type="text" id="pc-supplier-add-fax" class="pc-input" placeholder="FAX" maxlength="20" style="flex:1;min-width:120px;">
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <input type="text" id="pc-supplier-add-postal" class="pc-input" placeholder="郵便番号" maxlength="8" style="width:120px;">
+            <input type="text" id="pc-supplier-add-address" class="pc-input" placeholder="住所" maxlength="80" style="flex:2;min-width:220px;">
+            <input type="text" id="pc-supplier-add-email" class="pc-input" placeholder="メール（任意）" maxlength="60" style="flex:1;min-width:180px;">
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <input type="text" id="pc-supplier-add-invoice" class="pc-input" placeholder="インボイス番号（任意）" maxlength="20" style="flex:1;min-width:180px;">
+            <input type="text" id="pc-supplier-add-bank" class="pc-input" placeholder="振込先（任意）" maxlength="60" style="flex:1;min-width:180px;">
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <input type="text" id="pc-supplier-add-aliases" class="pc-input" placeholder="表記ゆれ別名（改行区切り）" maxlength="120" style="flex:2;min-width:200px;">
+            <input type="text" id="pc-supplier-add-memo" class="pc-input" placeholder="メモ（任意）" maxlength="60" style="flex:1;min-width:150px;">
+            <button id="pc-supplier-add-btn" class="pc-btn" type="button">＋ 追加</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ③-5 顧客マスタ CSV I/O（→ 03§1-6-1） -->
+      <div class="pc-card">
+        <div class="pc-section-title">顧客マスタ CSV 入出力</div>
+        <p class="pc-note" style="color:var(--uz-muted);margin-bottom:10px;">
+          顧客マスタ（得意先）は日々スマホ版で追加できます。既存顧客の一括取込／バックアップ書出はここで操作。ヘッダー行付き12列雛形（customerId 空は新規採番・値ありは upsert）。
+        </p>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <button id="pc-customers-export-btn" class="pc-btn" type="button">CSV エクスポート</button>
+          <label for="pc-customers-import-file" class="pc-btn" style="cursor:pointer;">CSV インポート</label>
+          <input type="file" id="pc-customers-import-file" accept=".csv,text/csv" style="display:none;">
+          <select id="pc-customers-import-mode" class="pc-select" style="width:150px;">
+            <option value="warn">重複時：警告</option>
+            <option value="skip">重複時：スキップ</option>
+            <option value="force">重複時：強制取込</option>
+          </select>
+        </div>
+        <p id="pc-customers-import-report" class="pc-note" style="margin-top:8px;color:var(--uz-muted);" hidden></p>
+      </div>
+
       <!-- ④ 販管費マスタ（コスト科目マスタ） -->
       <div class="pc-card">
         <div class="pc-section-title">販管費マスタ（コスト科目マスタ）</div>

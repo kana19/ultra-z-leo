@@ -45,6 +45,10 @@ const MASTER_CACHE_KEYS = [
   STAFF_MASTER_KEY,     // uz_staff_master（settings.js/sales.js/history.js が読む正本）
   'uz_store_name',
   'uz_business_hours',
+  'uz_service_channel_list',   // 販売チャネル大分類（2026-08-27・→ 03§1-1-2）
+  'uz_purchase_category_list', // 仕入原価大分類（2026-08-27・→ 03§1-3-2）
+  'uz_customers_list',         // 顧客マスタキャッシュ（2026-08-27・→ 03§1-6）
+  'uz_suppliers_list',         // 仕入先マスタキャッシュ（2026-08-27・→ 03§1-6-2）
   PL_SUMMARY_CACHE_KEY, // uz_pl_summary_cache（対策A・別店舗の損益が一瞬出るのを防ぐ）
 ];
 
@@ -767,10 +771,36 @@ async function syncSettingsAtStartup() {
       localStorage.setItem('uz_feature_visibility', JSON.stringify(d.featureVisibility));
     }
 
+    // 2026-08-27：大分類マスタ（serviceChannelList / purchaseCategoryList）を localStorage キャッシュ
+    // sales.js（販売チャネル選択）・pc集計（大分類別内訳）・settings.js（管理UI）が参照する。
+    if (Array.isArray(d.serviceChannelList)) {
+      localStorage.setItem('uz_service_channel_list', JSON.stringify(d.serviceChannelList));
+    }
+    if (Array.isArray(d.purchaseCategoryList)) {
+      localStorage.setItem('uz_purchase_category_list', JSON.stringify(d.purchaseCategoryList));
+    }
+
     // settings 同期完了イベント発火
     try {
       document.dispatchEvent(new CustomEvent('uz:settings-synced', { detail: { data: d } }));
     } catch (e) { /* CustomEvent 非対応環境は無視 */ }
+
+    // 2026-08-27：顧客・仕入先マスタは別アクションで並列取得しキャッシュ（→ 03§1-6 / §1-6-2）
+    // sales.js（売上入力モーダルの顧客タグ）・cost.js（コスト入力モーダルの仕入先タグ）が参照。
+    Promise.all([
+      callGAS('getCustomers', {}).catch(() => null),
+      callGAS('getSuppliers', {}).catch(() => null)
+    ]).then(([cRes, sRes]) => {
+      if (cRes && cRes.status === 'ok' && Array.isArray(cRes.customers)) {
+        localStorage.setItem('uz_customers_list', JSON.stringify(cRes.customers));
+      }
+      if (sRes && sRes.status === 'ok' && Array.isArray(sRes.suppliers)) {
+        localStorage.setItem('uz_suppliers_list', JSON.stringify(sRes.suppliers));
+      }
+      try {
+        document.dispatchEvent(new CustomEvent('uz:masters-synced'));
+      } catch (e) { /* CustomEvent 非対応環境は無視 */ }
+    }).catch(() => { /* サイレントフェイル */ });
   } catch (e) {
     console.warn('[app.js] settings起動時同期失敗（キャッシュ値を使用）:', e);
   }

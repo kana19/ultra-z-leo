@@ -12,9 +12,13 @@
 let settings = null;
 let costMaster = [];
 let purchaseList = [];
-let masterQuota = { serviceMasterQuota: 5, purchaseMasterQuota: 3, costOptionalQuota: 5 };
+let masterQuota = { serviceMasterQuota: 5, serviceChannelQuota: 5, purchaseMasterQuota: 3, purchaseCategoryQuota: 3, costOptionalQuota: 5 };
 let qrLocations = [];          // 段2・拠点リスト（settings B6）
 let qrProofEnabled = false;    // 段2・QR現地証明の有効可否（featureVisibility）
+// 2026-08-27：新マスタ（大分類・仕入先）用の PC 側 state
+let serviceChannelList = [];
+let purchaseCategoryList = [];
+let suppliersList = [];
 
 document.addEventListener('DOMContentLoaded', async () => {
   pcBootstrap('pc-settings.html', '設定');
@@ -31,6 +35,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   const qrlocInput = document.getElementById('qrloc-add-name');
   if (qrlocInput) qrlocInput.addEventListener('keydown', e => { if (e.key === 'Enter') addQrLocation(); });
   bindStaffAdd();
+  // 2026-08-27：新マスタ管理UI のイベントバインド
+  bindPcServiceChannelAdd();
+  bindPcPurchaseCategoryAdd();
+  bindPcSupplierAdd();
+  bindPcCustomersCsvIO();
 });
 
 async function loadAll() {
@@ -43,13 +52,18 @@ async function loadAll() {
   if (settings.masterQuota && typeof settings.masterQuota === 'object') {
     masterQuota = {
       serviceMasterQuota: Number(settings.masterQuota.serviceMasterQuota) || 5,
+      serviceChannelQuota: Number(settings.masterQuota.serviceChannelQuota) || 5,
       purchaseMasterQuota: Number(settings.masterQuota.purchaseMasterQuota) || 3,
+      purchaseCategoryQuota: Number(settings.masterQuota.purchaseCategoryQuota) || 3,
       costOptionalQuota: Number(settings.masterQuota.costOptionalQuota) || 5
     };
   } else if (settings.masterQuota === null) {
     // B17未投入の既存ユーザー → 上限制御を無効化（03_データ仕様.md §1-4-2）
-    masterQuota = { serviceMasterQuota: null, purchaseMasterQuota: null, costOptionalQuota: null };
+    masterQuota = { serviceMasterQuota: null, serviceChannelQuota: null, purchaseMasterQuota: null, purchaseCategoryQuota: null, costOptionalQuota: null };
   }
+  // 2026-08-27：大分類マスタを取得（getSettings 応答から・空配列で無害運転）
+  serviceChannelList = Array.isArray(settings.serviceChannelList) ? settings.serviceChannelList : [];
+  purchaseCategoryList = Array.isArray(settings.purchaseCategoryList) ? settings.purchaseCategoryList : [];
   // 6-G フェーズ2：仕入マスタを取得（getSettings 応答から優先・なければ空）
   if (Array.isArray(settings.purchaseMasterList)) {
     purchaseList = settings.purchaseMasterList;
@@ -75,10 +89,14 @@ async function loadAll() {
   saveCostMasterToStorage(costMaster);
   renderServices();
   renderPurchases();
+  renderPcServiceChannels();
+  renderPcPurchaseCategories();
   renderQrLocations();
   renderCM();
   renderStaff();
   renderBasicInfo();
+  // 2026-08-27：仕入先マスタは別アクションで並列取得（getSettings 応答に含まれない）
+  loadPcSuppliers();
 }
 
 /* ── 基本情報セクション（読み取り専用・スマホ版と表記統一） ── */
@@ -739,4 +757,323 @@ function bindStaffAdd() {
   btn.addEventListener('click', doAdd);
   nameInput.addEventListener('keydown', e => { if (e.key === 'Enter') doAdd(); });
   if (pwInput) pwInput.addEventListener('keydown', e => { if (e.key === 'Enter') doAdd(); });
+}
+
+/* ============================================================
+ * 2026-08-27：新マスタ管理UI（PC版・→ PWA settings.js と同型・独自 id で衝突回避）
+ * - サービス販売チャネル大分類（→ 03§1-1-2）
+ * - 仕入原価大分類（→ 03§1-3-2）
+ * - 仕入先マスタ（→ 03§1-6-2・集計付）
+ * - 顧客CSV I/O（→ 03§1-6-1）
+ * ============================================================ */
+
+/* ── サービス販売チャネル大分類 ─────────────────── */
+function renderPcServiceChannels() {
+  const tbody = document.getElementById('pc-schannel-body');
+  if (!tbody) return;
+  const list = serviceChannelList || [];
+  const quota = masterQuota.serviceChannelQuota;
+  const unlimited = (quota == null || !isFinite(quota));
+  tbody.innerHTML = list.length ? list.map(ch => `
+    <tr>
+      <td>${uzEscHtml(ch.id || '')}</td>
+      <td>${uzEscHtml(ch.name || '')}</td>
+      <td>${Number(ch.taxRate) || 0}%</td>
+      <td><button type="button" class="pc-btn" style="background:#c00;color:#fff;" onclick="deletePcServiceChannel('${uzEscHtml(String(ch.id))}')">削除</button></td>
+    </tr>
+  `).join('') : '<tr><td colspan="4" style="text-align:center;color:var(--uz-muted);">未設定（売上入力にチャネル選択は出ません＝後方互換）</td></tr>';
+  const badge = document.getElementById('pc-schannel-count-badge');
+  if (badge) { badge.hidden = false; badge.textContent = unlimited ? ` ${list.length}件` : ` ${list.length}/${quota}`; }
+  const addRow = document.getElementById('pc-schannel-add-row');
+  const hint = document.getElementById('pc-schannel-limit-hint');
+  const atMax = !unlimited && list.length >= quota;
+  if (addRow) addRow.hidden = atMax;
+  if (hint) { hint.hidden = !atMax; if (atMax) hint.textContent = `件数枠の上限（${quota}件）に達しています`; }
+}
+
+function bindPcServiceChannelAdd() {
+  const btn = document.getElementById('pc-schannel-add-btn');
+  const nameInput = document.getElementById('pc-schannel-add-name');
+  const taxSelect = document.getElementById('pc-schannel-add-tax');
+  if (!btn || !nameInput) return;
+  const doAdd = async () => {
+    const name = nameInput.value.trim();
+    const taxRate = parseInt(taxSelect.value, 10);
+    if (!name) return showToast('チャネル名を入力してください', 'error');
+    if (name.length > 30) return showToast('チャネル名は30文字以内で入力してください', 'error');
+    const quota = masterQuota.serviceChannelQuota;
+    if (quota != null && isFinite(quota) && serviceChannelList.length >= quota) {
+      return showToast(`件数枠の上限（${quota}件）に達しています`, 'error');
+    }
+    if (serviceChannelList.some(c => c.name === name)) return showToast('同じ名前のチャネルが既に登録されています', 'error');
+    btn.disabled = true;
+    try {
+      const res = await callGAS('addServiceChannel', { name, taxRate });
+      if (res && res.status === 'ok' && Array.isArray(res.serviceChannelList)) {
+        serviceChannelList = res.serviceChannelList;
+        try { localStorage.setItem('uz_service_channel_list', JSON.stringify(serviceChannelList)); } catch {}
+        nameInput.value = ''; taxSelect.value = '10';
+        renderPcServiceChannels();
+        showToast(`${name}を追加しました`, 'success');
+      } else if (res && res.code === 'quota_exceeded') {
+        showToast(res.message || '件数枠の上限に達しています', 'error');
+      } else {
+        showToast((res && res.message) || '追加に失敗しました', 'error');
+      }
+    } catch (e) { showToast('通信エラー：' + (e.message || 'unknown'), 'error'); }
+    finally { btn.disabled = false; }
+  };
+  btn.addEventListener('click', doAdd);
+  nameInput.addEventListener('keydown', e => { if (e.key === 'Enter') doAdd(); });
+}
+
+async function deletePcServiceChannel(id) {
+  const target = serviceChannelList.find(c => String(c.id) === String(id));
+  if (!target) return;
+  if (!confirm(`「${target.name}」を削除しますか？\n登録済みの売上データには影響しません。`)) return;
+  try {
+    const res = await callGAS('deleteServiceChannel', { id: String(id) });
+    if (res && res.status === 'ok' && Array.isArray(res.serviceChannelList)) {
+      serviceChannelList = res.serviceChannelList;
+      try { localStorage.setItem('uz_service_channel_list', JSON.stringify(serviceChannelList)); } catch {}
+      renderPcServiceChannels();
+      showToast(`${target.name}を削除しました`, 'success');
+    } else {
+      showToast((res && res.message) || '削除に失敗しました', 'error');
+    }
+  } catch (e) { showToast('通信エラー：' + (e.message || 'unknown'), 'error'); }
+}
+
+/* ── 仕入原価大分類 ─────────────────── */
+function renderPcPurchaseCategories() {
+  const tbody = document.getElementById('pc-pcat-body');
+  if (!tbody) return;
+  const list = purchaseCategoryList || [];
+  const quota = masterQuota.purchaseCategoryQuota;
+  const unlimited = (quota == null || !isFinite(quota));
+  tbody.innerHTML = list.length ? list.map(c => `
+    <tr>
+      <td>${uzEscHtml(c.id || '')}</td>
+      <td>${uzEscHtml(c.name || '')}</td>
+      <td><button type="button" class="pc-btn" style="background:#c00;color:#fff;" onclick="deletePcPurchaseCategory('${uzEscHtml(String(c.id))}')">削除</button></td>
+    </tr>
+  `).join('') : '<tr><td colspan="3" style="text-align:center;color:var(--uz-muted);">未設定（品目マスタで categoryId 紐付けのみ）</td></tr>';
+  const badge = document.getElementById('pc-pcat-count-badge');
+  if (badge) { badge.hidden = false; badge.textContent = unlimited ? ` ${list.length}件` : ` ${list.length}/${quota}`; }
+  const addRow = document.getElementById('pc-pcat-add-row');
+  const hint = document.getElementById('pc-pcat-limit-hint');
+  const atMax = !unlimited && list.length >= quota;
+  if (addRow) addRow.hidden = atMax;
+  if (hint) { hint.hidden = !atMax; if (atMax) hint.textContent = `件数枠の上限（${quota}件）に達しています`; }
+}
+
+function bindPcPurchaseCategoryAdd() {
+  const btn = document.getElementById('pc-pcat-add-btn');
+  const nameInput = document.getElementById('pc-pcat-add-name');
+  if (!btn || !nameInput) return;
+  const doAdd = async () => {
+    const name = nameInput.value.trim();
+    if (!name) return showToast('大分類名を入力してください', 'error');
+    if (name.length > 30) return showToast('大分類名は30文字以内で入力してください', 'error');
+    const quota = masterQuota.purchaseCategoryQuota;
+    if (quota != null && isFinite(quota) && purchaseCategoryList.length >= quota) {
+      return showToast(`件数枠の上限（${quota}件）に達しています`, 'error');
+    }
+    if (purchaseCategoryList.some(c => c.name === name)) return showToast('同じ名前の大分類が既に登録されています', 'error');
+    btn.disabled = true;
+    try {
+      const res = await callGAS('addPurchaseCategory', { name });
+      if (res && res.status === 'ok' && Array.isArray(res.purchaseCategoryList)) {
+        purchaseCategoryList = res.purchaseCategoryList;
+        try { localStorage.setItem('uz_purchase_category_list', JSON.stringify(purchaseCategoryList)); } catch {}
+        nameInput.value = '';
+        renderPcPurchaseCategories();
+        showToast(`${name}を追加しました`, 'success');
+      } else if (res && res.code === 'quota_exceeded') {
+        showToast(res.message || '件数枠の上限に達しています', 'error');
+      } else {
+        showToast((res && res.message) || '追加に失敗しました', 'error');
+      }
+    } catch (e) { showToast('通信エラー：' + (e.message || 'unknown'), 'error'); }
+    finally { btn.disabled = false; }
+  };
+  btn.addEventListener('click', doAdd);
+  nameInput.addEventListener('keydown', e => { if (e.key === 'Enter') doAdd(); });
+}
+
+async function deletePcPurchaseCategory(id) {
+  const target = purchaseCategoryList.find(c => String(c.id) === String(id));
+  if (!target) return;
+  if (!confirm(`「${target.name}」を削除しますか？\n仕入原価品目の紐付けは自動で解除されます。`)) return;
+  try {
+    const res = await callGAS('deletePurchaseCategory', { id: String(id) });
+    if (res && res.status === 'ok' && Array.isArray(res.purchaseCategoryList)) {
+      purchaseCategoryList = res.purchaseCategoryList;
+      try { localStorage.setItem('uz_purchase_category_list', JSON.stringify(purchaseCategoryList)); } catch {}
+      renderPcPurchaseCategories();
+      showToast(`${target.name}を削除しました`, 'success');
+    } else {
+      showToast((res && res.message) || '削除に失敗しました', 'error');
+    }
+  } catch (e) { showToast('通信エラー：' + (e.message || 'unknown'), 'error'); }
+}
+
+/* ── 仕入先マスタ ─────────────────── */
+async function loadPcSuppliers() {
+  try {
+    const res = await callGAS('getSuppliers', {});
+    if (res && res.status === 'ok' && Array.isArray(res.suppliers)) {
+      suppliersList = res.suppliers;
+      try { localStorage.setItem('uz_suppliers_list', JSON.stringify(suppliersList)); } catch {}
+      renderPcSuppliers();
+    }
+  } catch {}
+}
+
+function renderPcSuppliers() {
+  const tbody = document.getElementById('pc-suppliers-body');
+  if (!tbody) return;
+  const list = suppliersList || [];
+  tbody.innerHTML = list.length ? list.map(s => `
+    <tr>
+      <td><a href="#" onclick="togglePcSupplierAggregate('${uzEscHtml(String(s.supplierId))}');return false;" style="color:var(--uz-accent);text-decoration:underline;">${uzEscHtml(s.name || '')}</a>
+        <div id="pc-supplier-agg-${uzEscHtml(String(s.supplierId))}" class="pc-note" style="margin-top:6px;" hidden></div>
+      </td>
+      <td>${uzEscHtml(s.tel || '')}</td>
+      <td>${uzEscHtml(s.fax || '')}</td>
+      <td><button type="button" class="pc-btn" style="background:#c00;color:#fff;" onclick="deletePcSupplier('${uzEscHtml(String(s.supplierId))}')">削除</button></td>
+    </tr>
+  `).join('') : '<tr><td colspan="4" style="text-align:center;color:var(--uz-muted);">未登録（下のフォームで追加）</td></tr>';
+  const badge = document.getElementById('pc-suppliers-count-badge');
+  if (badge) { badge.hidden = false; badge.textContent = ` ${list.length}件`; }
+}
+
+function bindPcSupplierAdd() {
+  const btn = document.getElementById('pc-supplier-add-btn');
+  const g = k => document.getElementById(`pc-supplier-add-${k}`);
+  if (!btn || !g('name')) return;
+  btn.addEventListener('click', async () => {
+    const name = g('name').value.trim();
+    if (!name) return showToast('仕入先名を入力してください', 'error');
+    const payload = {
+      name, tel: g('tel').value.trim(), fax: g('fax').value.trim(),
+      postalCode: g('postal').value.trim(), address: g('address').value.trim(),
+      email: g('email').value.trim(), invoiceRegNo: g('invoice').value.trim(),
+      bankAccount: g('bank').value.trim(), aliases: g('aliases').value.trim(),
+      memo: g('memo').value.trim()
+    };
+    btn.disabled = true;
+    try {
+      const res = await callGAS('addSupplier', payload);
+      if (res && res.status === 'ok') {
+        ['name','tel','fax','postal','address','email','invoice','bank','aliases','memo'].forEach(k => { const el = g(k); if (el) el.value = ''; });
+        await loadPcSuppliers();
+        showToast(`${name}を追加しました`, 'success');
+      } else {
+        showToast((res && res.message) || '追加に失敗しました', 'error');
+      }
+    } catch (e) { showToast('通信エラー：' + (e.message || 'unknown'), 'error'); }
+    finally { btn.disabled = false; }
+  });
+}
+
+async function deletePcSupplier(id) {
+  const target = suppliersList.find(s => String(s.supplierId) === String(id));
+  if (!target) return;
+  if (!confirm(`「${target.name}」を削除しますか？\n過去のコストデータには影響しません。`)) return;
+  try {
+    const res = await callGAS('deleteSupplier', { supplierId: String(id) });
+    if (res && res.status === 'ok') {
+      await loadPcSuppliers();
+      showToast(`${target.name}を削除しました`, 'success');
+    } else {
+      showToast((res && res.message) || '削除に失敗しました', 'error');
+    }
+  } catch (e) { showToast('通信エラー：' + (e.message || 'unknown'), 'error'); }
+}
+
+async function togglePcSupplierAggregate(id) {
+  const box = document.getElementById(`pc-supplier-agg-${id}`);
+  if (!box) return;
+  if (!box.hidden) { box.hidden = true; return; }
+  box.hidden = false;
+  box.textContent = '読み込み中…';
+  const now = new Date();
+  const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  try {
+    const res = await callGAS('getSupplierAggregate', { supplierId: String(id), month: monthKey });
+    if (res && res.status === 'ok') {
+      const yen = n => (Number(n) || 0).toLocaleString('ja-JP');
+      const recent = (res.history || []).slice(0, 5).map(h => {
+        const d = h.date instanceof Date ? h.date : (typeof h.date === 'string' ? h.date.substring(0, 10) : '');
+        const dstr = d instanceof Date ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` : d;
+        return `<div>${uzEscHtml(String(dstr))}｜¥${yen(h.amount)}｜${uzEscHtml(h.itemName || '')}</div>`;
+      }).join('');
+      box.innerHTML = `
+        <div style="padding:8px;background:#f5f5f5;border-radius:4px;">
+          <div><strong>${uzEscHtml(monthKey)}</strong> 仕入額：<strong>¥${yen(res.monthly)}</strong></div>
+          <div>累計仕入額：<strong>¥${yen(res.lifetime)}</strong></div>
+          ${recent ? `<div style="margin-top:6px;"><strong>直近履歴：</strong></div>${recent}` : '<div style="margin-top:4px;color:var(--uz-muted);">履歴なし</div>'}
+        </div>
+      `;
+    } else {
+      box.textContent = (res && res.message) || '集計取得に失敗しました';
+    }
+  } catch { box.textContent = '通信エラー'; }
+}
+
+/* ── 顧客マスタ CSV I/O ─────────────────── */
+function bindPcCustomersCsvIO() {
+  const exportBtn = document.getElementById('pc-customers-export-btn');
+  const importFile = document.getElementById('pc-customers-import-file');
+  const modeSelect = document.getElementById('pc-customers-import-mode');
+  const report = document.getElementById('pc-customers-import-report');
+  if (exportBtn) {
+    exportBtn.addEventListener('click', async () => {
+      exportBtn.disabled = true;
+      try {
+        const res = await callGAS('exportCustomersCSV', {});
+        if (res && res.status === 'ok' && typeof res.csv === 'string') {
+          const blob = new Blob([res.csv], { type: 'text/csv;charset=utf-8;' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          const ts = new Date().toISOString().substring(0, 10);
+          a.href = url; a.download = `customers_${ts}.csv`;
+          document.body.appendChild(a); a.click(); a.remove();
+          URL.revokeObjectURL(url);
+          showToast(`顧客マスタ ${res.count}件を書き出しました`, 'success');
+        } else {
+          showToast((res && res.message) || 'エクスポート失敗', 'error');
+        }
+      } catch { showToast('通信エラー', 'error'); }
+      finally { exportBtn.disabled = false; }
+    });
+  }
+  if (importFile) {
+    importFile.addEventListener('change', async () => {
+      const file = importFile.files && importFile.files[0];
+      if (!file) return;
+      const duplicateBehavior = modeSelect ? modeSelect.value : 'warn';
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const csv = String(reader.result || '');
+        try {
+          const res = await callGAS('importCustomersCSV', { csv, duplicateBehavior });
+          if (res && res.status === 'ok' && res.report) {
+            const r = res.report;
+            const msg = `取込 ${r.imported}件・更新 ${r.updated}件・スキップ ${r.skipped}件`;
+            if (report) {
+              report.hidden = false;
+              report.innerHTML = `<strong>${uzEscHtml(msg)}</strong>` + (r.warnings && r.warnings.length ? `<br>${r.warnings.map(w => uzEscHtml(w)).join('<br>')}` : '');
+            }
+            showToast(msg, 'success');
+          } else {
+            showToast((res && res.message) || 'インポート失敗', 'error');
+          }
+        } catch { showToast('通信エラー', 'error'); }
+        importFile.value = '';
+      };
+      reader.readAsText(file, 'utf-8');
+    });
+  }
 }

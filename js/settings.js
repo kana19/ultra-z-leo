@@ -173,12 +173,15 @@ async function loadSettingsFromGAS() {
   try {
     const data = await uzGetSettings();   // ②共通化：取得+{status,data}展開を app.js に集約
     if (data) {
-      const { storeName, staffList, serviceList, purchaseMasterList, qrLocations, masterQuota, businessHours, featureVisibility } = data;
+      const { storeName, staffList, serviceList, purchaseMasterList, qrLocations, masterQuota, businessHours, featureVisibility, serviceChannelList, purchaseCategoryList } = data;
       if (storeName   != null) _saveStoreName(storeName);
       if (Array.isArray(staffList))   _saveStaffList(staffList);
       if (Array.isArray(serviceList)) _saveServiceList(serviceList);
       // 6-G フェーズ2：仕入マスタを受け取る
       if (Array.isArray(purchaseMasterList)) _savePurchaseList(purchaseMasterList);
+      // 2026-08-27：大分類マスタを受け取る（→ 03§1-1-2 / §1-3-2）
+      if (Array.isArray(serviceChannelList)) _saveServiceChannelList(serviceChannelList);
+      if (Array.isArray(purchaseCategoryList)) _savePurchaseCategoryList(purchaseCategoryList);
       // 6-G フェーズ2：マスタ件数枠を受け取る
       if (masterQuota && typeof masterQuota === 'object') {
         _saveMasterQuota(masterQuota);
@@ -200,8 +203,12 @@ async function loadSettingsFromGAS() {
       renderStaffList();
       renderServiceList();
       renderPurchaseList();
+      renderServiceChannelList();
+      renderPurchaseCategoryList();
       renderQrLocations();
       updateGasStatus(true);
+      // 仕入先マスタは on-demand で取得（起動時ではなく初回展開時）
+      loadSuppliersFromGAS();
     } else {
       updateGasStatus(false);
     }
@@ -282,12 +289,19 @@ document.addEventListener('DOMContentLoaded', () => {
   initStaffList();
   initServiceList();
   initPurchaseList();
+  initServiceChannel();
+  initPurchaseCategory();
+  initSuppliers();
   initQrLocations();
   initCostMaster();
   initBasicInfo();
   bindStaffAdd();
   bindServiceAdd();
   bindPurchaseAdd();
+  bindServiceChannelAdd();
+  bindPurchaseCategoryAdd();
+  bindSupplierAdd();
+  bindCustomersCsvIO();
   bindQrLocationAdd();
   bindCostMasterSave();
   bindVersionTapDebug();
@@ -1336,4 +1350,476 @@ function bindCostMasterSave() {
 function escHtml(str) {
   // app.js の uzEscHtml に委譲（重複定義を解消・SSOT）
   return uzEscHtml(str);
+}
+
+/* ============================================================
+ * 新マスタ管理UI（2026-08-27 実装・→ 03§1-1-2 / §1-3-2 / §1-6-1 / §1-6-2）
+ * - サービス販売チャネル大分類（serviceChannelList・任意）
+ * - 仕入原価大分類（purchaseCategoryList・任意）
+ * - 仕入先マスタ（suppliers・新規台帳・集計付）
+ * - 顧客マスタ CSV I/O
+ * ============================================================ */
+
+const SERVICE_CHANNEL_KEY_  = 'uz_service_channel_list';
+const PURCHASE_CATEGORY_KEY_ = 'uz_purchase_category_list';
+
+function _saveServiceChannelList(list) {
+  try { localStorage.setItem(SERVICE_CHANNEL_KEY_, JSON.stringify(Array.isArray(list) ? list : [])); } catch { /* ignore */ }
+}
+function getServiceChannelList() {
+  try { const s = localStorage.getItem(SERVICE_CHANNEL_KEY_); const l = s ? JSON.parse(s) : []; return Array.isArray(l) ? l : []; } catch { return []; }
+}
+function _savePurchaseCategoryList(list) {
+  try { localStorage.setItem(PURCHASE_CATEGORY_KEY_, JSON.stringify(Array.isArray(list) ? list : [])); } catch { /* ignore */ }
+}
+function getPurchaseCategoryList() {
+  try { const s = localStorage.getItem(PURCHASE_CATEGORY_KEY_); const l = s ? JSON.parse(s) : []; return Array.isArray(l) ? l : []; } catch { return []; }
+}
+
+/* ── サービス販売チャネル大分類 serviceChannelList ─────────── */
+function initServiceChannel() { renderServiceChannelList(); }
+
+function renderServiceChannelList() {
+  const c = document.getElementById('schannel-list-container');
+  if (!c) return;
+  const list = getServiceChannelList();
+  const quota = getMasterQuota().serviceChannelQuota;
+  const unlimited = (quota == null || !isFinite(quota));
+  c.innerHTML = list.map(s => `
+    <div class="staff-row" id="schannel-row-${escHtml(String(s.id))}">
+      <span class="staff-row__name">${escHtml(s.name)}</span>
+      <span class="service-tax-badge">税率 ${escHtml(String(s.taxRate))}%</span>
+      <button class="staff-edit-btn" type="button" onclick="editServiceChannel('${escHtml(String(s.id))}')">編集</button>
+      <button class="staff-delete-btn" type="button" onclick="deleteServiceChannel('${escHtml(String(s.id))}')">削除</button>
+    </div>
+  `).join('');
+  const badge = document.getElementById('schannel-count-badge');
+  if (badge) { badge.hidden = false; badge.textContent = unlimited ? ` ${list.length}件` : ` ${list.length}/${quota}`; }
+  const addRow = document.getElementById('schannel-add-row');
+  const hint = document.getElementById('schannel-limit-hint');
+  const atMax = !unlimited && list.length >= quota;
+  if (addRow) addRow.hidden = atMax;
+  if (hint) { hint.hidden = !atMax; if (atMax) hint.textContent = `件数枠の上限（${quota}件）に達しています。追加するにはターゲット社にご相談ください。`; }
+}
+
+function editServiceChannel(id) {
+  const list = getServiceChannelList();
+  const it = list.find(s => String(s.id) === String(id));
+  if (!it) return;
+  const row = document.getElementById(`schannel-row-${id}`);
+  if (!row) return;
+  const rate = (it.taxRate !== undefined) ? it.taxRate : 10;
+  row.classList.add('staff-row--editing');
+  row.innerHTML = `
+    <div class="staff-edit">
+      <div class="staff-edit__line">
+        <input type="text" id="schannel-edit-name-${id}" class="settings-input staff-edit__name" value="${escHtml(it.name)}" maxlength="30" autocomplete="off" placeholder="チャネル名">
+        <select id="schannel-edit-tax-${id}" class="form-select" style="width:120px;flex-shrink:0;">
+          <option value="10"${Number(rate) === 10 ? ' selected' : ''}>10%</option>
+          <option value="8"${Number(rate) === 8 ? ' selected' : ''}>8%（軽減）</option>
+          <option value="0"${Number(rate) === 0 ? ' selected' : ''}>0%（非課税）</option>
+        </select>
+      </div>
+      <div class="staff-edit__line staff-edit__actions">
+        <button class="staff-save-btn" type="button" onclick="saveEditServiceChannel('${escHtml(String(id))}')">保存</button>
+        <button class="staff-cancel-btn" type="button" onclick="renderServiceChannelList()">キャンセル</button>
+        <span class="staff-edit__spacer"></span>
+        <button class="staff-delete-btn" type="button" onclick="deleteServiceChannel('${escHtml(String(id))}')">削除</button>
+      </div>
+    </div>
+  `;
+  document.getElementById(`schannel-edit-name-${id}`)?.focus();
+}
+
+async function saveEditServiceChannel(id) {
+  const name = document.getElementById(`schannel-edit-name-${id}`)?.value.trim();
+  const taxRate = parseInt(document.getElementById(`schannel-edit-tax-${id}`)?.value, 10);
+  if (!name) return showToast('チャネル名を入力してください', 'error');
+  if (name.length > 30) return showToast('チャネル名は30文字以内で入力してください', 'error');
+  try {
+    const res = await callGAS('updateServiceChannel', { id: String(id), name, taxRate });
+    if (res && res.status === 'ok' && Array.isArray(res.serviceChannelList)) {
+      _saveServiceChannelList(res.serviceChannelList);
+      renderServiceChannelList();
+      showToast(`${name}を更新しました ✓`, 'success');
+    } else {
+      showToast((res && res.message) || '更新に失敗しました', 'error');
+    }
+  } catch { showToast('通信エラーで更新できませんでした', 'error'); }
+}
+
+async function deleteServiceChannel(id) {
+  const list = getServiceChannelList();
+  const target = list.find(s => String(s.id) === String(id));
+  if (!target) return;
+  if (!confirm(`「${target.name}」を削除しますか？\n登録済みの売上データには影響しません。`)) return;
+  try {
+    const res = await callGAS('deleteServiceChannel', { id: String(id) });
+    if (res && res.status === 'ok' && Array.isArray(res.serviceChannelList)) {
+      _saveServiceChannelList(res.serviceChannelList);
+      renderServiceChannelList();
+      showToast(`${target.name}を削除しました`, 'success');
+    } else {
+      showToast((res && res.message) || '削除に失敗しました', 'error');
+    }
+  } catch { showToast('通信エラーで削除できませんでした', 'error'); }
+}
+
+function bindServiceChannelAdd() {
+  const btn = document.getElementById('schannel-add-btn');
+  const nameInput = document.getElementById('schannel-add-name');
+  const taxSelect = document.getElementById('schannel-add-tax');
+  if (!btn || !nameInput || !taxSelect) return;
+  const doAdd = async () => {
+    const name = nameInput.value.trim();
+    const taxRate = parseInt(taxSelect.value, 10);
+    if (!name) return showToast('チャネル名を入力してください', 'error');
+    if (name.length > 30) return showToast('チャネル名は30文字以内で入力してください', 'error');
+    const list = getServiceChannelList();
+    const quota = getMasterQuota().serviceChannelQuota;
+    if (quota != null && isFinite(quota) && list.length >= quota) {
+      return showToast(`件数枠の上限（${quota}件）に達しています`, 'error');
+    }
+    if (list.some(s => s.name === name)) return showToast('同じ名前のチャネルが既に登録されています', 'error');
+    btn.disabled = true;
+    try {
+      const res = await callGAS('addServiceChannel', { name, taxRate });
+      if (res && res.status === 'ok' && Array.isArray(res.serviceChannelList)) {
+        _saveServiceChannelList(res.serviceChannelList);
+        nameInput.value = ''; taxSelect.value = '10';
+        renderServiceChannelList();
+        showToast(`${name}を追加しました ✓`, 'success');
+      } else if (res && res.code === 'quota_exceeded') {
+        showToast(res.message || '件数枠の上限に達しています', 'error');
+        if (typeof res.quota === 'number') { const q = getMasterQuota(); q.serviceChannelQuota = res.quota; _saveMasterQuota(q); }
+        renderServiceChannelList();
+      } else {
+        showToast((res && res.message) || '追加に失敗しました', 'error');
+      }
+    } catch { showToast('通信エラーで追加できませんでした', 'error'); }
+    finally { btn.disabled = false; }
+  };
+  btn.addEventListener('click', doAdd);
+  nameInput.addEventListener('keydown', e => { if (e.key === 'Enter') doAdd(); });
+}
+
+/* ── 仕入原価大分類 purchaseCategoryList ─────────────────── */
+function initPurchaseCategory() { renderPurchaseCategoryList(); }
+
+function renderPurchaseCategoryList() {
+  const c = document.getElementById('pcat-list-container');
+  if (!c) return;
+  const list = getPurchaseCategoryList();
+  const quota = getMasterQuota().purchaseCategoryQuota;
+  const unlimited = (quota == null || !isFinite(quota));
+  c.innerHTML = list.map(s => `
+    <div class="staff-row" id="pcat-row-${escHtml(String(s.id))}">
+      <span class="staff-row__name">${escHtml(s.name)}</span>
+      <button class="staff-edit-btn" type="button" onclick="editPurchaseCategory('${escHtml(String(s.id))}')">編集</button>
+      <button class="staff-delete-btn" type="button" onclick="deletePurchaseCategory('${escHtml(String(s.id))}')">削除</button>
+    </div>
+  `).join('');
+  const badge = document.getElementById('pcat-count-badge');
+  if (badge) { badge.hidden = false; badge.textContent = unlimited ? ` ${list.length}件` : ` ${list.length}/${quota}`; }
+  const addRow = document.getElementById('pcat-add-row');
+  const hint = document.getElementById('pcat-limit-hint');
+  const atMax = !unlimited && list.length >= quota;
+  if (addRow) addRow.hidden = atMax;
+  if (hint) { hint.hidden = !atMax; if (atMax) hint.textContent = `件数枠の上限（${quota}件）に達しています。追加するにはターゲット社にご相談ください。`; }
+}
+
+function editPurchaseCategory(id) {
+  const list = getPurchaseCategoryList();
+  const it = list.find(s => String(s.id) === String(id));
+  if (!it) return;
+  const row = document.getElementById(`pcat-row-${id}`);
+  if (!row) return;
+  row.classList.add('staff-row--editing');
+  row.innerHTML = `
+    <div class="staff-edit">
+      <div class="staff-edit__line">
+        <input type="text" id="pcat-edit-name-${id}" class="settings-input staff-edit__name" value="${escHtml(it.name)}" maxlength="30" autocomplete="off" placeholder="大分類名">
+      </div>
+      <div class="staff-edit__line staff-edit__actions">
+        <button class="staff-save-btn" type="button" onclick="saveEditPurchaseCategory('${escHtml(String(id))}')">保存</button>
+        <button class="staff-cancel-btn" type="button" onclick="renderPurchaseCategoryList()">キャンセル</button>
+        <span class="staff-edit__spacer"></span>
+        <button class="staff-delete-btn" type="button" onclick="deletePurchaseCategory('${escHtml(String(id))}')">削除</button>
+      </div>
+    </div>
+  `;
+  document.getElementById(`pcat-edit-name-${id}`)?.focus();
+}
+
+async function saveEditPurchaseCategory(id) {
+  const name = document.getElementById(`pcat-edit-name-${id}`)?.value.trim();
+  if (!name) return showToast('大分類名を入力してください', 'error');
+  if (name.length > 30) return showToast('大分類名は30文字以内で入力してください', 'error');
+  try {
+    const res = await callGAS('updatePurchaseCategory', { id: String(id), name });
+    if (res && res.status === 'ok' && Array.isArray(res.purchaseCategoryList)) {
+      _savePurchaseCategoryList(res.purchaseCategoryList);
+      renderPurchaseCategoryList();
+      showToast(`${name}を更新しました ✓`, 'success');
+    } else {
+      showToast((res && res.message) || '更新に失敗しました', 'error');
+    }
+  } catch { showToast('通信エラーで更新できませんでした', 'error'); }
+}
+
+async function deletePurchaseCategory(id) {
+  const list = getPurchaseCategoryList();
+  const target = list.find(s => String(s.id) === String(id));
+  if (!target) return;
+  if (!confirm(`「${target.name}」を削除しますか？\n仕入原価品目の紐付けは自動で解除されます。`)) return;
+  try {
+    const res = await callGAS('deletePurchaseCategory', { id: String(id) });
+    if (res && res.status === 'ok' && Array.isArray(res.purchaseCategoryList)) {
+      _savePurchaseCategoryList(res.purchaseCategoryList);
+      renderPurchaseCategoryList();
+      showToast(`${target.name}を削除しました`, 'success');
+    } else {
+      showToast((res && res.message) || '削除に失敗しました', 'error');
+    }
+  } catch { showToast('通信エラーで削除できませんでした', 'error'); }
+}
+
+function bindPurchaseCategoryAdd() {
+  const btn = document.getElementById('pcat-add-btn');
+  const nameInput = document.getElementById('pcat-add-name');
+  if (!btn || !nameInput) return;
+  const doAdd = async () => {
+    const name = nameInput.value.trim();
+    if (!name) return showToast('大分類名を入力してください', 'error');
+    if (name.length > 30) return showToast('大分類名は30文字以内で入力してください', 'error');
+    const list = getPurchaseCategoryList();
+    const quota = getMasterQuota().purchaseCategoryQuota;
+    if (quota != null && isFinite(quota) && list.length >= quota) {
+      return showToast(`件数枠の上限（${quota}件）に達しています`, 'error');
+    }
+    if (list.some(s => s.name === name)) return showToast('同じ名前の大分類が既に登録されています', 'error');
+    btn.disabled = true;
+    try {
+      const res = await callGAS('addPurchaseCategory', { name });
+      if (res && res.status === 'ok' && Array.isArray(res.purchaseCategoryList)) {
+        _savePurchaseCategoryList(res.purchaseCategoryList);
+        nameInput.value = '';
+        renderPurchaseCategoryList();
+        showToast(`${name}を追加しました ✓`, 'success');
+      } else if (res && res.code === 'quota_exceeded') {
+        showToast(res.message || '件数枠の上限に達しています', 'error');
+        if (typeof res.quota === 'number') { const q = getMasterQuota(); q.purchaseCategoryQuota = res.quota; _saveMasterQuota(q); }
+        renderPurchaseCategoryList();
+      } else {
+        showToast((res && res.message) || '追加に失敗しました', 'error');
+      }
+    } catch { showToast('通信エラーで追加できませんでした', 'error'); }
+    finally { btn.disabled = false; }
+  };
+  btn.addEventListener('click', doAdd);
+  nameInput.addEventListener('keydown', e => { if (e.key === 'Enter') doAdd(); });
+}
+
+/* ── 仕入先マスタ suppliers ──────────────────────────────── */
+let _uzSuppliersCache_ = [];
+
+function initSuppliers() { renderSuppliersList(); }
+
+async function loadSuppliersFromGAS() {
+  try {
+    const res = await callGAS('getSuppliers', {});
+    if (res && res.status === 'ok' && Array.isArray(res.suppliers)) {
+      _uzSuppliersCache_ = res.suppliers;
+      renderSuppliersList();
+    }
+  } catch { /* サイレント */ }
+}
+
+function renderSuppliersList() {
+  const c = document.getElementById('suppliers-list-container');
+  if (!c) return;
+  const list = _uzSuppliersCache_ || [];
+  c.innerHTML = list.map(s => `
+    <div class="staff-row" id="supplier-row-${escHtml(String(s.supplierId))}">
+      <span class="staff-row__name" onclick="toggleSupplierAggregate('${escHtml(String(s.supplierId))}')" style="cursor:pointer;">${escHtml(s.name)}</span>
+      ${s.tel ? `<span class="service-tax-badge">${escHtml(s.tel)}</span>` : ''}
+      <button class="staff-edit-btn" type="button" onclick="editSupplier('${escHtml(String(s.supplierId))}')">編集</button>
+      <button class="staff-delete-btn" type="button" onclick="deleteSupplier('${escHtml(String(s.supplierId))}')">削除</button>
+      <div id="supplier-agg-${escHtml(String(s.supplierId))}" class="settings-note" hidden></div>
+    </div>
+  `).join('');
+  const badge = document.getElementById('suppliers-count-badge');
+  if (badge) { badge.hidden = false; badge.textContent = ` ${list.length}件`; }
+}
+
+async function toggleSupplierAggregate(id) {
+  const box = document.getElementById(`supplier-agg-${id}`);
+  if (!box) return;
+  if (!box.hidden) { box.hidden = true; return; }
+  box.hidden = false;
+  box.textContent = '読み込み中…';
+  const ym = new Date();
+  const monthKey = `${ym.getFullYear()}-${String(ym.getMonth() + 1).padStart(2, '0')}`;
+  try {
+    const res = await callGAS('getSupplierAggregate', { supplierId: String(id), month: monthKey });
+    if (res && res.status === 'ok') {
+      const yen = n => (Number(n) || 0).toLocaleString('ja-JP');
+      const recent = (res.history || []).slice(0, 5).map(h => {
+        const d = h.date instanceof Date ? h.date : (typeof h.date === 'string' ? h.date.substring(0, 10) : '');
+        const dstr = d instanceof Date ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` : d;
+        return `<div style="font-size:11px;">${escHtml(dstr)}｜¥${yen(h.amount)}｜${escHtml(h.itemName || '')}</div>`;
+      }).join('');
+      box.innerHTML = `
+        <div style="margin-top:6px;padding:6px;background:#f8f8f8;border-radius:4px;">
+          <div><strong>${escHtml(monthKey)}</strong> 仕入額：¥${yen(res.monthly)}</div>
+          <div>累計仕入額：¥${yen(res.lifetime)}</div>
+          ${recent ? `<div style="margin-top:4px;"><strong>直近履歴：</strong></div>${recent}` : '<div style="margin-top:4px;color:#888;">履歴なし</div>'}
+        </div>
+      `;
+    } else {
+      box.textContent = (res && res.message) || '集計取得に失敗しました';
+    }
+  } catch { box.textContent = '通信エラー'; }
+}
+
+function editSupplier(id) {
+  const s = _uzSuppliersCache_.find(x => String(x.supplierId) === String(id));
+  if (!s) return;
+  const row = document.getElementById(`supplier-row-${id}`);
+  if (!row) return;
+  row.classList.add('staff-row--editing');
+  row.innerHTML = `
+    <div class="staff-edit">
+      <div class="staff-edit__line"><input type="text" id="supplier-edit-name-${id}" class="settings-input staff-edit__name" value="${escHtml(s.name)}" maxlength="40" placeholder="仕入先名"></div>
+      <div class="staff-edit__line"><input type="text" id="supplier-edit-tel-${id}" class="settings-input" value="${escHtml(s.tel || '')}" maxlength="20" placeholder="電話"><input type="text" id="supplier-edit-fax-${id}" class="settings-input" value="${escHtml(s.fax || '')}" maxlength="20" placeholder="FAX"></div>
+      <div class="staff-edit__line"><input type="text" id="supplier-edit-postal-${id}" class="settings-input" style="max-width:140px;" value="${escHtml(s.postalCode || '')}" maxlength="8" placeholder="郵便番号"><input type="text" id="supplier-edit-address-${id}" class="settings-input" value="${escHtml(s.address || '')}" maxlength="80" placeholder="住所"></div>
+      <div class="staff-edit__line"><input type="text" id="supplier-edit-email-${id}" class="settings-input" value="${escHtml(s.email || '')}" maxlength="60" placeholder="メール"><input type="text" id="supplier-edit-invoice-${id}" class="settings-input" value="${escHtml(s.invoiceRegNo || '')}" maxlength="20" placeholder="インボイス番号"></div>
+      <div class="staff-edit__line"><input type="text" id="supplier-edit-bank-${id}" class="settings-input" value="${escHtml(s.bankAccount || '')}" maxlength="60" placeholder="振込先"></div>
+      <div class="staff-edit__line"><input type="text" id="supplier-edit-aliases-${id}" class="settings-input" value="${escHtml(s.aliases || '')}" maxlength="120" placeholder="表記ゆれ別名（改行区切り）"></div>
+      <div class="staff-edit__line"><input type="text" id="supplier-edit-memo-${id}" class="settings-input" value="${escHtml(s.memo || '')}" maxlength="60" placeholder="メモ"></div>
+      <div class="staff-edit__line staff-edit__actions">
+        <button class="staff-save-btn" type="button" onclick="saveEditSupplier('${escHtml(String(id))}')">保存</button>
+        <button class="staff-cancel-btn" type="button" onclick="renderSuppliersList()">キャンセル</button>
+        <span class="staff-edit__spacer"></span>
+        <button class="staff-delete-btn" type="button" onclick="deleteSupplier('${escHtml(String(id))}')">削除</button>
+      </div>
+    </div>
+  `;
+  document.getElementById(`supplier-edit-name-${id}`)?.focus();
+}
+
+async function saveEditSupplier(id) {
+  const g = k => document.getElementById(`supplier-edit-${k}-${id}`)?.value.trim();
+  const name = g('name');
+  if (!name) return showToast('仕入先名を入力してください', 'error');
+  const payload = { supplierId: String(id), name, tel: g('tel'), fax: g('fax'),
+    postalCode: g('postal'), address: g('address'), email: g('email'),
+    invoiceRegNo: g('invoice'), bankAccount: g('bank'), aliases: g('aliases'), memo: g('memo') };
+  try {
+    const res = await callGAS('updateSupplier', payload);
+    if (res && res.status === 'ok') {
+      await loadSuppliersFromGAS();
+      showToast(`${name}を更新しました ✓`, 'success');
+    } else {
+      showToast((res && res.message) || '更新に失敗しました', 'error');
+    }
+  } catch { showToast('通信エラーで更新できませんでした', 'error'); }
+}
+
+async function deleteSupplier(id) {
+  const s = _uzSuppliersCache_.find(x => String(x.supplierId) === String(id));
+  if (!s) return;
+  if (!confirm(`「${s.name}」を削除しますか？\n過去のコストデータには影響しません（取引先名は残ります）。`)) return;
+  try {
+    const res = await callGAS('deleteSupplier', { supplierId: String(id) });
+    if (res && res.status === 'ok') {
+      await loadSuppliersFromGAS();
+      showToast(`${s.name}を削除しました`, 'success');
+    } else {
+      showToast((res && res.message) || '削除に失敗しました', 'error');
+    }
+  } catch { showToast('通信エラーで削除できませんでした', 'error'); }
+}
+
+function bindSupplierAdd() {
+  const btn = document.getElementById('supplier-add-btn');
+  const g = k => document.getElementById(`supplier-add-${k}`);
+  if (!btn || !g('name')) return;
+  btn.addEventListener('click', async () => {
+    const name = g('name').value.trim();
+    if (!name) return showToast('仕入先名を入力してください', 'error');
+    const payload = { name, tel: g('tel').value.trim(), fax: g('fax').value.trim(),
+      postalCode: g('postal').value.trim(), address: g('address').value.trim(),
+      email: g('email').value.trim(), invoiceRegNo: g('invoice').value.trim(),
+      bankAccount: g('bank').value.trim(), aliases: g('aliases').value.trim(),
+      memo: g('memo').value.trim() };
+    btn.disabled = true;
+    try {
+      const res = await callGAS('addSupplier', payload);
+      if (res && res.status === 'ok') {
+        ['name','tel','fax','postal','address','email','invoice','bank','aliases','memo'].forEach(k => { const el = g(k); if (el) el.value = ''; });
+        await loadSuppliersFromGAS();
+        showToast(`${name}を追加しました ✓`, 'success');
+      } else {
+        showToast((res && res.message) || '追加に失敗しました', 'error');
+      }
+    } catch { showToast('通信エラーで追加できませんでした', 'error'); }
+    finally { btn.disabled = false; }
+  });
+}
+
+/* ── 顧客マスタ CSV I/O ─────────────────────────────────── */
+function bindCustomersCsvIO() {
+  const exportBtn = document.getElementById('customers-export-csv-btn');
+  const importFile = document.getElementById('customers-import-csv-file');
+  const modeSelect = document.getElementById('customers-import-mode');
+  const report = document.getElementById('customers-import-report');
+  if (exportBtn) {
+    exportBtn.addEventListener('click', async () => {
+      exportBtn.disabled = true;
+      try {
+        const res = await callGAS('exportCustomersCSV', {});
+        if (res && res.status === 'ok' && typeof res.csv === 'string') {
+          const blob = new Blob([res.csv], { type: 'text/csv;charset=utf-8;' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          const ts = new Date().toISOString().substring(0, 10);
+          a.href = url; a.download = `customers_${ts}.csv`;
+          document.body.appendChild(a); a.click(); a.remove();
+          URL.revokeObjectURL(url);
+          showToast(`顧客マスタ ${res.count}件を書き出しました ✓`, 'success');
+        } else {
+          showToast((res && res.message) || 'エクスポート失敗', 'error');
+        }
+      } catch { showToast('通信エラー', 'error'); }
+      finally { exportBtn.disabled = false; }
+    });
+  }
+  if (importFile) {
+    importFile.addEventListener('change', async () => {
+      const file = importFile.files && importFile.files[0];
+      if (!file) return;
+      const duplicateBehavior = modeSelect ? modeSelect.value : 'warn';
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const csv = String(reader.result || '');
+        try {
+          const res = await callGAS('importCustomersCSV', { csv, duplicateBehavior });
+          if (res && res.status === 'ok' && res.report) {
+            const r = res.report;
+            const msg = `取込 ${r.imported}件・更新 ${r.updated}件・スキップ ${r.skipped}件`;
+            if (report) {
+              report.hidden = false;
+              report.innerHTML = `<strong>${escHtml(msg)}</strong>` + (r.warnings && r.warnings.length ? `<br>${r.warnings.map(w => escHtml(w)).join('<br>')}` : '');
+            }
+            showToast(msg, 'success');
+          } else {
+            showToast((res && res.message) || 'インポート失敗', 'error');
+          }
+        } catch { showToast('通信エラー', 'error'); }
+        importFile.value = '';
+      };
+      reader.readAsText(file, 'utf-8');
+    });
+  }
 }
