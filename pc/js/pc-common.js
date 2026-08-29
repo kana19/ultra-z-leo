@@ -107,6 +107,14 @@ function pcApplyNavGates() {
     const key = a.getAttribute('data-vis');
     a.style.display = (fv[key] === true) ? '' : 'none';
   });
+  // 2026-08-29：コンテンツ内の [data-feature] セクションも同じ源で出し分け。
+  //   スマホ側 uzApplyFeatureGates と対称＝アストラでスタッフマスタ等の勤怠ドメイン UI を非表示。
+  //   attendance = attendance_menu の別名（既存スマホ HTML との互換）。
+  document.querySelectorAll('[data-feature]').forEach(function (el) {
+    const key = el.getAttribute('data-feature');
+    const gateKey = (key === 'attendance') ? 'attendance_menu' : key;
+    el.style.display = (fv[gateKey] === true) ? '' : 'none';
+  });
 }
 document.addEventListener('uz:settings-synced', pcApplyNavGates);
 
