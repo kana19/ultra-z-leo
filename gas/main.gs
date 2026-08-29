@@ -470,12 +470,40 @@ function getSummary(month) {
   var year = Number(parts[0]);
   var mon  = Number(parts[1]);
   var sales = 0, cogs = 0, sga = 0;
+
+  // 2026-08-29：大分類 payoff（サービスマスタ/仕入原価マスタの category を集計）。
+  //   serviceList[i].category → 売上の大分類（サービス販売チャネル大分類 等）
+  //   purchaseMasterList[i].category → 仕入原価の大分類（仕入原価大分類 等）
+  //   販管費は青色申告固定＝科目名グルーピング（従来通り）。
+  //   pc-home.js の breakdownRows は {name, amount} 配列を期待するので、
+  //   {name: category or 未分類, amount: 合計} の形で返す。
+  var settings = ss.getSheetByName('settings');
+  function _parseCell_(cell) {
+    try { var v = settings ? settings.getRange(cell).getValue() : ''; return v ? JSON.parse(v) : []; }
+    catch (e) { return []; }
+  }
+  var svcCat = {}, purCat = {};
+  _parseCell_('B3').forEach(function (s) {
+    if (s && s.id) svcCat[String(s.id)] = String(s.category || '').trim();
+    if (s && s.name) svcCat['name:' + String(s.name)] = String(s.category || '').trim();
+  });
+  _parseCell_('B5').forEach(function (p) {
+    if (p && p.id) purCat[String(p.id)] = String(p.category || '').trim();
+    if (p && p.name) purCat['name:' + String(p.name)] = String(p.category || '').trim();
+  });
+  var UNCAT = '未分類';
+  var salesByCat = {}, cogsByCat = {}, sgaBySubject = {};
+
   var salesSheet = ss.getSheetByName('売上');
   if (salesSheet && salesSheet.getLastRow() > 1) {
     salesSheet.getDataRange().getValues().slice(1).forEach(function(r) {
       if (!r[0]) return;
       if (Number(r[1]) === year && Number(r[2]) === mon) {
-        sales += Number(r[11]) || 0;
+        var amt = Number(r[11]) || 0;
+        sales += amt;
+        // r[5]=serviceCode（マスタ経由）／r[6]=科目名（自由入力売上フォールバック）
+        var cat = svcCat[String(r[5] || '')] || svcCat['name:' + String(r[6] || '')] || UNCAT;
+        salesByCat[cat] = (salesByCat[cat] || 0) + amt;
       }
     });
   }
@@ -485,15 +513,29 @@ function getSummary(month) {
       if (!r[0]) return;
       if (Number(r[1]) === year && Number(r[2]) === mon) {
         var amt = Number(r[11]) || 0;
-        if (String(r[3]) === '1') { cogs += amt; }
-        else { sga += amt; }
+        if (String(r[3]) === '1') {
+          cogs += amt;
+          var cat2 = purCat[String(r[5] || '')] || purCat['name:' + String(r[6] || '')] || UNCAT;
+          cogsByCat[cat2] = (cogsByCat[cat2] || 0) + amt;
+        } else {
+          sga += amt;
+          var name = String(r[6] || '不明');
+          sgaBySubject[name] = (sgaBySubject[name] || 0) + amt;
+        }
       }
     });
+  }
+  function _toArr_(obj) {
+    return Object.keys(obj).map(function (k) { return { name: k, amount: obj[k] }; })
+      .sort(function (a, b) { return b.amount - a.amount; });
   }
   return { status: 'ok', data: {
     month: month, sales: sales, cogs: cogs,
     grossProfit: sales - cogs, sga: sga,
-    operatingProfit: sales - cogs - sga
+    operatingProfit: sales - cogs - sga,
+    salesBreakdown: _toArr_(salesByCat),
+    cogsBreakdown:  _toArr_(cogsByCat),
+    sgaBreakdown:   _toArr_(sgaBySubject)
   }};
 }
 

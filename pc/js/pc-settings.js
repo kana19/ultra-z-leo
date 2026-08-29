@@ -175,24 +175,48 @@ function getServiceListFromState() {
   return svcs;
 }
 
+/* 2026-08-29：分類選択肢を「サービス販売チャネル大分類」から <option> で生成（後方互換：既存 category からも収集）。 */
+function _svcCatOptions_(selected) {
+  const names = new Set();
+  (serviceChannelList || []).forEach(c => { if (c && c.name) names.add(String(c.name).trim()); });
+  getServiceListFromState().forEach(s => { if (s && s.category) names.add(String(s.category).trim()); });
+  const sel = String(selected || '').trim();
+  if (sel) names.add(sel);
+  return `<option value="">（分類なし）</option>` +
+    [...names].filter(Boolean).map(n =>
+      `<option value="${escHtml(n)}"${n === sel ? ' selected' : ''}>${escHtml(n)}</option>`
+    ).join('');
+}
+
+function _refreshSvcAddCatOptions_() {
+  const sel = document.getElementById('svc-add-cat');
+  if (sel) sel.innerHTML = _svcCatOptions_('');
+}
+
 function renderServices() {
   const svcs = getServiceListFromState();
   const body = document.getElementById('svc-body');
   const quota = masterQuota.serviceMasterQuota;
 
   if (svcs.length === 0) {
-    body.innerHTML = `<tr><td colspan="4" class="text-muted" style="text-align:center;padding:20px;">登録なし</td></tr>`;
+    body.innerHTML = `<tr><td colspan="5" class="text-muted" style="text-align:center;padding:20px;">登録なし</td></tr>`;
   } else {
     body.innerHTML = svcs.map(s => {
       const idKey = escHtml(String(s.id || s.code || ''));
-      return `<tr>
+      return `<tr id="svc-row-${idKey}">
         <td>${idKey}</td>
         <td>${escHtml(s.name||'')}</td>
+        <td>
+          <select class="pc-select" style="width:100%;" onchange="updateServiceCategory('${idKey}', this.value)" title="分類を変更するとホーム損益の集計に反映">
+            ${_svcCatOptions_(s.category || '')}
+          </select>
+        </td>
         <td>${Number(s.taxRate)||0}%</td>
         <td><button class="pc-btn pc-btn--ghost" type="button" onclick="deleteService('${idKey}')">削除</button></td>
       </tr>`;
     }).join('');
   }
+  _refreshSvcAddCatOptions_();
 
   const badge = document.getElementById('svc-count-badge');
   const quotaUnlimited = (quota == null || !isFinite(quota));
@@ -213,9 +237,11 @@ function renderServices() {
 async function addService() {
   const nameEl = document.getElementById('svc-add-name');
   const taxEl  = document.getElementById('svc-add-tax');
+  const catEl  = document.getElementById('svc-add-cat');
   const btn    = document.getElementById('svc-add-btn');
   const name = nameEl.value.trim();
   const taxRate = parseInt(taxEl.value);
+  const category = catEl ? String(catEl.value || '').trim() : '';
   if (!name) return showToast('サービス名を入力してください', 'error');
   if (name.length > 30) return showToast('サービス名は30文字以内で入力してください', 'error');
 
@@ -230,11 +256,12 @@ async function addService() {
 
   btn.disabled = true;
   try {
-    const res = await callGAS('addServiceItem', { name, taxRate });
+    const res = await callGAS('addServiceItem', { name, taxRate, category });
     if (res && res.status === 'ok' && Array.isArray(res.serviceList)) {
       settings.serviceList = res.serviceList;
       nameEl.value = '';
       taxEl.value = '10';
+      if (catEl) catEl.value = '';
       renderServices();
       showToast(`${name}を追加しました`, 'success');
     } else if (res && res.code === 'quota_exceeded') {
@@ -250,6 +277,30 @@ async function addService() {
     showToast('通信エラー：' + (e.message || 'unknown'), 'error');
   } finally {
     btn.disabled = false;
+  }
+}
+
+/* 2026-08-29：分類の変更は inline dropdown で即保存（updateServiceItem＝サーバ真実源）。 */
+async function updateServiceCategory(id, category) {
+  const list = getServiceListFromState();
+  const target = list.find(s => String(s.id || s.code) === String(id));
+  if (!target) return;
+  try {
+    const res = await callGAS('updateServiceItem', {
+      id: String(id),
+      name: target.name,
+      taxRate: Number(target.taxRate) || 10,
+      category: String(category || '').trim()
+    });
+    if (res && res.status === 'ok' && Array.isArray(res.serviceList)) {
+      settings.serviceList = res.serviceList;
+      renderServices();
+      showToast(category ? `分類を「${category}」に設定` : '分類を解除', 'success');
+    } else {
+      showToast((res && res.message) || '更新に失敗しました', 'error');
+    }
+  } catch (e) {
+    showToast('通信エラー：' + (e.message || 'unknown'), 'error');
   }
 }
 
@@ -274,24 +325,48 @@ async function deleteService(id) {
 }
 
 /* ── 仕入原価マスタ（6-G フェーズ2 新設）─────────────── */
+/* 2026-08-29：分類選択肢を「仕入原価大分類」から <option> で生成（後方互換：既存 category からも収集）。 */
+function _purCatOptions_(selected) {
+  const names = new Set();
+  (purchaseCategoryList || []).forEach(c => { if (c && c.name) names.add(String(c.name).trim()); });
+  (purchaseList || []).forEach(p => { if (p && p.category) names.add(String(p.category).trim()); });
+  const sel = String(selected || '').trim();
+  if (sel) names.add(sel);
+  return `<option value="">（分類なし）</option>` +
+    [...names].filter(Boolean).map(n =>
+      `<option value="${escHtml(n)}"${n === sel ? ' selected' : ''}>${escHtml(n)}</option>`
+    ).join('');
+}
+
+function _refreshPurAddCatOptions_() {
+  const sel = document.getElementById('pur-add-cat');
+  if (sel) sel.innerHTML = _purCatOptions_('');
+}
+
 function renderPurchases() {
   const body = document.getElementById('pur-body');
   const quota = masterQuota.purchaseMasterQuota;
 
   if (!Array.isArray(purchaseList) || purchaseList.length === 0) {
-    body.innerHTML = `<tr><td colspan="4" class="text-muted" style="text-align:center;padding:20px;">登録なし</td></tr>`;
+    body.innerHTML = `<tr><td colspan="5" class="text-muted" style="text-align:center;padding:20px;">登録なし</td></tr>`;
   } else {
     body.innerHTML = purchaseList.map(p => {
       const idKey = escHtml(String(p.id || ''));
       const rate = (p.defaultTaxRate !== undefined) ? p.defaultTaxRate : (p.taxRate !== undefined ? p.taxRate : 10);
-      return `<tr>
+      return `<tr id="pur-row-${idKey}">
         <td>${idKey}</td>
         <td>${escHtml(p.name||'')}</td>
+        <td>
+          <select class="pc-select" style="width:100%;" onchange="updatePurchaseCategory('${idKey}', this.value)" title="分類を変更するとホーム損益の集計に反映">
+            ${_purCatOptions_(p.category || '')}
+          </select>
+        </td>
         <td>${Number(rate)||0}%</td>
         <td><button class="pc-btn pc-btn--ghost" type="button" onclick="deletePurchase('${idKey}')">削除</button></td>
       </tr>`;
     }).join('');
   }
+  _refreshPurAddCatOptions_();
 
   const badge = document.getElementById('pur-count-badge');
   const quotaUnlimited = (quota == null || !isFinite(quota));
@@ -312,9 +387,11 @@ function renderPurchases() {
 async function addPurchase() {
   const nameEl = document.getElementById('pur-add-name');
   const taxEl  = document.getElementById('pur-add-tax');
+  const catEl  = document.getElementById('pur-add-cat');
   const btn    = document.getElementById('pur-add-btn');
   const name = nameEl.value.trim();
   const taxRate = parseInt(taxEl.value);
+  const category = catEl ? String(catEl.value || '').trim() : '';
   if (!name) return showToast('科目名を入力してください', 'error');
   if (name.length > 30) return showToast('科目名は30文字以内で入力してください', 'error');
 
@@ -328,11 +405,12 @@ async function addPurchase() {
 
   btn.disabled = true;
   try {
-    const res = await callGAS('addPurchaseItem', { name, defaultTaxRate: taxRate });
+    const res = await callGAS('addPurchaseItem', { name, defaultTaxRate: taxRate, category });
     if (res && res.status === 'ok' && Array.isArray(res.purchaseMasterList)) {
       purchaseList = res.purchaseMasterList;
       nameEl.value = '';
       taxEl.value = '10';
+      if (catEl) catEl.value = '';
       renderPurchases();
       showToast(`${name}を追加しました`, 'success');
     } else if (res && res.code === 'quota_exceeded') {
@@ -348,6 +426,30 @@ async function addPurchase() {
     showToast('通信エラー：' + (e.message || 'unknown'), 'error');
   } finally {
     btn.disabled = false;
+  }
+}
+
+/* 2026-08-29：分類の変更は inline dropdown で即保存（updatePurchaseItem＝サーバ真実源）。 */
+async function updatePurchaseCategory(id, category) {
+  const target = (purchaseList || []).find(p => String(p.id) === String(id));
+  if (!target) return;
+  const rate = (target.defaultTaxRate !== undefined) ? target.defaultTaxRate : (target.taxRate !== undefined ? target.taxRate : 10);
+  try {
+    const res = await callGAS('updatePurchaseItem', {
+      id: String(id),
+      name: target.name,
+      defaultTaxRate: Number(rate) || 10,
+      category: String(category || '').trim()
+    });
+    if (res && res.status === 'ok' && Array.isArray(res.purchaseMasterList)) {
+      purchaseList = res.purchaseMasterList;
+      renderPurchases();
+      showToast(category ? `分類を「${category}」に設定` : '分類を解除', 'success');
+    } else {
+      showToast((res && res.message) || '更新に失敗しました', 'error');
+    }
+  } catch (e) {
+    showToast('通信エラー：' + (e.message || 'unknown'), 'error');
   }
 }
 
@@ -814,6 +916,7 @@ function bindPcServiceChannelAdd() {
         try { localStorage.setItem('uz_service_channel_list', JSON.stringify(serviceChannelList)); } catch {}
         nameInput.value = ''; taxSelect.value = '10';
         renderPcServiceChannels();
+        renderServices();  // 2026-08-29：サービスマスタの分類ドロップダウンを新チャネルで再描画
         showToast(`${name}を追加しました`, 'success');
       } else if (res && res.code === 'quota_exceeded') {
         showToast(res.message || '件数枠の上限に達しています', 'error');
@@ -837,6 +940,7 @@ async function deletePcServiceChannel(id) {
       serviceChannelList = res.serviceChannelList;
       try { localStorage.setItem('uz_service_channel_list', JSON.stringify(serviceChannelList)); } catch {}
       renderPcServiceChannels();
+      renderServices();  // 2026-08-29：サービスマスタの分類ドロップダウン再描画
       showToast(`${target.name}を削除しました`, 'success');
     } else {
       showToast((res && res.message) || '削除に失敗しました', 'error');
@@ -888,6 +992,7 @@ function bindPcPurchaseCategoryAdd() {
         try { localStorage.setItem('uz_purchase_category_list', JSON.stringify(purchaseCategoryList)); } catch {}
         nameInput.value = '';
         renderPcPurchaseCategories();
+        renderPurchases();  // 2026-08-29：仕入原価マスタの分類ドロップダウン再描画
         showToast(`${name}を追加しました`, 'success');
       } else if (res && res.code === 'quota_exceeded') {
         showToast(res.message || '件数枠の上限に達しています', 'error');
@@ -911,6 +1016,7 @@ async function deletePcPurchaseCategory(id) {
       purchaseCategoryList = res.purchaseCategoryList;
       try { localStorage.setItem('uz_purchase_category_list', JSON.stringify(purchaseCategoryList)); } catch {}
       renderPcPurchaseCategories();
+      renderPurchases();  // 2026-08-29：仕入原価マスタの分類ドロップダウン再描画
       showToast(`${target.name}を削除しました`, 'success');
     } else {
       showToast((res && res.message) || '削除に失敗しました', 'error');

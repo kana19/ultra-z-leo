@@ -689,7 +689,17 @@ function renderServiceList() {
     `;
   }).join('');
 
-  const cats = [...new Set(list.map(s => String(s.category || '').trim()).filter(Boolean))];
+  // 2026-08-29：分類候補は「サービス販売チャネル大分類」(serviceChannelList) を第一の正とする。
+  //   空の場合のみ既存 item.category から抽出（後方互換）。大分類が設定されていれば
+  //   ユーザーはドロップダウンから選ぶだけで item に category が付き、集計に流れる。
+  let cats = [];
+  try {
+    const ch = JSON.parse(localStorage.getItem('uz_service_channel_list') || '[]');
+    cats = ch.map(c => String((c && c.name) || '').trim()).filter(Boolean);
+  } catch (_e) {}
+  if (cats.length === 0) {
+    cats = [...new Set(list.map(s => String(s.category || '').trim()).filter(Boolean))];
+  }
   container.innerHTML = html + `<datalist id="service-cat-options">${cats.map(c => `<option value="${escHtml(c)}"></option>`).join('')}</datalist>`;
 
   // 件数バッジ表示（運営付与枠 vs 現使用件数・無制限時は件数のみ）
@@ -906,7 +916,16 @@ function renderPurchaseList() {
     `;
   }).join('');
 
-  const cats = [...new Set(list.map(p => String(p.category || '').trim()).filter(Boolean))];
+  // 2026-08-29：分類候補は「仕入原価大分類」(purchaseCategoryList) を第一の正とする。
+  //   空の場合のみ既存 item.category から抽出（後方互換）。
+  let cats = [];
+  try {
+    const pc = JSON.parse(localStorage.getItem('uz_purchase_category_list') || '[]');
+    cats = pc.map(c => String((c && c.name) || '').trim()).filter(Boolean);
+  } catch (_e) {}
+  if (cats.length === 0) {
+    cats = [...new Set(list.map(p => String(p.category || '').trim()).filter(Boolean))];
+  }
   container.innerHTML = html + `<datalist id="purchase-cat-options">${cats.map(c => `<option value="${escHtml(c)}"></option>`).join('')}</datalist>`;
 
   const badge = document.getElementById('purchase-count-badge');
