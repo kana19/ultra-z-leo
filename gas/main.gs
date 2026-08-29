@@ -188,6 +188,9 @@ function doPost(e) {
     var action = body.action;
     var data = body.data || {};
     switch (action) {
+      // 2026-08-29：master GAS の registerUserGasUrl が疎通確認用に POST で ping を打つ。
+      //   これに応じないと access_denied 誤判定の原因になる（v0.9.7 は緩和したが対称性のため対応）。
+      case 'ping':              result = { status: 'ok', pong: Date.now() }; break;
       case 'faxOrderScanTier1': result = faxOrderScanTier1(data); break;
       case 'previewFaxOrder':   result = previewFaxOrder(data);   break;
       // 書類発行＋商品マスタ（doc_automation・§8-5）：運営ポータル(admin)は master プロキシ
