@@ -689,9 +689,10 @@ function renderServiceList() {
     `;
   }).join('');
 
-  // 2026-08-29：分類候補は「サービス販売チャネル大分類」(serviceChannelList) を第一の正とする。
+  // 2026-08-30：分類候補は「サービス大分類」(serviceChannelList・旧サービス販売チャネル大分類) を第一の正とする。
   //   空の場合のみ既存 item.category から抽出（後方互換）。大分類が設定されていれば
   //   ユーザーはドロップダウンから選ぶだけで item に category が付き、集計に流れる。
+  //   ※ localStorage キー・GAS action 名は既存店の後方互換のため保持（UI表記のみ「大分類」に統一）。
   let cats = [];
   try {
     const ch = JSON.parse(localStorage.getItem('uz_service_channel_list') || '[]');
@@ -1373,7 +1374,7 @@ function escHtml(str) {
 
 /* ============================================================
  * 新マスタ管理UI（2026-08-27 実装・→ 03§1-1-2 / §1-3-2 / §1-6-1 / §1-6-2）
- * - サービス販売チャネル大分類（serviceChannelList・任意）
+ * - サービス大分類（serviceChannelList・任意・旧「サービス販売チャネル大分類」から改名 2026-08-30）
  * - 仕入原価大分類（purchaseCategoryList・任意）
  * - 仕入先マスタ（suppliers・新規台帳・集計付）
  * - 顧客マスタ CSV I/O
@@ -1395,7 +1396,7 @@ function getPurchaseCategoryList() {
   try { const s = localStorage.getItem(PURCHASE_CATEGORY_KEY_); const l = s ? JSON.parse(s) : []; return Array.isArray(l) ? l : []; } catch { return []; }
 }
 
-/* ── サービス販売チャネル大分類 serviceChannelList ─────────── */
+/* ── サービス大分類 serviceChannelList（旧サービス販売チャネル大分類・2026-08-30 UI統合改名） ─────────── */
 function initServiceChannel() { renderServiceChannelList(); }
 
 function renderServiceChannelList() {
@@ -1432,7 +1433,7 @@ function editServiceChannel(id) {
   row.innerHTML = `
     <div class="staff-edit">
       <div class="staff-edit__line">
-        <input type="text" id="schannel-edit-name-${id}" class="settings-input staff-edit__name" value="${escHtml(it.name)}" maxlength="30" autocomplete="off" placeholder="チャネル名">
+        <input type="text" id="schannel-edit-name-${id}" class="settings-input staff-edit__name" value="${escHtml(it.name)}" maxlength="30" autocomplete="off" placeholder="大分類名">
         <select id="schannel-edit-tax-${id}" class="form-select" style="width:120px;flex-shrink:0;">
           <option value="10"${Number(rate) === 10 ? ' selected' : ''}>10%</option>
           <option value="8"${Number(rate) === 8 ? ' selected' : ''}>8%（軽減）</option>
@@ -1453,8 +1454,8 @@ function editServiceChannel(id) {
 async function saveEditServiceChannel(id) {
   const name = document.getElementById(`schannel-edit-name-${id}`)?.value.trim();
   const taxRate = parseInt(document.getElementById(`schannel-edit-tax-${id}`)?.value, 10);
-  if (!name) return showToast('チャネル名を入力してください', 'error');
-  if (name.length > 30) return showToast('チャネル名は30文字以内で入力してください', 'error');
+  if (!name) return showToast('大分類名を入力してください', 'error');
+  if (name.length > 30) return showToast('大分類名は30文字以内で入力してください', 'error');
   try {
     const res = await callGAS('updateServiceChannel', { id: String(id), name, taxRate });
     if (res && res.status === 'ok' && Array.isArray(res.serviceChannelList)) {
@@ -1492,14 +1493,14 @@ function bindServiceChannelAdd() {
   const doAdd = async () => {
     const name = nameInput.value.trim();
     const taxRate = parseInt(taxSelect.value, 10);
-    if (!name) return showToast('チャネル名を入力してください', 'error');
-    if (name.length > 30) return showToast('チャネル名は30文字以内で入力してください', 'error');
+    if (!name) return showToast('大分類名を入力してください', 'error');
+    if (name.length > 30) return showToast('大分類名は30文字以内で入力してください', 'error');
     const list = getServiceChannelList();
     const quota = getMasterQuota().serviceChannelQuota;
     if (quota != null && isFinite(quota) && list.length >= quota) {
       return showToast(`件数枠の上限（${quota}件）に達しています`, 'error');
     }
-    if (list.some(s => s.name === name)) return showToast('同じ名前のチャネルが既に登録されています', 'error');
+    if (list.some(s => s.name === name)) return showToast('同じ名前の大分類が既に登録されています', 'error');
     btn.disabled = true;
     try {
       const res = await callGAS('addServiceChannel', { name, taxRate });

@@ -175,7 +175,7 @@ function getServiceListFromState() {
   return svcs;
 }
 
-/* 2026-08-29：分類選択肢を「サービス販売チャネル大分類」から <option> で生成（後方互換：既存 category からも収集）。 */
+/* 2026-08-30：分類選択肢を「サービス大分類」(旧サービス販売チャネル大分類) から <option> で生成（後方互換：既存 category からも収集）。 */
 function _svcCatOptions_(selected) {
   const names = new Set();
   (serviceChannelList || []).forEach(c => { if (c && c.name) names.add(String(c.name).trim()); });
@@ -863,13 +863,13 @@ function bindStaffAdd() {
 
 /* ============================================================
  * 2026-08-27：新マスタ管理UI（PC版・→ PWA settings.js と同型・独自 id で衝突回避）
- * - サービス販売チャネル大分類（→ 03§1-1-2）
+ * - サービス大分類（旧サービス販売チャネル大分類・→ 03§1-1-2・2026-08-30 UI統合改名）
  * - 仕入原価大分類（→ 03§1-3-2）
  * - 仕入先マスタ（→ 03§1-6-2・集計付）
  * - 顧客CSV I/O（→ 03§1-6-1）
  * ============================================================ */
 
-/* ── サービス販売チャネル大分類 ─────────────────── */
+/* ── サービス大分類（旧サービス販売チャネル大分類・2026-08-30 UI統合改名） ─────────────────── */
 function renderPcServiceChannels() {
   const tbody = document.getElementById('pc-schannel-body');
   if (!tbody) return;
@@ -883,7 +883,7 @@ function renderPcServiceChannels() {
       <td>${Number(ch.taxRate) || 0}%</td>
       <td><button type="button" class="pc-btn" style="background:#c00;color:#fff;" onclick="deletePcServiceChannel('${uzEscHtml(String(ch.id))}')">削除</button></td>
     </tr>
-  `).join('') : '<tr><td colspan="4" style="text-align:center;color:var(--uz-muted);">未設定（売上入力にチャネル選択は出ません＝後方互換）</td></tr>';
+  `).join('') : '<tr><td colspan="4" style="text-align:center;color:var(--uz-muted);">未設定（サービスマスタの分類欄は自由入力になります＝後方互換）</td></tr>';
   const badge = document.getElementById('pc-schannel-count-badge');
   if (badge) { badge.hidden = false; badge.textContent = unlimited ? ` ${list.length}件` : ` ${list.length}/${quota}`; }
   const addRow = document.getElementById('pc-schannel-add-row');
@@ -901,13 +901,13 @@ function bindPcServiceChannelAdd() {
   const doAdd = async () => {
     const name = nameInput.value.trim();
     const taxRate = parseInt(taxSelect.value, 10);
-    if (!name) return showToast('チャネル名を入力してください', 'error');
-    if (name.length > 30) return showToast('チャネル名は30文字以内で入力してください', 'error');
+    if (!name) return showToast('大分類名を入力してください', 'error');
+    if (name.length > 30) return showToast('大分類名は30文字以内で入力してください', 'error');
     const quota = masterQuota.serviceChannelQuota;
     if (quota != null && isFinite(quota) && serviceChannelList.length >= quota) {
       return showToast(`件数枠の上限（${quota}件）に達しています`, 'error');
     }
-    if (serviceChannelList.some(c => c.name === name)) return showToast('同じ名前のチャネルが既に登録されています', 'error');
+    if (serviceChannelList.some(c => c.name === name)) return showToast('同じ名前の大分類が既に登録されています', 'error');
     btn.disabled = true;
     try {
       const res = await callGAS('addServiceChannel', { name, taxRate });

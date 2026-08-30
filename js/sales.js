@@ -439,8 +439,8 @@ function _buildSalesFormBodyHTML() {
         <div id="sm-sales-cards" class="sales-sm-cards"></div>
         <!-- 販売チャネル大分類（→ 03§1-1-2 serviceChannelList・任意設定・空なら非表示） -->
         <div id="sm-sales-channel-wrap" hidden style="margin-top:10px;">
-          <label class="sales-sm-label" style="font-size:12px;color:var(--uz-muted);">販売チャネル（任意・選ぶと税率上書き）</label>
-          <div class="sm-taxrate-chips" id="sm-sales-channel-chips" role="group" aria-label="販売チャネル選択"></div>
+          <label class="sales-sm-label" style="font-size:12px;color:var(--uz-muted);">大分類（任意・選ぶと税率上書き）</label>
+          <div class="sm-taxrate-chips" id="sm-sales-channel-chips" role="group" aria-label="大分類選択"></div>
         </div>
         <div class="sm-taxrate-chips" id="sm-sales-taxrate-chips" role="group" aria-label="税率選択">
           <button type="button" class="sm-taxrate-chip" data-rate="10">10%</button>

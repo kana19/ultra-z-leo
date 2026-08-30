@@ -65,7 +65,7 @@
       <div class="pc-card">
         <div class="pc-section-title">サービスマスタ（売上区分） <span id="svc-count-badge" class="pc-count-badge" hidden></span></div>
         <p class="pc-note" style="color:var(--uz-muted);margin-bottom:8px;">
-          分類＝下の「サービス販売チャネル大分類」で登録した名前を選ぶと、ホーム損益がこの分類でグルーピング集計されます。
+          分類＝下の「サービス大分類」で登録した名前を選ぶと、ホーム損益がこの分類でグルーピング集計されます。
         </p>
         <table class="pc-table" id="svc-table">
           <thead><tr><th style="width:90px;">コード</th><th>サービス名</th><th style="width:150px;">分類（大分類）</th><th style="width:90px;">税率</th><th style="width:140px;">操作</th></tr></thead>
@@ -73,7 +73,7 @@
         </table>
         <div id="svc-add-row" class="pc-form-row" style="margin-top:10px;align-items:center;gap:8px;flex-wrap:wrap;">
           <input type="text" id="svc-add-name" class="pc-input" placeholder="サービス名（例：店内売上）" maxlength="30" style="flex:2;min-width:160px;">
-          <select id="svc-add-cat" class="pc-select" style="width:150px;" title="サービス販売チャネル大分類から選択（任意）">
+          <select id="svc-add-cat" class="pc-select" style="width:150px;" title="サービス大分類から選択（任意）">
             <option value="">分類（任意）</option>
           </select>
           <select id="svc-add-tax" class="pc-select" style="width:120px;">
@@ -86,7 +86,29 @@
         <p id="svc-limit-hint" class="pc-note" style="margin-top:6px;color:var(--uz-muted);" hidden></p>
       </div>
 
-      <!-- ③ 仕入原価マスタ -->
+      <!-- ③ サービス大分類（任意・売上区分をまとめる／旧「サービス販売チャネル大分類」から統合改名 2026-08-30） -->
+      <div class="pc-card">
+        <div class="pc-section-title">サービス大分類（任意） <span id="pc-schannel-count-badge" class="pc-count-badge" hidden></span></div>
+        <p class="pc-note" style="color:var(--uz-muted);margin-bottom:10px;">
+          売上区分をまとめる大分類（経営方針で自由に定義：店内／テイクアウト／卸し／コンサル／物販など）。設定するとサービスマスタの分類欄で選べ、税率はこちらが優先されます。空欄で無害運転（既存動作を壊さない）。
+        </p>
+        <table class="pc-table" id="pc-schannel-table">
+          <thead><tr><th style="width:90px;">ID</th><th>大分類名</th><th style="width:90px;">税率</th><th style="width:90px;">操作</th></tr></thead>
+          <tbody id="pc-schannel-body"></tbody>
+        </table>
+        <div id="pc-schannel-add-row" class="pc-form-row" style="margin-top:10px;align-items:center;gap:8px;flex-wrap:wrap;">
+          <input type="text" id="pc-schannel-add-name" class="pc-input" placeholder="大分類名（例：店内）" maxlength="30" style="flex:2;min-width:160px;">
+          <select id="pc-schannel-add-tax" class="pc-select" style="width:120px;">
+            <option value="10">10%</option>
+            <option value="8">8%（軽減）</option>
+            <option value="0">0%（非課税）</option>
+          </select>
+          <button id="pc-schannel-add-btn" class="pc-btn" type="button">＋ 追加</button>
+        </div>
+        <p id="pc-schannel-limit-hint" class="pc-note" style="margin-top:6px;color:var(--uz-muted);" hidden></p>
+      </div>
+
+      <!-- ③-2 仕入原価マスタ -->
       <div class="pc-card">
         <div class="pc-section-title">仕入原価マスタ <span id="pur-count-badge" class="pc-count-badge" hidden></span></div>
         <p class="pc-note" style="color:var(--uz-muted);margin-bottom:8px;">
@@ -111,31 +133,9 @@
         <p id="pur-limit-hint" class="pc-note" style="margin-top:6px;color:var(--uz-muted);" hidden></p>
       </div>
 
-      <!-- ③-2 サービス販売チャネル大分類（任意設定・→ 03§1-1-2） -->
-      <div class="pc-card">
-        <div class="pc-section-title">サービス販売チャネル大分類（任意） <span id="pc-schannel-count-badge" class="pc-count-badge" hidden></span></div>
-        <p class="pc-note" style="color:var(--uz-muted);margin-bottom:10px;">
-          同じサービスを店内・テイクアウト・卸し等の違うチャネル・違う税率で売り分ける時の大分類です。設定するとスマホ売上入力で選択でき、税率は大分類が優先。空欄で無害運転（既存動作を壊さない）。
-        </p>
-        <table class="pc-table" id="pc-schannel-table">
-          <thead><tr><th style="width:90px;">ID</th><th>チャネル名</th><th style="width:90px;">税率</th><th style="width:90px;">操作</th></tr></thead>
-          <tbody id="pc-schannel-body"></tbody>
-        </table>
-        <div id="pc-schannel-add-row" class="pc-form-row" style="margin-top:10px;align-items:center;gap:8px;flex-wrap:wrap;">
-          <input type="text" id="pc-schannel-add-name" class="pc-input" placeholder="チャネル名（例：店内）" maxlength="30" style="flex:2;min-width:160px;">
-          <select id="pc-schannel-add-tax" class="pc-select" style="width:120px;">
-            <option value="10">10%</option>
-            <option value="8">8%（軽減）</option>
-            <option value="0">0%（非課税）</option>
-          </select>
-          <button id="pc-schannel-add-btn" class="pc-btn" type="button">＋ 追加</button>
-        </div>
-        <p id="pc-schannel-limit-hint" class="pc-note" style="margin-top:6px;color:var(--uz-muted);" hidden></p>
-      </div>
-
       <!-- ③-3 仕入原価大分類（任意設定・→ 03§1-3-2） -->
       <div class="pc-card">
-        <div class="pc-section-title">仕入原価大分類（任意・グルーピング） <span id="pc-pcat-count-badge" class="pc-count-badge" hidden></span></div>
+        <div class="pc-section-title">仕入原価大分類（任意） <span id="pc-pcat-count-badge" class="pc-count-badge" hidden></span></div>
         <p class="pc-note" style="color:var(--uz-muted);margin-bottom:10px;">
           仕入原価品目を大分類でまとめます（食材／酒類／包材など）。品目マスタで categoryId 紐付け＝入力時は品目選択で自動決定（モーダルにタグは出ません）。税率は品目側 defaultTaxRate が正。
         </p>
