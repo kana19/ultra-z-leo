@@ -17,7 +17,7 @@ function doGet(e) {
     switch (action) {
       // 対策B：キープウォーム用の軽量応答（スプレッドシート非接触＝最速）。
       // 5分ごとの自己ping（keepWarm）がここを叩き、Webアプリを常時ウォームに保つ。
-      case 'ping':                      result = { status: 'ok', pong: Date.now() };      break;
+      case 'ping':                      result = { status: 'ok', pong: Date.now(), scriptId: (function(){ try { return ScriptApp.getScriptId(); } catch (_e) { return ''; } })() }; break;
       case 'addSales':                  result = addSales(data);                          break;
       case 'addCost':                   result = addCost(data);                           break;
       case 'getSummary':                result = getSummary(data.month);                  break;
@@ -190,7 +190,10 @@ function doPost(e) {
     switch (action) {
       // 2026-08-29：master GAS の registerUserGasUrl が疎通確認用に POST で ping を打つ。
       //   これに応じないと access_denied 誤判定の原因になる（v0.9.7 は緩和したが対称性のため対応）。
-      case 'ping':              result = { status: 'ok', pong: Date.now() }; break;
+      // 2026-08-30（v0.9.10）：ping 応答に scriptId を含める＝master 側で受け取って
+      //   新clientId フォルダに GAS のショートカットを自動作成できるようにする（運営手動操作なし）。
+      //   ScriptApp.getScriptId() は script.scriptapp scope で動く（appsscript.json 宣言済）。
+      case 'ping':              result = { status: 'ok', pong: Date.now(), scriptId: (function(){ try { return ScriptApp.getScriptId(); } catch (_e) { return ''; } })() }; break;
       case 'faxOrderScanTier1': result = faxOrderScanTier1(data); break;
       case 'previewFaxOrder':   result = previewFaxOrder(data);   break;
       // 書類発行＋商品マスタ（doc_automation・§8-5）：運営ポータル(admin)は master プロキシ
