@@ -7,8 +7,57 @@
 const SPREADSHEET_ID = '__SPREADSHEET_ID__';
 function _ss_() { return SpreadsheetApp.openById(SPREADSHEET_ID); }
 
+// v0.9.12（2026-08-31）：⑤-b「関数プルダウンから getSettings 選択→▶実行→承認」を構造消去する
+//   1クリック承認ブートストラップHTML。admin panel から `<GAS_URL>?action=authorize` を
+//   新タブで開くと、google.script.run 経由で authorizeScopes() が呼ばれ Google の
+//   interactive OAuth consent が発火する。k@tgx.jp が「詳細→安全ではないページに移動→許可」を
+//   1回押すだけで SpreadsheetApp/DriveApp/GmailApp の Sensitive scope が web app 外部呼出しに
+//   対して活性化＝以後 admin panel の疎通テストが通る。エディタでの関数選択・実行の手作業を消す。
+function _renderAuthorizeBootstrapHtml_() {
+  var html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>顧客GAS 認可</title>'
+    + '<style>body{font-family:system-ui,-apple-system,sans-serif;padding:24px;max-width:640px;margin:auto;line-height:1.6}'
+    + 'h2{color:#111;margin-top:0}#status{font-size:16px;padding:12px;border-radius:6px;margin:16px 0}'
+    + '.ok{background:#dcfce7;color:#166534}.err{background:#fee2e2;color:#991b1b}.pending{background:#e0e7ff;color:#3730a3}'
+    + 'pre{background:#f4f4f5;padding:12px;border-radius:6px;overflow-x:auto;font-size:12px}</style></head><body>'
+    + '<h2>顧客GAS 認可ブートストラップ</h2>'
+    + '<p>Sensitive scope（Spreadsheets／Drive／Gmail）を web app 外部呼出しに対して活性化します。'
+    + '認可ダイアログが出たら「<b>詳細 → 安全ではないページに移動 → 許可</b>」で完了してください。</p>'
+    + '<div id="status" class="pending">認可処理中...</div>'
+    + '<pre id="result"></pre>'
+    + '<script>'
+    + 'google.script.run'
+    + '.withSuccessHandler(function(r){'
+    + '  var s=document.getElementById("status");s.className="ok";'
+    + '  s.innerText="✅ 認可完了。このタブを閉じて admin panel に戻り「再検証」を押してください。";'
+    + '  document.getElementById("result").innerText=JSON.stringify(r,null,2);'
+    + '})'
+    + '.withFailureHandler(function(e){'
+    + '  var s=document.getElementById("status");s.className="err";'
+    + '  s.innerText="❌ エラー："+(e&&e.message?e.message:String(e));'
+    + '  document.getElementById("result").innerText=(e&&e.stack)?e.stack:"";'
+    + '})'
+    + '.authorizeScopes();'
+    + '</script></body></html>';
+  return HtmlService.createHtmlOutput(html).setTitle('顧客GAS 認可').setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
+// v0.9.12：全 Sensitive scope を明示的に触って runtime verification を活性化する。
+// bootstrap HTML の google.script.run から呼ばれ、k@tgx.jp のブラウザで OAuth consent を1クリック発火。
+function authorizeScopes() {
+  var out = { spreadsheet: null, drive: null, gmail: null, scriptapp: null };
+  try { out.spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID).getName(); } catch (e) { out.spreadsheet = 'err: ' + e.message; }
+  try { out.drive = DriveApp.getFileById(SPREADSHEET_ID).getName(); } catch (e) { out.drive = 'err: ' + e.message; }
+  try { out.gmail = 'unread=' + GmailApp.getInboxUnreadCount(); } catch (e) { out.gmail = 'err: ' + e.message; }
+  try { out.scriptapp = ScriptApp.getScriptId(); } catch (e) { out.scriptapp = 'err: ' + e.message; }
+  return out;
+}
+
 function doGet(e) {
   const action = e.parameter.action;
+  // v0.9.12：認可ブートストラップHTMLをJSONルーティングより前に処理（1クリック承認導線）
+  if (action === 'authorize' || action === 'bootstrap') {
+    return _renderAuthorizeBootstrapHtml_();
+  }
   const data = JSON.parse(e.parameter.data || '{}');
   // clientId 受け口：全アクションで data.clientId を受領可能（実値は Phase A 管理ポータル実装時に運用開始）
   // 現時点では箱だけ用意し、ログ以外には使用しない
