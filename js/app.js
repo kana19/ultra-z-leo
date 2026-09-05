@@ -170,7 +170,14 @@ function uzRenderSidebar() {
 document.addEventListener('DOMContentLoaded', uzRenderSidebar);
 
 /* ── GAS設定 ─────────────────────────────────────────────── */
+// v0.10.0（2026-09-05・一元GAS化）：master GAS 1 本で全店舗を処理する構造に転換。
+//   GAS_URL は master GAS URL（全店舗共通・OAuth consent は master GAS 1 回のみ済）。
+//   CLIENT_ID は writeUserRepositoryFiles（master.gs）が発行時に実 clientId に置換する。
+//   callGAS / callGASPost 内で { action:'user_call', clientId:CLIENT_ID, userAction, data } の
+//   形に自動変換して master GAS に投げる＝ 呼出側（sales.js/cost.js/attendance 等）は無変更で
+//   v0.10.0 経路になる。詳細は 資料/知識MD/04_運営ポータル.md §11。
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbwBDHj9-p6ZT6ExXrxF1Q-XwiEkNMPwDc0aAuk7zptivRhWhepvaCDsjaIJd7WHh_h9-A/exec';
+const CLIENT_ID = '__CLIENT_ID__';
 
 /* ── デモモード（複製元 ultra-z-leo・UI確認用） ───────────────
    複製元はテンプレGASの SPREADSHEET_ID が __SPREADSHEET_ID__ のままで、
@@ -402,11 +409,20 @@ function uzDemoResponse(action, data) {
  */
 async function callGAS(action, data = {}) {
   if (UZ_DEMO) return uzDemoResponse(action, data);
-  const params = new URLSearchParams({ action, data: JSON.stringify(data) });
+  // v0.10.0 一元GAS化：master GAS の user_call action 経由で dispatch。
+  //   CLIENT_ID が未置換（テンプレのまま '__CLIENT_ID__'）ならデモモードへ移行（新規発行前の複製元 UI 確認）。
+  if (CLIENT_ID === '__CLIENT_ID__') {
+    UZ_DEMO = true;
+    return uzDemoResponse(action, data);
+  }
+  const params = new URLSearchParams({
+    action: 'user_call',
+    data: JSON.stringify({ clientId: CLIENT_ID, userAction: action, data })
+  });
   const res = await fetch(`${GAS_URL}?${params}`, { method: 'GET' });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const json = await res.json();
-  // 複製元シグナル検知：SPREADSHEET_ID 未置換ならデモモードへ移行し、ダミーを返す
+  // 旧複製元シグナル（v0.9.x 期の SPREADSHEET_ID 未置換）検知の互換フォールバック
   if (json && json.status === 'error' && typeof json.message === 'string'
       && json.message.indexOf('__SPREADSHEET_ID__') !== -1) {
     UZ_DEMO = true;
@@ -419,9 +435,19 @@ async function callGAS(action, data = {}) {
    text/plain 送信で GAS の CORS プリフライトを回避する（doPost が JSON.parse する）。 */
 async function callGASPost(action, data = {}) {
   if (UZ_DEMO) return uzDemoResponse(action, data);
+  if (CLIENT_ID === '__CLIENT_ID__') {
+    UZ_DEMO = true;
+    return uzDemoResponse(action, data);
+  }
+  // v0.10.0 一元GAS化：POST body にも user_call ラッパーを付与
   const res = await fetch(GAS_URL, {
     method: 'POST',
-    body: JSON.stringify({ action, data })
+    body: JSON.stringify({
+      action: 'user_call',
+      clientId: CLIENT_ID,
+      userAction: action,
+      data
+    })
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const json = await res.json();
