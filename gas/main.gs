@@ -243,6 +243,25 @@ function doPost(e) {
       //   新clientId フォルダに GAS のショートカットを自動作成できるようにする（運営手動操作なし）。
       //   ScriptApp.getScriptId() は script.scriptapp scope で動く（appsscript.json 宣言済）。
       case 'ping':              result = { status: 'ok', pong: Date.now(), scriptId: (function(){ try { return ScriptApp.getScriptId(); } catch (_e) { return ''; } })() }; break;
+      // 2026-09-05（v0.9.15）：authorize_check＝ authorizeScopes() を web app 外部呼出しから叩き、
+      //   全 Sensitive scope（Spreadsheets/Drive/Gmail/ScriptApp）の consent 完了を1回で確認する。
+      //   master.gs の registerUserGasUrl は⑥ URL 登録時にこれを呼び、scope エラーがあれば
+      //   gas_unauthorized＋authUrl を返して admin UI から 1クリック承認へ誘導する。
+      //   ⑤-b「エディタで getSettings ▶実行」の手作業を構造消去する要（v0.9.10 の getSettings 追補を代替）。
+      case 'authorize_check':   result = (function(){
+                                  var chk = authorizeScopes();
+                                  var errs = [];
+                                  ['spreadsheet','drive','gmail','scriptapp'].forEach(function(k){
+                                    if (String(chk[k] || '').indexOf('err:') === 0) errs.push(k);
+                                  });
+                                  return {
+                                    status: errs.length === 0 ? 'ok' : 'error',
+                                    authorized: errs.length === 0,
+                                    scopeErrors: errs,
+                                    detail: chk,
+                                    scriptId: (chk.scriptapp && String(chk.scriptapp).indexOf('err:') !== 0) ? chk.scriptapp : ''
+                                  };
+                                })(); break;
       case 'faxOrderScanTier1': result = faxOrderScanTier1(data); break;
       case 'previewFaxOrder':   result = previewFaxOrder(data);   break;
       // 書類発行＋商品マスタ（doc_automation・§8-5）：運営ポータル(admin)は master プロキシ
