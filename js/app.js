@@ -178,6 +178,10 @@ document.addEventListener('DOMContentLoaded', uzRenderSidebar);
 //   v0.10.0 経路になる。詳細は 資料/知識MD/04_運営ポータル.md §11。
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbwBDHj9-p6ZT6ExXrxF1Q-XwiEkNMPwDc0aAuk7zptivRhWhepvaCDsjaIJd7WHh_h9-A/exec';
 const CLIENT_ID = '__CLIENT_ID__';
+// v0.11.0（2026-09-06）：店舗固有 apiToken。master GAS が発行時に clients シートに保存し
+//   本定数へ埋め込む。全 user_call リクエストで送信し master 側で clientId × apiToken を
+//   照合＝ URL 予測（-<4桁ランダム>）と組合わせて 3 層防御の 1 層を担う。
+const API_TOKEN = '__API_TOKEN__';
 
 /* ── デモモード（複製元 ultra-z-leo・UI確認用） ───────────────
    複製元はテンプレGASの SPREADSHEET_ID が __SPREADSHEET_ID__ のままで、
@@ -417,7 +421,8 @@ async function callGAS(action, data = {}) {
   }
   const params = new URLSearchParams({
     action: 'user_call',
-    data: JSON.stringify({ clientId: CLIENT_ID, userAction: action, data })
+    // v0.11.0：apiToken を data payload に同梱＝master 側 _handleUserCall_ が照合
+    data: JSON.stringify({ clientId: CLIENT_ID, apiToken: API_TOKEN, userAction: action, data })
   });
   const res = await fetch(`${GAS_URL}?${params}`, { method: 'GET' });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -440,11 +445,13 @@ async function callGASPost(action, data = {}) {
     return uzDemoResponse(action, data);
   }
   // v0.10.0 一元GAS化：POST body にも user_call ラッパーを付与
+  // v0.11.0：apiToken を body に同梱＝master 側 _handleUserCall_ が照合
   const res = await fetch(GAS_URL, {
     method: 'POST',
     body: JSON.stringify({
       action: 'user_call',
       clientId: CLIENT_ID,
+      apiToken: API_TOKEN,
       userAction: action,
       data
     })

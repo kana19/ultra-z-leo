@@ -12,6 +12,8 @@
 // v0.10.0 一元GAS化：master GAS 経由（app.js §「GAS設定」と同一設計）
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbwBDHj9-p6ZT6ExXrxF1Q-XwiEkNMPwDc0aAuk7zptivRhWhepvaCDsjaIJd7WHh_h9-A/exec';
 const CLIENT_ID = '__CLIENT_ID__';
+// v0.11.0（2026-09-06）：店舗固有 apiToken（app.js と同設計）。master GAS が発行時に注入。
+const API_TOKEN = '__API_TOKEN__';
 const WD = ['日','月','火','水','木','金','土'];
 const STAFF_ID_KEY = 'uz_staff_id';
 
@@ -25,7 +27,8 @@ let state = {
 
 async function callGAS(action, data={}) {
   // v0.10.0 一元GAS化：master GAS の user_call 経由で dispatch
-  const wrappedData = { clientId: CLIENT_ID, userAction: action, data };
+  // v0.11.0：apiToken を wrappedData に同梱＝master 側 _handleUserCall_ が照合
+  const wrappedData = { clientId: CLIENT_ID, apiToken: API_TOKEN, userAction: action, data };
   const url = `${GAS_URL}?action=user_call&data=${encodeURIComponent(JSON.stringify(wrappedData))}`;
   const res = await fetch(url);
   if (!res.ok) throw new Error('HTTP '+res.status);
