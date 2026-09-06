@@ -317,6 +317,38 @@ function initBasicInfo() {
 
   // 営業時間（A-9：businessHours が設定されていれば表示・未設定なら行ごと非表示）
   _renderBusinessHoursRow();
+
+  // v0.11.2（2026-09-06）：プラン欄・フッタ・バージョンを動的埋込。
+  //   プラン判定＝ settings.featureVisibility.attendance_menu（真実の源）から決定論的。
+  //     attendance_menu:true → 'レオ'（勤怠あり・TC>=5）／false → 'アストラ'（TC=0）
+  //   バージョン＝ master GAS ping action から APP_VERSION 取得（fallback は '—' 維持）。
+  //   従来（v0.11.1 まで）は settings.html に "レオ" / "1.0.0" / "LEO版" が全店舗ハードコード
+  //   されており、TC=0 アストラ発行でも "レオ" と表示される事象を field test で確認。
+  _renderPlanRow();
+  _renderVersionRow();
+}
+
+function _renderPlanRow() {
+  const planEl = document.getElementById('info-plan');
+  const footerEl = document.getElementById('info-plan-footer');
+  let planName = 'レオ';
+  try {
+    if (typeof getFeatureVisibility === 'function') {
+      const fv = getFeatureVisibility();
+      planName = (fv && fv.attendance_menu === true) ? 'レオ' : 'アストラ';
+    }
+  } catch { planName = 'レオ'; }
+  if (planEl) planEl.textContent = planName;
+  if (footerEl) footerEl.textContent = planName;
+}
+
+function _renderVersionRow() {
+  const verEl = document.getElementById('info-version');
+  if (!verEl) return;
+  if (typeof callGAS !== 'function') return;
+  callGAS('ping', {}).then(function (r) {
+    if (r && r.ok && r.version) verEl.textContent = 'v' + r.version;
+  }).catch(function () { /* silent - "—" のまま */ });
 }
 
 /**
