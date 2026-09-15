@@ -17,6 +17,63 @@
   <link rel="stylesheet" href="css/pl.css">
   <link rel="stylesheet" href="css/pages.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.9.0/dist/tabler-icons.min.css">
+  <style>
+    /* 会計元帳ビュー（v0.15.0・IT導入補助金 インボイス対応類型 登録の会計 1 機能）
+       - 3 機能：①科目別元帳（既存 PL 展開の二段深堀り）／②売掛金・買掛金元帳＋残高／③税率別消費税集計
+       - lg2- 接頭辞で ledger.html (取引管理・lg-)・pcldg-（PC 未納消込）と衝突回避 */
+    .lg2-section { margin: 16px 16px 0; }
+    .lg2-section__title { font-size: 14px; font-weight: 700; color: var(--uz-text); margin: 0 0 8px; display: flex; align-items: center; gap: 6px; }
+    .lg2-section__title i { color: var(--uz-accent, #2563eb); }
+    .lg2-card { background: var(--uz-surface, #fff); border: 1px solid var(--uz-border); border-radius: 12px; overflow: hidden; }
+    .lg2-card__body { padding: 10px 14px; }
+    .lg2-empty { text-align: center; color: var(--uz-muted); font-size: 12px; padding: 12px 6px; }
+
+    /* 売掛・買掛残高（サマリ） */
+    .lg2-balance { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 10px 14px 6px; }
+    .lg2-balance__cell { padding: 8px 10px; border-radius: 8px; background: var(--uz-bg, #f8fafc); }
+    .lg2-balance__label { font-size: 11px; color: var(--uz-muted); }
+    .lg2-balance__val { font-size: 16px; font-weight: 700; color: var(--uz-text); font-variant-numeric: tabular-nums; margin-top: 2px; }
+    .lg2-balance__val--recv { color: #1d4ed8; }
+    .lg2-balance__val--pay  { color: #b91c1c; }
+
+    /* 売掛・買掛タブ */
+    .lg2-tabs { display: flex; gap: 4px; padding: 4px 14px 0; }
+    .lg2-tab { flex: 1; padding: 8px 6px; border-radius: 8px 8px 0 0; font-size: 12px; font-weight: 700;
+      border: 1px solid var(--uz-border); border-bottom: none; background: #fff; color: var(--uz-muted); cursor: pointer; }
+    .lg2-tab--active { background: var(--uz-accent, #2563eb); color: #fff; border-color: transparent; }
+
+    /* 元帳明細行 */
+    .lg2-row { display: grid; grid-template-columns: 82px 1fr auto; align-items: center; gap: 6px;
+      padding: 8px 4px; border-top: 1px solid var(--uz-border); font-size: 12px; }
+    .lg2-row:first-child { border-top: none; }
+    .lg2-row__date { color: var(--uz-muted); font-variant-numeric: tabular-nums; }
+    .lg2-row__name { color: var(--uz-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .lg2-row__amt { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .lg2-row__paid { font-size: 10px; color: #166534; margin-left: 6px; }
+    .lg2-row__unpaid { font-size: 10px; color: #b91c1c; margin-left: 6px; font-weight: 700; }
+
+    /* 税率別消費税集計テーブル */
+    .lg2-tax { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .lg2-tax th, .lg2-tax td { padding: 8px 6px; border-bottom: 1px solid var(--uz-border); }
+    .lg2-tax th { background: var(--uz-bg, #f8fafc); font-size: 11px; color: var(--uz-muted); font-weight: 700; text-align: left; }
+    .lg2-tax td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    .lg2-tax tr.lg2-tax__total td { border-top: 2px solid var(--uz-text); font-weight: 700; }
+    .lg2-tax__side { font-size: 12px; font-weight: 700; color: var(--uz-text); margin: 6px 0 4px; padding: 0 4px; }
+    .lg2-tax__estimate { padding: 10px 14px; font-size: 12px; color: var(--uz-text); border-top: 1px solid var(--uz-border); background: var(--uz-bg, #f8fafc); }
+    .lg2-tax__estimate b { color: var(--uz-accent, #2563eb); font-variant-numeric: tabular-nums; font-size: 14px; }
+    .lg2-note { padding: 8px 14px 10px; font-size: 11px; color: var(--uz-muted); line-height: 1.6; }
+
+    /* 科目別元帳の二段深堀り展開（既存 pl-detail-row を明細行付きに拡張） */
+    .pl-detail-row--drillable { cursor: pointer; user-select: none; position: relative; padding-right: 20px; }
+    .pl-detail-row--drillable::after { content: ''; position: absolute; right: 4px; top: 50%; width: 6px; height: 6px;
+      border-right: 2px solid var(--uz-muted); border-bottom: 2px solid var(--uz-muted); transform: translateY(-70%) rotate(45deg); transition: transform .15s ease; }
+    .pl-detail-row--drillable.pl-detail-row--open::after { transform: translateY(-30%) rotate(-135deg); }
+    .pl-ledger { padding: 6px 8px 6px 14px; background: #fafafa; border-top: 1px dashed var(--uz-border); }
+    .pl-ledger__row { display: grid; grid-template-columns: 72px 1fr auto auto auto auto; gap: 6px; padding: 4px 0; font-size: 11px; align-items: center; }
+    .pl-ledger__row--head { color: var(--uz-muted); font-weight: 700; border-bottom: 1px solid var(--uz-border); padding-bottom: 6px; margin-bottom: 4px; }
+    .pl-ledger__num { text-align: right; font-variant-numeric: tabular-nums; }
+    .pl-ledger__empty { text-align: center; color: var(--uz-muted); font-size: 11px; padding: 8px 0; }
+  </style>
 </head>
 <body>
 
@@ -94,8 +151,45 @@
 
     <!-- PLテーブル（月次） -->
     <div id="pl-table" class="pl-table" role="region" aria-label="月次損益">
-      <!-- pl.js が描画 -->
+      <!-- pl.js が描画・科目▼展開の 2 段目に取引明細（元帳）を表示（会計元帳 ①） -->
     </div>
+
+    <!-- 会計元帳 ②：売掛金・買掛金元帳＋残高（read-only・書き込みなし） -->
+    <section class="lg2-section" aria-label="売掛金・買掛金元帳">
+      <h2 class="lg2-section__title"><i class="ti ti-scale-outline" aria-hidden="true"></i>売掛金・買掛金（元帳・残高）</h2>
+      <div class="lg2-card">
+        <div class="lg2-balance">
+          <div class="lg2-balance__cell">
+            <div class="lg2-balance__label">売掛金残高（未入金累計）</div>
+            <div class="lg2-balance__val lg2-balance__val--recv" id="lg2-recv-balance">—</div>
+          </div>
+          <div class="lg2-balance__cell">
+            <div class="lg2-balance__label">買掛金残高（未払累計）</div>
+            <div class="lg2-balance__val lg2-balance__val--pay" id="lg2-pay-balance">—</div>
+          </div>
+        </div>
+        <div class="lg2-tabs" role="tablist" aria-label="元帳タイプ">
+          <button type="button" class="lg2-tab lg2-tab--active" data-side="recv" role="tab" aria-selected="true">売掛金</button>
+          <button type="button" class="lg2-tab" data-side="pay" role="tab">買掛金</button>
+        </div>
+        <div class="lg2-card__body" id="lg2-ledger-body">
+          <div class="lg2-empty">読み込み中…</div>
+        </div>
+        <p class="lg2-note">当月に発生または消込された行を時系列表示。残高は月に依らず全期間累計（未消込の税込金額合計）。</p>
+      </div>
+    </section>
+
+    <!-- 会計元帳 ③：税率別消費税集計（read-only・課税標準額・消費税額を 8%/10%/0% で区分） -->
+    <section class="lg2-section" aria-label="税率別消費税集計">
+      <h2 class="lg2-section__title"><i class="ti ti-receipt-tax" aria-hidden="true"></i>税率別消費税集計（インボイス対応）</h2>
+      <div class="lg2-card" id="lg2-tax-card">
+        <div class="lg2-card__body" id="lg2-tax-body">
+          <div class="lg2-empty">読み込み中…</div>
+        </div>
+        <div class="lg2-tax__estimate" id="lg2-tax-estimate">—</div>
+        <p class="lg2-note">売上・仕入原価・販管費を税率区分（8%/10%/0%）で集計。純納付見込は「売上消費税 − 仕入税額控除（仕入原価＋販管費の消費税額）」の当月概算（免税事業者を除く）。</p>
+      </div>
+    </section>
 
     <!-- 税理士用CSV DL（カード型） -->
     <div class="tax-dl-card">

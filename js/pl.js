@@ -193,6 +193,11 @@ async function renderMonthly() {
   }
 
   renderPLTable(plData, prevPlData);
+
+  // 会計元帳ビュー（v0.15.0・IT導入補助金 インボイス対応類型 登録の会計 1 機能）
+  //   ②売掛金・買掛金元帳＋残高／③税率別消費税集計 を描画（read-only・書き込みなし）
+  //   ①科目別元帳は既存 pl-accordion-detail の 2 段目として本ファイル末尾で拡張
+  renderLedgerSections(currentPeriod).catch(err => console.warn('[ledger sections]', err));
 }
 
 /* ── 年度累計描画 ────────────────────────────────────────── */
@@ -460,4 +465,273 @@ function bindTaxDownload() {
     const to   = toSel?.value   || curMonth;
     downloadTaxCSVByRange(from, to, btn);
   });
+}
+
+/* ══════════════════════════════════════════════════════════
+   会計元帳ビュー（v0.15.0・IT導入補助金 インボイス対応類型 登録の会計 1 機能）
+   3 機能：①科目別元帳（既存 pl-accordion-detail の 2 段目・下部で togglePlAccordion 拡張）
+          ②売掛金・買掛金元帳＋残高（getReceivablePayableLedger 経由）
+          ③税率別消費税集計（既存 uzFetchHistory から client 側決定論的算出）
+   read-only・書き込みなし・全 clientId 同一ロジック（特定 clientId ハードコードなし）
+   ══════════════════════════════════════════════════════════ */
+
+const _lg2State = { currentSide: 'recv', lastRp: null };
+
+async function renderLedgerSections(monthStr) {
+  const body = document.getElementById('lg2-ledger-body');
+  const taxBody = document.getElementById('lg2-tax-body');
+  if (!body || !taxBody) return; // 損益タブ以外なら skip
+  body.innerHTML = '<div class="lg2-empty">読み込み中…</div>';
+  taxBody.innerHTML = '<div class="lg2-empty">読み込み中…</div>';
+
+  // ②売掛/買掛：新 API 経由（残高は累計・entries は month で絞込）
+  let rp = null;
+  try {
+    const res = await callGAS('getReceivablePayableLedger', { month: monthStr });
+    if (res?.status === 'ok') rp = res.data;
+  } catch (err) {
+    console.warn('[getReceivablePayableLedger]', err);
+  }
+  _lg2State.lastRp = rp;
+  renderReceivablePayable();
+  bindLedgerTabs();
+
+  // ③税率別消費税：既存 getHistory から client 側算出
+  const history = await uzFetchHistory(monthStr);
+  renderTaxByRate(history);
+}
+
+function bindLedgerTabs() {
+  document.querySelectorAll('.lg2-tab').forEach(btn => {
+    if (btn.dataset._lg2Bound) return;
+    btn.dataset._lg2Bound = '1';
+    btn.addEventListener('click', () => {
+      _lg2State.currentSide = btn.dataset.side;
+      document.querySelectorAll('.lg2-tab').forEach(b =>
+        b.classList.toggle('lg2-tab--active', b === btn)
+      );
+      document.querySelectorAll('.lg2-tab').forEach(b =>
+        b.setAttribute('aria-selected', String(b === btn))
+      );
+      renderReceivablePayable();
+    });
+  });
+}
+
+function renderReceivablePayable() {
+  const body = document.getElementById('lg2-ledger-body');
+  const recvEl = document.getElementById('lg2-recv-balance');
+  const payEl = document.getElementById('lg2-pay-balance');
+  const rp = _lg2State.lastRp;
+  if (!body || !recvEl || !payEl) return;
+  if (!rp) {
+    body.innerHTML = '<div class="lg2-empty">元帳データを取得できませんでした。</div>';
+    recvEl.textContent = '—';
+    payEl.textContent = '—';
+    return;
+  }
+  recvEl.textContent = formatYen(rp.receivableBalance || 0);
+  payEl.textContent = formatYen(rp.payableBalance || 0);
+  const entries = _lg2State.currentSide === 'pay' ? (rp.payable || []) : (rp.receivable || []);
+  if (entries.length === 0) {
+    body.innerHTML = '<div class="lg2-empty">当月の発生・消込はありません。</div>';
+    return;
+  }
+  body.innerHTML = entries.map(e => {
+    const statusHtml = e.reconciled
+      ? `<span class="lg2-row__paid">✓ ${escHtml(e.paidDate || '')}</span>`
+      : `<span class="lg2-row__unpaid">未消込</span>`;
+    return `
+      <div class="lg2-row">
+        <span class="lg2-row__date">${escHtml(e.date || '')}</span>
+        <span class="lg2-row__name">${escHtml(e.itemName || '不明')}${statusHtml}</span>
+        <span class="lg2-row__amt">${formatYen(e.amountIncl || 0)}</span>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderTaxByRate(history) {
+  const taxBody = document.getElementById('lg2-tax-body');
+  const estEl = document.getElementById('lg2-tax-estimate');
+  if (!taxBody || !estEl) return;
+
+  const buckets = {
+    sales: {},        // rate → { base, tax }
+    cogs:  {},
+    sga:   {}
+  };
+  function init(side, rate) {
+    if (!buckets[side][rate]) buckets[side][rate] = { base: 0, tax: 0 };
+    return buckets[side][rate];
+  }
+  (history || []).forEach(r => {
+    const rate = Number(r.taxRate) || 0;
+    const tax  = Number(r.taxAmount) || 0;
+    const amountIncl = Number(r.amount) || 0;
+    const base = amountIncl - tax;
+    if (r.type === 'sales') {
+      const b = init('sales', rate); b.base += base; b.tax += tax;
+    } else if (r.type === 'cost') {
+      const side = String(r.divisionCode) === '1' ? 'cogs' : 'sga';
+      const b = init(side, rate); b.base += base; b.tax += tax;
+    }
+  });
+
+  const rateOrder = [10, 8, 0];
+  function renderSide(label, byRate) {
+    const rates = Object.keys(byRate).map(Number).sort((a, b) => (rateOrder.indexOf(b) - rateOrder.indexOf(a)) || (b - a));
+    const rows = rates.length === 0
+      ? `<tr><td colspan="3" class="lg2-empty">当月データなし</td></tr>`
+      : rates.map(rate => {
+          const v = byRate[rate];
+          return `<tr>
+            <td>${rate}%</td>
+            <td class="num">${formatYen(v.base)}</td>
+            <td class="num">${formatYen(v.tax)}</td>
+          </tr>`;
+        }).join('');
+    const totalBase = rates.reduce((s, r) => s + byRate[r].base, 0);
+    const totalTax  = rates.reduce((s, r) => s + byRate[r].tax,  0);
+    const totalRow = rates.length > 0
+      ? `<tr class="lg2-tax__total"><td>合計</td><td class="num">${formatYen(totalBase)}</td><td class="num">${formatYen(totalTax)}</td></tr>`
+      : '';
+    return `
+      <div class="lg2-tax__side">${label}</div>
+      <table class="lg2-tax">
+        <thead><tr><th>税率</th><th style="text-align:right;">課税標準額</th><th style="text-align:right;">消費税額</th></tr></thead>
+        <tbody>${rows}${totalRow}</tbody>
+      </table>
+    `;
+  }
+
+  taxBody.innerHTML =
+    renderSide('売上', buckets.sales) +
+    renderSide('仕入原価', buckets.cogs) +
+    renderSide('販管費', buckets.sga);
+
+  const salesTax = Object.values(buckets.sales).reduce((s, v) => s + v.tax, 0);
+  const cogsTax  = Object.values(buckets.cogs).reduce((s, v) => s + v.tax, 0);
+  const sgaTax   = Object.values(buckets.sga).reduce((s, v) => s + v.tax, 0);
+  const payable  = salesTax - cogsTax - sgaTax;
+  estEl.innerHTML =
+    `純納付見込（当月概算）：<b>${formatYen(payable)}</b>　＝　売上消費税 ${formatYen(salesTax)} − 仕入税額控除 ${formatYen(cogsTax + sgaTax)}`;
+}
+
+/* ── 科目別元帳の二段深堀り展開（togglePlAccordion 拡張・pl.html 専用）─────
+   app.js の共通版を pl.html 上で override（redefine）。同 key 名で hoisting により
+   本定義が最終＝ pl.html 経由のクリックはここに来る（home.js には無影響）。
+   1 段目：カテゴリ/科目名 別合計（既存 _plBreakdown 参照）— これを開いた時、
+   各行を drillable 表示にしてクリック→ 2 段目に取引明細（時系列・税抜/税率/消費税/税込）を表示。 */
+function togglePlAccordion(key) {
+  const detail = document.getElementById(`pl-detail-${key}`);
+  const chev   = document.getElementById(`pl-chev-${key}`);
+  const btn    = detail?.previousElementSibling;
+  if (!detail) return;
+  const isOpen = !detail.hidden;
+  if (isOpen) {
+    detail.hidden = true;
+    chev?.classList.remove('pl-chevron--open');
+    btn?.setAttribute('aria-expanded', 'false');
+    return;
+  }
+  const items = (typeof _plBreakdown !== 'undefined' && _plBreakdown[key]) || [];
+  if (items.length === 0) {
+    detail.innerHTML =
+      '<div class="pl-detail-row" style="color:var(--uz-text3);font-size:12px;padding:4px 0;">内訳データなし</div>';
+  } else {
+    // itemsに category があれば分類束ね（既存 payoff）＋ 各行 drillable
+    const hasAnyCategory = items.some(it => it.category && it.category.length);
+    if (!hasAnyCategory) {
+      detail.innerHTML = items.map((it, idx) => renderDrillableRow(key, idx, it)).join('');
+    } else {
+      const groups = {};
+      items.forEach((it, idx) => {
+        const g = it.category && it.category.length ? it.category : '未分類';
+        if (!groups[g]) groups[g] = { total: 0, items: [] };
+        groups[g].total += it.amt;
+        groups[g].items.push({ ...it, __idx: idx });
+      });
+      const entries = Object.entries(groups).sort((a, b) => b[1].total - a[1].total);
+      detail.innerHTML = entries.map(([groupName, g]) => `
+        <div class="pl-detail-row" style="font-weight:700;color:var(--uz-text);">
+          <span class="pl-detail-row__name">${uzEscHtml(groupName)}</span>
+          <span class="pl-detail-row__val">${formatYen(g.total)}</span>
+        </div>
+        ${g.items.map(it => renderDrillableRow(key, it.__idx, it, true)).join('')}
+      `).join('');
+    }
+  }
+  detail.hidden = false;
+  chev?.classList.add('pl-chevron--open');
+  btn?.setAttribute('aria-expanded', 'true');
+}
+
+function renderDrillableRow(key, idx, it, indented) {
+  const style = indented ? 'padding-left:16px;' : '';
+  return `
+    <div class="pl-detail-row pl-detail-row--drillable" style="${style}"
+         onclick="togglePlLedger('${key}', ${idx}, this)">
+      <span class="pl-detail-row__name">${uzEscHtml(it.name)}</span>
+      <span class="pl-detail-row__val">${formatYen(it.amt)}</span>
+    </div>
+    <div class="pl-ledger" id="pl-ledger-${key}-${idx}" hidden></div>
+  `;
+}
+
+async function togglePlLedger(key, idx, rowEl) {
+  const container = document.getElementById(`pl-ledger-${key}-${idx}`);
+  if (!container) return;
+  const isOpen = !container.hidden;
+  rowEl?.classList.toggle('pl-detail-row--open', !isOpen);
+  if (isOpen) { container.hidden = true; return; }
+
+  const items = (typeof _plBreakdown !== 'undefined' && _plBreakdown[key]) || [];
+  const subject = items[idx]?.name;
+  if (!subject) { container.innerHTML = '<div class="pl-ledger__empty">対象科目なし</div>'; container.hidden = false; return; }
+  // key は 'sales' / 'cogs' / 'sga' / 'sales-ytd' 等。年度累計 (ytd) は月データ非対応＝ skip 表示。
+  if (String(key).endsWith('-ytd')) {
+    container.innerHTML = '<div class="pl-ledger__empty">年度累計では明細を表示できません（月次タブで開いてください）</div>';
+    container.hidden = false;
+    return;
+  }
+  const rows = await uzFetchHistory(currentPeriod);
+  const filtered = (rows || []).filter(r => {
+    if (key.startsWith('sales') && r.type !== 'sales') return false;
+    if (key.startsWith('cogs') && !(r.type === 'cost' && String(r.divisionCode) === '1')) return false;
+    if (key.startsWith('sga')  && !(r.type === 'cost' && String(r.divisionCode) !== '1')) return false;
+    return (r.itemName || (r.type === 'sales' ? '売上' : '経費')) === subject;
+  }).sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+
+  if (filtered.length === 0) {
+    container.innerHTML = '<div class="pl-ledger__empty">明細なし</div>';
+  } else {
+    const head = `
+      <div class="pl-ledger__row pl-ledger__row--head">
+        <span>日付</span><span>相手先/摘要</span>
+        <span class="pl-ledger__num">税抜</span>
+        <span class="pl-ledger__num">税率</span>
+        <span class="pl-ledger__num">消費税</span>
+        <span class="pl-ledger__num">税込</span>
+      </div>`;
+    const rowsHtml = filtered.map(r => {
+      const amt  = Number(r.amount) || 0;
+      const tax  = Number(r.taxAmount) || 0;
+      const rate = Number(r.taxRate) || 0;
+      const base = amt - tax;
+      const label = r.memo || r.itemName || '';
+      return `
+        <div class="pl-ledger__row">
+          <span>${uzEscHtml(r.date || '')}</span>
+          <span>${uzEscHtml(label)}</span>
+          <span class="pl-ledger__num">${formatYen(base)}</span>
+          <span class="pl-ledger__num">${rate}%</span>
+          <span class="pl-ledger__num">${formatYen(tax)}</span>
+          <span class="pl-ledger__num">${formatYen(amt)}</span>
+        </div>
+      `;
+    }).join('');
+    container.innerHTML = head + rowsHtml;
+  }
+  container.hidden = false;
 }
