@@ -4905,7 +4905,7 @@ function deletePurchaseCategory(data) {
 // 1 回きり実行関数（Apps Script エディタから手動実行）＝ 完了後は R5 準拠で撤去。
 // idempotent（複数回実行しても安全）。
 // ============================================================
-function migration_v0_16_1_stripCategoryLinkage_() {
+function migration_v0_16_1_stripCategoryLinkage() {
   var sheet = _ss_().getSheetByName('settings');
   if (!sheet) return { status: 'error', message: 'settingsシートが見つかりません' };
 
@@ -4948,7 +4948,7 @@ function migration_v0_16_1_stripCategoryLinkage_() {
     }
   }
 
-  Logger.log('[migration_v0_16_1_stripCategoryLinkage_] result=' + JSON.stringify(result));
+  Logger.log('[migration_v0_16_1_stripCategoryLinkage] result=' + JSON.stringify(result));
   return { status: 'ok', result: result };
 }
 
