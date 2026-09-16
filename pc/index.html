@@ -43,6 +43,42 @@
       <div class="pl-chart-wrap">
         <canvas id="pl-chart"></canvas>
       </div>
+
+      <!-- 会計元帳ビュー（v0.15.0/v0.16.1・IT 導入補助金 インボイス対応類型 登録の会計 1 機能）
+           G シリーズ共通の土台＝ ①科目別元帳（2 段深堀り＝ 上部 P&L テーブルで対応）／
+           ②売掛金・買掛金元帳＋残高／③税率別消費税集計 -->
+      <div class="pc-card" id="pc-ledger-card">
+        <div class="pc-filter-row" style="flex-wrap:wrap;gap:12px;">
+          <span style="font-weight:600;">会計元帳ビュー</span>
+          <label>対象月
+            <select id="pc-ledger-month" class="pc-select" aria-label="対象月"></select>
+          </label>
+          <span class="text-muted" style="font-size:11px;">売掛/買掛残高は累計・月フィルタは entries のみ</span>
+        </div>
+
+        <!-- ②売掛金・買掛金元帳＋残高 -->
+        <div style="margin-top:12px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:8px;">
+            <div style="display:flex;gap:4px;">
+              <button type="button" class="pc-btn pc-ledger-tab pc-ledger-tab--active" data-side="recv">売掛金</button>
+              <button type="button" class="pc-btn pc-btn--ghost pc-ledger-tab" data-side="pay">買掛金</button>
+            </div>
+            <div style="font-size:13px;color:var(--uz-text2);display:flex;gap:16px;flex-wrap:wrap;">
+              <span>売掛残高: <b id="pc-ledger-recv-balance" style="color:var(--uz-text);">—</b></span>
+              <span>買掛残高: <b id="pc-ledger-pay-balance" style="color:var(--uz-text);">—</b></span>
+            </div>
+          </div>
+          <div id="pc-ledger-body" style="border:1px solid var(--uz-border,#e5e7eb);border-radius:6px;overflow:hidden;"></div>
+        </div>
+
+        <!-- ③税率別消費税集計 -->
+        <div style="margin-top:20px;">
+          <div style="font-weight:600;margin-bottom:8px;">税率別消費税集計</div>
+          <div id="pc-tax-body"></div>
+          <div id="pc-tax-estimate" style="margin-top:8px;padding:8px 12px;background:rgba(0,0,0,0.03);border-radius:6px;font-size:13px;"></div>
+        </div>
+      </div>
+
       <!-- 直近入力 -->
       <div class="pc-card" id="pc-recent-card">
         <div class="pc-filter-row">

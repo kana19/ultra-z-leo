@@ -685,28 +685,21 @@ function getSummary(month) {
   var mon  = Number(parts[1]);
   var sales = 0, cogs = 0, sga = 0;
 
-  // 2026-08-29：大分類 payoff（サービスマスタ/仕入原価マスタの category を集計）。
-  //   serviceList[i].category → 売上の大分類（サービス販売チャネル大分類 等）
-  //   purchaseMasterList[i].category → 仕入原価の大分類（仕入原価大分類 等）
-  //   販管費は青色申告固定＝科目名グルーピング（従来通り）。
-  //   pc-home.js の breakdownRows は {name, amount} 配列を期待するので、
-  //   {name: category or 未分類, amount: 合計} の形で返す。
-  var settings = ss.getSheetByName('settings');
-  function _parseCell_(cell) {
-    try { var v = settings ? settings.getRange(cell).getValue() : ''; return v ? JSON.parse(v) : []; }
-    catch (e) { return []; }
-  }
-  var svcCat = {}, purCat = {};
-  _parseCell_('B3').forEach(function (s) {
-    if (s && s.id) svcCat[String(s.id)] = String(s.category || '').trim();
-    if (s && s.name) svcCat['name:' + String(s.name)] = String(s.category || '').trim();
-  });
-  _parseCell_('B5').forEach(function (p) {
-    if (p && p.id) purCat[String(p.id)] = String(p.category || '').trim();
-    if (p && p.name) purCat['name:' + String(p.name)] = String(p.category || '').trim();
-  });
+  // v0.16.1（2026-09-16）：分類集計は登録時属性（シート列）から。
+  //   売上シート r[21]=serviceChannelCode / r[22]=serviceChannelName（v0.16.0 で追加された分類タグ）
+  //   コストシート r[22]=purchaseCategoryCode / r[23]=purchaseCategoryName（仕入原価のみ・販管費は分類なし）
+  //   マスタ 1 対 1 紐付け（旧 serviceList[i].category / purchaseMasterList[i].category）は撤廃済。
+  //   2 段深堀り（分類 → 科目）用に items[] を含む形で返す＝ pc-home.js の 2 段階層 render に対応：
+  //   salesBreakdown: [{ name: 分類名, amount: 合計, items: [{name: 科目名, amount: 合計}] }]
+  //   販管費は分類なしゆえ従来通りの 1 段（items:[] 空配列）。
   var UNCAT = '未分類';
   var salesByCat = {}, cogsByCat = {}, sgaBySubject = {};
+
+  function _bumpTwoLayer_(bucket, catName, itemName, amt) {
+    if (!bucket[catName]) bucket[catName] = { total: 0, items: {} };
+    bucket[catName].total += amt;
+    bucket[catName].items[itemName] = (bucket[catName].items[itemName] || 0) + amt;
+  }
 
   var salesSheet = ss.getSheetByName('売上');
   if (salesSheet && salesSheet.getLastRow() > 1) {
@@ -715,9 +708,11 @@ function getSummary(month) {
       if (Number(r[1]) === year && Number(r[2]) === mon) {
         var amt = Number(r[11]) || 0;
         sales += amt;
-        // r[5]=serviceCode（マスタ経由）／r[6]=科目名（自由入力売上フォールバック）
-        var cat = svcCat[String(r[5] || '')] || svcCat['name:' + String(r[6] || '')] || UNCAT;
-        salesByCat[cat] = (salesByCat[cat] || 0) + amt;
+        // 分類名＝ 登録時属性の serviceChannelName（r[22]）。空欄は「未分類」。
+        // 科目名＝ r[6]（サービス名 or 諸口）／ r[4]（売上対象）。
+        var catName = String(r[22] || '').trim() || UNCAT;
+        var itemName = String(r[6] || r[4] || '不明').trim();
+        _bumpTwoLayer_(salesByCat, catName, itemName, amt);
       }
     });
   }
@@ -729,51 +724,53 @@ function getSummary(month) {
         var amt = Number(r[11]) || 0;
         if (String(r[3]) === '1') {
           cogs += amt;
-          var cat2 = purCat[String(r[5] || '')] || purCat['name:' + String(r[6] || '')] || UNCAT;
-          cogsByCat[cat2] = (cogsByCat[cat2] || 0) + amt;
+          // 仕入原価：分類名＝ purchaseCategoryName（r[23]）／ 科目名＝ r[6]（品目名）
+          var catName2 = String(r[23] || '').trim() || UNCAT;
+          var itemName2 = String(r[6] || r[4] || '不明').trim();
+          _bumpTwoLayer_(cogsByCat, catName2, itemName2, amt);
         } else {
           sga += amt;
-          var name = String(r[6] || '不明');
+          // 販管費：分類なし＝ 科目名で 1 段集計（現状維持）
+          var name = String(r[6] || '不明').trim();
           sgaBySubject[name] = (sgaBySubject[name] || 0) + amt;
         }
       }
     });
   }
-  function _toArr_(obj) {
-    return Object.keys(obj).map(function (k) { return { name: k, amount: obj[k] }; })
-      .sort(function (a, b) { return b.amount - a.amount; });
+  function _twoLayerToArr_(bucket) {
+    return Object.keys(bucket).map(function(catName) {
+      var itemsObj = bucket[catName].items;
+      var items = Object.keys(itemsObj).map(function(k) { return { name: k, amount: itemsObj[k] }; })
+        .sort(function(a, b) { return b.amount - a.amount; });
+      return { name: catName, amount: bucket[catName].total, items: items };
+    }).sort(function(a, b) { return b.amount - a.amount; });
+  }
+  function _oneLayerToArr_(obj) {
+    return Object.keys(obj).map(function(k) { return { name: k, amount: obj[k], items: [] }; })
+      .sort(function(a, b) { return b.amount - a.amount; });
   }
   return { status: 'ok', data: {
     month: month, sales: sales, cogs: cogs,
     grossProfit: sales - cogs, sga: sga,
     operatingProfit: sales - cogs - sga,
-    salesBreakdown: _toArr_(salesByCat),
-    cogsBreakdown:  _toArr_(cogsByCat),
-    sgaBreakdown:   _toArr_(sgaBySubject)
+    salesBreakdown: _twoLayerToArr_(salesByCat),
+    cogsBreakdown:  _twoLayerToArr_(cogsByCat),
+    sgaBreakdown:   _oneLayerToArr_(sgaBySubject)
   }};
 }
 
 /**
- * 科目別内訳をカテゴリ単位でグルーピングして返す（サービス分類 payoff・07_命名は無関係）。
- *   売上 → serviceList の category で集計（r[5]=serviceCode→settings B3）
- *   仕入原価（区分1）→ purchaseMasterList の category で集計（r[5]=costCode→settings B5）
- *   販管費（区分2）→ 青色申告科目名で集計（固定コード＝ユーザー分類なし・r[6]=科目名）
- * 列は getSummary と同一実スキーマ（r[1]年 r[2]月 r[3]区分 r[5]コード r[6]科目名 r[11]税込）。
+ * 科目別内訳をカテゴリ単位でグルーピングして返す（v0.16.1 で登録時属性ベースに変更）。
+ *   売上 → r[22]=serviceChannelName（v0.16.0 登録時属性・空欄は「未分類」）
+ *   仕入原価（区分1）→ r[23]=purchaseCategoryName（同上）
+ *   販管費（区分2）→ 青色申告科目名で集計（分類なし・r[6]=科目名）
+ * 列は getSummary と同一実スキーマ。マスタ 1 対 1 紐付け（旧 category）は撤廃済。
  */
 function getCategoryBreakdown(month) {
   var ss = _ss_();
   var parts = String(month || '').split('-');
   var year = Number(parts[0]);
   var mon  = Number(parts[1]);
-  var settings = ss.getSheetByName('settings');
-  function parseList(cell) {
-    try { var v = settings ? settings.getRange(cell).getValue() : ''; return v ? JSON.parse(v) : []; }
-    catch (e) { return []; }
-  }
-  var svcCat = {}, purCat = {};
-  parseList('B3').forEach(function (s) { if (s && s.id) svcCat[String(s.id)] = String(s.category || '').trim(); });
-  parseList('B5').forEach(function (p) { if (p && p.id) purCat[String(p.id)] = String(p.category || '').trim(); });
-
   var UNCAT = '未分類';
   var salesByCat = {}, cogsByCat = {}, sgaBySubject = {};
 
@@ -782,7 +779,7 @@ function getCategoryBreakdown(month) {
     salesSheet.getDataRange().getValues().slice(1).forEach(function (r) {
       if (!r[0]) return;
       if (Number(r[1]) !== year || Number(r[2]) !== mon) return;
-      var cat = svcCat[String(r[5] || '')] || UNCAT;
+      var cat = String(r[22] || '').trim() || UNCAT;
       salesByCat[cat] = (salesByCat[cat] || 0) + (Number(r[11]) || 0);
     });
   }
@@ -793,7 +790,7 @@ function getCategoryBreakdown(month) {
       if (Number(r[1]) !== year || Number(r[2]) !== mon) return;
       var amt = Number(r[11]) || 0;
       if (String(r[3]) === '1') {
-        var cat = purCat[String(r[5] || '')] || UNCAT;
+        var cat = String(r[23] || '').trim() || UNCAT;
         cogsByCat[cat] = (cogsByCat[cat] || 0) + amt;
       } else {
         var name = String(r[6] || '不明');

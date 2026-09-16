@@ -8,12 +8,17 @@ const curMonth = now.getMonth() + 1;
 
 const expandedSections = { sales: false, cogs: false, sga: false };
 
+// v0.16.1（2026-09-16）：会計元帳ビュー state（G シリーズ共通の土台）
+const _pcLedgerState = { currentSide: 'recv', lastRp: null };
+
 document.addEventListener('DOMContentLoaded', async () => {
   pcBootstrap('index.html', 'ホーム（損益概観）');
   initYearSelect();
   initTaxDL();
+  initLedgerMonthSelect();
   await loadAndRender();
   loadRecentEntries();
+  loadLedgerSections();
 });
 
 function initTaxDL() {
@@ -141,31 +146,72 @@ function sumRow(label, vals) {
   return `<tr class="${cls}"><td>${label}</td>${cells}<td class="num col-total">${formatYen(total)}</td></tr>`;
 }
 
+/**
+ * v0.16.1（2026-09-16）：2 段深堀り階層 render（分類 → 科目）
+ *   getSummary の応答形式：{name: 分類名, amount: 合計, items:[{name: 科目名, amount: 合計}]}
+ *   売上・仕入原価は 2 段（分類レイヤ ▼＋ 科目レイヤ indent）／ 販管費は分類なしゆえ 1 段（items 空配列）。
+ *   販管費は items:[] ゆえ分類レイヤ ▼ を出さず科目名として直接表示。
+ */
 function breakdownRows(monthly, field) {
-  // 科目名をユニオン
-  const nameSet = new Set();
+  // 分類名をユニオン（全月にまたがる分類）
+  const catSet = new Set();
   monthly.forEach(d => {
     if (d && Array.isArray(d[field])) {
-      d[field].forEach(b => { if (b && b.name) nameSet.add(b.name); });
+      d[field].forEach(b => { if (b && b.name) catSet.add(b.name); });
     }
   });
-  const names = [...nameSet];
-  if (names.length === 0) {
+  const cats = [...catSet];
+  if (cats.length === 0) {
     return [`<tr class="pl-row--sub"><td>（データなし）</td>${MONTHS.map(() => '<td class="num">—</td>').join('')}<td class="num col-total">—</td></tr>`];
   }
-  return names.map(name => {
-    const vals = monthly.map(d => {
+  const rows = [];
+  cats.forEach(catName => {
+    // 分類レベル 12 ヶ月合計
+    const catVals = monthly.map(d => {
       if (!d || !Array.isArray(d[field])) return 0;
-      const item = d[field].find(b => b.name === name);
-      return item ? (Number(item.amount) || 0) : 0;
+      const catObj = d[field].find(b => b.name === catName);
+      return catObj ? (Number(catObj.amount) || 0) : 0;
     });
-    const total = vals.reduce((a,b) => a+b, 0);
-    const cells = vals.map((v, i) => {
-      const cur = (selYear === now.getFullYear() && (i+1) === curMonth);
+    const catTotal = catVals.reduce((a, b) => a + b, 0);
+    const catCells = catVals.map((v, i) => {
+      const cur = (selYear === now.getFullYear() && (i + 1) === curMonth);
       return `<td class="num${cur ? ' col-current' : ''}">${v ? formatYen(v) : '—'}</td>`;
     }).join('');
-    return `<tr class="pl-row--sub"><td>${escHtml(name)}</td>${cells}<td class="num col-total">${formatYen(total)}</td></tr>`;
+    // 科目名の union（全月分・items[] は分類ごと）
+    const itemSet = new Set();
+    monthly.forEach(d => {
+      if (!d || !Array.isArray(d[field])) return;
+      const catObj = d[field].find(b => b.name === catName);
+      if (catObj && Array.isArray(catObj.items)) {
+        catObj.items.forEach(it => { if (it && it.name) itemSet.add(it.name); });
+      }
+    });
+    const items = [...itemSet];
+    if (items.length === 0) {
+      // 販管費など分類レイヤなし＝ 分類名を科目名として直接出力（1 段のみ）
+      rows.push(`<tr class="pl-row--sub"><td style="padding-left:16px;">${escHtml(catName)}</td>${catCells}<td class="num col-total">${formatYen(catTotal)}</td></tr>`);
+    } else {
+      // 分類レベル行（▼＋ 分類名）
+      rows.push(`<tr class="pl-row--sub" style="background:rgba(0,0,0,0.03);font-weight:600;"><td style="padding-left:16px;">▼${escHtml(catName)}</td>${catCells}<td class="num col-total">${formatYen(catTotal)}</td></tr>`);
+      // 科目レベル行（indent 深く・分類配下の各科目）
+      items.forEach(itemName => {
+        const itemVals = monthly.map(d => {
+          if (!d || !Array.isArray(d[field])) return 0;
+          const catObj = d[field].find(b => b.name === catName);
+          if (!catObj || !Array.isArray(catObj.items)) return 0;
+          const it = catObj.items.find(i => i.name === itemName);
+          return it ? (Number(it.amount) || 0) : 0;
+        });
+        const itemTotal = itemVals.reduce((a, b) => a + b, 0);
+        const itemCells = itemVals.map((v, i) => {
+          const cur = (selYear === now.getFullYear() && (i + 1) === curMonth);
+          return `<td class="num${cur ? ' col-current' : ''}">${v ? formatYen(v) : '—'}</td>`;
+        }).join('');
+        rows.push(`<tr class="pl-row--sub"><td style="padding-left:36px;color:var(--uz-text2);">${escHtml(itemName)}</td>${itemCells}<td class="num col-total">${formatYen(itemTotal)}</td></tr>`);
+      });
+    }
   });
+  return rows;
 }
 
 /* ↑ renderTable を置き換え */
@@ -311,4 +357,193 @@ async function loadRecentEntries() {
     tbody.innerHTML = '';
     if (empty) empty.hidden = false;
   }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   会計元帳ビュー（v0.15.0/v0.16.1・IT 導入補助金 インボイス対応類型 登録の会計 1 機能）
+   G シリーズ共通の土台＝ ②売掛/買掛元帳＋残高／③税率別消費税集計 の 2 機能を実装。
+   ①科目別元帳は上部 P&L テーブルの 2 段深堀り階層 (▼分類→科目) で担保。
+   pl.js の実装 (PWA/iPad 側) を PC 版損益概観画面に移植。
+   read-only・書込みなし・全 clientId 同一ロジック（特定 clientId ハードコードなし・§◎ 再現性ルール準拠）
+   ══════════════════════════════════════════════════════════════════════ */
+
+function initLedgerMonthSelect() {
+  const sel = document.getElementById('pc-ledger-month');
+  if (!sel) return;
+  const n = new Date();
+  const curMonthKey = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`;
+  // 直近 24 ヶ月を選択肢に
+  for (let i = 0; i < 24; i++) {
+    const d = new Date(n.getFullYear(), n.getMonth() - i, 1);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    const opt = document.createElement('option');
+    opt.value = key;
+    opt.textContent = key;
+    if (key === curMonthKey) opt.selected = true;
+    sel.appendChild(opt);
+  }
+  sel.addEventListener('change', () => { loadLedgerSections(); });
+}
+
+async function loadLedgerSections() {
+  const sel = document.getElementById('pc-ledger-month');
+  const monthStr = sel ? sel.value : '';
+  if (!monthStr) return;
+  const body = document.getElementById('pc-ledger-body');
+  const taxBody = document.getElementById('pc-tax-body');
+  if (body) body.innerHTML = '<div style="padding:16px;text-align:center;color:var(--uz-text2);font-size:13px;">読み込み中…</div>';
+  if (taxBody) taxBody.innerHTML = '<div style="padding:16px;text-align:center;color:var(--uz-text2);font-size:13px;">読み込み中…</div>';
+
+  // ②売掛/買掛元帳＋残高（新 API・残高は累計・entries は month 絞込）
+  let rp = null;
+  try {
+    const res = await callGAS('getReceivablePayableLedger', { month: monthStr });
+    if (res && res.status === 'ok') rp = res.data;
+  } catch (err) {
+    console.warn('[getReceivablePayableLedger]', err);
+  }
+  _pcLedgerState.lastRp = rp;
+  renderPcReceivablePayable();
+  bindPcLedgerTabs();
+
+  // ③税率別消費税集計（既存 getHistory から client 側算出）
+  let history = [];
+  try {
+    const res = await callGAS('getHistory', { month: monthStr });
+    if (res && res.status === 'ok' && Array.isArray(res.data)) history = res.data;
+  } catch (err) {
+    console.warn('[getHistory]', err);
+  }
+  renderPcTaxByRate(history);
+}
+
+function bindPcLedgerTabs() {
+  document.querySelectorAll('.pc-ledger-tab').forEach(btn => {
+    if (btn.dataset._pcBound) return;
+    btn.dataset._pcBound = '1';
+    btn.addEventListener('click', () => {
+      _pcLedgerState.currentSide = btn.dataset.side;
+      document.querySelectorAll('.pc-ledger-tab').forEach(b => {
+        const isActive = (b === btn);
+        b.classList.toggle('pc-ledger-tab--active', isActive);
+        // ghost/primary の見た目切替
+        if (isActive) {
+          b.classList.remove('pc-btn--ghost');
+        } else {
+          b.classList.add('pc-btn--ghost');
+        }
+      });
+      renderPcReceivablePayable();
+    });
+  });
+}
+
+function renderPcReceivablePayable() {
+  const body = document.getElementById('pc-ledger-body');
+  const recvEl = document.getElementById('pc-ledger-recv-balance');
+  const payEl = document.getElementById('pc-ledger-pay-balance');
+  const rp = _pcLedgerState.lastRp;
+  if (!body || !recvEl || !payEl) return;
+  if (!rp) {
+    body.innerHTML = '<div style="padding:16px;text-align:center;color:var(--uz-text2);font-size:13px;">元帳データを取得できませんでした。</div>';
+    recvEl.textContent = '—';
+    payEl.textContent = '—';
+    return;
+  }
+  recvEl.textContent = formatYen(rp.receivableBalance || 0);
+  payEl.textContent = formatYen(rp.payableBalance || 0);
+  const entries = _pcLedgerState.currentSide === 'pay' ? (rp.payable || []) : (rp.receivable || []);
+  if (entries.length === 0) {
+    body.innerHTML = '<div style="padding:16px;text-align:center;color:var(--uz-text2);font-size:13px;">当月の発生・消込はありません。</div>';
+    return;
+  }
+  body.innerHTML = `
+    <table class="pl-table" style="width:100%;">
+      <thead>
+        <tr>
+          <th style="width:110px;">発生日</th>
+          <th>相手先/摘要</th>
+          <th class="num" style="width:130px;">税込金額</th>
+          <th style="width:150px;">状態</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${entries.map(e => {
+          const statusHtml = e.reconciled
+            ? `<span style="color:var(--uz-green,#28a745);">✓ 消込 ${escHtml(e.paidDate || '')}</span>`
+            : `<span style="color:var(--uz-red,#c0392b);">未消込</span>`;
+          return `<tr>
+            <td>${escHtml(e.date || '')}</td>
+            <td>${escHtml(e.itemName || '不明')}</td>
+            <td class="num">${formatYen(e.amountIncl || 0)}</td>
+            <td>${statusHtml}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+function renderPcTaxByRate(history) {
+  const taxBody = document.getElementById('pc-tax-body');
+  const estEl = document.getElementById('pc-tax-estimate');
+  if (!taxBody || !estEl) return;
+
+  const buckets = { sales: {}, cogs: {}, sga: {} };
+  function init(side, rate) {
+    if (!buckets[side][rate]) buckets[side][rate] = { base: 0, tax: 0 };
+    return buckets[side][rate];
+  }
+  (history || []).forEach(r => {
+    const rate = Number(r.taxRate) || 0;
+    const tax = Number(r.taxAmount) || 0;
+    const amountIncl = Number(r.amount) || 0;
+    const base = amountIncl - tax;
+    if (r.type === 'sales') {
+      const b = init('sales', rate); b.base += base; b.tax += tax;
+    } else if (r.type === 'cost') {
+      const side = String(r.divisionCode) === '1' ? 'cogs' : 'sga';
+      const b = init(side, rate); b.base += base; b.tax += tax;
+    }
+  });
+
+  const rateOrder = [10, 8, 0];
+  function renderSide(label, byRate) {
+    const rates = Object.keys(byRate).map(Number).sort((a, b) =>
+      (rateOrder.indexOf(b) - rateOrder.indexOf(a)) || (b - a));
+    if (rates.length === 0) {
+      return `<div style="margin-bottom:8px;"><div style="font-weight:600;font-size:13px;margin-bottom:4px;">${label}</div>
+        <div style="padding:8px 12px;background:rgba(0,0,0,0.02);border-radius:4px;color:var(--uz-text2);font-size:13px;">当月データなし</div></div>`;
+    }
+    const rows = rates.map(rate => {
+      const v = byRate[rate];
+      return `<tr><td>${rate}%</td><td class="num">${formatYen(v.base)}</td><td class="num">${formatYen(v.tax)}</td></tr>`;
+    }).join('');
+    const totalBase = rates.reduce((s, r) => s + byRate[r].base, 0);
+    const totalTax = rates.reduce((s, r) => s + byRate[r].tax, 0);
+    return `
+      <div style="margin-bottom:12px;">
+        <div style="font-weight:600;font-size:13px;margin-bottom:4px;">${label}</div>
+        <table class="pl-table" style="width:100%;">
+          <thead><tr><th style="width:80px;">税率</th><th class="num">課税標準額</th><th class="num">消費税額</th></tr></thead>
+          <tbody>${rows}
+            <tr style="background:rgba(0,0,0,0.03);font-weight:600;">
+              <td>合計</td><td class="num">${formatYen(totalBase)}</td><td class="num">${formatYen(totalTax)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>`;
+  }
+
+  taxBody.innerHTML =
+    renderSide('売上', buckets.sales) +
+    renderSide('仕入原価', buckets.cogs) +
+    renderSide('販管費', buckets.sga);
+
+  const salesTax = Object.values(buckets.sales).reduce((s, v) => s + v.tax, 0);
+  const cogsTax = Object.values(buckets.cogs).reduce((s, v) => s + v.tax, 0);
+  const sgaTax = Object.values(buckets.sga).reduce((s, v) => s + v.tax, 0);
+  const payable = salesTax - cogsTax - sgaTax;
+  estEl.innerHTML =
+    `純納付見込（当月概算）：<b>${formatYen(payable)}</b>　＝　売上消費税 ${formatYen(salesTax)} − 仕入税額控除 ${formatYen(cogsTax + sgaTax)}`;
 }
