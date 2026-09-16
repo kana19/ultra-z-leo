@@ -69,6 +69,8 @@ function doGet(e) {
       case 'ping':                      result = { status: 'ok', pong: Date.now(), scriptId: (function(){ try { return ScriptApp.getScriptId(); } catch (_e) { return ''; } })() }; break;
       case 'addSales':                  result = addSales(data);                          break;
       case 'addCost':                   result = addCost(data);                           break;
+      case 'addSalesBatch':             result = addSalesBatch(data);                     break;
+      case 'addCostBatch':              result = addCostBatch(data);                      break;
       case 'getSummary':                result = getSummary(data.month);                  break;
       case 'getCategoryBreakdown':      result = getCategoryBreakdown(data.month);        break;
       case 'getUnpaid':                 result = getUnpaid();                             break;
@@ -307,10 +309,87 @@ function addSales(data) {
     t.taxAmount, inAmt,
     data.memo || '', '', '',
     Number(data.uncollected) || 0, new Date(), new Date(), 0,
-    salesRowId,                                    // T列(20) 売上行ID（自動採番・取引ペア紐付けモデル）
-    isProject                                      // U列(21) 案件化フラグ（戦略思想§3-9-3 2画面分離モデル）
+    salesRowId,                                    // T列(20)
+    isProject,                                     // U列(21)
+    String(data.serviceChannelCode || ''),         // V列(22) v0.16.0 分類タグ
+    String(data.serviceChannelName || '')          // W列(23)
   ]);
   return { status: 'ok', salesRowId: salesRowId, rowIndex: sheet.getLastRow() };
+}
+
+/**
+ * v0.16.0（2026-09-16）：売上の複数行一括登録。5 秒問題起点 3（1 行登録ごとに全件 refetch）
+ *   の解消のため、N 行を 1 度の setValues で書き込み・N 回の doPost dispatch overhead を 1 回に集約。
+ * 入力：{items: [{date, customerCode, serviceCode, serviceName, miscItemName, amountInTax,
+ *                  taxRate, memo, uncollected, isProject}, ...]}
+ * 返り値：{status:'ok', results: [{rowIndex, salesRowId, taxExcluded, taxAmount, createdAt}, ...]}
+ */
+function addSalesBatch(data) {
+  var items = (data && Array.isArray(data.items)) ? data.items : [];
+  if (items.length === 0) return { status: 'ok', results: [] };
+  var sheet = getOrCreateSheet('売上');
+  var lastRow = sheet.getLastRow();
+  var sameDayMaxSeq = {};
+  if (lastRow >= 2) {
+    var idValues = sheet.getRange(2, 20, lastRow - 1, 1).getValues();
+    for (var i = 0; i < idValues.length; i++) {
+      var id = idValues[i][0];
+      if (typeof id === 'string' && /^s-\d{12}$/.test(id)) {
+        var ymd0 = id.substring(2, 10);
+        var seq0 = parseInt(id.substring(10), 10);
+        if (!isNaN(seq0)) sameDayMaxSeq[ymd0] = Math.max(sameDayMaxSeq[ymd0] || 0, seq0);
+      }
+    }
+  }
+  var now = new Date();
+  var rows = [];
+  var results = [];
+  for (var j = 0; j < items.length; j++) {
+    var d = items[j] || {};
+    var date = String(d.date || '');
+    var parts = date.split('-');
+    var rate = Number(d.taxRate) || 0;
+    var inAmt = Math.max(0, Math.floor(Number(d.amountInTax) || 0));
+    var t = calcTax_(inAmt, rate);
+    var ymd = date.replace(/-/g, '').substring(0, 8);
+    if (ymd.length < 8) ymd = Utilities.formatDate(now, 'Asia/Tokyo', 'yyyyMMdd');
+    var nextSeq = (sameDayMaxSeq[ymd] || 0) + 1;
+    sameDayMaxSeq[ymd] = nextSeq;
+    var seqStr = String(nextSeq);
+    while (seqStr.length < 4) seqStr = '0' + seqStr;
+    var salesRowId = 's-' + ymd + seqStr;
+    var isProject = String(d.isProject) === '1' ? '1' : '';
+    rows.push([
+      date, Number(parts[0]) || '', Number(parts[1]) || '',
+      d.customerCode || '', d.serviceName || '',
+      d.serviceCode  || '', d.serviceName || '',
+      d.miscItemName || '',
+      t.taxExcluded, rate,
+      t.taxAmount, inAmt,
+      d.memo || '', '', '',
+      Number(d.uncollected) || 0, now, now, 0,
+      salesRowId,
+      isProject,
+      String(d.serviceChannelCode || ''),
+      String(d.serviceChannelName || '')
+    ]);
+    results.push({
+      salesRowId: salesRowId,
+      taxExcluded: t.taxExcluded,
+      taxAmount: t.taxAmount,
+      amountInTax: inAmt,
+      taxRate: rate,
+      serviceChannelCode: String(d.serviceChannelCode || ''),
+      serviceChannelName: String(d.serviceChannelName || ''),
+      createdAt: now.getTime()
+    });
+  }
+  var startRow = sheet.getLastRow() + 1;
+  sheet.getRange(startRow, 1, rows.length, 23).setValues(rows);
+  for (var k = 0; k < results.length; k++) {
+    results[k].rowIndex = startRow + k;
+  }
+  return { status: 'ok', results: results };
 }
 
 /**
@@ -440,10 +519,71 @@ function addCost(data) {
     Number(data.unpaid) || 0, new Date(), new Date(), 0,
     Number(data.withholdingAmount) || 0,   // T列(20)
     String(data.clientId || ''),            // U列(21)
-    String(data.projectId || '')            // V列(22) 紐付け先売上行ID（取引ペア紐付けモデル）
+    String(data.projectId || ''),           // V列(22)
+    String(data.purchaseCategoryCode || ''),// W列(23) v0.16.0 分類タグ（仕入原価のみ）
+    String(data.purchaseCategoryName || '') // X列(24)
   ]);
 
   return { status: 'ok', rowIndex: sheet.getLastRow() };
+}
+
+/**
+ * v0.16.0（2026-09-16）：コストの複数行一括登録。addSalesBatch と対の実装。
+ * 入力：{items: [{date, divisionCode, divisionName, itemCode, itemName, miscItemName,
+ *                  taxIncluded, taxRate, memo, unpaid, withholdingAmount, clientId, projectId,
+ *                  subType, staffName}, ...]}
+ * 返り値：{status:'ok', results: [{rowIndex, taxExcluded, taxAmount, createdAt}, ...]}
+ */
+function addCostBatch(data) {
+  var items = (data && Array.isArray(data.items)) ? data.items : [];
+  if (items.length === 0) return { status: 'ok', results: [] };
+  var sheet = getOrCreateSheet('コスト');
+  var now = new Date();
+  var rows = [];
+  var results = [];
+  for (var j = 0; j < items.length; j++) {
+    var d = items[j] || {};
+    var date = String(d.date || '');
+    var parts = date.split('-');
+    var rate = Number(d.taxRate) || 0;
+    var inAmt = Math.max(0, Math.floor(Number(d.taxIncluded) || 0));
+    var t = calcTax_(inAmt, rate);
+    var itemCode = String(d.itemCode || '');
+    var miscItemName = d.miscItemName || '';
+    if (String(d.subType || '') === '20a' && String(d.staffName || '')) {
+      miscItemName = '[月次]' + String(d.staffName);
+    }
+    rows.push([
+      date, Number(parts[0]) || '', Number(parts[1]) || '',
+      d.divisionCode || '', d.divisionName || '',
+      itemCode, d.itemName || '',
+      miscItemName,
+      t.taxExcluded, rate,
+      t.taxAmount, inAmt,
+      d.memo || '', '', '',
+      Number(d.unpaid) || 0, now, now, 0,
+      Number(d.withholdingAmount) || 0,
+      String(d.clientId || ''),
+      String(d.projectId || ''),
+      String(d.purchaseCategoryCode || ''),
+      String(d.purchaseCategoryName || '')
+    ]);
+    results.push({
+      taxExcluded: t.taxExcluded,
+      taxAmount: t.taxAmount,
+      taxIncluded: inAmt,
+      taxRate: rate,
+      purchaseCategoryCode: String(d.purchaseCategoryCode || ''),
+      purchaseCategoryName: String(d.purchaseCategoryName || ''),
+      createdAt: now.getTime()
+    });
+  }
+  var startRow = sheet.getLastRow() + 1;
+  sheet.getRange(startRow, 1, rows.length, 24).setValues(rows);
+  for (var k = 0; k < results.length; k++) {
+    results[k].rowIndex = startRow + k;
+  }
+  return { status: 'ok', results: results };
 }
 
 function updateSales(data) {
@@ -773,6 +913,8 @@ function getHistory(month) {
         projectId: String(row[19] || ''),       // T列(20=index 19)・既存名義（後方互換のため残置）
         salesRowId: String(row[19] || ''),      // T列(20=index 19)・取引ペア紐付けモデル親キー
         isProject: String(row[20]).trim() === '1', // U列(21=index 20)・案件化フラグ（§3-9-3 2画面分離）
+        serviceChannelCode: String(row[21] || ''), // V列(22=index 21)・v0.16.0 分類タグ
+        serviceChannelName: String(row[22] || ''), // W列(23=index 22)
         updatedAt: (row[17] instanceof Date ? row[17].getTime() : (row[17] ? (new Date(row[17]).getTime() || 0) : 0)), // R列(18=index 17) 登録/更新日時
         createdAt: (row[16] instanceof Date ? row[16].getTime() : (row[16] ? (new Date(row[16]).getTime() || 0) : 0)), // Q列(17=index 16) 作成日時
         isLocked:  Number(row[18]) === 1        // S列(19=index 18)・ロックフラグ
@@ -803,6 +945,8 @@ function getHistory(month) {
         withholdingAmount: Number(row[19]) || 0,
         projectId: String(row[21] || ''),       // V列(22=index 21)・既存名義（後方互換のため残置）
         linkedSalesRowId: String(row[21] || ''),// V列(22=index 21)・紐付け先売上行ID（projectIdの別名）
+        purchaseCategoryCode: String(row[22] || ''), // W列(23=index 22)・v0.16.0 分類タグ（仕入原価のみ）
+        purchaseCategoryName: String(row[23] || ''), // X列(24=index 23)
         updatedAt: (row[17] instanceof Date ? row[17].getTime() : (row[17] ? (new Date(row[17]).getTime() || 0) : 0)), // R列(18=index 17) 登録/更新日時
         createdAt: (row[16] instanceof Date ? row[16].getTime() : (row[16] ? (new Date(row[16]).getTime() || 0) : 0)), // Q列(17=index 16) 作成日時
         isLocked: Number(row[18]) === 1         // S列(19=index 18)・ロックフラグ
@@ -843,11 +987,29 @@ function getOrCreateSheet(name) {
   if (!sheet) {
     sheet = ss.insertSheet(name);
     if (name === '売上') {
-      sheet.appendRow(['日付','年','月','顧客コード','売上対象','サービスコード','サービス','諸口品目名','金額(税抜)','税率','消費税','税込金額','メモ','入金日','入金額','未収フラグ','消込状況','登録日時','ロックフラグ','売上行ID','isProject']);
+      // v0.16.0（2026-09-16）：末尾に大分類コード（V列）・大分類名（W列）を追加。
+      //   月次入力の分類タグ（登録時属性）の格納先＝ serviceChannelList との紐付け。
+      sheet.appendRow(['日付','年','月','顧客コード','売上対象','サービスコード','サービス','諸口品目名','金額(税抜)','税率','消費税','税込金額','メモ','入金日','入金額','未収フラグ','消込状況','登録日時','ロックフラグ','売上行ID','isProject','大分類コード','大分類名']);
     } else if (name === 'コスト') {
-      sheet.appendRow(['日付','年','月','区分コード','経費区分','科目コード','科目','諸口科目名','金額(税抜)','税率','消費税','税込金額','メモ','支払日','支払額','未払フラグ','消込状況','登録日時','ロックフラグ','源泉徴収額','クライアントID','紐付け先売上行ID']);
+      // v0.16.0：末尾に大分類コード（W列）・大分類名（X列）を追加。
+      //   仕入原価（divisionCode='1'）の分類タグ格納先＝ purchaseCategoryList との紐付け。
+      //   販管費は現状維持（大分類なし・(b) 確定）。
+      sheet.appendRow(['日付','年','月','区分コード','経費区分','科目コード','科目','諸口科目名','金額(税抜)','税率','消費税','税込金額','メモ','支払日','支払額','未払フラグ','消込状況','登録日時','ロックフラグ','源泉徴収額','クライアントID','紐付け先売上行ID','大分類コード','大分類名']);
     }
     sheet.setFrozenRows(1);
+  }
+  // v0.16.0：末尾追加規律（00_原則.md §4-6-4）＝ header 実装列不足時のみ末尾に追加（idempotent）
+  //   判定は getLastColumn()（header 行の実装済み列数）を使う。getMaxColumns()（default 26）ではない。
+  if (name === '売上' && sheet.getLastColumn() < 23) {
+    if (sheet.getMaxColumns() < 23) {
+      sheet.insertColumnsAfter(sheet.getMaxColumns(), 23 - sheet.getMaxColumns());
+    }
+    sheet.getRange(1, 22, 1, 2).setValues([['大分類コード','大分類名']]);
+  } else if (name === 'コスト' && sheet.getLastColumn() < 24) {
+    if (sheet.getMaxColumns() < 24) {
+      sheet.insertColumnsAfter(sheet.getMaxColumns(), 24 - sheet.getMaxColumns());
+    }
+    sheet.getRange(1, 23, 1, 2).setValues([['大分類コード','大分類名']]);
   }
   return sheet;
 }

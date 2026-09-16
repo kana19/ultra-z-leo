@@ -18,10 +18,11 @@
 
       <!-- 月フィルタは廃止（指示書9§1：今月固定・列見出しフィルタで代替） -->
 
-      <!-- 行追加ボタン＋ページャ（指示書11§3：20件ページング・テーブル上部右） -->
+      <!-- 行追加ボタン＋一括登録＋ページャ（v0.16.0：一括登録ボタンで複数 draft を batch 送信） -->
       <section class="pc-add-buttons">
         <button type="button" id="btn-add-sales">+ 売上行を追加</button>
         <button type="button" id="btn-add-cost">+ コスト行を追加</button>
+        <button type="button" id="btn-commit-all-drafts" class="pc-btn-primary">下書き行を一括登録</button>
         <div class="pc-pagination" id="monthly-pagination" hidden>
           <button type="button" id="page-newer" hidden>← 次の20件</button>
           <span id="page-info"></span>
@@ -29,7 +30,7 @@
         </div>
       </section>
 
-      <!-- フラットテーブル（code列廃止・指示書5§2-1 / 技術仕様§9-4） -->
+      <!-- フラットテーブル（v0.16.0：分類列追加・9列構成） -->
       <section class="pc-table-wrap">
         <table class="pc-monthly-table" id="monthly-table">
           <thead>
@@ -37,15 +38,16 @@
               <th data-filter-col="date">発生日</th>
               <th data-filter-col="type">種別</th>
               <th data-filter-col="subject">科目</th>
+              <th data-filter-col="category">分類</th>
               <th class="num">金額(税込)</th>
               <th data-filter-col="taxRate">税率</th>
               <th class="num">消費税</th>
               <th data-filter-col="memo">メモ</th>
               <th data-filter-col="project">案件</th>
             </tr>
-            <!-- フィルタ集計行（指示書8-6§2）：thead 直下に sticky 配置・各列セルに集計値を直接表示 -->
             <tr class="monthly-summary-row" id="monthly-summary-row" hidden>
               <td class="monthly-summary-cell" data-summary-col="count"></td>
+              <td></td>
               <td></td>
               <td></td>
               <td class="num monthly-summary-cell" data-summary-col="amount"></td>
@@ -56,7 +58,7 @@
             </tr>
           </thead>
           <tbody id="monthly-tbody">
-            <tr><td colspan="8" class="loading">読み込み中…</td></tr>
+            <tr><td colspan="9" class="loading">読み込み中…</td></tr>
           </tbody>
         </table>
       </section>

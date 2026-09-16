@@ -404,6 +404,24 @@ function uzDemoResponse(action, data) {
   return { status: 'ok', data: null, demo: true };
 }
 
+// v0.16.0 settings cache（5 秒問題起点 2 の解消・メニュー切替時の getSettings 再取得を排除）
+//   getSettings は同一セッション内で不変な内容を返す（storeName・staffList・serviceList・
+//   costMaster・masterQuota 等）＝ 1 度取得したら全画面で共有する。TTL 5 分。
+//   saveSettings/setStaff/saveCostMaster 系の書込 action 実行時に自動で invalidate。
+let _uzSettingsCache = null;
+let _uzSettingsCacheAt = 0;
+const _UZ_SETTINGS_TTL_MS = 5 * 60 * 1000;
+const _UZ_SETTINGS_WRITE_ACTIONS = new Set([
+  'saveSettings', 'setStaff', 'saveCostMaster', 'savePurchaseMaster',
+  'saveServiceMaster', 'saveMasterQuota', 'saveBusinessHours',
+  'saveInvoiceSettings', 'saveFaxPatterns', 'saveServiceChannelList',
+  'savePurchaseCategoryList', 'saveFeatureVisibility', 'saveQrLocations'
+]);
+function _uzInvalidateSettingsCache() {
+  _uzSettingsCache = null;
+  _uzSettingsCacheAt = 0;
+}
+
 /**
  * GASにGETリクエストを送る（CORS回避のためクエリパラメータで送信）。
  * デモモード時はダミー応答を返す。
@@ -419,6 +437,10 @@ async function callGAS(action, data = {}) {
     UZ_DEMO = true;
     return uzDemoResponse(action, data);
   }
+  // v0.16.0 settings cache：getSettings は TTL 内なら cache から即返す
+  if (action === 'getSettings' && _uzSettingsCache && (Date.now() - _uzSettingsCacheAt) < _UZ_SETTINGS_TTL_MS) {
+    return _uzSettingsCache;
+  }
   const params = new URLSearchParams({
     action: 'user_call',
     // v0.11.0：apiToken を data payload に同梱＝master 側 _handleUserCall_ が照合
@@ -432,6 +454,13 @@ async function callGAS(action, data = {}) {
       && json.message.indexOf('__SPREADSHEET_ID__') !== -1) {
     UZ_DEMO = true;
     return uzDemoResponse(action, data);
+  }
+  // v0.16.0：getSettings 成功時に cache 保存・書込系 action 実行時に invalidate
+  if (action === 'getSettings' && json && json.status === 'ok') {
+    _uzSettingsCache = json;
+    _uzSettingsCacheAt = Date.now();
+  } else if (_UZ_SETTINGS_WRITE_ACTIONS.has(action)) {
+    _uzInvalidateSettingsCache();
   }
   return json;
 }
@@ -462,6 +491,10 @@ async function callGASPost(action, data = {}) {
       && json.message.indexOf('__SPREADSHEET_ID__') !== -1) {
     UZ_DEMO = true;
     return uzDemoResponse(action, data);
+  }
+  // v0.16.0：書込系 action 実行時に settings cache を invalidate
+  if (_UZ_SETTINGS_WRITE_ACTIONS.has(action)) {
+    _uzInvalidateSettingsCache();
   }
   return json;
 }

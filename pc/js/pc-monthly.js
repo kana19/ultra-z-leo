@@ -93,7 +93,7 @@ function bindPaginationButtons() {
 /* ── データ取得・統合 ────────────────────────────────────── */
 async function loadMonthlyData(month) {
   const tbody = document.getElementById('monthly-tbody');
-  if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="loading">読み込み中…</td></tr>';
+  if (tbody) tbody.innerHTML = '<tr><td colspan="9" class="loading">読み込み中…</td></tr>';
 
   try {
     const [historyRes, settingsRes] = await Promise.all([
@@ -118,6 +118,9 @@ async function loadMonthlyData(month) {
       ? uzNormalizeServiceList(settings.serviceList) : [];
     _settings.purchaseMaster = (typeof uzNormalizePurchaseList === 'function')
       ? uzNormalizePurchaseList(settings.purchaseMasterList) : [];
+    // v0.16.0 大分類マスタ（登録時属性タグの選択肢・空でも無害運転）
+    _settings.serviceChannelList = Array.isArray(settings.serviceChannelList) ? settings.serviceChannelList : [];
+    _settings.purchaseCategoryList = Array.isArray(settings.purchaseCategoryList) ? settings.purchaseCategoryList : [];
 
     _monthlyData = mergeAndClassify(history);
     _sortRows(_monthlyData);
@@ -129,7 +132,7 @@ async function loadMonthlyData(month) {
     renderTable();
   } catch (err) {
     console.error('[pc-monthly] loadMonthlyData failed', err);
-    if (tbody) tbody.innerHTML = `<tr><td colspan="8" class="loading">読み込みに失敗しました：${_escHtml(err.message || err)}</td></tr>`;
+    if (tbody) tbody.innerHTML = `<tr><td colspan="9" class="loading">読み込みに失敗しました：${_escHtml(err.message || err)}</td></tr>`;
   }
 }
 
@@ -157,6 +160,8 @@ function mergeAndClassify(historyRows) {
         isUnpaid:   Number(r.uncollected) === 1,
         isLocked:   !!r.isLocked,                   // S列=1 を GAS が boolean 化して返す
         salesRowId: salesRowId,
+        serviceChannelCode: String(r.serviceChannelCode || ''),
+        serviceChannelName: String(r.serviceChannelName || ''),
       });
     } else if (r.type === 'cost') {
       const cls = _classifyCost(r.divisionCode, r.itemCode);
@@ -181,6 +186,8 @@ function mergeAndClassify(historyRows) {
         isUnpaid:   Number(r.unpaid) === 1,
         isLocked:   !!r.isLocked,
         salesRowId: linkedTo,
+        purchaseCategoryCode: String(r.purchaseCategoryCode || ''),
+        purchaseCategoryName: String(r.purchaseCategoryName || ''),
       });
     }
   }
@@ -207,6 +214,12 @@ function _getColValue(row, col) {
   if (col === 'taxRate') return `${Number(row.taxRate) || 0}%`;
   if (col === 'project') return row.isProject ? '案件あり' : '案件なし';
   if (col === 'memo')    return String(row.memo || '');
+  if (col === 'category') {
+    // v0.16.0：分類タグ列（登録時属性）。売上は serviceChannelName、仕入原価は purchaseCategoryName、
+    //   販管費は現状維持ゆえ「―」表示（分類対象外）＝ 大分類マスタなしの領域
+    const name = String(row.serviceChannelName || row.purchaseCategoryName || '');
+    return name || '（分類なし）';
+  }
   if (col === 'date') {
     const m = String(row.date || '').match(/^(\d{4})-(\d{1,2})-/);
     return m ? `${m[1]}年${Number(m[2])}月` : '';
@@ -428,7 +441,7 @@ function renderTable() {
   // ドラフト行を最上段（指示書5§2-2 step3 / §3-5）
   const draftHtml = _draftRows.map(d => renderDraftRow(d)).join('');
   const rowHtml   = pagedRows.map(r => renderRow(r)).join('');
-  tbody.innerHTML = (draftHtml + rowHtml) || '<tr><td colspan="8" class="loading">該当する行がありません</td></tr>';
+  tbody.innerHTML = (draftHtml + rowHtml) || '<tr><td colspan="9" class="loading">該当する行がありません</td></tr>';
   // bindRowEvents は撤去（指示書8-5§1：tbody-level delegation で1度だけ結線・renderTable の負荷も低減）
   _refreshColFilterButtonStates();
   _renderFilterSummary(filteredRows);   // 集計はフィルタ後の全件が対象（ページング前）
@@ -514,11 +527,16 @@ function renderRow(row) {
   const rowFocusable = !row.isLocked;
   const tabindexAttr = rowFocusable ? ' tabindex="0"' : '';
 
+  // v0.16.0 分類列（登録時属性・売上/仕入原価のみ）
+  const categoryName = String(row.serviceChannelName || row.purchaseCategoryName || '');
+  const cellCategory = categoryName || '<span style="color:#999;">―</span>';
+
   return `
     <tr class="${classes}" data-row-key="${_escHtml(key)}" data-source="${row.source}" data-row-index="${row.rowIndex}"${tabindexAttr}>
       <td data-field-cell="date">${cellDate}</td>
       <td>${_escHtml(row.type)}</td>
       <td data-field-cell="subject">${cellSubject}</td>
+      <td>${cellCategory}</td>
       <td class="num" data-field-cell="amount">${cellAmount}</td>
       <td data-field-cell="taxRate">${cellTaxRate}</td>
       <td class="num">${cellTax}</td>
@@ -549,11 +567,13 @@ function renderDraftRow(draft) {
   const discardHidden = valid ? 'hidden' : '';
   const commitHidden  = valid ? '' : 'hidden';
 
+  const categoryCellHtml = renderCategorySelect(draft);
   return `
     <tr class="pc-row--draft" data-row-key="${_escHtml(key)}" data-draft-id="${draft.draftId}">
       <td><input type="date" class="pc-edit-input" data-field="date" value="${_escHtml(draft.date)}"></td>
       <td>${typeCellHtml}</td>
       <td>${subjectCellHtml}</td>
+      <td>${categoryCellHtml}</td>
       <td class="num"><input type="number" class="pc-edit-input pc-edit-input--num" data-field="amount" value="${draft.amount || ''}" placeholder="0"></td>
       <td>${renderTaxRateSelect(draft.taxRate, 'draft')}</td>
       <td class="num">${_formatYenPlain(draftTax)}</td>
@@ -564,6 +584,57 @@ function renderDraftRow(draft) {
       </td>
     </tr>
   `;
+}
+
+/**
+ * v0.16.0：分類（大分類）select レンダラー（登録時属性タグ）
+ *  - 売上（realSource='sales'）：serviceChannelList から select
+ *  - 仕入原価（realSource='cost' && divisionCode='1'）：purchaseCategoryList から select
+ *  - 販管費（divisionCode='2'）：現状維持ゆえ「―（分類対象外）」の disabled 表示
+ *  - コスト区分未選択：「先に区分を選択してください」の disabled
+ * 保存時は data-field 経由で captureFieldValue が draft.serviceChannelCode/purchaseCategoryCode に反映。
+ */
+function renderCategorySelect(draft) {
+  if (draft.realSource === 'sales') {
+    const list = _settings.serviceChannelList || [];
+    if (list.length === 0) {
+      return `<select class="pc-edit-input" data-field="serviceChannelCode" disabled><option value="">（分類マスタ未登録）</option></select>`;
+    }
+    const cur = String(draft.serviceChannelCode || '');
+    const opts = ['<option value="" data-name="">（分類なし）</option>'].concat(
+      list.map(c => {
+        const code = String(c.code || c.id || '');
+        const name = String(c.name || '');
+        const sel = (cur === code) ? 'selected' : '';
+        return `<option value="${_escHtml(code)}" data-name="${_escHtml(name)}" ${sel}>${_escHtml(name)}</option>`;
+      })
+    ).join('');
+    return `<select class="pc-edit-input" data-field="serviceChannelCode">${opts}</select>`;
+  }
+  // cost
+  const div = String(draft.divisionCode || '');
+  if (!div) {
+    return `<select class="pc-edit-input" disabled><option value="">先に区分を選択</option></select>`;
+  }
+  if (div === '2') {
+    // 販管費は現状維持（(b) 確定・零細事業者思想＝ 大分類なし）
+    return `<span style="color:#999;">―</span>`;
+  }
+  // div === '1' 仕入原価：purchaseCategoryList から select
+  const list = _settings.purchaseCategoryList || [];
+  if (list.length === 0) {
+    return `<select class="pc-edit-input" data-field="purchaseCategoryCode" disabled><option value="">（分類マスタ未登録）</option></select>`;
+  }
+  const cur = String(draft.purchaseCategoryCode || '');
+  const opts = ['<option value="" data-name="">（分類なし）</option>'].concat(
+    list.map(c => {
+      const code = String(c.code || c.id || '');
+      const name = String(c.name || '');
+      const sel = (cur === code) ? 'selected' : '';
+      return `<option value="${_escHtml(code)}" data-name="${_escHtml(name)}" ${sel}>${_escHtml(name)}</option>`;
+    })
+  ).join('');
+  return `<select class="pc-edit-input" data-field="purchaseCategoryCode">${opts}</select>`;
 }
 
 /**
@@ -656,7 +727,12 @@ function selectDraftDivision(draftId, divisionCode) {
   d.divisionCode = String(divisionCode);
   d.subjectCode = '';
   d.subject = '';
-  d.taxRate = 10;
+  // v0.16.0（金光指示）：区分タブ変更時の taxRate 強制リセット廃止＝ 科目選択時に
+  //   科目マスタの設定税率で上書きされる経路（data-tax）に任せる。
+  //   区分未選択→ 選択、区分切替時ともに前値を保持＝ 「設定通り優先」の運用に沿う。
+  // 分類（大分類）も区分変更時にリセット（大分類は区分に紐付く：仕入原価⇔purchaseCategoryList／販管費⇔なし）
+  d.purchaseCategoryCode = '';
+  d.purchaseCategoryName = '';
   renderTable();
 }
 
@@ -922,6 +998,12 @@ function captureFieldValue(target, inp, field) {
       target.divisionCode = String(opt.dataset.div || '');
     }
   }
+  // v0.16.0 分類 select（登録時属性タグ）：value=code、data-name=表示名 を対応プロパティに反映
+  if (inp.tagName === 'SELECT' && (field === 'serviceChannelCode' || field === 'purchaseCategoryCode')) {
+    const opt = inp.options[inp.selectedIndex];
+    const nameField = (field === 'serviceChannelCode') ? 'serviceChannelName' : 'purchaseCategoryName';
+    target[nameField] = (opt && opt.dataset && opt.dataset.name) ? opt.dataset.name : '';
+  }
   target[field] = v;
 }
 
@@ -1024,6 +1106,7 @@ function cancelEdit() {
 function bindAddButtons() {
   document.getElementById('btn-add-sales')?.addEventListener('click', () => addDraftRow('sales'));
   document.getElementById('btn-add-cost')?.addEventListener('click', () => addDraftRow('cost'));
+  document.getElementById('btn-commit-all-drafts')?.addEventListener('click', () => commitAllDrafts());
 }
 
 function addDraftRow(source) {
@@ -1042,6 +1125,11 @@ function addDraftRow(source) {
     amount: 0,
     taxRate: 10,
     memo: '',
+    // v0.16.0 分類タグ（登録時属性・空 = 分類なし）
+    serviceChannelCode: '',
+    serviceChannelName: '',
+    purchaseCategoryCode: '',
+    purchaseCategoryName: '',
   };
   // 最上段に挿入（§2-2 step3）
   _draftRows.unshift(draft);
@@ -1058,70 +1146,168 @@ function addDraftRow(source) {
   }, 0);
 }
 
+// v0.16.0：単発コミットは commitAllDrafts([draft]) の 1 件版として batch API 経由に集約
+//   （5 秒問題起点 3：登録後の全件 refetch を差分 append に置換）
 async function commitDraftRow(draftId) {
   const draft = _draftRows.find(d => String(d.draftId) === String(draftId));
   if (!draft) return;
-  // §1-7：disabled の登録ボタン誤発火対策（キーボード経由等）も含む二重防御
-  if (!_isDraftValid(draft)) {
-    const errors = validateDraftRow(draft);
-    showToast(errors[0] || '入力に不足があります', 'error', 3000);
+  await commitDrafts([draft]);
+}
+
+// v0.16.0：draft の複数行一括コミット。金光指示「複数行を一括登録できるように」＋
+//   5 秒問題起点 3（1 行登録ごとに全件 refetch）の同時解消。
+//   種別ごとに addSalesBatch / addCostBatch へ集約送信し、返り値の results を
+//   _monthlyData に直接 push＝ 登録後の全件 refetch を廃止。
+async function commitDrafts(drafts) {
+  if (!Array.isArray(drafts) || drafts.length === 0) return;
+  const invalidCount = drafts.filter(d => !_isDraftValid(d)).length;
+  if (invalidCount > 0) {
+    showToast(`入力不足の行があります（${invalidCount}件）`, 'error', 3000);
     return;
   }
+  const salesDrafts = drafts.filter(d => d.realSource === 'sales');
+  const costDrafts  = drafts.filter(d => d.realSource === 'cost');
+
+  const salesItems = salesDrafts.map(draft => {
+    const tax = _calcTaxAmount(draft.amount, draft.taxRate);
+    return {
+      date: draft.date,
+      customerCode: '',
+      serviceCode: draft.subjectCode || '',
+      serviceName: draft.subject || '',
+      miscItemName: '',
+      amountExTax: (Number(draft.amount) || 0) - tax,
+      taxRate: Number(draft.taxRate) || 0,
+      tax: tax,
+      amountInTax: Number(draft.amount) || 0,
+      memo: draft.memo || '',
+      uncollected: 0,
+      // v0.16.0 分類タグ（登録時属性・大分類は serviceChannelList から select）
+      serviceChannelCode: draft.serviceChannelCode || '',
+      serviceChannelName: draft.serviceChannelName || '',
+    };
+  });
+  const costItems = costDrafts.map(draft => {
+    const cm = (_settings.costMaster || []).find(it => String(it.code) === String(draft.subjectCode));
+    const divisionCode = String(draft.divisionCode || (cm && cm.divisionCode) || '2');
+    const divisionName = divisionCode === '1' ? '仕入原価' : '販管費';
+    const itemName = (cm && cm.name) || draft.subject || '';
+    const tax = _calcTaxAmount(draft.amount, draft.taxRate);
+    return {
+      date: draft.date,
+      divisionCode: divisionCode,
+      divisionName: divisionName,
+      itemCode: draft.subjectCode || '',
+      itemName: itemName,
+      miscItemName: '',
+      taxExcluded: (Number(draft.amount) || 0) - tax,
+      taxRate: Number(draft.taxRate) || 0,
+      tax: tax,
+      taxIncluded: Number(draft.amount) || 0,
+      memo: draft.memo || '',
+      unpaid: 0,
+      withholdingAmount: 0,
+      clientId: '',
+      projectId: '',
+      // v0.16.0 分類タグ（仕入原価のみ・販管費は現状維持ゆえ空）
+      purchaseCategoryCode: (divisionCode === '1') ? (draft.purchaseCategoryCode || '') : '',
+      purchaseCategoryName: (divisionCode === '1') ? (draft.purchaseCategoryName || '') : '',
+    };
+  });
 
   try {
-    let res;
-    if (draft.realSource === 'sales') {
-      const tax = _calcTaxAmount(draft.amount, draft.taxRate);
-      res = await callGAS('addSales', {
-        date: draft.date,
-        customerCode: '',
-        serviceCode: draft.subjectCode || '',
-        serviceName: draft.subject || '',
-        miscItemName: '',
-        amountExTax: (Number(draft.amount) || 0) - tax,
-        taxRate: Number(draft.taxRate) || 0,
-        tax: tax,
-        amountInTax: Number(draft.amount) || 0,
-        memo: draft.memo || '',
-        uncollected: 0,
-      });
-    } else {
-      // 区分タブで明示選択された divisionCode を最優先とする（マスタ未登録の諸口にも対応）
-      const cm = (_settings.costMaster || []).find(it => String(it.code) === String(draft.subjectCode));
-      const divisionCode = String(draft.divisionCode || (cm && cm.divisionCode) || '2');
-      const divisionName = divisionCode === '1' ? '仕入原価' : '販管費';
-      const itemName = (cm && cm.name) || draft.subject || '';
-      const tax = _calcTaxAmount(draft.amount, draft.taxRate);
-      res = await callGAS('addCost', {
-        date: draft.date,
-        divisionCode: divisionCode,
-        divisionName: divisionName,
-        itemCode: draft.subjectCode || '',
-        itemName: itemName,
-        miscItemName: '',
-        taxExcluded: (Number(draft.amount) || 0) - tax,
-        taxRate: Number(draft.taxRate) || 0,
-        tax: tax,
-        taxIncluded: Number(draft.amount) || 0,
-        memo: draft.memo || '',
-        unpaid: 0,
-        withholdingAmount: 0,
-        clientId: '',
-        projectId: '',
-      });
-    }
-    if (!res || res.status !== 'ok') {
-      showToast(`登録失敗：${(res && res.message) || '不明なエラー'}`, 'error', 3500);
+    const promises = [];
+    if (salesItems.length > 0) promises.push(callGAS('addSalesBatch', { items: salesItems }));
+    if (costItems.length > 0)  promises.push(callGAS('addCostBatch',  { items: costItems  }));
+    const responses = await Promise.all(promises);
+    let salesRes = null, costRes = null;
+    let idx = 0;
+    if (salesItems.length > 0) salesRes = responses[idx++];
+    if (costItems.length > 0)  costRes  = responses[idx++];
+
+    if (salesRes && salesRes.status !== 'ok') {
+      showToast(`売上登録失敗：${salesRes.message || '不明なエラー'}`, 'error', 3500);
       return;
     }
-    showToast('登録しました', 'success', 2000);
-    discardDraftRow(draftId);
-    await loadMonthlyData('');   // 指示書12§1：全件再読込
+    if (costRes && costRes.status !== 'ok') {
+      showToast(`コスト登録失敗：${costRes.message || '不明なエラー'}`, 'error', 3500);
+      return;
+    }
 
+    // 差分 append：返り値の results を _monthlyData に直接 push（全件 refetch 廃止）
+    if (salesRes && Array.isArray(salesRes.results)) {
+      salesRes.results.forEach((r, i) => {
+        const draft = salesDrafts[i];
+        _monthlyData.push({
+          source:     'sales',
+          rowIndex:   Number(r.rowIndex),
+          sheetName:  '売上',
+          date:       String(draft.date || ''),
+          type:       '売上',
+          typeCode:   'u',
+          subject:    String(draft.subject || ''),
+          subjectCode: String(draft.subjectCode || ''),
+          amount:     Number(r.amountInTax) || 0,
+          taxRate:    Number(r.taxRate) || 0,
+          taxAmount:  Number(r.taxAmount) || 0,
+          memo:       String(draft.memo || ''),
+          isProject:  false,
+          isUnpaid:   false,
+          isLocked:   false,
+          salesRowId: String(r.salesRowId || ''),
+          serviceChannelCode: String(r.serviceChannelCode || draft.serviceChannelCode || ''),
+          serviceChannelName: String(r.serviceChannelName || draft.serviceChannelName || ''),
+        });
+      });
+    }
+    if (costRes && Array.isArray(costRes.results)) {
+      costRes.results.forEach((r, i) => {
+        const draft = costDrafts[i];
+        const cm = (_settings.costMaster || []).find(it => String(it.code) === String(draft.subjectCode));
+        const divisionCode = String(draft.divisionCode || (cm && cm.divisionCode) || '2');
+        const cls = _classifyCost(divisionCode, draft.subjectCode);
+        _monthlyData.push({
+          source:     'cost',
+          rowIndex:   Number(r.rowIndex),
+          sheetName:  'コスト',
+          date:       String(draft.date || ''),
+          type:       cls.type,
+          typeCode:   cls.typeCode,
+          subject:    String(draft.subject || (cm && cm.name) || ''),
+          subjectCode: String(draft.subjectCode || ''),
+          divisionCode: divisionCode,
+          amount:     Number(r.taxIncluded) || 0,
+          taxRate:    Number(r.taxRate) || 0,
+          taxAmount:  Number(r.taxAmount) || 0,
+          memo:       String(draft.memo || ''),
+          isProject:  false,
+          isUnpaid:   false,
+          isLocked:   false,
+          salesRowId: '',
+          purchaseCategoryCode: String(r.purchaseCategoryCode || draft.purchaseCategoryCode || ''),
+          purchaseCategoryName: String(r.purchaseCategoryName || draft.purchaseCategoryName || ''),
+        });
+      });
+    }
+    _sortRows(_monthlyData);
+    _draftRows = _draftRows.filter(d => !drafts.includes(d));
+    _pageIndex = 0;
+    renderTable();
+    const n = drafts.length;
+    showToast(n === 1 ? '登録しました' : `${n} 件を登録しました`, 'success', 2000);
   } catch (err) {
-    console.error('[pc-monthly] commitDraftRow', err);
+    console.error('[pc-monthly] commitDrafts', err);
     showToast(`登録失敗：${err.message || err}`, 'error', 3500);
   }
+}
+
+// v0.16.0：ヘッダーの「一括登録」ボタンから呼ばれる。全 draft を 1 API で送信。
+async function commitAllDrafts() {
+  if (_draftRows.length === 0) {
+    showToast('登録待ちの下書き行がありません', 'info', 2000);
+    return;
+  }
+  await commitDrafts(_draftRows.slice());
 }
 
 function discardDraftRow(draftId) {
