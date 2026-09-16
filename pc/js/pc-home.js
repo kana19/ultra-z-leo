@@ -188,12 +188,13 @@ function breakdownRows(monthly, field) {
     });
     const items = [...itemSet];
     if (items.length === 0) {
-      // 販管費など分類レイヤなし＝ 分類名を科目名として直接出力（1 段のみ）
-      rows.push(`<tr class="pl-row--sub"><td style="padding-left:16px;">${escHtml(catName)}</td>${catCells}<td class="num col-total">${formatYen(catTotal)}</td></tr>`);
+      // 販管費など分類レイヤなし＝ 分類名を科目名として直接出力（1 段のみ・drillable）
+      const key = _makeLedgerKey_(field, catName, catName);
+      rows.push(`<tr class="pl-row--sub pl-row--drillable" data-ledger-key="${key}" style="cursor:pointer;"><td style="padding-left:16px;">${escHtml(catName)} <span style="color:var(--uz-text3,#999);font-size:11px;">▸ 明細</span></td>${catCells}<td class="num col-total">${formatYen(catTotal)}</td></tr>`);
     } else {
-      // 分類レベル行（▼＋ 分類名）
+      // 分類レベル行（▼＋ 分類名・drillable ではない）
       rows.push(`<tr class="pl-row--sub" style="background:rgba(0,0,0,0.03);font-weight:600;"><td style="padding-left:16px;">▼${escHtml(catName)}</td>${catCells}<td class="num col-total">${formatYen(catTotal)}</td></tr>`);
-      // 科目レベル行（indent 深く・分類配下の各科目）
+      // 科目レベル行（indent 深く・分類配下の各科目・drillable＝ 3 段目明細展開）
       items.forEach(itemName => {
         const itemVals = monthly.map(d => {
           if (!d || !Array.isArray(d[field])) return 0;
@@ -207,11 +208,18 @@ function breakdownRows(monthly, field) {
           const cur = (selYear === now.getFullYear() && (i + 1) === curMonth);
           return `<td class="num${cur ? ' col-current' : ''}">${v ? formatYen(v) : '—'}</td>`;
         }).join('');
-        rows.push(`<tr class="pl-row--sub"><td style="padding-left:36px;color:var(--uz-text2);">${escHtml(itemName)}</td>${itemCells}<td class="num col-total">${formatYen(itemTotal)}</td></tr>`);
+        const key = _makeLedgerKey_(field, catName, itemName);
+        rows.push(`<tr class="pl-row--sub pl-row--drillable" data-ledger-key="${key}" style="cursor:pointer;"><td style="padding-left:36px;color:var(--uz-text2);">${escHtml(itemName)} <span style="color:var(--uz-text3,#999);font-size:11px;">▸ 明細</span></td>${itemCells}<td class="num col-total">${formatYen(itemTotal)}</td></tr>`);
       });
     }
   });
   return rows;
+}
+
+// v0.16.1：科目別元帳 3 段目 (取引明細) 深堀り用のキー生成。
+//   科目行の data-ledger-key に埋め込み、click 時に field/分類名/科目名 を復元。
+function _makeLedgerKey_(field, catName, itemName) {
+  return `${field}::${encodeURIComponent(catName)}::${encodeURIComponent(itemName)}`;
 }
 
 /* ↑ renderTable を置き換え */
@@ -251,6 +259,99 @@ function renderTable(monthly) {
       renderTable(monthly);
     });
   });
+
+  // v0.16.1：科目別元帳 3 段目 (取引明細) 深堀り＝ 科目行クリック→ 明細行を tr 挿入
+  body.querySelectorAll('.pl-row--drillable').forEach(tr => {
+    tr.addEventListener('click', () => togglePcLedgerRow(tr));
+  });
+}
+
+/**
+ * v0.16.1：科目別元帳 3 段目 (取引明細) 深堀り。
+ *   科目行をクリック→ 対象月 (会計元帳ビューの pc-ledger-month select 値) の明細を tr 挿入で展開。
+ *   再クリック→ 明細行を除去 (toggle)。pl.js の togglePlLedger を Table 構造に移植・全 clientId 同一ロジック。
+ *   getHistory 応答から type/divisionCode/itemName で filter→ 発生日昇順で明細行 render。
+ *   明細列＝ 発生日 / 相手先/摘要 / 税抜 / 税率 / 消費税 / 税込（金光要求 5 項目＋消費税額）。
+ */
+async function togglePcLedgerRow(tr) {
+  const key = tr.dataset.ledgerKey;
+  if (!key) return;
+  const nextTr = tr.nextElementSibling;
+  const isAlreadyOpen = nextTr && nextTr.classList.contains('pl-row--ledger');
+  if (isAlreadyOpen) {
+    nextTr.remove();
+    return;
+  }
+  const parts = key.split('::');
+  const field = parts[0];
+  const catName = decodeURIComponent(parts[1] || '');
+  const itemName = decodeURIComponent(parts[2] || '');
+  const sel = document.getElementById('pc-ledger-month');
+  const monthStr = sel ? sel.value : '';
+  if (!monthStr) return;
+  const cols = MONTHS.length + 2;   // 科目 + 12 ヶ月 + 年計
+  const ledgerTr = document.createElement('tr');
+  ledgerTr.className = 'pl-row--ledger';
+  ledgerTr.innerHTML = `<td colspan="${cols}" style="padding:0;"><div style="padding:12px;color:var(--uz-text2);font-size:13px;">読み込み中…</div></td>`;
+  tr.after(ledgerTr);
+  try {
+    const res = await callGAS('getHistory', { month: monthStr });
+    if (!res || res.status !== 'ok' || !Array.isArray(res.data)) {
+      ledgerTr.innerHTML = `<td colspan="${cols}" style="padding:0;"><div style="padding:12px;color:var(--uz-red,#c0392b);font-size:13px;">明細データを取得できませんでした</div></td>`;
+      return;
+    }
+    const filtered = res.data.filter(r => {
+      // 種別 filter：field で type/divisionCode 判定
+      if (field === 'salesBreakdown' && r.type !== 'sales') return false;
+      if (field === 'cogsBreakdown' && !(r.type === 'cost' && String(r.divisionCode) === '1')) return false;
+      if (field === 'sgaBreakdown'  && !(r.type === 'cost' && String(r.divisionCode) !== '1')) return false;
+      // 科目名 filter：getHistory の r.itemName で照合（pl.js と同じ規約）
+      const rowItemName = String(r.itemName || (r.type === 'sales' ? '売上' : '経費')).trim();
+      return rowItemName === itemName;
+    }).sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+    if (filtered.length === 0) {
+      ledgerTr.innerHTML = `<td colspan="${cols}" style="padding:0;"><div style="padding:12px;text-align:center;color:var(--uz-text2);font-size:13px;">${escHtml(monthStr)} の ${escHtml(itemName)} 明細なし</div></td>`;
+      return;
+    }
+    const rowsHtml = filtered.map(r => {
+      const amt  = Number(r.amount) || 0;
+      const tax  = Number(r.taxAmount) || 0;
+      const rate = Number(r.taxRate) || 0;
+      const base = amt - tax;
+      const label = r.memo || r.itemName || '';
+      return `<tr>
+        <td>${escHtml(r.date || '')}</td>
+        <td>${escHtml(label)}</td>
+        <td class="num">${formatYen(base)}</td>
+        <td class="num">${rate}%</td>
+        <td class="num">${formatYen(tax)}</td>
+        <td class="num">${formatYen(amt)}</td>
+      </tr>`;
+    }).join('');
+    ledgerTr.innerHTML = `<td colspan="${cols}" style="padding:0;">
+      <div style="padding:8px 12px;background:rgba(0,0,0,0.02);border-left:3px solid var(--uz-accent,#b8860b);">
+        <div style="font-size:12px;color:var(--uz-text2);margin-bottom:6px;">
+          <b>${escHtml(catName)}</b> → <b>${escHtml(itemName)}</b>（対象月：${escHtml(monthStr)}・${filtered.length} 件）
+        </div>
+        <table class="pl-table" style="width:100%;">
+          <thead>
+            <tr>
+              <th style="width:110px;">発生日</th>
+              <th>相手先/摘要</th>
+              <th class="num" style="width:120px;">税抜</th>
+              <th class="num" style="width:80px;">税率</th>
+              <th class="num" style="width:120px;">消費税</th>
+              <th class="num" style="width:120px;">税込</th>
+            </tr>
+          </thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+      </div>
+    </td>`;
+  } catch (err) {
+    console.warn('[togglePcLedgerRow]', err);
+    ledgerTr.innerHTML = `<td colspan="${cols}" style="padding:0;"><div style="padding:12px;color:var(--uz-red,#c0392b);font-size:13px;">エラー：${escHtml(String(err.message || err))}</div></td>`;
+  }
 }
 
 /* ── チャート ──────────────────────────────── */
