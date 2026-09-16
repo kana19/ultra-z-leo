@@ -503,6 +503,7 @@ let _smCostSelectedDivisionCode = '2';   // 初期値 = 販管費
 let _smCostSelectedItemCode     = null;
 let _smCostSelectedTaxRate      = null;
 let _smCostSelectedSupplierId   = null; // 仕入先タグ（→ 03§1-6-2 suppliers・任意・仕入原価タブのみ）
+let _smCostSelectedCategoryId   = null; // v0.16.1：仕入原価大分類（→ 03§1-3-2 purchaseCategoryList・任意・仕入原価タブのみ）
 let _smCostUnpaid               = false;
 
 // ── モーダル起動 ───────────────────────
@@ -565,6 +566,11 @@ function _smCostBuildFormBodyHTML() {
       <section class="cost-sm-section">
         <label class="cost-sm-label">科目を選択</label>
         <div id="sm-cost-item-cards" class="cost-sm-cards"></div>
+        <!-- v0.16.1：仕入原価大分類（→ 03§1-3-2 purchaseCategoryList・任意設定・仕入原価タブ選択時のみ表示・選ぶと税率上書き） -->
+        <div id="sm-cost-category-wrap" hidden style="margin-top:10px;">
+          <label class="cost-sm-label" style="font-size:12px;color:var(--uz-muted);">大分類（任意・選ぶと税率上書き）</label>
+          <div class="sm-taxrate-chips" id="sm-cost-category-chips" role="group" aria-label="大分類選択"></div>
+        </div>
         <!-- 仕入先タグ（→ 03§1-6-2 suppliers・任意設定・仕入原価タブ選択時のみ表示） -->
         <div id="sm-cost-supplier-wrap" hidden style="margin-top:10px;">
           <label class="cost-sm-label" style="font-size:12px;color:var(--uz-muted);">仕入先（任意タグ）</label>
@@ -638,15 +644,25 @@ function _smCostInitFormInModal() {
   _smCostSelectedItemCode     = null;
   _smCostSelectedTaxRate      = null;
   _smCostSelectedSupplierId   = null;
+  _smCostSelectedCategoryId   = null;
   _smCostUnpaid               = false;
+
+  // v0.16.1（2026-09-17）：drawer 開く時に最新 settings 取得＝ 大分類マスタ（purchaseCategoryList）を
+  //   localStorage キャッシュに反映。新規 PWA でホーム未経由アクセス時に大分類 chip が空返却で
+  //   非表示になる事故を根治（app.js uzGetSettings 内で自動キャッシュ更新される）。
+  if (typeof uzGetSettings === 'function') {
+    try { await uzGetSettings(); } catch (_e) { /* オフライン等はキャッシュに fallback */ }
+  }
 
   // 2. 科目カードの初期レンダリング（販管費＝divisionCode:'2'）
   _smCostRenderItemCards('2');
+  _smCostRenderCategoryChips();  // v0.16.1：仕入原価大分類（仕入原価タブのみ表示）
   _smCostRenderSupplierChips();  // 仕入先タグ（→ 03§1-6-2・仕入原価タブ選択時のみ表示）
 
   // 3. 各要素のイベントバインド
   _smCostBindDivisionTabs();
   _smCostBindTaxChips();
+  _smCostBindCategoryChips();
   _smCostBindSupplierChips();
   _smCostBindAmountInput();
   _smCostBindSubmit();
@@ -674,6 +690,7 @@ function _smCostSelectDivision(divisionCode) {
   // 1. state 更新
   _smCostSelectedDivisionCode = divisionCode;
   _smCostSelectedSupplierId = null;   // 区分切替で仕入先タグをクリア（仕入先は仕入原価専用）
+  _smCostSelectedCategoryId = null;   // v0.16.1：区分切替で大分類をクリア（大分類は仕入原価専用）
 
   // 2. 区分タブの --active 付け替え
   document.querySelectorAll('.cost-sm-division-tab').forEach(tab => {
@@ -682,6 +699,7 @@ function _smCostSelectDivision(divisionCode) {
       tab.dataset.divisionCode === divisionCode
     );
   });
+  _smCostRenderCategoryChips();  // v0.16.1：仕入原価タブ選択時のみ大分類チップを表示
   _smCostRenderSupplierChips();  // 仕入原価タブ選択時のみ仕入先チップを表示
 
   // 3. 科目選択と税率選択をリセット（区分切替で選択を持ち越さない）
@@ -911,6 +929,18 @@ async function _smCostHandleSubmit() {
   //   全科目で総額（税込）入力に統一する。
   //   人件費系科目（20/21/25）も科目選択して金額入力できるが、スタッフ紐付けは持たない。
   //   人件費の算出・確定は勤怠管理→PC出勤管理で行う（→ 02§5-9 / 03§5-2）。
+  // v0.16.1：仕入原価大分類（登録時属性・仕入原価タブのみ）を payload に載せる。
+  //   販管費は分類なし＝ 空文字（GAS 側でシートの W/X 列に書込み・getSummary で分類集計）。
+  let purchaseCategoryCode = '';
+  let purchaseCategoryName = '';
+  if (_smCostSelectedCategoryId && _smCostSelectedDivisionCode === '1') {
+    const cat = _getPurchaseCategoryListSafe_().find(c => String(c.id) === String(_smCostSelectedCategoryId));
+    if (cat) {
+      purchaseCategoryCode = String(cat.id || '');
+      purchaseCategoryName = String(cat.name || '');
+    }
+  }
+
   const payload = {
     date:              dateVal,
     divisionCode:      _smCostSelectedDivisionCode,
@@ -925,6 +955,8 @@ async function _smCostHandleSubmit() {
     memo:              memoWithTags,
     unpaid:            unpaidVal,
     clientId:          '',   // 管理ポータル実装時に実値を入れる・現時点は空
+    purchaseCategoryCode: purchaseCategoryCode,
+    purchaseCategoryName: purchaseCategoryName
   };
 
   // 5. GAS 送信
@@ -1031,7 +1063,68 @@ function _smCostUpdateSupplierChipUI() {
 // masters-synced 完了時に仕入先チップを再描画
 document.addEventListener('uz:masters-synced', () => {
   _smCostRenderSupplierChips();
+  _smCostRenderCategoryChips();
 });
+
+/* ── v0.16.1：仕入原価大分類（→ 03§1-3-2 purchaseCategoryList・任意設定・仕入原価タブのみ・sales.js と同型） ── */
+function _getPurchaseCategoryListSafe_() {
+  try {
+    if (typeof getPurchaseCategoryList === 'function') return getPurchaseCategoryList();
+    const s = localStorage.getItem('uz_purchase_category_list');
+    const l = s ? JSON.parse(s) : [];
+    return Array.isArray(l) ? l : [];
+  } catch { return []; }
+}
+
+function _smCostRenderCategoryChips() {
+  const wrap = document.getElementById('sm-cost-category-wrap');
+  const chips = document.getElementById('sm-cost-category-chips');
+  if (!wrap || !chips) return;
+  // 販管費タブ時は非表示（大分類は仕入原価専用・(b) 確定・零細事業者思想）
+  if (_smCostSelectedDivisionCode !== '1') { wrap.hidden = true; chips.innerHTML = ''; return; }
+  const list = _getPurchaseCategoryListSafe_();
+  if (!list.length) { wrap.hidden = true; chips.innerHTML = ''; return; }
+  wrap.hidden = false;
+  chips.innerHTML = list.map(c => `
+    <button type="button" class="sm-taxrate-chip" data-category-id="${uzEscHtml(String(c.id))}" data-tax-rate="${uzEscHtml(String(c.taxRate || 0))}">
+      ${uzEscHtml(c.name || '')}<span style="opacity:.6;margin-left:4px;">(${uzEscHtml(String(c.taxRate || 0))}%)</span>
+    </button>
+  `).join('');
+  _smCostUpdateCategoryChipUI();
+}
+
+function _smCostBindCategoryChips() {
+  const chips = document.getElementById('sm-cost-category-chips');
+  if (!chips) return;
+  chips.addEventListener('click', e => {
+    const btn = e.target.closest('.sm-taxrate-chip');
+    if (!btn) return;
+    const id = btn.dataset.categoryId;
+    const rate = parseInt(btn.dataset.taxRate, 10);
+    // トグル：同じ大分類を再タップで解除（税率は科目のマスタ taxRate へ戻す）
+    if (_smCostSelectedCategoryId === id) {
+      _smCostSelectedCategoryId = null;
+      const items = getDivisionItems(_smCostSelectedDivisionCode, { filterBySmartphoneVisible: true });
+      const selectedItem = items.find(it => it.code === _smCostSelectedItemCode);
+      if (selectedItem && [0, 8, 10].indexOf(selectedItem.taxRate) >= 0) {
+        _smCostSetTaxRate(selectedItem.taxRate);
+      }
+    } else {
+      _smCostSelectedCategoryId = id;
+      if (Number.isFinite(rate) && [0, 8, 10].indexOf(rate) >= 0) {
+        _smCostSetTaxRate(rate);
+      }
+    }
+    _smCostUpdateCategoryChipUI();
+    _smCostRecalcTaxMemo();
+  });
+}
+
+function _smCostUpdateCategoryChipUI() {
+  document.querySelectorAll('#sm-cost-category-chips .sm-taxrate-chip').forEach(btn => {
+    btn.classList.toggle('is-active', _smCostSelectedCategoryId != null && btn.dataset.categoryId === _smCostSelectedCategoryId);
+  });
+}
 
 function _smCostBindSubmit() {
   const btn = document.getElementById('sm-cost-submit');

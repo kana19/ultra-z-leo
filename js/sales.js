@@ -497,6 +497,13 @@ async function _initSalesFormInModal() {
 
   document.getElementById('sm-sales-date').value = todayStr();
 
+  // v0.16.1（2026-09-17）：drawer 開く時に最新 settings を取得＝ 大分類マスタ（serviceChannelList）を
+  //   localStorage キャッシュに反映。新規 PWA でホーム未経由アクセス時に大分類 chip が空返却で
+  //   非表示になる事故を根治（app.js uzGetSettings 内で自動キャッシュ更新される）。
+  if (typeof uzGetSettings === 'function') {
+    try { await uzGetSettings(); } catch (_e) { /* オフライン等はキャッシュに fallback */ }
+  }
+
   await _renderSalesCards();
   _renderSalesChannelChips();  // 販売チャネル大分類（→ 03§1-1-2・任意）
   _renderSalesCustomerChips(); // 顧客タグ（→ 03§1-6・任意）
@@ -811,6 +818,20 @@ async function _smHandleSalesSubmit() {
     memoWithTags = tagPrefixParts.join('') + (memo ? ' ' + memo : '');
   }
 
+  // v0.16.1：販売チャネル大分類（登録時属性）を売上シート V/W 列に載せる。
+  //   getSummary/getCategoryBreakdown が V/W 列 (serviceChannelCode/serviceChannelName) から
+  //   分類集計する設計（v0.16.0/v0.16.1）＝ PC 版と同じロジックで損益概観の分類が正しく出る。
+  //   memo への [分類名] 付記は互換で残置（V/W 列と重複するが memo は運営視界の補助表示）。
+  let serviceChannelCode = '';
+  let serviceChannelName = '';
+  if (_smSelectedChannelId) {
+    const ch = _getServiceChannelListSafe_().find(c => String(c.id) === String(_smSelectedChannelId));
+    if (ch) {
+      serviceChannelCode = String(ch.id || '');
+      serviceChannelName = String(ch.name || '');
+    }
+  }
+
   btn.disabled = true;
   btn.textContent = '送信中...';
   try {
@@ -825,6 +846,8 @@ async function _smHandleSalesSubmit() {
       amountInTax:  amount,
       memo:         memoWithTags,
       uncollected:  document.getElementById('uncollected-toggle')?.checked ? 1 : 0,
+      serviceChannelCode: serviceChannelCode,
+      serviceChannelName: serviceChannelName,
     });
 
     if (result?.status !== 'ok') throw new Error(result?.message || '登録エラー');

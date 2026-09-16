@@ -568,6 +568,11 @@ function renderDraftRow(draft) {
   const commitHidden  = valid ? '' : 'hidden';
 
   const categoryCellHtml = renderCategorySelect(draft);
+  // v0.16.1（2026-09-17）：売掛/買掛 checkbox を項目列に配置（3 デバイス共通の会計基本機能）。
+  //   売上＝ 売掛（未入金）／ コスト＝ 買掛（未払）＝ 選択で 1／未選択で 0＝ シート P 列 (未収/未払フラグ) に反映。
+  //   スマホ (sales.js/cost.js)・iPad (共通)・PC の 3 デバイスで機能均一化＝ 検証コスト削減。
+  const unpaidLabel = isCost ? '買掛' : '売掛';
+  const isUnpaidChecked = draft.isUnpaid ? 'checked' : '';
   return `
     <tr class="pc-row--draft" data-row-key="${_escHtml(key)}" data-draft-id="${draft.draftId}">
       <td><input type="date" class="pc-edit-input" data-field="date" value="${_escHtml(draft.date)}"></td>
@@ -577,7 +582,13 @@ function renderDraftRow(draft) {
       <td class="num"><input type="number" class="pc-edit-input pc-edit-input--num" data-field="amount" value="${draft.amount || ''}" placeholder="0"></td>
       <td>${renderTaxRateSelect(draft.taxRate, 'draft')}</td>
       <td class="num">${_formatYenPlain(draftTax)}</td>
-      <td><input type="text" class="pc-edit-input" data-field="memo" value="${_escHtml(draft.memo)}" placeholder="メモ"></td>
+      <td>
+        <input type="text" class="pc-edit-input" data-field="memo" value="${_escHtml(draft.memo)}" placeholder="メモ">
+        <label style="display:inline-flex;align-items:center;gap:4px;margin-top:4px;font-size:11px;color:var(--uz-text2);cursor:pointer;">
+          <input type="checkbox" class="pc-draft-unpaid" data-field="isUnpaid" ${isUnpaidChecked}>
+          ${unpaidLabel}（${isCost ? '未払' : '未入金'}）
+        </label>
+      </td>
       <td class="pc-project-col">
         <button type="button" class="pc-action-btn" data-action="discard-draft" ${discardHidden}>取消</button>
         <button type="button" class="pc-action-btn pc-action-btn--save" data-action="commit-draft" ${commitHidden}>登録</button>
@@ -888,6 +899,20 @@ function bindTbodyDelegation() {
     }, 0);
   });
 
+  // ─── change：ドラフト行の売掛/買掛 checkbox（v0.16.1・3 デバイス共通の会計基本機能） ───
+  tbody.addEventListener('change', (e) => {
+    const inp = e.target;
+    if (!inp || !inp.classList || !inp.classList.contains('pc-draft-unpaid')) return;
+    const tr = inp.closest('tr[data-row-key]');
+    if (!tr) return;
+    const rowKey = tr.getAttribute('data-row-key');
+    if (!rowKey.startsWith('draft-')) return;
+    const draftId = rowKey.replace('draft-', '');
+    const d = _draftRows.find(x => String(x.draftId) === String(draftId));
+    if (!d) return;
+    d.isUnpaid = !!inp.checked;
+  });
+
   // ─── input：ドラフト or 編集中の入力値捕捉 ───
   tbody.addEventListener('input', (e) => {
     const inp = e.target;
@@ -1157,6 +1182,8 @@ function addDraftRow(source) {
     serviceChannelName: '',
     purchaseCategoryCode: '',
     purchaseCategoryName: '',
+    // v0.16.1 売掛/買掛フラグ（3 デバイス共通・売上=売掛(未入金)／コスト=買掛(未払)）
+    isUnpaid: false,
   };
   // 最上段に挿入（§2-2 step3）
   _draftRows.unshift(draft);
@@ -1209,7 +1236,8 @@ async function commitDrafts(drafts) {
       tax: tax,
       amountInTax: Number(draft.amount) || 0,
       memo: draft.memo || '',
-      uncollected: 0,
+      // v0.16.1：売掛（未入金）フラグ＝ シート P 列に 1／0 で書込＝ getUnpaid/売掛買掛元帳で拾える
+      uncollected: draft.isUnpaid ? 1 : 0,
       // v0.16.0 分類タグ（登録時属性・大分類は serviceChannelList から select）
       serviceChannelCode: draft.serviceChannelCode || '',
       serviceChannelName: draft.serviceChannelName || '',
@@ -1233,7 +1261,8 @@ async function commitDrafts(drafts) {
       tax: tax,
       taxIncluded: Number(draft.amount) || 0,
       memo: draft.memo || '',
-      unpaid: 0,
+      // v0.16.1：買掛（未払）フラグ＝ シート P 列に 1／0 で書込＝ getUnpaid/売掛買掛元帳で拾える
+      unpaid: draft.isUnpaid ? 1 : 0,
       withholdingAmount: 0,
       clientId: '',
       projectId: '',
