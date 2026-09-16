@@ -448,11 +448,16 @@
       <div id="pcat-add-row" class="settings-add-row">
         <input type="text" id="pcat-add-name" class="settings-input"
                placeholder="大分類名（例：食材・酒類・包材）" maxlength="30" autocomplete="off">
+        <select id="pcat-add-tax" class="form-select" style="width:120px;flex-shrink:0;">
+          <option value="10">10%</option>
+          <option value="8">8%（軽減）</option>
+          <option value="0">0%（非課税）</option>
+        </select>
         <button id="pcat-add-btn" class="settings-add-btn" type="button">＋ 追加</button>
       </div>
       <p id="pcat-limit-hint" class="settings-note" hidden></p>
       <p class="settings-note">
-        仕入原価品目をまとめる大分類（食材／酒類／包材など）。PC月次管理で大分類別の集計が見られます。品目の税率は品目側で保持します。空欄でも動きます（設定なし＝従来通り）。
+        仕入原価品目をまとめる大分類（食材／酒類／包材など）。月次入力の登録時に大分類を選択すると税率がこちらに切替＋ホーム損益で分類別グルーピング集計。空欄でも動きます（設定なし＝従来通り）。
       </p>
     </div>
   </section>

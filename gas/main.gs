@@ -1113,6 +1113,11 @@ function getSettings() {
   var purchaseCategoryList = [];
   try { if (purchaseCategoryJson) purchaseCategoryList = JSON.parse(purchaseCategoryJson); } catch(e) {}
   if (!Array.isArray(purchaseCategoryList)) purchaseCategoryList = [];
+  // v0.16.1：仕入原価大分類にも taxRate フィールドを保証（サービス大分類と対称・未設定は 0）
+  purchaseCategoryList = purchaseCategoryList.map(function(c) {
+    if (c && typeof c === 'object' && c.taxRate === undefined) c.taxRate = 0;
+    return c;
+  });
   // businessHours は JSON 文字列。パース失敗・未設定時は null を返す（A-9：出勤履歴の打刻状態判定で使用）
   // 形式：{open:"HH:MM", close:"HH:MM", closeNextDay:boolean}
   var businessHours = null;
@@ -1329,7 +1334,8 @@ function addServiceItem(data) {
   }
   if (!newId) return { status: 'error', message: 'サービスID の採番に失敗しました（sv999 まで埋まっています）' };
 
-  var newItem = { id: newId, name: name, taxRate: taxRate, category: String(data.category || '').trim() };
+  // v0.16.1：大分類は月次入力の登録時属性運用に統一（マスタ 1 対 1 紐付け撤廃）＝ category プロパティなし
+  var newItem = { id: newId, name: name, taxRate: taxRate };
   list.push(newItem);
   sheet.getRange('A3').setValue('serviceList');
   sheet.getRange('B3').setValue(JSON.stringify(list));
@@ -1398,7 +1404,8 @@ function addPurchaseItem(data) {
   }
   if (!newId) return { status: 'error', message: '仕入科目ID の採番に失敗しました（p999 まで埋まっています）' };
 
-  var newItem = { id: newId, name: name, defaultTaxRate: rate, category: String(data.category || '').trim() };
+  // v0.16.1：大分類は月次入力の登録時属性運用に統一（マスタ 1 対 1 紐付け撤廃）＝ category プロパティなし
+  var newItem = { id: newId, name: name, defaultTaxRate: rate };
   list.push(newItem);
   sheet.getRange('A5').setValue('purchaseMasterList');
   sheet.getRange('B5').setValue(JSON.stringify(list));
@@ -1481,7 +1488,7 @@ function updateServiceItem(data) {
   var id = String(data.id || '');
   var name = (data.name !== undefined) ? String(data.name).trim() : undefined;
   var taxRate = (data.taxRate !== undefined) ? Number(data.taxRate) : undefined;
-  var category = (data.category !== undefined) ? String(data.category).trim() : undefined;
+  // v0.16.1：category 引数受口を削除（1 対 1 紐付け撤廃・登録時属性運用に統一）
   if (!id) return { status: 'error', message: 'id が指定されていません' };
   if (name !== undefined && (name === '' || name.length > 30)) {
     return { status: 'error', message: 'サービス名は 1〜30 文字で入力してください' };
@@ -1504,7 +1511,6 @@ function updateServiceItem(data) {
       found = true;
       if (name !== undefined) it.name = name;
       if (taxRate !== undefined) it.taxRate = taxRate;
-      if (category !== undefined) it.category = category;
     }
     return it;
   });
@@ -1522,7 +1528,7 @@ function updatePurchaseItem(data) {
   data = data || {};
   var id = String(data.id || '');
   var name = (data.name !== undefined) ? String(data.name).trim() : undefined;
-  var category = (data.category !== undefined) ? String(data.category).trim() : undefined;
+  // v0.16.1：category 引数受口を削除（1 対 1 紐付け撤廃・登録時属性運用に統一）
   // 受口フィールド名は defaultTaxRate（taxRate でも受け取る）
   var rate;
   if (data.defaultTaxRate !== undefined) rate = Number(data.defaultTaxRate);
@@ -1549,7 +1555,6 @@ function updatePurchaseItem(data) {
       found = true;
       if (name !== undefined) it.name = name;
       if (rate !== undefined) it.defaultTaxRate = rate;
-      if (category !== undefined) it.category = category;
     }
     return it;
   });
@@ -4810,11 +4815,14 @@ function deleteServiceChannel(data) {
 }
 
 // ----- 仕入原価大分類 purchaseCategoryList（B9・→ §1-3-2） -----
+// v0.16.1：仕入原価大分類も taxRate を持ち、月次入力の登録時属性運用でデフォルト税率源になる（サービス大分類と対称）
 function addPurchaseCategory(data) {
   data = data || {};
   var name = String(data.name || '').trim();
+  var taxRate = Number(data.taxRate);
   if (!name) return { status: 'error', message: '大分類名が空です' };
   if (name.length > 30) return { status: 'error', message: '大分類名は30文字以内で入力してください' };
+  if ([0, 8, 10].indexOf(taxRate) < 0) return { status: 'error', message: '税率は 0 / 8 / 10 のいずれかを指定してください' };
   var ctx = _readListCell_('B9');
   if (!ctx.sheet) return { status: 'error', message: 'settingsシートが見つかりません' };
   var quota = _quotaForKey_('purchaseCategoryQuota', 3);
@@ -4825,7 +4833,7 @@ function addPurchaseCategory(data) {
   }
   var id = _nextIdWithPrefix_(ctx.list, 'pc');
   if (!id) return { status: 'error', message: '仕入原価大分類ID の採番に失敗しました（pc999 まで埋まっています）' };
-  var item = { id: id, name: name };
+  var item = { id: id, name: name, taxRate: taxRate };
   ctx.list.push(item);
   _writeListCell_(ctx.sheet, 'A9', 'purchaseCategoryList', 'B9', ctx.list);
   return { status: 'ok', item: item, purchaseCategoryList: ctx.list };
@@ -4836,8 +4844,12 @@ function updatePurchaseCategory(data) {
   var id = String(data.id || '');
   if (!id) return { status: 'error', message: 'id が指定されていません' };
   var name = (data.name !== undefined) ? String(data.name).trim() : undefined;
+  var taxRate = (data.taxRate !== undefined) ? Number(data.taxRate) : undefined;
   if (name !== undefined && (name === '' || name.length > 30)) {
     return { status: 'error', message: '大分類名は 1〜30 文字で入力してください' };
+  }
+  if (taxRate !== undefined && [0, 8, 10].indexOf(taxRate) < 0) {
+    return { status: 'error', message: '税率は 0 / 8 / 10 のいずれかを指定してください' };
   }
   var ctx = _readListCell_('B9');
   if (!ctx.sheet) return { status: 'error', message: 'settingsシートが見つかりません' };
@@ -4846,6 +4858,7 @@ function updatePurchaseCategory(data) {
     if (it && String(it.id) === id) {
       found = true;
       if (name !== undefined) it.name = name;
+      if (taxRate !== undefined) it.taxRate = taxRate;
     }
     return it;
   });
@@ -4882,6 +4895,61 @@ function deletePurchaseCategory(data) {
     }
   }
   return { status: 'ok', purchaseCategoryList: filtered };
+}
+
+// ============================================================
+// v0.16.1 migration：serviceList / purchaseMasterList の 1 対 1 分類紐付けを撤廃
+// ------------------------------------------------------------
+// 大分類の運用を「マスタ 1 対 1 紐付け」→「月次入力の登録時属性」に統一（金光判断確定・2026-09-16）。
+// 既存の serviceList / purchaseMasterList JSON 内の category / categoryId プロパティを全削除。
+// 1 回きり実行関数（Apps Script エディタから手動実行）＝ 完了後は R5 準拠で撤去。
+// idempotent（複数回実行しても安全）。
+// ============================================================
+function migration_v0_16_1_stripCategoryLinkage_() {
+  var sheet = _ss_().getSheetByName('settings');
+  if (!sheet) return { status: 'error', message: 'settingsシートが見つかりません' };
+
+  var STRIP_KEYS = ['category', 'categoryId', 'serviceChannelCode', 'purchaseCategoryCode'];
+  var result = { serviceListStripped: 0, purchaseMasterListStripped: 0 };
+
+  // B3 serviceList
+  var svcJson = sheet.getRange('B3').getValue();
+  var svcList = [];
+  try { if (svcJson) svcList = JSON.parse(svcJson); } catch(e) {}
+  if (Array.isArray(svcList)) {
+    var svcTouched = false;
+    svcList.forEach(function(it) {
+      if (!it || typeof it !== 'object') return;
+      STRIP_KEYS.forEach(function(k) {
+        if (k in it) { delete it[k]; svcTouched = true; result.serviceListStripped++; }
+      });
+    });
+    if (svcTouched) {
+      sheet.getRange('A3').setValue('serviceList');
+      sheet.getRange('B3').setValue(JSON.stringify(svcList));
+    }
+  }
+
+  // B5 purchaseMasterList
+  var pmJson = sheet.getRange('B5').getValue();
+  var pmList = [];
+  try { if (pmJson) pmList = JSON.parse(pmJson); } catch(e) {}
+  if (Array.isArray(pmList)) {
+    var pmTouched = false;
+    pmList.forEach(function(it) {
+      if (!it || typeof it !== 'object') return;
+      STRIP_KEYS.forEach(function(k) {
+        if (k in it) { delete it[k]; pmTouched = true; result.purchaseMasterListStripped++; }
+      });
+    });
+    if (pmTouched) {
+      sheet.getRange('A5').setValue('purchaseMasterList');
+      sheet.getRange('B5').setValue(JSON.stringify(pmList));
+    }
+  }
+
+  Logger.log('[migration_v0_16_1_stripCategoryLinkage_] result=' + JSON.stringify(result));
+  return { status: 'ok', result: result };
 }
 
 // ============================================================

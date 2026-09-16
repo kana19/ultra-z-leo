@@ -1639,9 +1639,11 @@ async function deletePurchaseCategory(id) {
 function bindPurchaseCategoryAdd() {
   const btn = document.getElementById('pcat-add-btn');
   const nameInput = document.getElementById('pcat-add-name');
+  const taxSelect = document.getElementById('pcat-add-tax');
   if (!btn || !nameInput) return;
   const doAdd = async () => {
     const name = nameInput.value.trim();
+    const taxRate = taxSelect ? parseInt(taxSelect.value, 10) : 10;
     if (!name) return showToast('大分類名を入力してください', 'error');
     if (name.length > 30) return showToast('大分類名は30文字以内で入力してください', 'error');
     const list = getPurchaseCategoryList();
@@ -1652,10 +1654,12 @@ function bindPurchaseCategoryAdd() {
     if (list.some(s => s.name === name)) return showToast('同じ名前の大分類が既に登録されています', 'error');
     btn.disabled = true;
     try {
-      const res = await callGAS('addPurchaseCategory', { name });
+      // v0.16.1：仕入原価大分類も taxRate を持つ（サービス大分類と対称）
+      const res = await callGAS('addPurchaseCategory', { name, taxRate });
       if (res && res.status === 'ok' && Array.isArray(res.purchaseCategoryList)) {
         _savePurchaseCategoryList(res.purchaseCategoryList);
         nameInput.value = '';
+        if (taxSelect) taxSelect.value = '10';
         renderPurchaseCategoryList();
         showToast(`${name}を追加しました ✓`, 'success');
       } else if (res && res.code === 'quota_exceeded') {

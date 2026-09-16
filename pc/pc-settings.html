@@ -65,17 +65,14 @@
       <div class="pc-card">
         <div class="pc-section-title">サービスマスタ（売上区分） <span id="svc-count-badge" class="pc-count-badge" hidden></span></div>
         <p class="pc-note" style="color:var(--uz-muted);margin-bottom:8px;">
-          分類＝下の「サービス大分類」で登録した名前を選ぶと、ホーム損益がこの分類でグルーピング集計されます。
+          月次入力の登録時に大分類を選択すると、ホーム損益がこの分類でグルーピング集計されます。
         </p>
         <table class="pc-table" id="svc-table">
-          <thead><tr><th style="width:90px;">コード</th><th>サービス名</th><th style="width:150px;">分類（大分類）</th><th style="width:90px;">税率</th><th style="width:140px;">操作</th></tr></thead>
+          <thead><tr><th style="width:90px;">コード</th><th>サービス名</th><th style="width:90px;">税率</th><th style="width:140px;">操作</th></tr></thead>
           <tbody id="svc-body"></tbody>
         </table>
         <div id="svc-add-row" class="pc-form-row" style="margin-top:10px;align-items:center;gap:8px;flex-wrap:wrap;">
           <input type="text" id="svc-add-name" class="pc-input" placeholder="サービス名（例：店内売上）" maxlength="30" style="flex:2;min-width:160px;">
-          <select id="svc-add-cat" class="pc-select" style="width:150px;" title="サービス大分類から選択（任意）">
-            <option value="">分類（任意）</option>
-          </select>
           <select id="svc-add-tax" class="pc-select" style="width:120px;">
             <option value="10">10%</option>
             <option value="8">8%（軽減）</option>
@@ -90,7 +87,7 @@
       <div class="pc-card">
         <div class="pc-section-title">サービス大分類（任意） <span id="pc-schannel-count-badge" class="pc-count-badge" hidden></span></div>
         <p class="pc-note" style="color:var(--uz-muted);margin-bottom:10px;">
-          売上区分をまとめる大分類（経営方針で自由に定義：店内／テイクアウト／卸し／コンサル／物販など）。設定するとサービスマスタの分類欄で選べ、税率はこちらが優先されます。空欄で無害運転（既存動作を壊さない）。
+          売上区分をまとめる大分類（経営方針で自由に定義：店内／テイクアウト／卸し／コンサル／物販など）。月次入力の登録時に大分類を選択すると税率がこちらに切替＋ホーム損益で分類別グルーピング集計。空欄で無害運転（既存動作を壊さない）。
         </p>
         <table class="pc-table" id="pc-schannel-table">
           <thead><tr><th style="width:90px;">ID</th><th>大分類名</th><th style="width:90px;">税率</th><th style="width:90px;">操作</th></tr></thead>
@@ -112,17 +109,14 @@
       <div class="pc-card">
         <div class="pc-section-title">仕入原価マスタ <span id="pur-count-badge" class="pc-count-badge" hidden></span></div>
         <p class="pc-note" style="color:var(--uz-muted);margin-bottom:8px;">
-          分類＝下の「仕入原価大分類」で登録した名前を選ぶと、ホーム損益がこの分類でグルーピング集計されます。
+          月次入力の登録時に大分類を選択すると、ホーム損益がこの分類でグルーピング集計されます。
         </p>
         <table class="pc-table" id="pur-table">
-          <thead><tr><th style="width:90px;">コード</th><th>仕入科目名</th><th style="width:150px;">分類（大分類）</th><th style="width:90px;">税率</th><th style="width:140px;">操作</th></tr></thead>
+          <thead><tr><th style="width:90px;">コード</th><th>仕入科目名</th><th style="width:90px;">税率</th><th style="width:140px;">操作</th></tr></thead>
           <tbody id="pur-body"></tbody>
         </table>
         <div id="pur-add-row" class="pc-form-row" style="margin-top:10px;align-items:center;gap:8px;flex-wrap:wrap;">
           <input type="text" id="pur-add-name" class="pc-input" placeholder="仕入科目名（例：食材費）" maxlength="30" style="flex:2;min-width:160px;">
-          <select id="pur-add-cat" class="pc-select" style="width:150px;" title="仕入原価大分類から選択（任意）">
-            <option value="">分類（任意）</option>
-          </select>
           <select id="pur-add-tax" class="pc-select" style="width:120px;">
             <option value="10">10%</option>
             <option value="8">8%（軽減）</option>
@@ -137,14 +131,19 @@
       <div class="pc-card">
         <div class="pc-section-title">仕入原価大分類（任意） <span id="pc-pcat-count-badge" class="pc-count-badge" hidden></span></div>
         <p class="pc-note" style="color:var(--uz-muted);margin-bottom:10px;">
-          仕入原価品目を大分類でまとめます（食材／酒類／包材など）。品目マスタで categoryId 紐付け＝入力時は品目選択で自動決定（モーダルにタグは出ません）。税率は品目側 defaultTaxRate が正。
+          仕入原価品目を大分類でまとめます（食材／酒類／包材など）。月次入力の登録時に大分類を選択すると税率がこちらに切替＋ホーム損益で分類別グルーピング集計。空欄で無害運転（既存動作を壊さない）。
         </p>
         <table class="pc-table" id="pc-pcat-table">
-          <thead><tr><th style="width:90px;">ID</th><th>大分類名</th><th style="width:90px;">操作</th></tr></thead>
+          <thead><tr><th style="width:90px;">ID</th><th>大分類名</th><th style="width:90px;">税率</th><th style="width:90px;">操作</th></tr></thead>
           <tbody id="pc-pcat-body"></tbody>
         </table>
         <div id="pc-pcat-add-row" class="pc-form-row" style="margin-top:10px;align-items:center;gap:8px;flex-wrap:wrap;">
           <input type="text" id="pc-pcat-add-name" class="pc-input" placeholder="大分類名（例：食材）" maxlength="30" style="flex:2;min-width:160px;">
+          <select id="pc-pcat-add-tax" class="pc-select" style="width:120px;">
+            <option value="10">10%</option>
+            <option value="8">8%（軽減）</option>
+            <option value="0">0%（非課税）</option>
+          </select>
           <button id="pc-pcat-add-btn" class="pc-btn" type="button">＋ 追加</button>
         </div>
         <p id="pc-pcat-limit-hint" class="pc-note" style="margin-top:6px;color:var(--uz-muted);" hidden></p>
