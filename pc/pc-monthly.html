@@ -30,7 +30,7 @@
         </div>
       </section>
 
-      <!-- フラットテーブル（v0.16.0：分類列追加・9列構成） -->
+      <!-- フラットテーブル（v0.16.1：掛列追加・10列構成／メモと案件の間） -->
       <section class="pc-table-wrap">
         <table class="pc-monthly-table" id="monthly-table">
           <thead>
@@ -43,6 +43,7 @@
               <th data-filter-col="taxRate">税率</th>
               <th class="num">消費税</th>
               <th data-filter-col="memo">メモ</th>
+              <th data-filter-col="unpaid" style="width:70px;">掛</th>
               <th data-filter-col="project">案件</th>
             </tr>
             <tr class="monthly-summary-row" id="monthly-summary-row" hidden>
@@ -55,10 +56,11 @@
               <td class="num monthly-summary-cell" data-summary-col="tax"></td>
               <td></td>
               <td></td>
+              <td></td>
             </tr>
           </thead>
           <tbody id="monthly-tbody">
-            <tr><td colspan="9" class="loading">読み込み中…</td></tr>
+            <tr><td colspan="10" class="loading">読み込み中…</td></tr>
           </tbody>
         </table>
       </section>

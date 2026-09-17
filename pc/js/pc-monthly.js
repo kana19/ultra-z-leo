@@ -441,7 +441,7 @@ function renderTable() {
   // ドラフト行を最上段（指示書5§2-2 step3 / §3-5）
   const draftHtml = _draftRows.map(d => renderDraftRow(d)).join('');
   const rowHtml   = pagedRows.map(r => renderRow(r)).join('');
-  tbody.innerHTML = (draftHtml + rowHtml) || '<tr><td colspan="9" class="loading">該当する行がありません</td></tr>';
+  tbody.innerHTML = (draftHtml + rowHtml) || '<tr><td colspan="10" class="loading">該当する行がありません</td></tr>';
   // bindRowEvents は撤去（指示書8-5§1：tbody-level delegation で1度だけ結線・renderTable の負荷も低減）
   _refreshColFilterButtonStates();
   _renderFilterSummary(filteredRows);   // 集計はフィルタ後の全件が対象（ページング前）
@@ -531,6 +531,18 @@ function renderRow(row) {
   const categoryName = String(row.serviceChannelName || row.purchaseCategoryName || '');
   const cellCategory = categoryName || '<span style="color:#999;">―</span>';
 
+  // v0.16.1（2026-09-17）：掛列（売掛/買掛）専用列。row.isUnpaid で判定＝ 売上=売掛（未入金）／コスト=買掛（未払）
+  //   金光要求「PC 版登録後の一覧に売掛/買掛の専用列」＝ 一覧行で即視認できる位置（メモと案件の間）に配置。
+  //   未消込は赤系ラベル・消込済/現金取引は「―」表示（getUnpaid/売掛買掛元帳と同じ判定基準）。
+  const isSalesRow = String(row.source) === 'sales';
+  let cellUnpaid;
+  if (row.isUnpaid) {
+    const label = isSalesRow ? '売掛' : '買掛';
+    cellUnpaid = `<span style="color:var(--uz-red,#c0392b);font-weight:600;font-size:12px;">${label}</span>`;
+  } else {
+    cellUnpaid = '<span style="color:#999;">―</span>';
+  }
+
   return `
     <tr class="${classes}" data-row-key="${_escHtml(key)}" data-source="${row.source}" data-row-index="${row.rowIndex}"${tabindexAttr}>
       <td data-field-cell="date">${cellDate}</td>
@@ -541,6 +553,7 @@ function renderRow(row) {
       <td data-field-cell="taxRate">${cellTaxRate}</td>
       <td class="num">${cellTax}</td>
       <td data-field-cell="memo">${cellMemo}</td>
+      <td class="num">${cellUnpaid}</td>
       <td class="pc-project-col">${cellProject}</td>
     </tr>
   `;
@@ -568,7 +581,7 @@ function renderDraftRow(draft) {
   const commitHidden  = valid ? '' : 'hidden';
 
   const categoryCellHtml = renderCategorySelect(draft);
-  // v0.16.1（2026-09-17）：売掛/買掛 checkbox を項目列に配置（3 デバイス共通の会計基本機能）。
+  // v0.16.1（2026-09-17）：売掛/買掛 checkbox を専用列（メモと案件の間）に配置＝ 通常行の掛列と同位置。
   //   売上＝ 売掛（未入金）／ コスト＝ 買掛（未払）＝ 選択で 1／未選択で 0＝ シート P 列 (未収/未払フラグ) に反映。
   //   スマホ (sales.js/cost.js)・iPad (共通)・PC の 3 デバイスで機能均一化＝ 検証コスト削減。
   const unpaidLabel = isCost ? '買掛' : '売掛';
@@ -582,11 +595,11 @@ function renderDraftRow(draft) {
       <td class="num"><input type="number" class="pc-edit-input pc-edit-input--num" data-field="amount" value="${draft.amount || ''}" placeholder="0"></td>
       <td>${renderTaxRateSelect(draft.taxRate, 'draft')}</td>
       <td class="num">${_formatYenPlain(draftTax)}</td>
-      <td>
-        <input type="text" class="pc-edit-input" data-field="memo" value="${_escHtml(draft.memo)}" placeholder="メモ">
-        <label style="display:inline-flex;align-items:center;gap:4px;margin-top:4px;font-size:11px;color:var(--uz-text2);cursor:pointer;">
+      <td><input type="text" class="pc-edit-input" data-field="memo" value="${_escHtml(draft.memo)}" placeholder="メモ"></td>
+      <td class="num">
+        <label style="display:inline-flex;align-items:center;gap:3px;font-size:11px;color:var(--uz-text2);cursor:pointer;white-space:nowrap;">
           <input type="checkbox" class="pc-draft-unpaid" data-field="isUnpaid" ${isUnpaidChecked}>
-          ${unpaidLabel}（${isCost ? '未払' : '未入金'}）
+          ${unpaidLabel}
         </label>
       </td>
       <td class="pc-project-col">
