@@ -220,6 +220,11 @@ function _getColValue(row, col) {
     const name = String(row.serviceChannelName || row.purchaseCategoryName || '');
     return name || '（分類なし）';
   }
+  if (col === 'unpaid') {
+    // v0.16.1：掛列（売掛/買掛）フィルタ値＝ renderRow の表示ラベルと同一で絞込可能にする。
+    if (!row.isUnpaid) return '―';
+    return String(row.source) === 'sales' ? '売掛' : '買掛';
+  }
   if (col === 'date') {
     const m = String(row.date || '').match(/^(\d{4})-(\d{1,2})-/);
     return m ? `${m[1]}年${Number(m[2])}月` : '';
@@ -1322,7 +1327,7 @@ async function commitDrafts(drafts) {
           taxAmount:  Number(r.taxAmount) || 0,
           memo:       String(draft.memo || ''),
           isProject:  false,
-          isUnpaid:   false,
+          isUnpaid:   !!draft.isUnpaid,
           isLocked:   false,
           salesRowId: String(r.salesRowId || ''),
           serviceChannelCode: String(r.serviceChannelCode || draft.serviceChannelCode || ''),
@@ -1351,7 +1356,7 @@ async function commitDrafts(drafts) {
           taxAmount:  Number(r.taxAmount) || 0,
           memo:       String(draft.memo || ''),
           isProject:  false,
-          isUnpaid:   false,
+          isUnpaid:   !!draft.isUnpaid,
           isLocked:   false,
           salesRowId: '',
           purchaseCategoryCode: String(r.purchaseCategoryCode || draft.purchaseCategoryCode || ''),

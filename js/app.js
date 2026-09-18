@@ -650,41 +650,44 @@ async function uzFetchHistory(month) {
 async function uzFetchBreakdown(month) {
   if (_uzBreakdownCache[month] !== undefined) return _uzBreakdownCache[month];
   const rows = await uzFetchHistory(month);
-  // 分類マップ（サービス名→category／仕入科目名→category）を settings マスタから引く。
-  // categoryは 03§1-1/§1-3 の任意フィールド（旧データは空＝'未分類'扱い）。
-  const nameToCat = { sv: {}, pur: {} };
-  try {
-    const svc = JSON.parse(localStorage.getItem(SERVICE_MASTER_KEY) || '[]');
-    svc.forEach(s => { if (s && s.name) nameToCat.sv[String(s.name)] = String(s.category || '').trim(); });
-  } catch (_e) {}
-  try {
-    const pur = JSON.parse(localStorage.getItem(PURCHASE_MASTER_KEY) || '[]');
-    pur.forEach(p => { if (p && p.name) nameToCat.pur[String(p.name)] = String(p.category || '').trim(); });
-  } catch (_e) {}
+  // v0.16.1【a/k1/k2】：分類は登録時属性（getHistory の r.serviceChannelName / r.purchaseCategoryName）から。
+  //   マスタ 1 対 1 紐付け（旧 serviceList/purchaseMasterList の category）は撤廃済み＝ 参照しない。
+  //   販管費は分類なし（(b) 確定・零細事業者思想）＝ category 常に空。
+  //   (name, category) の複合キーで集計＝ 同一科目名が複数の大分類で登録された場合の混在を防ぐ。
   const salesMap = {}, cogsMap = {}, sgaMap = {};
+  const salesCat = {}, cogsCat = {};
+  function bumpNamed(map, catMap, key, cat, amt) {
+    map[key] = (map[key] || 0) + amt;
+    catMap[key] = cat;
+  }
   rows.forEach(r => {
     const amt = Number(r.amount) || 0;
     if (r.type === 'sales') {
       const name = r.itemName || '売上';
-      salesMap[name] = (salesMap[name] || 0) + amt;
+      const cat = String(r.serviceChannelName || '').trim();
+      const key = cat ? `${cat}${name}` : name;
+      bumpNamed(salesMap, salesCat, key, cat, amt);
     } else if (r.type === 'cost') {
       const name = r.itemName || '経費';
       if (String(r.divisionCode) === '1') {
-        cogsMap[name] = (cogsMap[name] || 0) + amt;
+        const cat = String(r.purchaseCategoryName || '').trim();
+        const key = cat ? `${cat}${name}` : name;
+        bumpNamed(cogsMap, cogsCat, key, cat, amt);
       } else {
         sgaMap[name] = (sgaMap[name] || 0) + amt;
       }
     }
   });
-  // {name,amt,category} を返し、pl.js/home.js の展開層で分類グルーピング可能に。
-  // categoryは serviceList/purchaseMasterList から引く。販管費は青色申告固定＝category常に空。
-  const toArr = (map, catMap) => Object.entries(map)
-    .map(([name, amt]) => ({ name, amt, category: (catMap && catMap[name]) || '' }))
+  const toArrWithCat = (map, catMap) => Object.entries(map)
+    .map(([key, amt]) => ({ name: key.includes('') ? key.split('')[1] : key, amt, category: catMap[key] || '' }))
+    .sort((a, b) => b.amt - a.amt);
+  const toArrPlain = (map) => Object.entries(map)
+    .map(([name, amt]) => ({ name, amt, category: '' }))
     .sort((a, b) => b.amt - a.amt);
   const result = {
-    sales: toArr(salesMap, nameToCat.sv),
-    cogs:  toArr(cogsMap,  nameToCat.pur),
-    sga:   toArr(sgaMap,   null)
+    sales: toArrWithCat(salesMap, salesCat),
+    cogs:  toArrWithCat(cogsMap,  cogsCat),
+    sga:   toArrPlain(sgaMap)
   };
   _uzBreakdownCache[month] = result;
   return result;

@@ -307,7 +307,19 @@ async function togglePcLedgerRow(tr) {
       if (field === 'sgaBreakdown'  && !(r.type === 'cost' && String(r.divisionCode) !== '1')) return false;
       // 科目名 filter：getHistory の r.itemName で照合（pl.js と同じ規約）
       const rowItemName = String(r.itemName || (r.type === 'sales' ? '売上' : '経費')).trim();
-      return rowItemName === itemName;
+      if (rowItemName !== itemName) return false;
+      // v0.16.1：分類名 filter（salesBreakdown / cogsBreakdown のみ・sgaBreakdown は 1 段ゆえスキップ）
+      //   同一科目名が複数の大分類で登録された場合の混在を防ぐ＝ getSummary の 2 段グルーピングと一致させる。
+      //   UNCAT（'未分類'）選択時は空欄行のみ抽出（大分類タグなし＝ 登録時に大分類未選択）。
+      if (field === 'salesBreakdown') {
+        const rowCat = String(r.serviceChannelName || '').trim();
+        return catName === '未分類' ? rowCat === '' : rowCat === catName;
+      }
+      if (field === 'cogsBreakdown') {
+        const rowCat = String(r.purchaseCategoryName || '').trim();
+        return catName === '未分類' ? rowCat === '' : rowCat === catName;
+      }
+      return true;
     }).sort((a, b) => (a.date || '').localeCompare(b.date || ''));
     if (filtered.length === 0) {
       ledgerTr.innerHTML = `<td colspan="${cols}" style="padding:0;"><div style="padding:12px;text-align:center;color:var(--uz-text2);font-size:13px;">${escHtml(monthStr)} の ${escHtml(itemName)} 明細なし</div></td>`;

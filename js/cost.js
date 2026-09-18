@@ -631,7 +631,7 @@ function _smCostBuildFormBodyHTML() {
  * この時点でモーダル DOM は document に挿入済みのため、
  * document.getElementById / document.querySelectorAll が利用可能。
  */
-function _smCostInitFormInModal() {
+async function _smCostInitFormInModal() {
   // 0. costMaster を初期化（home 等 data-page≠cost のページでモーダルを開くと
   //    cost.js の DOMContentLoaded 初期化が走らず costMaster が空のままになり、
   //    販管費が諸口のみになるため、モーダル起動時に必ず読み直す）。

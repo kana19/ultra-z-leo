@@ -36,10 +36,34 @@
     const base = {
       kind, date: today(), taxRate: null, miscName: '',
       amount: '', memo: '', unpaid: false, calView: null, opts: {},
+      // v0.16.1【k1/k2】：大分類 chip（登録時属性・売上=serviceChannel／仕入原価=purchaseCategory）
+      //   sales: channelId+channelName／cost: categoryId+categoryName （仕入原価タブのみ有効）
+      categoryId: '', categoryName: '',
     };
     if (kind === 'sales') Object.assign(base, { svcCode: '', svcName: '' });
     else Object.assign(base, { divCode: '2', itemCode: '', itemName: '' });
     return base;
+  }
+  // v0.16.1：大分類マスタ safe-getter（sales.js/cost.js の _get*ListSafe_ と同型・localStorage フォールバック）
+  function _getServiceChannelList() {
+    try {
+      if (typeof getServiceChannelList === 'function') return getServiceChannelList();
+      const s = localStorage.getItem('uz_service_channel_list');
+      return s ? (JSON.parse(s) || []) : [];
+    } catch (_) { return []; }
+  }
+  function _getPurchaseCategoryList() {
+    try {
+      if (typeof getPurchaseCategoryList === 'function') return getPurchaseCategoryList();
+      const s = localStorage.getItem('uz_purchase_category_list');
+      return s ? (JSON.parse(s) || []) : [];
+    } catch (_) { return []; }
+  }
+  // 大分類は sales と cost(divCode='1' 仕入原価) のみ・cost の販管費は分類なし（(b) 確定・零細事業者思想）。
+  function getCategoryList(s) {
+    if (s.kind === 'sales') return _getServiceChannelList();
+    if (s.kind === 'cost' && s.divCode === '1') return _getPurchaseCategoryList();
+    return [];
   }
   function itemResolved(s) {
     if (s.editId) return s.kind === 'sales' ? !!(s.svcCode || s.svcName) : !!(s.itemCode || s.itemName);
@@ -86,6 +110,18 @@
   function taxchipsHTML(s) {
     return [10, 8, 0].map(r =>
       `<button type="button" class="uzf-taxchip ${s.taxRate === r ? 'is-active' : ''}" data-rate="${r}">${r === 0 ? '非課税' : r + '%'}</button>`).join('');
+  }
+  // v0.16.1【k1/k2】：大分類 chip（登録時属性）レンダラ。cost.js/sales.js の chip と同型（税率上書き源）。
+  function catchipsHTML(s) {
+    const list = getCategoryList(s);
+    if (!list.length) return '';
+    return list.map(c => {
+      const cid = String(c.id || c.channelId || '');
+      const nm = String(c.name || '');
+      const tax = Number(c.taxRate) || 0;
+      const active = s.categoryId && String(s.categoryId) === cid ? ' is-active' : '';
+      return `<button type="button" class="uzf-taxchip${active}" data-cat-id="${ESC(cid)}" data-cat-name="${ESC(nm)}" data-cat-tax="${tax}">${ESC(nm)}<span style="opacity:.6;margin-left:4px;">(${tax}%)</span></button>`;
+    }).join('');
   }
   function keypadHTML() {
     const keys = ['7', '8', '9', '4', '5', '6', '1', '2', '3', '00', '0', 'del'];
@@ -136,6 +172,11 @@
          <div class="uzf-cards ${colsCls(s)}" data-cards>${cardsHTML(s)}</div>
          <div class="uzf-misc" data-misc hidden>
            <input type="text" class="uzf-misc-input" maxlength="50" placeholder="品目名（任意）">
+         </div>
+         <!-- v0.16.1【k1/k2】：大分類 chip（登録時属性・売上=serviceChannel／仕入原価=purchaseCategory・空なら hidden） -->
+         <div class="uzf-cat-wrap" data-cat-wrap hidden style="margin-top:10px;">
+           <div class="uzf-ed-sub" style="font-size:12px;color:var(--uz-muted);">大分類（任意・選ぶと税率上書き）</div>
+           <div class="uzf-taxchips" data-cat-chips role="group" aria-label="大分類選択">${catchipsHTML(s)}</div>
          </div>
          <div class="uzf-ed-sub">税率</div>
          <div class="uzf-taxchips" data-tax-chips>${taxchipsHTML(s)}</div>
@@ -198,18 +239,65 @@
     box.className = 'uzf-cards ' + colsCls(s);
     box.innerHTML = cardsHTML(s);
   }
+  // v0.16.1【k1/k2】：大分類 chip の rebuild＋wrap 表示制御。
+  //   list 空／販管費タブは wrap を hidden＝ chip DOM を隠す（cost.js/sales.js の hidden 属性運用と同型）。
+  function rebuildCategoryChips(host) {
+    const s = host.__uzf;
+    const wrap = $(host, '[data-cat-wrap]');
+    const box = $(host, '[data-cat-chips]');
+    if (!wrap || !box) return;
+    const list = getCategoryList(s);
+    if (!list.length) { wrap.hidden = true; box.innerHTML = ''; return; }
+    wrap.hidden = false;
+    box.innerHTML = catchipsHTML(s);
+  }
+  function updateCategoryActive(host) {
+    const s = host.__uzf;
+    host.querySelectorAll('.uzf-taxchip[data-cat-id]').forEach(c => {
+      c.classList.toggle('is-active', !!s.categoryId && String(c.dataset.catId) === String(s.categoryId));
+    });
+  }
 
   /* ── 操作（インクリメンタル：scrollを保ったまま該当部のみ更新） ── */
   function selectItem(host, card) {
     const s = host.__uzf;
     if (s.kind === 'sales') { s.svcCode = card.dataset.code; s.svcName = card.dataset.name; }
     else { s.itemCode = card.dataset.code; s.itemName = card.dataset.name; }
-    s.taxRate = parseInt(card.dataset.tax, 10);
+    // v0.16.1：大分類 chip 選択中は大分類 taxRate 優先＝ 科目 taxRate 上書きしない。
+    //   大分類未選択時のみ 科目マスタの taxRate をデフォルトとして反映（v0.16.1 hotfix【c】方針の一貫）。
+    if (!s.categoryId) s.taxRate = parseInt(card.dataset.tax, 10);
     if (!isMisc(card.dataset.code)) s.miscName = '';
     host.querySelectorAll('.uzf-card').forEach(c => c.classList.toggle('is-active', c === card));
     updateMiscBox(host);
     updateTaxActive(host);
     setHead(host, 'item', itemHeadValue(s));
+    setHead(host, 'itemtax', itemTaxLabel(s));
+    updateAmountUI(host);
+    updateReady(host);
+  }
+  // v0.16.1【k1/k2】：大分類 chip 選択。トグル動作＝ 同じ大分類再タップで解除（税率は科目マスタへ戻す）。
+  function selectCategory(host, chip) {
+    const s = host.__uzf;
+    const cid = String(chip.dataset.catId || '');
+    const nm = String(chip.dataset.catName || '');
+    const tax = parseInt(chip.dataset.catTax, 10);
+    if (s.categoryId === cid) {
+      // 解除：categoryId クリア＋ 税率は科目マスタの taxRate へ戻す（現在選択中の科目があれば）
+      s.categoryId = '';
+      s.categoryName = '';
+      const items = getItems(s);
+      const sel = s.kind === 'sales' ? s.svcCode : s.itemCode;
+      const cur = items.find(it => it.code === sel);
+      if (cur && [0, 8, 10].indexOf(Number(cur.taxRate)) >= 0) {
+        s.taxRate = Number(cur.taxRate);
+      }
+    } else {
+      s.categoryId = cid;
+      s.categoryName = nm;
+      if (Number.isFinite(tax) && [0, 8, 10].indexOf(tax) >= 0) s.taxRate = tax;
+    }
+    updateCategoryActive(host);
+    updateTaxActive(host);
     setHead(host, 'itemtax', itemTaxLabel(s));
     updateAmountUI(host);
     updateReady(host);
@@ -226,8 +314,11 @@
     const s = host.__uzf;
     s.divCode = tab.dataset.div;
     s.itemCode = ''; s.itemName = ''; s.taxRate = null; s.miscName = '';
+    // v0.16.1：区分切替で大分類もクリア（大分類は仕入原価専用・販管費は分類なし・(b) 確定）
+    s.categoryId = ''; s.categoryName = '';
     host.querySelectorAll('.uzf-divtab').forEach(t => t.classList.toggle('is-active', t === tab));
     rebuildCards(host);
+    rebuildCategoryChips(host);
     updateMiscBox(host);
     updateTaxActive(host);
     setHead(host, 'item', itemHeadValue(s));
@@ -360,6 +451,9 @@
           miscItemName: isMisc(s.svcCode) ? s.miscName : '',
           amountExTax: taxExcluded, taxRate: s.taxRate, tax, amountInTax: amount,
           memo: s.memo, uncollected: s.unpaid ? 1 : 0,
+          // v0.16.1【k2】：大分類（登録時属性）＝ シート V/W 列に書込＝ getSummary で分類集計
+          serviceChannelCode: s.categoryId || '',
+          serviceChannelName: s.categoryName || '',
         });
       } else {
         result = await callGAS('addCost', {
@@ -368,6 +462,9 @@
           miscItemName: isMisc(s.itemCode) ? s.miscName : '',
           taxExcluded, taxRate: s.taxRate, tax, taxIncluded: amount,
           memo: s.memo, unpaid: s.unpaid ? 1 : 0, staffId: '', staffName: '', clientId: '',
+          // v0.16.1【k1】：仕入原価大分類（登録時属性・仕入原価タブのみ・販管費は空文字）＝ シート W/X 列に書込
+          purchaseCategoryCode: (s.divCode === '1') ? (s.categoryId || '') : '',
+          purchaseCategoryName: (s.divCode === '1') ? (s.categoryName || '') : '',
         });
       }
       if (result?.status !== 'ok') throw new Error(result?.message || '登録エラー');
@@ -380,11 +477,17 @@
         ? { type: 'sales', rowIndex: _rowIndex, date: s.date,
             serviceCode: s.svcCode, serviceName: s.svcName, itemName: s.svcName,
             taxRate: s.taxRate, amount: String(amount), memo: s.memo,
-            uncollected: s.unpaid ? 1 : 0 }
+            uncollected: s.unpaid ? 1 : 0,
+            // v0.16.1【k2】：登録時属性（大分類）を保存＝ 編集モードでの復元用
+            serviceChannelCode: s.categoryId || '',
+            serviceChannelName: s.categoryName || '' }
         : { type: 'cost', rowIndex: _rowIndex, date: s.date,
             divisionCode: s.divCode, itemCode: s.itemCode, itemName: s.itemName,
             taxRate: s.taxRate, amount: String(amount), memo: s.memo,
-            unpaid: s.unpaid ? 1 : 0 };
+            unpaid: s.unpaid ? 1 : 0,
+            // v0.16.1【k1】：登録時属性（仕入原価大分類・仕入原価のみ）を保存
+            purchaseCategoryCode: (s.divCode === '1') ? (s.categoryId || '') : '',
+            purchaseCategoryName: (s.divCode === '1') ? (s.categoryName || '') : '' };
       showDetail(host, saved);
     } catch (e) {
       toast('登録に失敗しました：' + (e?.message || '通信エラー'));
@@ -407,6 +510,8 @@
     host.addEventListener('click', e => {
       let el;
       if ((el = e.target.closest('.uzf-card'))) return selectItem(host, el);
+      // v0.16.1【k1/k2】：大分類 chip（.uzf-taxchip[data-cat-id]）を通常 tax chip より先に判定
+      if ((el = e.target.closest('.uzf-taxchip[data-cat-id]'))) return selectCategory(host, el);
       if ((el = e.target.closest('.uzf-taxchip'))) return selectTax(host, el);
       if ((el = e.target.closest('.uzf-divtab'))) return selectDiv(host, el);
       if ((el = e.target.closest('.uzf-key'))) return pressKey(host, el);
@@ -456,6 +561,23 @@
     buildSkeleton(host);
     bindAll(host);
     if (kind === 'cost') _ensureCostMaster();
+    // v0.16.1【k1/k2】：大分類 chip wrap の表示制御（list があれば unhide）＋ 最新 settings を非同期取得
+    //   →キャッシュ更新後に chip を再描画（新規 PWA でホーム未経由時の空返却事故を根治）。
+    rebuildCategoryChips(host);
+    if (typeof uzGetSettings === 'function') {
+      Promise.resolve(uzGetSettings()).then(d => {
+        if (!d) return;
+        try {
+          if (Array.isArray(d.serviceChannelList)) {
+            localStorage.setItem('uz_service_channel_list', JSON.stringify(d.serviceChannelList));
+          }
+          if (Array.isArray(d.purchaseCategoryList)) {
+            localStorage.setItem('uz_purchase_category_list', JSON.stringify(d.purchaseCategoryList));
+          }
+        } catch (_) {}
+        if (host.isConnected) rebuildCategoryChips(host);
+      }).catch(() => {});
+    }
   }
 
   /* 修正（編集）モード：既存レコードでプリフィルして同一エンジンで描画。
@@ -477,17 +599,28 @@
       s.svcCode = record.serviceCode || '';
       s.svcName = record.itemName || record.serviceName || '';
       s.unpaid = Number(record.uncollected) === 1;
+      // v0.16.1【k2】：編集モードで登録時属性（大分類）を復元
+      s.categoryId = String(record.serviceChannelCode || '');
+      s.categoryName = String(record.serviceChannelName || '');
     } else {
       s.divCode = String(record.divisionCode || '2') === '1' ? '1' : '2';
       s.itemCode = record.itemCode || '';
       s.itemName = record.itemName || '';
       s.unpaid = Number(record.unpaid) === 1;
+      // v0.16.1【k1】：編集モードで登録時属性（仕入原価大分類・仕入原価タブのみ）を復元
+      if (s.divCode === '1') {
+        s.categoryId = String(record.purchaseCategoryCode || '');
+        s.categoryName = String(record.purchaseCategoryName || '');
+      }
     }
     host.__uzf = s;
     _hosts.add(host);
     buildSkeleton(host);
     bindAll(host);
     if (kind === 'cost') _ensureCostMaster();
+    // v0.16.1【k1/k2】：大分類 chip の描画・活性反映（プリフィル値の categoryId を is-active に）
+    rebuildCategoryChips(host);
+    updateCategoryActive(host);
     // プリフィル値をヘッド・金額・税率・活性に反映
     setHead(host, 'item', itemHeadValue(s));
     setHead(host, 'itemtax', itemTaxLabel(s));

@@ -372,8 +372,6 @@
           <option value="8">8%（軽減）</option>
           <option value="0">0%（非課税）</option>
         </select>
-        <input type="text" id="service-add-cat" class="settings-input" style="width:130px;flex-shrink:0;"
-               placeholder="分類（任意）" maxlength="20" list="service-cat-options" autocomplete="off">
         <button id="service-add-btn" class="settings-add-btn" type="button">＋ 追加</button>
       </div>
       <p id="service-limit-hint" class="settings-note" hidden></p>
@@ -404,7 +402,7 @@
       </div>
       <p id="schannel-limit-hint" class="settings-note" hidden></p>
       <p class="settings-note">
-        売上区分をまとめる大分類（経営方針で自由に定義）。設定すると上のサービスマスタの分類欄で選べ、税率はこちらが優先されます。空欄でも動きます（設定なし＝従来通り）。
+        売上区分をまとめる大分類（経営方針で自由に定義）。月次入力の売上登録時に選ぶと税率がこちらに切替＋ホーム損益で分類別グルーピング集計。空欄でも動きます（設定なし＝従来通り）。
       </p>
     </div>
   </section>
@@ -427,8 +425,6 @@
           <option value="8">8%（軽減）</option>
           <option value="0">0%（非課税）</option>
         </select>
-        <input type="text" id="purchase-add-cat" class="settings-input" style="width:130px;flex-shrink:0;"
-               placeholder="分類（任意）" maxlength="20" list="purchase-cat-options" autocomplete="off">
         <button id="purchase-add-btn" class="settings-add-btn" type="button">＋ 追加</button>
       </div>
       <p id="purchase-limit-hint" class="settings-note" hidden></p>
