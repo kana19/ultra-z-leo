@@ -475,10 +475,14 @@ function _renderPagination(totalCount) {
 function renderRow(row) {
   const key = _rowKey(row);
   const isEditing = _editingRowKey === key;
+  // v0.16.3：販管費行（cost && divisionCode='2'）に濃いグレー背景で「☆無し行」の視覚区別を担当させる。
+  //          売掛/買掛（pc-row--unpaid）背景色は撤廃（金光指示・2026-09-21）。
+  const isSga = row.source === 'cost' && String(row.divisionCode || '') === '2';
   const classes = [
     isEditing ? 'pc-row--editing' : '',
     row.isUnpaid ? 'pc-row--unpaid' : '',
     row.isLocked ? 'pc-row--locked' : '',
+    isSga ? 'pc-row--sga' : '',
   ].filter(Boolean).join(' ');
 
   const cellDate    = isEditing
@@ -513,17 +517,21 @@ function renderRow(row) {
   } else if (row.isLocked) {
     cellProject = `<button type="button" class="pc-action-btn pc-action-btn--unlock" data-action="request-unlock">解除申請</button>`;
   } else {
-    const parts = [];
+    // v0.16.3：☆/★ボタン欄と 削除ボタン欄を独立させ、案件列見出し（左端）と全行の
+    //          左端要素（☆/★ or 空 placeholder）を縦一直線に揃える。案件化対象外の
+    //          販管費行（canMark=false かつ isProject=false）は透明 placeholder で
+    //          スペース維持＝ 削除ボタンが左に詰まって列見出しに食い込む状態を消す。
+    let starPart;
     if (row.isProject) {
-      parts.push(`<button type="button" class="btn-star btn-star--active" data-action="unmark-project" title="案件登録解除">★</button>`);
+      starPart = `<button type="button" class="btn-star btn-star--active" data-action="unmark-project" title="案件登録解除">★</button>`;
     } else {
       const canMark = row.source === 'sales' || (row.source === 'cost' && _isLinkableCost(row));
-      if (canMark) {
-        parts.push(`<button type="button" class="btn-star" data-action="mark-project" title="案件化">☆</button>`);
-      }
+      starPart = canMark
+        ? `<button type="button" class="btn-star" data-action="mark-project" title="案件化">☆</button>`
+        : `<span class="btn-star-placeholder" aria-hidden="true"></span>`;
     }
-    parts.push(`<button type="button" class="pc-action-btn pc-action-btn--delete" data-action="delete-row" title="行を削除">削除</button>`);
-    cellProject = parts.join('');
+    const delPart = `<button type="button" class="pc-action-btn pc-action-btn--delete" data-action="delete-row" title="行を削除">削除</button>`;
+    cellProject = starPart + delPart;
   }
 
   // 指示書11§4：tr 自体を focusable に（tabindex=0・ロック行のみ除外）

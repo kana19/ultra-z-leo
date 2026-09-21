@@ -110,7 +110,8 @@ body.pc-body {
   padding: 0;
 }
 .pc-header {
-  padding: 22px 28px 18px;
+  /* v0.16.3：右 padding を 28→32 に拡大＝ 時計テキストが右端で切れる（screenshot 4 の状態）を是正 */
+  padding: 22px 32px 18px 28px;
   background: var(--uz-bg);
   border-bottom: 1px solid var(--uz-border);
   display: flex;
@@ -124,12 +125,15 @@ body.pc-body {
   letter-spacing: 0.04em;
 }
 .pc-header__meta  {
-  font-size: 13px;
-  color: var(--uz-text2);
+  /* v0.16.3：ヘッダー時計をタイトルと同サイズに（金光指示・2026-09-21）＝ タイトル撤廃ページで
+              日時単独表示が小さく見える違和感を消す。他ページでも同大サイズで統一。 */
+  font-size: 19px;
+  font-weight: 700;
+  color: var(--uz-text);
   display: flex;
   align-items: baseline;
+  letter-spacing: 0.04em;
 }
-.pc-header__meta #pc-header-store { font-weight: 600; color: var(--uz-text); }
 
 .pc-body-inner { padding: 24px 28px 48px; }
 
@@ -845,11 +849,18 @@ body.pc-body {
   font-size: 12px;
   vertical-align: middle;
 }
-.pc-row--unpaid {
-  background: var(--uz-amber-bg);
+/* v0.16.3：売掛/買掛の背景色は撤廃（金光指示・2026-09-21）＝ 掛列「売掛/買掛」文字表示のみで判別。
+            金光の主張：売掛/買掛行は特別扱いせず、代わりに販管費行（☆無し行）を濃いグレーで区別。 */
+.pc-row--unpaid { background: transparent; }
+.pc-row--unpaid:hover { background: rgba(212, 175, 55, 0.04); }   /* 通常行の hover と同じ */
+
+/* v0.16.3：販管費行（cost && divisionCode='2'）は案件化対象外・☆無し行＝ 濃いグレー背景で区別。
+            hover 時も濃さを維持しつつ僅かに変化＝ 選択可能性を示す。 */
+.pc-row--sga {
+  background: rgba(0, 0, 0, 0.06);
 }
-.pc-row--unpaid:hover {
-  background: rgba(212, 175, 55, 0.18);
+.pc-row--sga:hover {
+  background: rgba(0, 0, 0, 0.09);
 }
 .pc-row--locked {
   background: rgba(160, 144, 112, 0.10);
@@ -1081,8 +1092,21 @@ body.pc-body {
 }
 .pc-project-col .pc-action-btn { margin-right: 4px; }
 .pc-project-col .pc-action-btn:last-child { margin-right: 0; }
-/* ☆ ボタンの左 padding を 0 にして、th「案件」文字の左端と ☆ の左端を厳密に揃える */
-.pc-project-col .btn-star { padding-left: 0; padding-right: 4px; }
+/* v0.16.3：☆/★ボタン と 案件化不可行の透明 placeholder を同幅で並べて、
+            削除ボタンの左端を全行で一致させる（金光指示・案件列見出しと縦一直線）。
+            btn-star の元の padding は除去し、幅は inline-block 固定で担保。 */
+.pc-project-col .btn-star,
+.pc-project-col .btn-star-placeholder {
+  display: inline-block;
+  width: 24px;
+  padding: 0;
+  margin-right: 4px;
+  text-align: left;
+  vertical-align: middle;
+}
+.pc-project-col .btn-star-placeholder {
+  visibility: hidden;   /* 幅だけ確保・見えない */
+}
 
 /* ═══════════════════════════════════════════════════════════
    紐付け候補モーダル

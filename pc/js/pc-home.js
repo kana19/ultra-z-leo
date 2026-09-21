@@ -12,7 +12,9 @@ const expandedSections = { sales: false, cogs: false, sga: false };
 const _pcLedgerState = { currentSide: 'recv', lastRp: null };
 
 document.addEventListener('DOMContentLoaded', async () => {
-  pcBootstrap('index.html', 'ホーム（損益概観）');
+  // v0.16.3：ホーム画面のヘッダータイトル撤廃（金光指示・2026-09-21）。空文字＝ title 要素は残し
+  //          .pc-header の flex space-between が meta（時計）を右端に押し出す構造で右揃え担保。
+  pcBootstrap('index.html', '');
   initYearSelect();
   initTaxDL();
   initLedgerMonthSelect();
