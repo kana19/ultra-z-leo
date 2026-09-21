@@ -983,10 +983,34 @@ function uzRenderAllBrands() {
   });
 }
 
+/**
+ * v0.16.5：<meta name="theme-color"> を theme.css の --uz-theme-color から動的セット。
+ *   PWA インストール後のブラウザ chrome バー・タスクスイッチャー等のシステム UI に反映される色。
+ *   master.gs writeUserRepositoryFiles が生成する theme.css の :root { --uz-theme-color: <顧客登録色>; } と
+ *   PWA 側 meta タグを結合＝ Step 4 で登録されたテーマカラーが実 PWA のシステム UI にも反映される構造。
+ *   theme.css 未読込 or 変数未定義時は既存 hardcode 値（#FFFFFF）を維持＝ 既存挙動不変。
+ */
+function uzSyncMetaThemeColor() {
+  try {
+    const themeColor = getComputedStyle(document.documentElement)
+      .getPropertyValue('--uz-theme-color').trim();
+    if (!themeColor) return;
+    let meta = document.querySelector('meta[name="theme-color"]');
+    if (!meta) {
+      meta = document.createElement('meta');
+      meta.name = 'theme-color';
+      document.head.appendChild(meta);
+    }
+    meta.setAttribute('content', themeColor);
+  } catch (_e) { /* 非対応環境は既存 hardcode 値を維持 */ }
+}
+
 // 初回ロード時に描画（store-logo.png があれば即表示・無ければ店舗名）。
 document.addEventListener('DOMContentLoaded', uzRenderAllBrands);
+document.addEventListener('DOMContentLoaded', uzSyncMetaThemeColor);
 // settings 同期で storeName が確定したら再描画（テキストフォールバック更新）。
 document.addEventListener('uz:settings-synced', uzRenderAllBrands);
+document.addEventListener('uz:settings-synced', uzSyncMetaThemeColor);
 
 /* ════════════════════════════════════════════════════════════
    カラータイマー SSOT（状態判定1・マークアップ1・02_画面仕様.md §5-4）

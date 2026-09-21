@@ -40,6 +40,8 @@ body.pc-body {
   border-bottom: 1px solid var(--uz-border);
   cursor: pointer;
   letter-spacing: 0.04em;
+  /* v0.16.5：PC サイドバーのロゴ位置にも顧客登録の「ロゴ背景色」を反映（theme.css の --uz-logo-bg-color）。 */
+  background: var(--uz-logo-bg-color, transparent);
 }
 .pc-sidebar-logo:hover { background: var(--uz-surface2); }
 .pc-sidebar-logo-brand { display: block; text-align: center; }
