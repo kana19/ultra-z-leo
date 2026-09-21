@@ -533,8 +533,13 @@ function renderRow(row) {
   const tabindexAttr = rowFocusable ? ' tabindex="0"' : '';
 
   // v0.16.0 分類列（登録時属性・売上/仕入原価のみ）
+  // v0.16.3：既存行の分類も click-to-edit で変更可能（登録後の分類つけ替え・修正を許可）
+  //   isEditing 時は renderCategorySelect(row-as-draft) で select 表示＝ ドラフト行と同 UI。
+  //   販管費（cost && divisionCode='2'）は分類対象外ゆえ「―」表示のまま（renderCategorySelect が返す）。
   const categoryName = String(row.serviceChannelName || row.purchaseCategoryName || '');
-  const cellCategory = categoryName || '<span style="color:#999;">―</span>';
+  const cellCategory = isEditing
+    ? renderCategorySelect({ ...row, realSource: row.source })
+    : (categoryName || '<span style="color:#999;">―</span>');
 
   // v0.16.1（2026-09-17）：掛列（売掛/買掛）専用列。row.isUnpaid で判定＝ 売上=売掛（未入金）／コスト=買掛（未払）
   //   金光要求「PC 版登録後の一覧に売掛/買掛の専用列」＝ 一覧行で即視認できる位置（メモと案件の間）に配置。
@@ -553,7 +558,7 @@ function renderRow(row) {
       <td data-field-cell="date">${cellDate}</td>
       <td>${_escHtml(row.type)}</td>
       <td data-field-cell="subject">${cellSubject}</td>
-      <td>${cellCategory}</td>
+      <td data-field-cell="category">${cellCategory}</td>
       <td class="num" data-field-cell="amount">${cellAmount}</td>
       <td data-field-cell="taxRate">${cellTaxRate}</td>
       <td class="num">${cellTax}</td>
@@ -1024,7 +1029,10 @@ function bindTbodyDelegation() {
 
 function isFieldEditable(field, source) {
   // 仕様§2-4 / §3-4：date / subject(=subjectCode) / amount / taxRate / memo
-  return ['date', 'subject', 'amount', 'taxRate', 'memo'].includes(field);
+  // v0.16.3：category（分類・登録時属性タグ）も編集対象＝ 登録後の分類つけ替え・修正を許可。
+  //          販管費（cost で divisionCode='2'）は renderCategorySelect が「―」表示で開き、
+  //          save 時も serviceChannelCode/purchaseCategoryCode が変わらないため fields に載らず no-op。
+  return ['date', 'subject', 'amount', 'taxRate', 'memo', 'category'].includes(field);
 }
 
 function captureFieldValue(target, inp, field) {
@@ -1101,7 +1109,20 @@ function startEdit(rowKey, field) {
   setTimeout(() => {
     const tr = document.querySelector(`tr[data-row-key="${CSS.escape(rowKey)}"]`);
     if (!tr) return;
-    const target = tr.querySelector(`[data-field="${field === 'subject' ? 'subjectCode' : field}"]`);
+    // field → 実 input/select の data-field 属性値のマッピング（renderRow / renderCategorySelect と対）
+    //   subject  → subjectCode
+    //   category → 売上=serviceChannelCode / 仕入原価=purchaseCategoryCode （販管費は select 未描画＝ 空 fallback）
+    let selector;
+    if (field === 'subject') {
+      selector = `[data-field="subjectCode"]`;
+    } else if (field === 'category') {
+      selector = row.source === 'sales'
+        ? `[data-field="serviceChannelCode"]`
+        : `[data-field="purchaseCategoryCode"]`;
+    } else {
+      selector = `[data-field="${field}"]`;
+    }
+    const target = tr.querySelector(selector);
     if (target) {
       target.focus();
       if (target.tagName === 'INPUT' && target.type !== 'date') {
@@ -1132,6 +1153,25 @@ async function commitEdit() {
     fields.subjectCode = _editingDraft.subjectCode;
     fields.subjectName = _editingDraft.subject || '';
   }
+  // v0.16.3：分類（大分類）の変更を GAS へ送信。
+  //   売上シート：serviceChannelCode(V列22) / serviceChannelName(W列23)
+  //   コストシート：purchaseCategoryCode(W列23) / purchaseCategoryName(X列24)
+  //   value 空（「（分類なし）」を選択）でも空文字を送信＝ 分類解除も反映される。
+  if (row.source === 'sales') {
+    const editedCode = String(_editingDraft.serviceChannelCode || '');
+    const rowCode    = String(row.serviceChannelCode || '');
+    if (editedCode !== rowCode) {
+      fields.serviceChannelCode = editedCode;
+      fields.serviceChannelName = String(_editingDraft.serviceChannelName || '');
+    }
+  } else if (row.source === 'cost') {
+    const editedCode = String(_editingDraft.purchaseCategoryCode || '');
+    const rowCode    = String(row.purchaseCategoryCode || '');
+    if (editedCode !== rowCode) {
+      fields.purchaseCategoryCode = editedCode;
+      fields.purchaseCategoryName = String(_editingDraft.purchaseCategoryName || '');
+    }
+  }
 
   try {
     const res = await callGAS('updateRow', {
@@ -1152,6 +1192,11 @@ async function commitEdit() {
       memo:    fields.memo    !== undefined ? fields.memo    : row.memo,
       subjectCode: fields.subjectCode !== undefined ? fields.subjectCode : row.subjectCode,
       subject:     fields.subjectName !== undefined ? fields.subjectName : row.subject,
+      // v0.16.3：分類（大分類）変更の即時反映＝ 保存後の一覧再描画で新分類名が表示される
+      serviceChannelCode: fields.serviceChannelCode !== undefined ? fields.serviceChannelCode : row.serviceChannelCode,
+      serviceChannelName: fields.serviceChannelName !== undefined ? fields.serviceChannelName : row.serviceChannelName,
+      purchaseCategoryCode: fields.purchaseCategoryCode !== undefined ? fields.purchaseCategoryCode : row.purchaseCategoryCode,
+      purchaseCategoryName: fields.purchaseCategoryName !== undefined ? fields.purchaseCategoryName : row.purchaseCategoryName,
     });
     if (res.data && res.data.recalculated) {
       row.taxAmount = Number(res.data.recalculated.taxAmount) || 0;

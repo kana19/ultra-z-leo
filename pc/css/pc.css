@@ -1077,10 +1077,12 @@ body.pc-body {
 
 .pc-project-col {
   white-space: nowrap;
-  text-align: center;
+  text-align: left;   /* v0.16.3：案件列見出し「案件」と ☆/★ ボタンの左端を列内で垂直一直線に揃える */
 }
 .pc-project-col .pc-action-btn { margin-right: 4px; }
 .pc-project-col .pc-action-btn:last-child { margin-right: 0; }
+/* ☆ ボタンの左 padding を 0 にして、th「案件」文字の左端と ☆ の左端を厳密に揃える */
+.pc-project-col .btn-star { padding-left: 0; padding-right: 4px; }
 
 /* ═══════════════════════════════════════════════════════════
    紐付け候補モーダル

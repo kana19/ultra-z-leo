@@ -2662,6 +2662,30 @@ function updateRow(data) {
     updated.push('memo');
   }
 
+  // v0.16.3：分類（大分類・登録時属性タグ）の書換え。
+  //   売上シート：V列(22)=serviceChannelCode / W列(23)=serviceChannelName
+  //   コストシート：W列(23)=purchaseCategoryCode / X列(24)=purchaseCategoryName
+  //   空文字送信＝ 分類解除。書込対象外シートでは黙って無視。
+  if (sheetName === '売上') {
+    if (fields.serviceChannelCode !== undefined) {
+      sheet.getRange(rowIndex, 22).setValue(String(fields.serviceChannelCode || ''));
+      updated.push('serviceChannelCode');
+    }
+    if (fields.serviceChannelName !== undefined) {
+      sheet.getRange(rowIndex, 23).setValue(String(fields.serviceChannelName || ''));
+      updated.push('serviceChannelName');
+    }
+  } else if (sheetName === 'コスト') {
+    if (fields.purchaseCategoryCode !== undefined) {
+      sheet.getRange(rowIndex, 23).setValue(String(fields.purchaseCategoryCode || ''));
+      updated.push('purchaseCategoryCode');
+    }
+    if (fields.purchaseCategoryName !== undefined) {
+      sheet.getRange(rowIndex, 24).setValue(String(fields.purchaseCategoryName || ''));
+      updated.push('purchaseCategoryName');
+    }
+  }
+
   // 金額・税率：いずれかが含まれていればサーバー側で§6-4 整数演算で再計算
   var recalculated = null;
   if (fields.amount !== undefined || fields.taxRate !== undefined) {

@@ -372,9 +372,11 @@ function renderChart(monthly) {
   const ctx = document.getElementById('pl-chart');
   if (!ctx || typeof Chart === 'undefined') return;
   const labels = MONTHS.map(m => `${m}月`);
-  const sales = monthly.map(d => d ? (Number(d.sales)||0) : 0);
-  const cogs  = monthly.map(d => d ? (Number(d.cogs) ||0) : 0);
-  const sga   = monthly.map(d => d ? (Number(d.sga)  ||0) : 0);
+  // 入力なし月（0）は null＝ Chart.js でポイント非プロット。spanGaps で入力月同士を線分連結。
+  const _pt = v => (Number(v) > 0 ? Number(v) : null);
+  const sales = monthly.map(d => d ? _pt(d.sales) : null);
+  const cogs  = monthly.map(d => d ? _pt(d.cogs)  : null);
+  const sga   = monthly.map(d => d ? _pt(d.sga)   : null);
 
   if (chartInstance) chartInstance.destroy();
   const _cs2 = getComputedStyle(document.documentElement);
@@ -397,6 +399,7 @@ function renderChart(monthly) {
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      spanGaps: true,   // null（未入力月）を挟んで両端の入力月同士を線で連結
       plugins: { legend: { labels: { color: _cT } } },
       scales: {
         x: { ticks: { color: _cM }, grid: { color: _cG } },
