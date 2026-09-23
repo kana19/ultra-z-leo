@@ -39,6 +39,9 @@
       // v0.16.1【k1/k2】：大分類 chip（登録時属性・売上=serviceChannel／仕入原価=purchaseCategory）
       //   sales: channelId+channelName／cost: categoryId+categoryName （仕入原価タブのみ有効）
       categoryId: '', categoryName: '',
+      // v0.17.0：入金・支払日（空＝発生日に追従）と口座（口座マスタ accountList）
+      paidDate: '', paidDateTouched: false, paidCalView: null, origUnpaid: false, origPaidDate: '',
+      accountCode: '', accountName: '',
     };
     if (kind === 'sales') Object.assign(base, { svcCode: '', svcName: '' });
     else Object.assign(base, { divCode: '2', itemCode: '', itemName: '' });
@@ -58,6 +61,18 @@
       const s = localStorage.getItem('uz_purchase_category_list');
       return s ? (JSON.parse(s) || []) : [];
     } catch (_) { return []; }
+  }
+  // v0.17.0：口座マスタ（settings B10）safe-getter
+  function _getAccountList() {
+    try {
+      const s = localStorage.getItem('uz_account_list');
+      return s ? (JSON.parse(s) || []) : [];
+    } catch (_) { return []; }
+  }
+  // 入金・支払日の表示値：掛（未消込）は空・未指定は発生日（新規・現金取引の既定）
+  function paidHeadValue(s) {
+    if (s.unpaid) return '未消込';
+    return fmtDate(s.paidDate || s.date);
   }
   // 大分類は sales と cost(divCode='1' 仕入原価) のみ・cost の販管費は分類なし（(b) 確定・零細事業者思想）。
   function getCategoryList(s) {
@@ -123,19 +138,41 @@
       return `<button type="button" class="uzf-taxchip${active}" data-cat-id="${ESC(cid)}" data-cat-name="${ESC(nm)}" data-cat-tax="${tax}">${ESC(nm)}<span style="opacity:.6;margin-left:4px;">(${tax}%)</span></button>`;
     }).join('');
   }
+  // v0.17.0：口座 chip（口座マスタ）。同じ chip の再タップで解除。
+  function accchipsHTML(s) {
+    const list = _getAccountList();
+    if (!list.length) return '<div class="uzf-cards-empty">設定の口座マスタで口座を登録すると選べます</div>';
+    const cur = String(s.accountCode || '');
+    const chips = list.map(a => {
+      const id = String(a.id || a.code || '');
+      const nm = String(a.name || '');
+      return `<button type="button" class="uzf-taxchip${id === cur ? ' is-active' : ''}" data-acc-id="${ESC(id)}" data-acc-name="${ESC(nm)}">${ESC(nm)}</button>`;
+    });
+    // マスタから削除済みの口座で登録された行は名称スナップショットを残す
+    if (cur && !list.some(a => String(a.id || a.code || '') === cur)) {
+      chips.push(`<button type="button" class="uzf-taxchip is-active" data-acc-id="${ESC(cur)}" data-acc-name="${ESC(s.accountName)}">${ESC(s.accountName || cur)}</button>`);
+    }
+    return chips.join('');
+  }
   function keypadHTML() {
     const keys = ['7', '8', '9', '4', '5', '6', '1', '2', '3', '00', '0', 'del'];
     return keys.map(k => k === 'del'
       ? `<button type="button" class="uzf-key uzf-key--del" data-key="del">←</button>`
       : `<button type="button" class="uzf-key" data-key="${k}">${k}</button>`).join('');
   }
-  function calInnerHTML(s) {
-    const base = s.calView || (s.date ? new Date(s.date) : new Date());
-    s.calView = base;
+  // which：'date'（発生日）／'paid'（入金・支払日・v0.17.0）。同じカレンダー部品を 2 つの日付で使う。
+  function calKeys(which) {
+    return which === 'paid' ? { view: 'paidCalView', date: 'paidDate' } : { view: 'calView', date: 'date' };
+  }
+  function calInnerHTML(s, which) {
+    const k = calKeys(which);
+    const cur = s[k.date] || (which === 'paid' ? s.date : '');
+    const base = s[k.view] || (cur ? new Date(cur) : new Date());
+    s[k.view] = base;
     const y = base.getFullYear(), m = base.getMonth();
     const startDow = new Date(y, m, 1).getDay();
     const daysInMonth = new Date(y, m + 1, 0).getDate();
-    const sel = s.date ? new Date(s.date) : null;
+    const sel = cur ? new Date(cur) : null;
     const dows = ['日', '月', '火', '水', '木', '金', '土'];
     let cells = dows.map(d => `<div class="uzf-cal-dow">${d}</div>`).join('');
     for (let i = 0; i < startDow; i++) cells += `<div class="uzf-cal-cell uzf-cal-empty"></div>`;
@@ -159,7 +196,7 @@
       `<div class="uzf-head" data-stick="0" data-go="date">
          <span class="uzf-sh-k">発生日</span><span class="uzf-sh-v" data-v="date">${fmtDate(s.date)}</span>
        </div>
-       <div class="uzf-body"><div class="uzf-cal">${calInnerHTML(s)}</div></div>
+       <div class="uzf-body"><div class="uzf-cal" data-cal="date">${calInnerHTML(s, 'date')}</div></div>
 
        <div class="uzf-head" data-stick="1" data-go="item">
          <span class="uzf-sh-k">${s.kind === 'sales' ? '区分' : '科目'}</span><span class="uzf-sh-v" data-v="item">未選択</span><span class="uzf-sh-tax" data-v="itemtax"></span>
@@ -192,6 +229,16 @@
            <button type="button" class="uzf-key uzf-key--clear" data-key="clear">クリア</button>
          </div>
          <textarea class="uzf-memo" rows="1" placeholder="メモ（任意）"></textarea>
+       </div>
+
+       <div class="uzf-head" data-stick="3" data-go="paid">
+         <span class="uzf-sh-k">${s.kind === 'sales' ? '入金日' : '支払日'}</span><span class="uzf-sh-v" data-v="paid">${paidHeadValue(s)}</span><span class="uzf-sh-tax" data-v="account">${ESC(s.accountName)}</span>
+       </div>
+       <div class="uzf-body">
+         <div class="uzf-cal" data-cal="paid"${s.unpaid ? ' hidden' : ''}>${calInnerHTML(s, 'paid')}</div>
+         <div class="uzf-ed-sub" data-paid-note${s.unpaid ? '' : ' hidden'}>${s.kind === 'sales' ? '売掛' : '買掛'}のため未消込です。☑を外すと${s.kind === 'sales' ? '入金日' : '支払日'}を選べます。</div>
+         <div class="uzf-ed-sub">口座</div>
+         <div class="uzf-taxchips" data-acc-chips role="group" aria-label="口座選択">${accchipsHTML(s)}</div>
        </div>
 
        <div class="uzf-tail">
@@ -338,21 +385,76 @@
     updateAmountUI(host);
     updateReady(host);
   }
+  function calWhich(el) {
+    const cal = el.closest('.uzf-cal');
+    return (cal && cal.dataset.cal === 'paid') ? 'paid' : 'date';
+  }
+  function rerenderCal(host, which) {
+    const cal = $(host, `.uzf-cal[data-cal="${which}"]`);
+    if (cal) cal.innerHTML = calInnerHTML(host.__uzf, which);
+  }
   function selectDay(host, cell) {
     const s = host.__uzf;
-    const base = s.calView || new Date();
+    const which = calWhich(cell);
+    const k = calKeys(which);
+    const base = s[k.view] || new Date();
     const y = base.getFullYear(), m = base.getMonth();
     const dd = parseInt(cell.dataset.day, 10);
-    s.date = `${y}-${String(m + 1).padStart(2, '0')}-${String(dd).padStart(2, '0')}`;
-    host.querySelectorAll('.uzf-cal-cell.is-sel').forEach(c => c.classList.remove('is-sel'));
+    const ymd = `${y}-${String(m + 1).padStart(2, '0')}-${String(dd).padStart(2, '0')}`;
+    s[k.date] = ymd;
+    const cal = cell.closest('.uzf-cal');
+    if (cal) cal.querySelectorAll('.uzf-cal-cell.is-sel').forEach(c => c.classList.remove('is-sel'));
     cell.classList.add('is-sel');
-    setHead(host, 'date', fmtDate(s.date));
+    if (which === 'paid') {
+      s.paidDateTouched = true;
+    } else {
+      setHead(host, 'date', fmtDate(s.date));
+      // 入金・支払日は手で選ぶまで発生日に追従（掛なし＝現金取引の既定）
+      if (!s.unpaid && !s.paidDateTouched) {
+        s.paidDate = s.date;
+        s.paidCalView = null;
+        rerenderCal(host, 'paid');
+      }
+    }
+    setHead(host, 'paid', paidHeadValue(s));
   }
   function navCal(host, nav) {
     const s = host.__uzf;
-    const base = s.calView || new Date();
-    s.calView = new Date(base.getFullYear(), base.getMonth() + parseInt(nav.dataset.nav, 10), 1);
-    const cal = $(host, '.uzf-cal'); if (cal) cal.innerHTML = calInnerHTML(s);
+    const which = calWhich(nav);
+    const k = calKeys(which);
+    const base = s[k.view] || new Date();
+    s[k.view] = new Date(base.getFullYear(), base.getMonth() + parseInt(nav.dataset.nav, 10), 1);
+    rerenderCal(host, which);
+  }
+  // 掛☑の切替：☑＝未消込（入金・支払日なし）／☑なし＝新規は発生日・既存の掛行は消込＝当日が既定
+  function toggleUnpaid(host, checked) {
+    const s = host.__uzf;
+    s.unpaid = !!checked;
+    if (s.unpaid) {
+      s.paidDate = '';
+    } else if (s.editId && s.origUnpaid) {
+      s.paidDate = today();
+      s.paidDateTouched = true;
+    } else if (s.editId && s.origPaidDate) {
+      s.paidDate = s.origPaidDate;
+    } else if (!s.paidDateTouched || !s.paidDate) {
+      s.paidDate = s.date;
+    }
+    s.paidCalView = null;
+    const cal = $(host, '.uzf-cal[data-cal="paid"]');
+    if (cal) { cal.hidden = s.unpaid; cal.innerHTML = calInnerHTML(s, 'paid'); }
+    const note = $(host, '[data-paid-note]'); if (note) note.hidden = !s.unpaid;
+    setHead(host, 'paid', paidHeadValue(s));
+  }
+  function selectAccount(host, chip) {
+    const s = host.__uzf;
+    const id = String(chip.dataset.accId || '');
+    if (s.accountCode === id) { s.accountCode = ''; s.accountName = ''; }
+    else { s.accountCode = id; s.accountName = String(chip.dataset.accName || ''); }
+    host.querySelectorAll('.uzf-taxchip[data-acc-id]').forEach(c => {
+      c.classList.toggle('is-active', !!s.accountCode && String(c.dataset.accId) === s.accountCode);
+    });
+    setHead(host, 'account', s.accountName);
   }
   function resetForm(host) {
     const opts = host.__uzf.opts;
@@ -371,6 +473,9 @@
       : '';
     const stateRow = s.unpaid
       ? `<div class="uzf-head uzf-head--ro"><span class="uzf-sh-k">状態</span><span class="uzf-sh-v">${s.kind === 'sales' ? '売掛（未入金）' : '買掛（未払い）'}</span></div>`
+      : `<div class="uzf-head uzf-head--ro"><span class="uzf-sh-k">${s.kind === 'sales' ? '入金日' : '支払日'}</span><span class="uzf-sh-v">${paidHeadValue(s)}</span></div>`;
+    const accountRow = s.accountName
+      ? `<div class="uzf-head uzf-head--ro"><span class="uzf-sh-k">口座</span><span class="uzf-sh-v">${escapeHtmlUzf(s.accountName)}</span></div>`
       : '';
     return `<div class="uzf-detail">
       <div class="uzf-head uzf-head--ro"><span class="uzf-sh-k">発生日</span><span class="uzf-sh-v">${fmtDate(s.date)}</span></div>
@@ -378,6 +483,7 @@
       <div class="uzf-head uzf-head--ro"><span class="uzf-sh-k">金額</span><span class="uzf-sh-v">${amountHeadValue(s)}</span><span class="uzf-sh-tax">${amountTaxLabel(s)}</span></div>
       ${memoRow}
       ${stateRow}
+      ${accountRow}
       <div class="uzf-det-actions">
         <button type="button" class="uzf-detbtn uzf-det-edit">編集</button>
         <button type="button" class="uzf-detbtn uzf-det-close">閉じる（新規登録）</button>
@@ -418,6 +524,15 @@
     if (s.taxRate == null) { toast('税率を選択してください'); return; }
 
     const { taxExcluded, tax } = calcTax(amount, s.taxRate);
+    // v0.17.0：入金・支払日（掛は空）・口座。修正時は空のまま送れば日付は書き換えない
+    //   （日付を記録していない旧経路の消込行に発生日を捏造しない）。
+    const paidDate = s.unpaid ? '' : (s.editId ? (s.paidDate || '') : (s.paidDate || s.date));
+    const salesCat = { serviceChannelCode: s.categoryId || '', serviceChannelName: s.categoryName || '' };
+    const costCat = {
+      purchaseCategoryCode: (s.divCode === '1') ? (s.categoryId || '') : '',
+      purchaseCategoryName: (s.divCode === '1') ? (s.categoryName || '') : '',
+    };
+    const acc = { accountCode: s.accountCode || '', accountName: s.accountName || '' };
     const btn = $(host, '.uzf-submit');
     if (btn) { btn.disabled = true; btn.dataset.busy = '1'; btn.textContent = s.editId ? '保存中...' : '登録中...'; }
     try {
@@ -425,20 +540,21 @@
       if (s.editId) {
         // ── 修正（更新）：GAS updateSales / updateCost（契約は従来の saveEdit と同一） ──
         if (s.kind === 'sales') {
-          result = await callGAS('updateSales', {
+          // v0.17.0：paidDate を送る＝ GAS は消込として処理（☑を外す＝消込・付ける＝掛へ戻す）＋分類・口座も保存
+          result = await callGAS('updateSales', Object.assign({
             rowIndex: s.editId, date: s.date,
             serviceName: s.svcName, serviceCode: s.svcCode || '',
             amountExTax: taxExcluded, taxRate: s.taxRate, tax, amountInTax: amount,
-            memo: s.memo, uncollected: s.unpaid ? 1 : 0,
-          });
+            memo: s.memo, uncollected: s.unpaid ? 1 : 0, paidDate,
+          }, salesCat, acc));
         } else {
-          result = await callGAS('updateCost', {
+          result = await callGAS('updateCost', Object.assign({
             rowIndex: s.editId, date: s.date,
             divisionCode: s.divCode, divisionName: divLabel(s.divCode),
             itemCode: s.itemCode || '', itemName: s.itemName,
             taxExcluded, taxRate: s.taxRate, tax, taxIncluded: amount,
-            memo: s.memo, unpaid: s.unpaid ? 1 : 0,
-          });
+            memo: s.memo, unpaid: s.unpaid ? 1 : 0, paidDate,
+          }, costCat, acc));
         }
         if (result?.status !== 'ok') throw new Error(result?.message || '更新エラー');
         toast('修正を保存しました ✓');
@@ -454,6 +570,8 @@
           // v0.16.1【k2】：大分類（登録時属性）＝ シート V/W 列に書込＝ getSummary で分類集計
           serviceChannelCode: s.categoryId || '',
           serviceChannelName: s.categoryName || '',
+          // v0.17.0：入金日（掛なしのみ）・入金口座
+          paidDate, accountCode: acc.accountCode, accountName: acc.accountName,
         });
       } else {
         result = await callGAS('addCost', {
@@ -465,6 +583,8 @@
           // v0.16.1【k1】：仕入原価大分類（登録時属性・仕入原価タブのみ・販管費は空文字）＝ シート W/X 列に書込
           purchaseCategoryCode: (s.divCode === '1') ? (s.categoryId || '') : '',
           purchaseCategoryName: (s.divCode === '1') ? (s.categoryName || '') : '',
+          // v0.17.0：支払日（掛なしのみ）・支払口座
+          paidDate, accountCode: acc.accountCode, accountName: acc.accountName,
         });
       }
       if (result?.status !== 'ok') throw new Error(result?.message || '登録エラー');
@@ -480,14 +600,16 @@
             uncollected: s.unpaid ? 1 : 0,
             // v0.16.1【k2】：登録時属性（大分類）を保存＝ 編集モードでの復元用
             serviceChannelCode: s.categoryId || '',
-            serviceChannelName: s.categoryName || '' }
+            serviceChannelName: s.categoryName || '',
+            paidDate, accountCode: acc.accountCode, accountName: acc.accountName }
         : { type: 'cost', rowIndex: _rowIndex, date: s.date,
             divisionCode: s.divCode, itemCode: s.itemCode, itemName: s.itemName,
             taxRate: s.taxRate, amount: String(amount), memo: s.memo,
             unpaid: s.unpaid ? 1 : 0,
             // v0.16.1【k1】：登録時属性（仕入原価大分類・仕入原価のみ）を保存
             purchaseCategoryCode: (s.divCode === '1') ? (s.categoryId || '') : '',
-            purchaseCategoryName: (s.divCode === '1') ? (s.categoryName || '') : '' };
+            purchaseCategoryName: (s.divCode === '1') ? (s.categoryName || '') : '',
+            paidDate, accountCode: acc.accountCode, accountName: acc.accountName };
       showDetail(host, saved);
     } catch (e) {
       toast('登録に失敗しました：' + (e?.message || '通信エラー'));
@@ -512,6 +634,8 @@
       if ((el = e.target.closest('.uzf-card'))) return selectItem(host, el);
       // v0.16.1【k1/k2】：大分類 chip（.uzf-taxchip[data-cat-id]）を通常 tax chip より先に判定
       if ((el = e.target.closest('.uzf-taxchip[data-cat-id]'))) return selectCategory(host, el);
+      // v0.17.0：口座 chip も通常 tax chip より先に判定
+      if ((el = e.target.closest('.uzf-taxchip[data-acc-id]'))) return selectAccount(host, el);
       if ((el = e.target.closest('.uzf-taxchip'))) return selectTax(host, el);
       if ((el = e.target.closest('.uzf-divtab'))) return selectDiv(host, el);
       if ((el = e.target.closest('.uzf-key'))) return pressKey(host, el);
@@ -533,7 +657,7 @@
       else if (e.target.classList.contains('uzf-memo')) s.memo = e.target.value;
     });
     host.addEventListener('change', e => {
-      if (e.target.classList.contains('uzf-unpaid')) host.__uzf.unpaid = e.target.checked;
+      if (e.target.classList.contains('uzf-unpaid')) toggleUnpaid(host, e.target.checked);
     });
   }
 
@@ -574,8 +698,15 @@
           if (Array.isArray(d.purchaseCategoryList)) {
             localStorage.setItem('uz_purchase_category_list', JSON.stringify(d.purchaseCategoryList));
           }
+          if (Array.isArray(d.accountList)) {
+            localStorage.setItem('uz_account_list', JSON.stringify(d.accountList));
+          }
         } catch (_) {}
-        if (host.isConnected) rebuildCategoryChips(host);
+        if (host.isConnected) {
+          rebuildCategoryChips(host);
+          const accBox = $(host, '[data-acc-chips]');
+          if (accBox) accBox.innerHTML = accchipsHTML(host.__uzf);
+        }
       }).catch(() => {});
     }
   }
@@ -613,6 +744,14 @@
         s.categoryName = String(record.purchaseCategoryName || '');
       }
     }
+    // v0.17.0：入金・支払日と口座を復元。記録なしの現金取引は発生日が既定、
+    //   日付を記録していない旧経路の消込行は空のまま（日付を捏造しない）。
+    s.origUnpaid = s.unpaid;
+    s.origPaidDate = String(record.paidDate || '');
+    s.paidDate = s.unpaid ? '' : (s.origPaidDate || (record.reconciled ? '' : s.date));
+    s.paidDateTouched = !!s.origPaidDate;
+    s.accountCode = String(record.accountCode || '');
+    s.accountName = String(record.accountName || '');
     host.__uzf = s;
     _hosts.add(host);
     buildSkeleton(host);

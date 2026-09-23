@@ -35,6 +35,7 @@
 .uzf-head[data-stick="0"] { top: 0;    z-index: 9; }
 .uzf-head[data-stick="1"] { top: 32px; z-index: 8; }
 .uzf-head[data-stick="2"] { top: 64px; z-index: 7; }
+.uzf-head[data-stick="3"] { top: 96px; z-index: 6; }   /* v0.17.0 入金日／支払日 */
 .uzf-sh-k { font-size: 15px; opacity: 0.6; flex: 0 0 54px; }
 .uzf-sh-v { flex: 1; font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .uzf-sh-tax { flex: 0 0 auto; font-size: 13px; font-weight: 600; opacity: 0.85; white-space: nowrap; }
@@ -218,8 +219,10 @@ body.is-ipad .uzf-head { height: 48px; }
 body.is-ipad .hist-right--input .uzf-head[data-stick="0"] { top: 46px; }
 body.is-ipad .hist-right--input .uzf-head[data-stick="1"] { top: 94px; }
 body.is-ipad .hist-right--input .uzf-head[data-stick="2"] { top: 142px; }
+body.is-ipad .hist-right--input .uzf-head[data-stick="3"] { top: 190px; }
 /* iPad 修正パネル（タブバーなし）：見出し sticky は黒帯高さ48px基準の 0/48/96 */
 body.is-ipad .hist-right--edit .uzf-head[data-stick="0"] { top: 0; }
 body.is-ipad .hist-right--edit .uzf-head[data-stick="1"] { top: 48px; }
 body.is-ipad .hist-right--edit .uzf-head[data-stick="2"] { top: 96px; }
+body.is-ipad .hist-right--edit .uzf-head[data-stick="3"] { top: 144px; }
 body.is-ipad .hist-right--edit .ipad-right-panel__header { padding: 12px 18px; }

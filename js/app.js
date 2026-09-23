@@ -47,6 +47,7 @@ const MASTER_CACHE_KEYS = [
   'uz_business_hours',
   'uz_service_channel_list',   // 販売チャネル大分類（2026-08-27・→ 03§1-1-2）
   'uz_purchase_category_list', // 仕入原価大分類（2026-08-27・→ 03§1-3-2）
+  'uz_account_list',           // 口座マスタ（v0.17.0・settings B10）
   'uz_customers_list',         // 顧客マスタキャッシュ（2026-08-27・→ 03§1-6）
   'uz_suppliers_list',         // 仕入先マスタキャッシュ（2026-08-27・→ 03§1-6-2）
   PL_SUMMARY_CACHE_KEY, // uz_pl_summary_cache（対策A・別店舗の損益が一瞬出るのを防ぐ）
@@ -866,6 +867,10 @@ async function syncSettingsAtStartup() {
     }
     if (Array.isArray(d.purchaseCategoryList)) {
       localStorage.setItem('uz_purchase_category_list', JSON.stringify(d.purchaseCategoryList));
+    }
+    // v0.17.0：口座マスタ（入力・修正画面の口座 chip が参照）
+    if (Array.isArray(d.accountList)) {
+      localStorage.setItem('uz_account_list', JSON.stringify(d.accountList));
     }
 
     // settings 同期完了イベント発火

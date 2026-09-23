@@ -459,6 +459,27 @@
     </div>
   </section>
 
+  <!-- ③-3b 口座マスタ（入金・支払口座・settings B10・v0.17.0） -->
+  <section class="settings-section">
+    <button class="settings-section__head" type="button"
+            aria-controls="sec-account-body" aria-expanded="false">
+      <span class="settings-section__title">口座マスタ
+        <span id="account-count-badge" class="settings-count-badge" hidden></span>
+      </span>
+    </button>
+    <div class="settings-section__body" id="sec-account-body">
+      <div id="account-list-container"></div>
+      <div id="account-add-row" class="settings-add-row">
+        <input type="text" id="account-add-name" class="settings-input"
+               placeholder="口座名（例：〇〇銀行 〇〇支店）" maxlength="40" autocomplete="off">
+        <button id="account-add-btn" class="settings-add-btn" type="button">＋ 追加</button>
+      </div>
+      <p class="settings-note">
+        入金・支払に使う口座（現金／〇〇銀行 〇〇支店 など）。売上・コストの入力と修正で口座を選べます。削除しても登録済みの取引の口座名は変わりません。
+      </p>
+    </div>
+  </section>
+
   <!-- ④ 販管費マスタ（コスト科目マスタ） -->
   <section class="settings-section">
     <button class="settings-section__head" type="button"

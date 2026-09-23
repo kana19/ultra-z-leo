@@ -173,7 +173,8 @@ async function loadSettingsFromGAS() {
   try {
     const data = await uzGetSettings();   // ②共通化：取得+{status,data}展開を app.js に集約
     if (data) {
-      const { storeName, staffList, serviceList, purchaseMasterList, qrLocations, masterQuota, businessHours, featureVisibility, serviceChannelList, purchaseCategoryList } = data;
+      const { storeName, staffList, serviceList, purchaseMasterList, qrLocations, masterQuota, businessHours, featureVisibility, serviceChannelList, purchaseCategoryList, accountList } = data;
+      if (Array.isArray(accountList)) _saveAccountList(accountList);
       if (storeName   != null) _saveStoreName(storeName);
       if (Array.isArray(staffList))   _saveStaffList(staffList);
       if (Array.isArray(serviceList)) _saveServiceList(serviceList);
@@ -205,6 +206,7 @@ async function loadSettingsFromGAS() {
       renderPurchaseList();
       renderServiceChannelList();
       renderPurchaseCategoryList();
+      renderAccountList();
       renderQrLocations();
       updateGasStatus(true);
       // 仕入先マスタは on-demand で取得（起動時ではなく初回展開時）
@@ -291,6 +293,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initPurchaseList();
   initServiceChannel();
   initPurchaseCategory();
+  renderAccountList();
   initSuppliers();
   initQrLocations();
   initCostMaster();
@@ -300,6 +303,7 @@ document.addEventListener('DOMContentLoaded', () => {
   bindPurchaseAdd();
   bindServiceChannelAdd();
   bindPurchaseCategoryAdd();
+  bindAccountAdd();
   bindSupplierAdd();
   bindCustomersCsvIO();
   bindQrLocationAdd();
@@ -1378,6 +1382,110 @@ function _savePurchaseCategoryList(list) {
 }
 function getPurchaseCategoryList() {
   try { const s = localStorage.getItem(PURCHASE_CATEGORY_KEY_); const l = s ? JSON.parse(s) : []; return Array.isArray(l) ? l : []; } catch { return []; }
+}
+
+/* ── 口座マスタ accountList（v0.17.0・settings B10） ─────────── */
+const ACCOUNT_LIST_KEY_ = 'uz_account_list';
+function _saveAccountList(list) {
+  try { localStorage.setItem(ACCOUNT_LIST_KEY_, JSON.stringify(Array.isArray(list) ? list : [])); } catch { /* ignore */ }
+}
+function getAccountList() {
+  try { const s = localStorage.getItem(ACCOUNT_LIST_KEY_); const l = s ? JSON.parse(s) : []; return Array.isArray(l) ? l : []; } catch { return []; }
+}
+
+function renderAccountList() {
+  const c = document.getElementById('account-list-container');
+  if (!c) return;
+  const list = getAccountList();
+  c.innerHTML = list.map(a => `
+    <div class="staff-row" id="account-row-${escHtml(String(a.id))}">
+      <span class="staff-row__name">${escHtml(a.name)}</span>
+      <button class="staff-edit-btn" type="button" onclick="editAccount('${escHtml(String(a.id))}')">編集</button>
+      <button class="staff-delete-btn" type="button" onclick="deleteAccount('${escHtml(String(a.id))}')">削除</button>
+    </div>
+  `).join('');
+  const badge = document.getElementById('account-count-badge');
+  if (badge) { badge.hidden = false; badge.textContent = ` ${list.length}件`; }
+}
+
+function editAccount(id) {
+  const it = getAccountList().find(a => String(a.id) === String(id));
+  const row = document.getElementById(`account-row-${id}`);
+  if (!it || !row) return;
+  row.classList.add('staff-row--editing');
+  row.innerHTML = `
+    <div class="staff-edit">
+      <div class="staff-edit__line">
+        <input type="text" id="account-edit-name-${id}" class="settings-input staff-edit__name" value="${escHtml(it.name)}" maxlength="40" autocomplete="off" placeholder="口座名">
+      </div>
+      <div class="staff-edit__line staff-edit__actions">
+        <button class="staff-save-btn" type="button" onclick="saveEditAccount('${escHtml(String(id))}')">保存</button>
+        <button class="staff-cancel-btn" type="button" onclick="renderAccountList()">キャンセル</button>
+        <span class="staff-edit__spacer"></span>
+        <button class="staff-delete-btn" type="button" onclick="deleteAccount('${escHtml(String(id))}')">削除</button>
+      </div>
+    </div>
+  `;
+  document.getElementById(`account-edit-name-${id}`)?.focus();
+}
+
+async function saveEditAccount(id) {
+  const name = document.getElementById(`account-edit-name-${id}`)?.value.trim();
+  if (!name) return showToast('口座名を入力してください', 'error');
+  if (name.length > 40) return showToast('口座名は40文字以内で入力してください', 'error');
+  try {
+    const res = await callGAS('updateAccount', { id: String(id), name });
+    if (res && res.status === 'ok' && Array.isArray(res.accountList)) {
+      _saveAccountList(res.accountList);
+      renderAccountList();
+      showToast(`${name}に変更しました ✓`, 'success');
+    } else {
+      showToast((res && res.message) || '更新に失敗しました', 'error');
+    }
+  } catch { showToast('通信エラーで更新できませんでした', 'error'); }
+}
+
+async function deleteAccount(id) {
+  const target = getAccountList().find(a => String(a.id) === String(id));
+  if (!target) return;
+  if (!confirm(`「${target.name}」を削除しますか？\n登録済みの取引の口座名は変わりません。`)) return;
+  try {
+    const res = await callGAS('deleteAccount', { id: String(id) });
+    if (res && res.status === 'ok' && Array.isArray(res.accountList)) {
+      _saveAccountList(res.accountList);
+      renderAccountList();
+      showToast(`${target.name}を削除しました`, 'success');
+    } else {
+      showToast((res && res.message) || '削除に失敗しました', 'error');
+    }
+  } catch { showToast('通信エラーで削除できませんでした', 'error'); }
+}
+
+function bindAccountAdd() {
+  const btn = document.getElementById('account-add-btn');
+  const nameInput = document.getElementById('account-add-name');
+  if (!btn || !nameInput) return;
+  const doAdd = async () => {
+    const name = nameInput.value.trim();
+    if (!name) return showToast('口座名を入力してください', 'error');
+    if (name.length > 40) return showToast('口座名は40文字以内で入力してください', 'error');
+    if (getAccountList().some(a => a.name === name)) return showToast('同じ名前の口座が既に登録されています', 'error');
+    btn.disabled = true;
+    try {
+      const res = await callGAS('addAccount', { name });
+      if (res && res.status === 'ok' && Array.isArray(res.accountList)) {
+        _saveAccountList(res.accountList);
+        nameInput.value = '';
+        renderAccountList();
+        showToast(`${name}を追加しました ✓`, 'success');
+      } else {
+        showToast((res && res.message) || '追加に失敗しました', 'error');
+      }
+    } catch { showToast('通信エラーで追加できませんでした', 'error'); }
+    finally { btn.disabled = false; }
+  };
+  btn.addEventListener('click', doAdd);
+  nameInput.addEventListener('keydown', e => { if (e.key === 'Enter') doAdd(); });
 }
 
 /* ── サービス大分類 serviceChannelList（旧サービス販売チャネル大分類・2026-08-30 UI統合改名） ─────────── */
