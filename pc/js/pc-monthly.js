@@ -612,7 +612,7 @@ function renderDraftRow(draft) {
       <td>${categoryCellHtml}</td>
       <td class="num"><input type="number" class="pc-edit-input pc-edit-input--num" data-field="amount" value="${draft.amount || ''}" placeholder="0"></td>
       <td>${renderTaxRateSelect(draft.taxRate, 'draft')}</td>
-      <td class="num">${_formatYenPlain(draftTax)}</td>
+      <td class="num" data-cell="tax">${_formatYenPlain(draftTax)}</td>
       <td><input type="text" class="pc-edit-input" data-field="memo" value="${_escHtml(draft.memo)}" placeholder="メモ"></td>
       <td class="num">
         <label style="display:inline-flex;align-items:center;gap:3px;font-size:11px;color:var(--uz-text2);cursor:pointer;white-space:nowrap;">
@@ -1094,10 +1094,10 @@ function captureFieldValue(target, inp, field) {
 }
 
 function updateDraftTaxDisplay(tr, draft) {
-  const numCells = tr.querySelectorAll('td.num');
-  // 金額・消費税の2列が num。最後の num が消費税列
-  if (numCells && numCells.length >= 2) {
-    numCells[numCells.length - 1].textContent = _formatYenPlain(_calcTaxAmount(draft.amount, draft.taxRate));
+  // 消費税セルは data-cell="tax" で特定する（列位置に依存しない＝ 列追加で他セルを上書きしない）
+  const taxCell = tr.querySelector('td[data-cell="tax"]');
+  if (taxCell) {
+    taxCell.textContent = _formatYenPlain(_calcTaxAmount(draft.amount, draft.taxRate));
   }
 }
 
