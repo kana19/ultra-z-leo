@@ -19,6 +19,7 @@ let qrProofEnabled = false;    // 段2・QR現地証明の有効可否（feature
 let serviceChannelList = [];
 let purchaseCategoryList = [];
 let suppliersList = [];
+let accountList = [];          // v0.17.0 口座マスタ（settings B10）
 
 document.addEventListener('DOMContentLoaded', async () => {
   pcBootstrap('pc-settings.html', '設定');
@@ -38,6 +39,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // 2026-08-27：新マスタ管理UI のイベントバインド
   bindPcServiceChannelAdd();
   bindPcPurchaseCategoryAdd();
+  bindPcAccountAdd();
   bindPcSupplierAdd();
   bindPcCustomersCsvIO();
 });
@@ -64,6 +66,7 @@ async function loadAll() {
   // 2026-08-27：大分類マスタを取得（getSettings 応答から・空配列で無害運転）
   serviceChannelList = Array.isArray(settings.serviceChannelList) ? settings.serviceChannelList : [];
   purchaseCategoryList = Array.isArray(settings.purchaseCategoryList) ? settings.purchaseCategoryList : [];
+  accountList = Array.isArray(settings.accountList) ? settings.accountList : [];
   // 6-G フェーズ2：仕入マスタを取得（getSettings 応答から優先・なければ空）
   if (Array.isArray(settings.purchaseMasterList)) {
     purchaseList = settings.purchaseMasterList;
@@ -91,6 +94,7 @@ async function loadAll() {
   renderPurchases();
   renderPcServiceChannels();
   renderPcPurchaseCategories();
+  renderPcAccounts();
   renderQrLocations();
   renderCM();
   renderStaff();
@@ -924,6 +928,90 @@ async function deletePcPurchaseCategory(id) {
       try { localStorage.setItem('uz_purchase_category_list', JSON.stringify(purchaseCategoryList)); } catch {}
       renderPcPurchaseCategories();
       renderPurchases();  // 2026-08-29：仕入原価マスタの分類ドロップダウン再描画
+      showToast(`${target.name}を削除しました`, 'success');
+    } else {
+      showToast((res && res.message) || '削除に失敗しました', 'error');
+    }
+  } catch (e) { showToast('通信エラー：' + (e.message || 'unknown'), 'error'); }
+}
+
+/* ── 口座マスタ（v0.17.0・settings B10） ─────────────────── */
+function renderPcAccounts() {
+  const tbody = document.getElementById('pc-account-body');
+  if (!tbody) return;
+  const list = accountList || [];
+  tbody.innerHTML = list.length ? list.map(a => `
+    <tr>
+      <td>${uzEscHtml(a.id || '')}</td>
+      <td>${uzEscHtml(a.name || '')}</td>
+      <td>
+        <button type="button" class="pc-btn" onclick="renamePcAccount('${uzEscHtml(String(a.id))}')">名前変更</button>
+        <button type="button" class="pc-btn" style="background:#c00;color:#fff;" onclick="deletePcAccount('${uzEscHtml(String(a.id))}')">削除</button>
+      </td>
+    </tr>
+  `).join('') : '<tr><td colspan="3" style="text-align:center;color:var(--uz-muted);">未登録（月次管理の口座列は選択できません）</td></tr>';
+  const badge = document.getElementById('pc-account-count-badge');
+  if (badge) { badge.hidden = false; badge.textContent = ` ${list.length}件`; }
+}
+
+function _applyAccountListResponse(res) {
+  accountList = res.accountList;
+  renderPcAccounts();
+}
+
+function bindPcAccountAdd() {
+  const btn = document.getElementById('pc-account-add-btn');
+  const nameInput = document.getElementById('pc-account-add-name');
+  if (!btn || !nameInput) return;
+  const doAdd = async () => {
+    const name = nameInput.value.trim();
+    if (!name) return showToast('口座名を入力してください', 'error');
+    if (name.length > 40) return showToast('口座名は40文字以内で入力してください', 'error');
+    if (accountList.some(a => a.name === name)) return showToast('同じ名前の口座が既に登録されています', 'error');
+    btn.disabled = true;
+    try {
+      const res = await callGAS('addAccount', { name });
+      if (res && res.status === 'ok' && Array.isArray(res.accountList)) {
+        _applyAccountListResponse(res);
+        nameInput.value = '';
+        showToast(`${name}を追加しました`, 'success');
+      } else {
+        showToast((res && res.message) || '追加に失敗しました', 'error');
+      }
+    } catch (e) { showToast('通信エラー：' + (e.message || 'unknown'), 'error'); }
+    finally { btn.disabled = false; }
+  };
+  btn.addEventListener('click', doAdd);
+  nameInput.addEventListener('keydown', e => { if (e.key === 'Enter') doAdd(); });
+}
+
+async function renamePcAccount(id) {
+  const target = accountList.find(a => String(a.id) === String(id));
+  if (!target) return;
+  const input = prompt('新しい口座名', target.name);
+  if (input === null) return;
+  const name = input.trim();
+  if (!name || name === target.name) return;
+  if (name.length > 40) return showToast('口座名は40文字以内で入力してください', 'error');
+  try {
+    const res = await callGAS('updateAccount', { id: String(id), name });
+    if (res && res.status === 'ok' && Array.isArray(res.accountList)) {
+      _applyAccountListResponse(res);
+      showToast('口座名を変更しました', 'success');
+    } else {
+      showToast((res && res.message) || '変更に失敗しました', 'error');
+    }
+  } catch (e) { showToast('通信エラー：' + (e.message || 'unknown'), 'error'); }
+}
+
+async function deletePcAccount(id) {
+  const target = accountList.find(a => String(a.id) === String(id));
+  if (!target) return;
+  if (!confirm(`「${target.name}」を削除しますか？\n登録済みの取引の口座名は変わりません。`)) return;
+  try {
+    const res = await callGAS('deleteAccount', { id: String(id) });
+    if (res && res.status === 'ok' && Array.isArray(res.accountList)) {
+      _applyAccountListResponse(res);
       showToast(`${target.name}を削除しました`, 'success');
     } else {
       showToast((res && res.message) || '削除に失敗しました', 'error');

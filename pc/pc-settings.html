@@ -150,6 +150,22 @@
         <p id="pc-pcat-limit-hint" class="pc-note" style="margin-top:6px;color:var(--uz-muted);" hidden></p>
       </div>
 
+      <!-- ③-3b 口座マスタ（入金・支払口座・settings B10） -->
+      <div class="pc-card">
+        <div class="pc-section-title">口座マスタ <span id="pc-account-count-badge" class="pc-count-badge" hidden></span></div>
+        <p class="pc-note" style="color:var(--uz-muted);margin-bottom:10px;">
+          入金・支払に使う口座（現金／〇〇銀行 〇〇支店 など）を登録します。月次管理の「口座」列で選択できます。削除しても登録済みの取引の口座名は変わりません。
+        </p>
+        <table class="pc-table" id="pc-account-table">
+          <thead><tr><th style="width:90px;">ID</th><th>口座名</th><th style="width:170px;">操作</th></tr></thead>
+          <tbody id="pc-account-body"></tbody>
+        </table>
+        <div id="pc-account-add-row" class="pc-form-row" style="margin-top:10px;align-items:center;gap:8px;flex-wrap:wrap;">
+          <input type="text" id="pc-account-add-name" class="pc-input" placeholder="口座名（例：〇〇銀行 〇〇支店）" maxlength="40" style="flex:2;min-width:220px;">
+          <button id="pc-account-add-btn" class="pc-btn" type="button">＋ 追加</button>
+        </div>
+      </div>
+
       <!-- ③-4 仕入先マスタ（新規台帳・→ 03§1-6-2） -->
       <div class="pc-card">
         <div class="pc-section-title">仕入先マスタ <span id="pc-suppliers-count-badge" class="pc-count-badge" hidden></span></div>

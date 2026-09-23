@@ -45,6 +45,8 @@
               <th class="num">消費税</th>
               <th data-filter-col="memo">メモ</th>
               <th data-filter-col="unpaid" style="width:70px;">掛</th>
+              <th data-filter-col="paidDate">入金・支払日</th>
+              <th data-filter-col="account">口座</th>
               <th data-filter-col="project">案件</th>
             </tr>
             <tr class="monthly-summary-row" id="monthly-summary-row" hidden>
@@ -58,10 +60,12 @@
               <td></td>
               <td></td>
               <td></td>
+              <td></td>
+              <td></td>
             </tr>
           </thead>
           <tbody id="monthly-tbody">
-            <tr><td colspan="10" class="loading">読み込み中…</td></tr>
+            <tr><td colspan="12" class="loading">読み込み中…</td></tr>
           </tbody>
         </table>
       </section>

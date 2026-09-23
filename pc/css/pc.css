@@ -856,6 +856,18 @@ body.pc-body {
 .pc-row--unpaid { background: transparent; }
 .pc-row--unpaid:hover { background: rgba(212, 175, 55, 0.04); }   /* 通常行の hover と同じ */
 
+/* v0.17.0：掛☑（ドラフト・編集中の既存行 共通）と空欄表示 */
+.pc-unpaid-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--uz-text2);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.pc-muted { color: #999; }
+
 /* v0.16.3：販管費行（cost && divisionCode='2'）は案件化対象外・☆無し行＝ 濃いグレー背景で区別。
             hover 時も濃さを維持しつつ僅かに変化＝ 選択可能性を示す。 */
 .pc-row--sga {

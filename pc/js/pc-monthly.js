@@ -93,7 +93,7 @@ function bindPaginationButtons() {
 /* ── データ取得・統合 ────────────────────────────────────── */
 async function loadMonthlyData(month) {
   const tbody = document.getElementById('monthly-tbody');
-  if (tbody) tbody.innerHTML = '<tr><td colspan="9" class="loading">読み込み中…</td></tr>';
+  if (tbody) tbody.innerHTML = '<tr><td colspan="12" class="loading">読み込み中…</td></tr>';
 
   try {
     const [historyRes, settingsRes] = await Promise.all([
@@ -121,6 +121,8 @@ async function loadMonthlyData(month) {
     // v0.16.0 大分類マスタ（登録時属性タグの選択肢・空でも無害運転）
     _settings.serviceChannelList = Array.isArray(settings.serviceChannelList) ? settings.serviceChannelList : [];
     _settings.purchaseCategoryList = Array.isArray(settings.purchaseCategoryList) ? settings.purchaseCategoryList : [];
+    // v0.17.0 口座マスタ（入金・支払口座の選択肢）
+    _settings.accountList = Array.isArray(settings.accountList) ? settings.accountList : [];
 
     _monthlyData = mergeAndClassify(history);
     _sortRows(_monthlyData);
@@ -132,7 +134,7 @@ async function loadMonthlyData(month) {
     renderTable();
   } catch (err) {
     console.error('[pc-monthly] loadMonthlyData failed', err);
-    if (tbody) tbody.innerHTML = `<tr><td colspan="9" class="loading">読み込みに失敗しました：${_escHtml(err.message || err)}</td></tr>`;
+    if (tbody) tbody.innerHTML = `<tr><td colspan="12" class="loading">読み込みに失敗しました：${_escHtml(err.message || err)}</td></tr>`;
   }
 }
 
@@ -162,6 +164,10 @@ function mergeAndClassify(historyRows) {
         salesRowId: salesRowId,
         serviceChannelCode: String(r.serviceChannelCode || ''),
         serviceChannelName: String(r.serviceChannelName || ''),
+        paidDate:    String(r.paidDate || ''),
+        reconciled:  !!r.reconciled,
+        accountCode: String(r.accountCode || ''),
+        accountName: String(r.accountName || ''),
       });
     } else if (r.type === 'cost') {
       const cls = _classifyCost(r.divisionCode, r.itemCode);
@@ -188,6 +194,10 @@ function mergeAndClassify(historyRows) {
         salesRowId: linkedTo,
         purchaseCategoryCode: String(r.purchaseCategoryCode || ''),
         purchaseCategoryName: String(r.purchaseCategoryName || ''),
+        paidDate:    String(r.paidDate || ''),
+        reconciled:  !!r.reconciled,
+        accountCode: String(r.accountCode || ''),
+        accountName: String(r.accountName || ''),
       });
     }
   }
@@ -225,6 +235,12 @@ function _getColValue(row, col) {
     if (!row.isUnpaid) return '―';
     return String(row.source) === 'sales' ? '売掛' : '買掛';
   }
+  if (col === 'paidDate') {
+    if (row.isUnpaid) return '未消込';
+    const m = _displayPaidDate(row).match(/^(\d{4})-(\d{1,2})-/);
+    return m ? `${m[1]}年${Number(m[2])}月` : '（記録なし）';
+  }
+  if (col === 'account') return String(row.accountName || '') || '（未設定）';
   if (col === 'date') {
     const m = String(row.date || '').match(/^(\d{4})-(\d{1,2})-/);
     return m ? `${m[1]}年${Number(m[2])}月` : '';
@@ -446,7 +462,7 @@ function renderTable() {
   // ドラフト行を最上段（指示書5§2-2 step3 / §3-5）
   const draftHtml = _draftRows.map(d => renderDraftRow(d)).join('');
   const rowHtml   = pagedRows.map(r => renderRow(r)).join('');
-  tbody.innerHTML = (draftHtml + rowHtml) || '<tr><td colspan="10" class="loading">該当する行がありません</td></tr>';
+  tbody.innerHTML = (draftHtml + rowHtml) || '<tr><td colspan="12" class="loading">該当する行がありません</td></tr>';
   // bindRowEvents は撤去（指示書8-5§1：tbody-level delegation で1度だけ結線・renderTable の負荷も低減）
   _refreshColFilterButtonStates();
   _renderFilterSummary(filteredRows);   // 集計はフィルタ後の全件が対象（ページング前）
@@ -549,16 +565,24 @@ function renderRow(row) {
     ? renderCategorySelect({ ...row, realSource: row.source })
     : (categoryName || '<span style="color:#999;">―</span>');
 
-  // v0.16.1（2026-09-17）：掛列（売掛/買掛）専用列。row.isUnpaid で判定＝ 売上=売掛（未入金）／コスト=買掛（未払）
-  //   金光要求「PC 版登録後の一覧に売掛/買掛の専用列」＝ 一覧行で即視認できる位置（メモと案件の間）に配置。
-  //   未消込は赤系ラベル・消込済/現金取引は「―」表示（getUnpaid/売掛買掛元帳と同じ判定基準）。
+  // 掛列（売上=売掛／コスト=買掛）・入金・支払日列・口座列（v0.17.0）
+  //   編集中は掛☑を外すと消込（入金・支払日の既定＝当日）、☑を付けると掛に戻す。
   const isSalesRow = String(row.source) === 'sales';
-  let cellUnpaid;
-  if (row.isUnpaid) {
-    const label = isSalesRow ? '売掛' : '買掛';
-    cellUnpaid = `<span style="color:var(--uz-red,#c0392b);font-weight:600;font-size:12px;">${label}</span>`;
+  const src = isEditing ? _editingDraft : row;
+  let cellUnpaid, cellPaidDate, cellAccount;
+  if (isEditing) {
+    cellUnpaid   = _renderUnpaidToggle(!isSalesRow, !!src.isUnpaid);
+    cellPaidDate = _renderPaidDateInput(src.isUnpaid ? '' : src.paidDate, !!src.isUnpaid);
+    cellAccount  = renderAccountSelect(src.accountCode, src.accountName);
   } else {
-    cellUnpaid = '<span style="color:#999;">―</span>';
+    cellUnpaid = row.isUnpaid
+      ? `<span style="color:var(--uz-red,#c0392b);font-weight:600;font-size:12px;">${isSalesRow ? '売掛' : '買掛'}</span>`
+      : '<span class="pc-muted">―</span>';
+    const pd = _displayPaidDate(row);
+    cellPaidDate = row.isUnpaid
+      ? '<span class="pc-muted">未消込</span>'
+      : (pd ? _escHtml(pd) : '<span class="pc-muted">―</span>');
+    cellAccount = row.accountName ? _escHtml(row.accountName) : '<span class="pc-muted">―</span>';
   }
 
   return `
@@ -571,10 +595,52 @@ function renderRow(row) {
       <td data-field-cell="taxRate">${cellTaxRate}</td>
       <td class="num">${cellTax}</td>
       <td data-field-cell="memo">${cellMemo}</td>
-      <td class="num">${cellUnpaid}</td>
+      <td class="num" data-field-cell="unpaid">${cellUnpaid}</td>
+      <td data-field-cell="paidDate">${cellPaidDate}</td>
+      <td data-field-cell="account">${cellAccount}</td>
       <td class="pc-project-col">${cellProject}</td>
     </tr>
   `;
+}
+
+// 入金・支払日の表示値：掛（未消込）は空・記録ありはその日・現金取引で記録なしは発生日（既定）・
+//   日付を記録しない旧経路で消込した行は空。
+function _displayPaidDate(row) {
+  if (!row || row.isUnpaid) return '';
+  if (row.paidDate) return String(row.paidDate);
+  if (row.reconciled) return '';
+  return String(row.date || '');
+}
+
+function _todayYmd() {
+  return (typeof todayStr === 'function') ? todayStr() : new Date().toISOString().slice(0, 10);
+}
+
+function _renderUnpaidToggle(isCost, checked) {
+  return `<label class="pc-unpaid-label"><input type="checkbox" class="pc-unpaid-toggle" data-field="isUnpaid"${checked ? ' checked' : ''}>${isCost ? '買掛' : '売掛'}</label>`;
+}
+
+function _renderPaidDateInput(value, disabled) {
+  return `<input type="date" class="pc-edit-input" data-field="paidDate" value="${_escHtml(value || '')}"${disabled ? ' disabled' : ''}>`;
+}
+
+// 口座 select（口座マスタ accountList）。マスタから削除済みの口座で登録された行は名称スナップショットを選択肢に残す。
+function renderAccountSelect(code, name) {
+  const list = _settings.accountList || [];
+  const cur = String(code || '');
+  if (list.length === 0 && !cur) {
+    return `<select class="pc-edit-input" data-field="accountCode" disabled><option value="">（口座マスタ未登録）</option></select>`;
+  }
+  const opts = ['<option value="" data-name="">（未選択）</option>'];
+  list.forEach(a => {
+    const c = String(a.id || a.code || '');
+    const n = String(a.name || '');
+    opts.push(`<option value="${_escHtml(c)}" data-name="${_escHtml(n)}"${c === cur ? ' selected' : ''}>${_escHtml(n)}</option>`);
+  });
+  if (cur && !list.some(a => String(a.id || a.code || '') === cur)) {
+    opts.push(`<option value="${_escHtml(cur)}" data-name="${_escHtml(name || '')}" selected>${_escHtml(name || cur)}</option>`);
+  }
+  return `<select class="pc-edit-input" data-field="accountCode">${opts.join('')}</select>`;
 }
 
 function renderDraftRow(draft) {
@@ -599,11 +665,8 @@ function renderDraftRow(draft) {
   const commitHidden  = valid ? '' : 'hidden';
 
   const categoryCellHtml = renderCategorySelect(draft);
-  // v0.16.1（2026-09-17）：売掛/買掛 checkbox を専用列（メモと案件の間）に配置＝ 通常行の掛列と同位置。
-  //   売上＝ 売掛（未入金）／ コスト＝ 買掛（未払）＝ 選択で 1／未選択で 0＝ シート P 列 (未収/未払フラグ) に反映。
-  //   スマホ (sales.js/cost.js)・iPad (共通)・PC の 3 デバイスで機能均一化＝ 検証コスト削減。
-  const unpaidLabel = isCost ? '買掛' : '売掛';
-  const isUnpaidChecked = draft.isUnpaid ? 'checked' : '';
+  // 売掛/買掛 checkbox（選択で P 列=1）。掛なしの入金・支払日は発生日が既定（v0.17.0）。
+  const draftPaidDate = draft.isUnpaid ? '' : (draft.paidDate || draft.date);
   return `
     <tr class="pc-row--draft" data-row-key="${_escHtml(key)}" data-draft-id="${draft.draftId}">
       <td><input type="date" class="pc-edit-input" data-field="date" value="${_escHtml(draft.date)}"></td>
@@ -614,12 +677,9 @@ function renderDraftRow(draft) {
       <td>${renderTaxRateSelect(draft.taxRate, 'draft')}</td>
       <td class="num" data-cell="tax">${_formatYenPlain(draftTax)}</td>
       <td><input type="text" class="pc-edit-input" data-field="memo" value="${_escHtml(draft.memo)}" placeholder="メモ"></td>
-      <td class="num">
-        <label style="display:inline-flex;align-items:center;gap:3px;font-size:11px;color:var(--uz-text2);cursor:pointer;white-space:nowrap;">
-          <input type="checkbox" class="pc-draft-unpaid" data-field="isUnpaid" ${isUnpaidChecked}>
-          ${unpaidLabel}
-        </label>
-      </td>
+      <td class="num">${_renderUnpaidToggle(isCost, !!draft.isUnpaid)}</td>
+      <td>${_renderPaidDateInput(draftPaidDate, !!draft.isUnpaid)}</td>
+      <td>${renderAccountSelect(draft.accountCode, draft.accountName)}</td>
       <td class="pc-project-col">
         <button type="button" class="pc-action-btn" data-action="discard-draft" ${discardHidden}>取消</button>
         <button type="button" class="pc-action-btn pc-action-btn--save" data-action="commit-draft" ${commitHidden}>登録</button>
@@ -930,18 +990,34 @@ function bindTbodyDelegation() {
     }, 0);
   });
 
-  // ─── change：ドラフト行の売掛/買掛 checkbox（v0.16.1・3 デバイス共通の会計基本機能） ───
+  // ─── change：売掛/買掛 checkbox（ドラフト行・編集中の既存行 共通） ───
+  //   ☑あり＝ 掛（入金・支払日は空・入力不可）
+  //   ☑なし＝ ドラフトは発生日が既定（現金取引）／既存の掛行は消込＝ 入金・支払日の既定は当日
   tbody.addEventListener('change', (e) => {
     const inp = e.target;
-    if (!inp || !inp.classList || !inp.classList.contains('pc-draft-unpaid')) return;
+    if (!inp || !inp.classList || !inp.classList.contains('pc-unpaid-toggle')) return;
     const tr = inp.closest('tr[data-row-key]');
     if (!tr) return;
     const rowKey = tr.getAttribute('data-row-key');
-    if (!rowKey.startsWith('draft-')) return;
-    const draftId = rowKey.replace('draft-', '');
-    const d = _draftRows.find(x => String(x.draftId) === String(draftId));
-    if (!d) return;
-    d.isUnpaid = !!inp.checked;
+    let target, defaultPaid;
+    if (rowKey.startsWith('draft-')) {
+      const draftId = rowKey.replace('draft-', '');
+      target = _draftRows.find(x => String(x.draftId) === String(draftId));
+      if (!target) return;
+      defaultPaid = (target.paidDateTouched && target.paidDate) ? target.paidDate : target.date;
+    } else {
+      if (rowKey !== _editingRowKey) return;
+      target = _editingDraft;
+      const orig = _monthlyData.find(r => _rowKey(r) === rowKey);
+      defaultPaid = (orig && orig.isUnpaid) ? _todayYmd() : _displayPaidDate(orig);
+    }
+    target.isUnpaid = !!inp.checked;
+    target.paidDate = inp.checked ? '' : defaultPaid;
+    const pd = tr.querySelector('input[data-field="paidDate"]');
+    if (pd) {
+      pd.disabled = !!inp.checked;
+      pd.value = target.paidDate || '';
+    }
   });
 
   // ─── input：ドラフト or 編集中の入力値捕捉 ───
@@ -957,6 +1033,13 @@ function bindTbodyDelegation() {
       const d = _draftRows.find(x => String(x.draftId) === String(draftId));
       if (!d) return;
       captureFieldValue(d, inp, field);
+      // 入金・支払日：手で変えるまでは発生日に追従（掛なし＝現金取引の既定）
+      if (field === 'paidDate') d.paidDateTouched = true;
+      if (field === 'date' && !d.isUnpaid && !d.paidDateTouched) {
+        d.paidDate = d.date;
+        const pd = tr.querySelector('input[data-field="paidDate"]');
+        if (pd) pd.value = d.date;
+      }
       updateDraftTaxDisplay(tr, d);
       _updateDraftSubmitState(tr, d);   // §1-7：登録ボタン活性化条件のリアルタイム判定
       // 科目プルダウン・分類プルダウン変更時は税率セレクト表示も同期（taxRate は captureFieldValue で更新済み）
@@ -1040,7 +1123,8 @@ function isFieldEditable(field, source) {
   // v0.16.3：category（分類・登録時属性タグ）も編集対象＝ 登録後の分類つけ替え・修正を許可。
   //          販管費（cost で divisionCode='2'）は renderCategorySelect が「―」表示で開き、
   //          save 時も serviceChannelCode/purchaseCategoryCode が変わらないため fields に載らず no-op。
-  return ['date', 'subject', 'amount', 'taxRate', 'memo', 'category'].includes(field);
+  // v0.17.0：unpaid（掛☑＝消込）・paidDate（入金・支払日）・account（口座）も編集対象。
+  return ['date', 'subject', 'amount', 'taxRate', 'memo', 'category', 'unpaid', 'paidDate', 'account'].includes(field);
 }
 
 function captureFieldValue(target, inp, field) {
@@ -1048,6 +1132,10 @@ function captureFieldValue(target, inp, field) {
   if (field === 'amount') v = Number(v) || 0;
   if (field === 'taxRate') v = Number(v) || 0;
   if (field === 'subject') field = 'subjectCode';
+  if (inp.tagName === 'SELECT' && field === 'accountCode') {
+    const opt = inp.options[inp.selectedIndex];
+    target.accountName = (opt && opt.dataset && opt.dataset.name) ? opt.dataset.name : '';
+  }
   if (inp.tagName === 'SELECT' && field === 'subjectCode') {
     const opt = inp.options[inp.selectedIndex];
     if (opt && opt.dataset && opt.dataset.name) {
@@ -1112,7 +1200,7 @@ function startEdit(rowKey, field) {
     return;
   }
   _editingRowKey = rowKey;
-  _editingDraft = { ...row };
+  _editingDraft = { ...row, paidDate: _displayPaidDate(row) };
   renderTable();
   setTimeout(() => {
     const tr = document.querySelector(`tr[data-row-key="${CSS.escape(rowKey)}"]`);
@@ -1127,6 +1215,10 @@ function startEdit(rowKey, field) {
       selector = row.source === 'sales'
         ? `[data-field="serviceChannelCode"]`
         : `[data-field="purchaseCategoryCode"]`;
+    } else if (field === 'unpaid') {
+      selector = `[data-field="isUnpaid"]`;
+    } else if (field === 'account') {
+      selector = `[data-field="accountCode"]`;
     } else {
       selector = `[data-field="${field}"]`;
     }
@@ -1180,6 +1272,22 @@ async function commitEdit() {
       fields.purchaseCategoryName = String(_editingDraft.purchaseCategoryName || '');
     }
   }
+  // v0.17.0：売掛/買掛の消込（掛☑を外す）・掛へ戻す・入金/支払日・口座
+  const origUnpaid = !!row.isUnpaid;
+  const editUnpaid = !!_editingDraft.isUnpaid;
+  if (editUnpaid !== origUnpaid) fields.isUnpaid = editUnpaid;
+  if (!editUnpaid) {
+    const pd = String(_editingDraft.paidDate || '');
+    if (fields.isUnpaid === false && !/^\d{4}-\d{2}-\d{2}$/.test(pd)) {
+      showToast('入金・支払日を選択してください', 'error', 3000);
+      return;
+    }
+    if (pd && (fields.isUnpaid === false || pd !== _displayPaidDate(row))) fields.paidDate = pd;
+  }
+  if (String(_editingDraft.accountCode || '') !== String(row.accountCode || '')) {
+    fields.accountCode = String(_editingDraft.accountCode || '');
+    fields.accountName = String(_editingDraft.accountName || '');
+  }
 
   try {
     const res = await callGAS('updateRow', {
@@ -1205,7 +1313,17 @@ async function commitEdit() {
       serviceChannelName: fields.serviceChannelName !== undefined ? fields.serviceChannelName : row.serviceChannelName,
       purchaseCategoryCode: fields.purchaseCategoryCode !== undefined ? fields.purchaseCategoryCode : row.purchaseCategoryCode,
       purchaseCategoryName: fields.purchaseCategoryName !== undefined ? fields.purchaseCategoryName : row.purchaseCategoryName,
+      accountCode: fields.accountCode !== undefined ? fields.accountCode : row.accountCode,
+      accountName: fields.accountName !== undefined ? fields.accountName : row.accountName,
     });
+    // 掛・入金/支払日の状態（GAS updateRow と同じ規則）
+    if (fields.isUnpaid === true) {
+      row.isUnpaid = true; row.paidDate = ''; row.reconciled = false;
+    } else if (fields.isUnpaid === false) {
+      row.isUnpaid = false; row.reconciled = true; row.paidDate = fields.paidDate;
+    } else if (fields.paidDate) {
+      row.paidDate = fields.paidDate;
+    }
     if (res.data && res.data.recalculated) {
       row.taxAmount = Number(res.data.recalculated.taxAmount) || 0;
     } else {
@@ -1255,6 +1373,11 @@ function addDraftRow(source) {
     purchaseCategoryName: '',
     // v0.16.1 売掛/買掛フラグ（3 デバイス共通・売上=売掛(未入金)／コスト=買掛(未払)）
     isUnpaid: false,
+    // v0.17.0 入金・支払日（空＝発生日に追従）・口座
+    paidDate: '',
+    paidDateTouched: false,
+    accountCode: '',
+    accountName: '',
   };
   // 最上段に挿入（§2-2 step3）
   _draftRows.unshift(draft);
@@ -1312,6 +1435,10 @@ async function commitDrafts(drafts) {
       // v0.16.0 分類タグ（登録時属性・大分類は serviceChannelList から select）
       serviceChannelCode: draft.serviceChannelCode || '',
       serviceChannelName: draft.serviceChannelName || '',
+      // v0.17.0 入金日（掛なし＝現金取引のみ・既定は発生日）・入金口座
+      paidDate: draft.isUnpaid ? '' : (draft.paidDate || draft.date),
+      accountCode: draft.accountCode || '',
+      accountName: draft.accountName || '',
     };
   });
   const costItems = costDrafts.map(draft => {
@@ -1340,6 +1467,10 @@ async function commitDrafts(drafts) {
       // v0.16.0 分類タグ（仕入原価のみ・販管費は現状維持ゆえ空）
       purchaseCategoryCode: (divisionCode === '1') ? (draft.purchaseCategoryCode || '') : '',
       purchaseCategoryName: (divisionCode === '1') ? (draft.purchaseCategoryName || '') : '',
+      // v0.17.0 支払日（掛なし＝現金取引のみ・既定は発生日）・支払口座
+      paidDate: draft.isUnpaid ? '' : (draft.paidDate || draft.date),
+      accountCode: draft.accountCode || '',
+      accountName: draft.accountName || '',
     };
   });
 
@@ -1385,6 +1516,10 @@ async function commitDrafts(drafts) {
           salesRowId: String(r.salesRowId || ''),
           serviceChannelCode: String(r.serviceChannelCode || draft.serviceChannelCode || ''),
           serviceChannelName: String(r.serviceChannelName || draft.serviceChannelName || ''),
+          paidDate:    draft.isUnpaid ? '' : String(r.paidDate || draft.paidDate || draft.date || ''),
+          reconciled:  false,
+          accountCode: String(draft.accountCode || ''),
+          accountName: String(draft.accountName || ''),
         });
       });
     }
@@ -1414,6 +1549,10 @@ async function commitDrafts(drafts) {
           salesRowId: '',
           purchaseCategoryCode: String(r.purchaseCategoryCode || draft.purchaseCategoryCode || ''),
           purchaseCategoryName: String(r.purchaseCategoryName || draft.purchaseCategoryName || ''),
+          paidDate:    draft.isUnpaid ? '' : String(r.paidDate || draft.paidDate || draft.date || ''),
+          reconciled:  false,
+          accountCode: String(draft.accountCode || ''),
+          accountName: String(draft.accountName || ''),
         });
       });
     }

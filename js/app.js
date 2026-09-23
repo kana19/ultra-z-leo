@@ -218,6 +218,11 @@ const UZ_DEMO_DATA = {
       { id: 'p001', name: '食材', defaultTaxRate: 8  },
       { id: 'p002', name: '酒類', defaultTaxRate: 10 }
     ],
+    /* 口座マスタ（settings B10・月次管理の口座列の選択肢） */
+    accountList: [
+      { id: 'ac001', name: '現金' },
+      { id: 'ac002', name: 'サンプル銀行 本店' }
+    ],
     staffList: [
       { id: 1, name: 'デモ太郎', employmentType: 'employed_full' },
       { id: 2, name: 'デモ花子', employmentType: 'employed_temp' }
@@ -397,6 +402,19 @@ function uzDemoResponse(action, data) {
     return { status: 'ok', preview: UZ_DEMO_FAX_PREVIEW,
              draft: { orderId: 'fo-demo-0001', customerId: '', lineCount: 2, confidence: 0.62 }, demo: true };
   }
+  // 口座マスタ：デモ内のリストを更新して GAS と同じ形（accountList）で返す
+  if (action === 'addAccount' || action === 'updateAccount' || action === 'deleteAccount') {
+    var accs = UZ_DEMO_DATA.getSettings.accountList;
+    if (action === 'addAccount') {
+      var n = accs.length + 1;
+      accs.push({ id: 'ac' + ('00' + n).slice(-3), name: String((data && data.name) || '') });
+    } else if (action === 'updateAccount') {
+      accs.forEach(function (a) { if (a.id === String(data && data.id)) a.name = String(data.name || ''); });
+    } else {
+      UZ_DEMO_DATA.getSettings.accountList = accs.filter(function (a) { return a.id !== String(data && data.id); });
+    }
+    return { status: 'ok', accountList: UZ_DEMO_DATA.getSettings.accountList.slice(), demo: true };
+  }
   if (Object.prototype.hasOwnProperty.call(UZ_DEMO_DATA, action)) {
     return { status: 'ok', data: UZ_DEMO_DATA[action] };
   }
@@ -415,7 +433,8 @@ const _UZ_SETTINGS_WRITE_ACTIONS = new Set([
   'saveSettings', 'setStaff', 'saveCostMaster', 'savePurchaseMaster',
   'saveServiceMaster', 'saveMasterQuota', 'saveBusinessHours',
   'saveInvoiceSettings', 'saveFaxPatterns', 'saveServiceChannelList',
-  'savePurchaseCategoryList', 'saveFeatureVisibility', 'saveQrLocations'
+  'savePurchaseCategoryList', 'saveFeatureVisibility', 'saveQrLocations',
+  'addAccount', 'updateAccount', 'deleteAccount'
 ]);
 function _uzInvalidateSettingsCache() {
   _uzSettingsCache = null;
