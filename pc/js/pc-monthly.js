@@ -1348,6 +1348,59 @@ function bindAddButtons() {
   document.getElementById('btn-add-sales')?.addEventListener('click', () => addDraftRow('sales'));
   document.getElementById('btn-add-cost')?.addEventListener('click', () => addDraftRow('cost'));
   document.getElementById('btn-commit-all-drafts')?.addEventListener('click', () => commitAllDrafts());
+  document.getElementById('btn-csv-filtered')?.addEventListener('click', () => downloadFilteredCsv());
+}
+
+/* ── 絞り込み結果の CSV 出力 ─────────────────────────────── */
+// 画面と同じ絞り込み（列見出し▼）の結果を、ページ送りに関係なく全件・画面の列順で出力する。
+// 未登録の下書き行は含めない。Excel で開けるよう BOM 付き UTF-8・CRLF。
+function downloadFilteredCsv() {
+  const hasActiveFilter = Object.keys(_activeFilters).some(c => _hasActiveColFilter(c));
+  const rows = hasActiveFilter ? applyFilters(_monthlyData) : _monthlyData;
+  if (rows.length === 0) {
+    showToast('出力する行がありません', 'info', 2000);
+    return;
+  }
+  // 表計算ソフトが数式として実行しないよう、= + - @ で始まる文字列の先頭に ' を付ける
+  const text = v => {
+    const s = String(v ?? '');
+    return /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
+  };
+  const header = ['発生日', '種別', '科目', '分類', '金額(税込)', '税率(%)', '消費税', 'メモ', '掛', '入金・支払日', '口座', '案件'];
+  const lines = [header];
+  for (const r of rows) {
+    const isSales = r.source === 'sales';
+    lines.push([
+      r.date,
+      text(r.type),
+      text(r.subject),
+      text(r.serviceChannelName || r.purchaseCategoryName || ''),
+      Number(r.amount) || 0,
+      Number(r.taxRate) || 0,
+      Number(r.taxAmount) || 0,
+      text(r.memo),
+      r.isUnpaid ? (isSales ? '売掛' : '買掛') : '',
+      r.isUnpaid ? '未消込' : _displayPaidDate(r),
+      text(r.accountName),
+      r.isProject ? '案件' : '',
+    ]);
+  }
+  const csv = lines
+    .map(cols => cols.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
+    .join('\r\n');
+  const n = new Date();
+  const pad = x => String(x).padStart(2, '0');
+  const stamp = `${n.getFullYear()}${pad(n.getMonth() + 1)}${pad(n.getDate())}_${pad(n.getHours())}${pad(n.getMinutes())}`;
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `月次管理_${hasActiveFilter ? '絞り込み' : '全件'}_${stamp}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast(`${rows.length}件をCSVで保存しました`, 'success', 2000);
 }
 
 function addDraftRow(source) {
