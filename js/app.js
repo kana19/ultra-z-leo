@@ -1373,6 +1373,15 @@ function getFeatureVisibility() {
   };
 }
 
+/* ── プラン表示名（G1／G2）＝ attendance_menu から決定論的に導く（getFeatureVisibility と同じ源）──
+ * 勤怠あり（attendance_menu=ON・タイムカード数≠0）＝ G2、勤怠なし（OFF）＝ G1。
+ * 設定画面の基本情報「プラン」・フッタ（スマホ／iPad／PC 共通）が使う。
+ * fv を渡すとその値（getSettings 応答の featureVisibility 等）で判定し、省略時は同期キャッシュを読む。 */
+function getPlanLabel(fv) {
+  var f = (fv && typeof fv === 'object') ? fv : getFeatureVisibility();
+  return f.attendance_menu === true ? 'G2' : 'G1';
+}
+
 
 
 /* ── 金額フォーマット ────────────────────────────────────── */

@@ -125,20 +125,41 @@ function renderBasicInfo() {
         formatted = formatBusinessHours(getBusinessHours());
       }
     } catch { formatted = null; }
-    // 営業時間の役割（打刻忘れ判定の基準）を機能説明として併記。営業時間表示時のみ。
+    // 営業時間の役割（打刻忘れ判定の基準）を機能説明として併記。営業時間表示時かつ G2（勤怠あり）のみ。
+    //   G1 は勤怠機能を持たず打刻忘れ判定が無いため説明を出さない。
     const hint = document.getElementById('info-business-hours-hint');
     if (formatted) {
       val.textContent = formatted;
       row.hidden = false;
-      if (hint) hint.hidden = false;
+      if (hint) hint.hidden = !_basicInfoHasAttendance();
     } else {
       row.hidden = true;
       if (hint) hint.hidden = true;
     }
   }
 
+  // プラン（G1／G2）＝ attendance_menu から決定論的（→ app.js getPlanLabel・スマホ版と同じ源）
+  let planName = '—';
+  try { if (typeof getPlanLabel === 'function') planName = getPlanLabel(settings?.featureVisibility); } catch { planName = '—'; }
+  const planEl = document.getElementById('info-plan');
+  if (planEl) planEl.textContent = planName;
+  const planFooterEl = document.getElementById('info-plan-footer');
+  if (planFooterEl) planFooterEl.textContent = planName;
+
   bindVersionTapDebug();
 }
+
+/** 勤怠あり（attendance_menu=ON）か。getSettings 応答の featureVisibility を優先し、無ければ同期キャッシュ。 */
+function _basicInfoHasAttendance() {
+  try {
+    const fv = settings?.featureVisibility;
+    if (fv && typeof fv === 'object') return fv.attendance_menu === true;
+    return typeof getFeatureVisibility === 'function' && getFeatureVisibility().attendance_menu === true;
+  } catch { return false; }
+}
+
+// featureVisibility は GAS 同期後に確定する（初回訪問はキャッシュが空）＝同期完了で基本情報を再描画する
+document.addEventListener('uz:settings-synced', function () { renderBasicInfo(); });
 
 /* ── バージョン5タップで GAS接続情報を展開（隠しコマンド・スマホ版と統一） ── */
 function bindVersionTapDebug() {

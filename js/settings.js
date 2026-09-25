@@ -323,25 +323,29 @@ function initBasicInfo() {
   _renderBusinessHoursRow();
 
   // v0.11.2（2026-09-06）：プラン欄・フッタ・バージョンを動的埋込。
-  //   プラン判定＝ settings.featureVisibility.attendance_menu（真実の源）から決定論的。
-  //     attendance_menu:true → 'レオ'（勤怠あり・TC>=5）／false → 'アストラ'（TC=0）
+  //   プラン判定＝ settings.featureVisibility.attendance_menu（真実の源）から決定論的（→ app.js getPlanLabel）。
+  //     attendance_menu:true → 'G2'（勤怠あり・TC>=5）／false → 'G1'（TC=0）
   //   バージョン＝ master GAS ping action から APP_VERSION 取得（fallback は '—' 維持）。
   //   従来（v0.11.1 まで）は settings.html に "レオ" / "1.0.0" / "LEO版" が全店舗ハードコード
   //   されており、TC=0 アストラ発行でも "レオ" と表示される事象を field test で確認。
   _renderPlanRow();
   _renderVersionRow();
+
+  // featureVisibility は GAS 同期後に確定する（初回訪問はキャッシュが空）＝同期完了でプラン欄と
+  // 営業時間の説明（G2 のみ表示）を再描画する。
+  if (!window.__uzInfoSyncBound) {
+    window.__uzInfoSyncBound = true;
+    document.addEventListener('uz:settings-synced', function () { _renderPlanRow(); _renderBusinessHoursRow(); });
+  }
 }
 
 function _renderPlanRow() {
   const planEl = document.getElementById('info-plan');
   const footerEl = document.getElementById('info-plan-footer');
-  let planName = 'レオ';
+  let planName = '—';
   try {
-    if (typeof getFeatureVisibility === 'function') {
-      const fv = getFeatureVisibility();
-      planName = (fv && fv.attendance_menu === true) ? 'レオ' : 'アストラ';
-    }
-  } catch { planName = 'レオ'; }
+    if (typeof getPlanLabel === 'function') planName = getPlanLabel();
+  } catch { planName = '—'; }
   if (planEl) planEl.textContent = planName;
   if (footerEl) footerEl.textContent = planName;
 }
@@ -373,12 +377,15 @@ function _renderBusinessHoursRow() {
     }
   } catch { formatted = null; }
 
-  // 営業時間の役割（打刻忘れ判定の基準）を機能説明として併記。営業時間表示時のみ。
+  // 営業時間の役割（打刻忘れ判定の基準）を機能説明として併記。営業時間表示時かつ G2（勤怠あり）のみ。
+  //   G1 は勤怠機能を持たず打刻忘れ判定が無いため説明を出さない。
   const hint = document.getElementById('info-business-hours-hint');
+  let hasAttendance = false;
+  try { hasAttendance = typeof getFeatureVisibility === 'function' && getFeatureVisibility().attendance_menu === true; } catch { hasAttendance = false; }
   if (formatted) {
     val.textContent = formatted;
     row.hidden = false;
-    if (hint) hint.hidden = false;
+    if (hint) hint.hidden = !hasAttendance;
   } else {
     row.hidden = true;
     if (hint) hint.hidden = true;
