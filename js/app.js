@@ -304,7 +304,14 @@ function uzDemoFaxOrders() {
 }
 
 /* 書類発行（第4隊員 doc_automation）のデモデータ。複製元で店舗を作らず
-   「宛先→明細→発行→プレビュー印刷」を確認できるようにする。 */
+   「商品SKU（商品名×分類）→宛先→明細→発行→プレビュー印刷」を確認できるようにする。
+   分類ちがいの同名SKU（店内/テイクアウト）＝チャネル区分の見本を含める。 */
+var UZ_DEMO_PRODUCTS = [
+  { rowIndex: 2, productCode: 'pr001', categoryL1: '店内',       categoryL2: '', categoryL3: '', productName: 'ブレンドコーヒー',     unitPrice: 500,  taxRate: 10, unit: '杯', aliases: '', enabled: true },
+  { rowIndex: 3, productCode: 'pr002', categoryL1: 'テイクアウト', categoryL2: '', categoryL3: '', productName: 'ブレンドコーヒー',     unitPrice: 480,  taxRate: 8,  unit: '杯', aliases: '', enabled: true },
+  { rowIndex: 4, productCode: 'pr003', categoryL1: '卸し',       categoryL2: '', categoryL3: '', productName: '自家焙煎豆 200g',       unitPrice: 1200, taxRate: 8,  unit: '袋', aliases: '', enabled: true },
+  { rowIndex: 5, productCode: 'pr004', categoryL1: '物販',       categoryL2: '', categoryL3: '', productName: 'オリジナルマグカップ', unitPrice: 1800, taxRate: 10, unit: '個', aliases: '', enabled: true }
+];
 var UZ_DEMO_CUSTOMERS = [
   { rowIndex: 2, customerId: 'cs001', name: '株式会社さくら商事', type: '', memo: '', senderFax: '03-1234-5678', postalCode: '100-0001', address: '東京都千代田区丸の内1-1-1', tel: '03-1234-5670', email: '', contactPerson: '佐藤' },
   { rowIndex: 3, customerId: 'cs002', name: 'こまち珈琲 卸販売部', type: '', memo: '', senderFax: '', postalCode: '700-0000', address: '岡山県岡山市北区表町2-2', tel: '086-000-0000', email: '', contactPerson: '田中' }
@@ -338,6 +345,7 @@ function uzDemoResponse(action, data) {
     return { status: 'ok', data: uzDemoSummaryForMonth(data && data.month) };
   }
   // 書類発行（第4隊員 doc_automation）：GAS と同じ平坦な形で返す
+  if (action === 'getProducts')  return { status: 'ok', products: UZ_DEMO_PRODUCTS, demo: true };
   if (action === 'getCustomers') return { status: 'ok', customers: UZ_DEMO_CUSTOMERS, demo: true };
   if (action === 'getDocuments') return { status: 'ok', documents: uzDemoDocuments(data && data.docType), demo: true };
   if (action === 'issueDocument') {

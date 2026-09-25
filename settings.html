@@ -492,6 +492,51 @@
     </div>
   </section>
 
+  <!-- ④-2 商品マスタ（FAX受注の名寄せ先＝受け皿／fax_order_ocr ON時のみ表示。書類発行は使わない・請求書は売上と連携） -->
+  <section class="settings-section" data-feature="fax_order_ocr" style="display:none">
+    <button class="settings-section__head" type="button"
+            aria-controls="sec-products-body" aria-expanded="true">
+      <span class="settings-section__title">商品マスタ（FAX受注の名寄せ先）
+        <span id="products-count-badge" class="settings-count-badge" hidden></span>
+      </span>
+    </button>
+    <div class="settings-section__body" id="sec-products-body">
+      <div id="products-list-container"></div>
+      <div id="products-add-row" class="settings-add-row settings-add-row--stack">
+        <!-- 分類（単一所属・値リスト自由拡張。既存から選ぶか新しい分類名を入力＝分類追加・空欄可） -->
+        <div class="mdoc-cat-row">
+          <input type="text" id="product-add-cat" class="settings-input mdoc-cat" list="mdoc-cat-list"
+                 placeholder="分類（例:店内/テイクアウト/卸し・任意）" maxlength="20" autocomplete="off">
+          <input type="text" id="product-add-name" class="settings-input" list="mdoc-name-list"
+                 placeholder="商品名（既存は選択・新規は入力）" maxlength="40" autocomplete="off">
+        </div>
+        <datalist id="mdoc-cat-list"></datalist>
+        <datalist id="mdoc-name-list"></datalist>
+        <p id="product-name-hint" class="mdoc-price-hint" hidden></p>
+        <div class="mdoc-cat-row">
+          <input type="number" id="product-add-price" class="settings-input" style="max-width:160px;"
+                 placeholder="標準単価(税抜)" min="0" inputmode="numeric" autocomplete="off">
+          <select id="product-add-tax" class="form-select" style="width:120px;flex-shrink:0;">
+            <option value="10">10%</option>
+            <option value="8">8%（軽減）</option>
+            <option value="0">0%（非課税）</option>
+          </select>
+          <input type="text" id="product-add-unit" class="settings-input" style="max-width:120px;"
+                 placeholder="単位(個/箱…)" maxlength="8" autocomplete="off">
+        </div>
+        <p id="product-price-hint" class="mdoc-price-hint" hidden></p>
+        <div class="mdoc-cat-row">
+          <input type="text" id="product-add-aliases" class="settings-input"
+                 placeholder="別名（FAX表記ゆれ・カンマ区切り・任意）" maxlength="120" autocomplete="off">
+          <button id="product-add-btn" class="settings-add-btn" type="button">＋ 追加</button>
+        </div>
+      </div>
+      <p class="settings-note">
+        FAX受注の名寄せに使う商品台帳です（受け皿）。1商品＝1分類（金額集計の骨）。分類は既存から選ぶか、新しい分類名を入力すれば追加できます（分類追加・空欄可）。分類は金額・税率に連動しやすいため、分類を確定すると標準単価と税率の確認をうながします。同じ商品を店内／テイクアウト等で売り分ける場合は、売上入力側でチャネルを区分します。
+      </p>
+    </div>
+  </section>
+
   <!-- ④-3 顧客マスタ（得意先・ユーザー主権／doc_automation ON時のみ表示） -->
   <section class="settings-section" data-feature="doc_automation" style="display:none">
     <button class="settings-section__head" type="button"
