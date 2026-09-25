@@ -58,7 +58,6 @@
   .pcinv-line__nums label { font-size:10px; color:var(--uz-text2,#64748b); display:block; margin-bottom:2px; }
   .pcinv-line__amount { grid-column:1/-1; text-align:right; font-weight:700; color:var(--uz-text); }
   .pcinv-line__del { height:38px; border:1px solid #fecaca; color:#b91c1c; background:#fff; border-radius:8px; cursor:pointer; font-size:16px; }
-  .pcinv-line__pick select { font-size:12px; color:var(--uz-text2,#64748b); }
   .pcinv-addline { width:100%; padding:10px; border-radius:10px; font-size:13px; font-weight:700; margin-top:8px;
     border:1px dashed var(--uz-border); background:#fff; color:var(--uz-accent,#2563eb); cursor:pointer; }
 
@@ -207,7 +206,7 @@
               <input type="text" id="pcinv-terms" class="pcinv-input" maxlength="80" placeholder="例：月末締め翌月末払い / 銀行振込"></div>
 
             <div class="pcinv-field">
-              <label>明細（品名は自由入力可＝マスタ外の品目・役務もそのまま記載。マスタSKUは「＋ マスタから選ぶ」で単価・税率を補完）</label>
+              <label>明細（品名・数量・単価・税率を入力）</label>
               <div class="pcinv-lines" id="pcinv-lines"></div>
               <button type="button" id="pcinv-addline-btn" class="pcinv-addline">＋ 明細を追加</button>
             </div>

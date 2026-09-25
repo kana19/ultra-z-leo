@@ -5,7 +5,7 @@
  * スマホ/iPad は閲覧・確認＋受注→売上反映のみ（発行しない）。帳票は見積・請求の2種（納品書撤廃）。
  *
  * 機能：
- *  - 見積書：宛先/敬称/件名/発行日/有効期限/納期/支払条件＋商品SKU明細（商品名×分類・自由入力可）。
+ *  - 見積書：宛先/敬称/件名/発行日/有効期限/納期/支払条件＋明細（品名・数量・単価・税率を自由入力。別途の商品台帳は持たない）。
  *    顧客別の見積一覧から「複製」（他得意先へ流用）・「編集」（updateDocument で上書き）。
  *  - 請求書：手入力／見積書から（明細・件名・宛先を反映）／売上から（期間の売上を自由入力明細で取込）。
  *  - PDF：A4書面プレビュー → window.print()（PCの「PDFとして保存」）。
@@ -15,7 +15,6 @@
  */
 'use strict';
 
-var _pciProducts = [];
 var _pciCustomers = [];
 var _pciStoreName = '';
 var _pciHonorificDefault = '御中';
@@ -62,18 +61,16 @@ async function _pciInit() {
 
   try {
     var results = await Promise.all([
-      callGAS('getProducts', {}),
       callGAS('getCustomers', {}),
       (typeof uzGetSettingsOnce === 'function') ? uzGetSettingsOnce() : uzGetSettings()
     ]);
-    var pr = results[0], cs = results[1], settings = results[2];
-    _pciProducts = (pr && pr.status === 'ok' && Array.isArray(pr.products)) ? pr.products.filter(function (p) { return p.enabled !== false; }) : [];
+    var cs = results[0], settings = results[1];
     _pciCustomers = (cs && cs.status === 'ok' && Array.isArray(cs.customers)) ? cs.customers : [];
     if (settings) {
       _pciStoreName = settings.storeName || (typeof uzGetStoreName === 'function' ? uzGetStoreName('') : '');
       if (settings.invoiceSettings && settings.invoiceSettings.honorificDefault) _pciHonorificDefault = settings.invoiceSettings.honorificDefault;
     }
-  } catch (e) { _pciProducts = []; _pciCustomers = []; }
+  } catch (e) { _pciCustomers = []; }
 
   _pciFillCustomers();
   var hon = _pciEl('pcinv-honorific'); if (hon) hon.value = _pciHonorificDefault;
@@ -241,26 +238,13 @@ function _pciApplySalesSelected() {
   _pciToast(items.length + '件の売上を明細にまとめました。宛先を選んで発行してください。', 'success');
 }
 
-/* ── 明細（品名は常に自由入力可＝マスタ外の見積を想定・マスタSKUは入力補完の"補助"） ───────
-   見積は都度の一品・役務など商品マスタに無い品目が多い。ゆえに品名/単価/税率を常時編集可とし、
-   マスタSKUは選ぶと各欄を補完する補助ピッカーに徹する（選択後は空へ戻す）。マスタが空でも成立する。 */
-function _pciPickerOptions() {
-  var opts = ['<option value="">＋ マスタから選ぶ（任意）</option>'];
-  _pciProducts.forEach(function (p) {
-    var cat = String(p.categoryL1 || '').trim();
-    var label = String(p.productName || '') + (cat ? '（' + cat + '）' : '') + '  ' + _pciYen(p.unitPrice) + ' [' + (Number(p.taxRate) || 0) + '%]';
-    opts.push('<option value="' + _pciEsc(p.productCode) + '">' + _pciEsc(label) + '</option>');
-  });
-  return opts.join('');
-}
-
+/* ── 明細（品名・単価・税率は常に自由入力＝別途の商品台帳を持たない。請求書は「売上から」で売上登録を取り込む） ── */
 function _pciAddLine(prefill) {
   var host = _pciEl('pcinv-lines'); if (!host) return;
   var id = 'pciln-' + (++_pciLineSeq);
   var wrap = document.createElement('div');
   wrap.className = 'pcinv-line'; wrap.id = id;
   wrap.innerHTML =
-    '<div class="pcinv-line__pick"><select class="pcinv-select" id="' + id + '-prod" aria-label="マスタから選ぶ（任意）">' + _pciPickerOptions() + '</select></div>' +
     '<div class="pcinv-line__nums">' +
       '<div><label>品名</label><input type="text" class="pcinv-input" id="' + id + '-name" placeholder="品名（自由入力可）" maxlength="80"></div>' +
       '<div><label>数量</label><input type="number" class="pcinv-input" id="' + id + '-qty" value="1" min="0" step="1" inputmode="numeric"></div>' +
@@ -271,8 +255,7 @@ function _pciAddLine(prefill) {
     '<div class="pcinv-line__amount" id="' + id + '-amt">¥0</div>';
   host.appendChild(wrap);
 
-  _pciEl(id + '-prod').addEventListener('change', function () { _pciPickFromMaster(id); });
-  _pciEl(id + '-name').addEventListener('input', function () { wrap.dataset.pc = ''; });   // 手編集でマスタ紐付けを外す
+  _pciEl(id + '-name').addEventListener('input', function () { wrap.dataset.pc = ''; });   // 手編集で既存明細の商品コード引継ぎを外す
   _pciEl(id + '-qty').addEventListener('input', function () { _pciRecalc(id); });
   _pciEl(id + '-price').addEventListener('input', function () { wrap.dataset.pc = ''; _pciRecalc(id); });
   _pciEl(id + '-tax').addEventListener('change', function () { _pciRecalc(id); });
@@ -287,21 +270,6 @@ function _pciAddLine(prefill) {
     _pciRecalc(id);
   }
   return id;
-}
-
-/* マスタSKUを選ぶと品名/単価/税率を補完（補助＝選択後は空へ戻す）。品名/単価は手編集で上書き可。 */
-function _pciPickFromMaster(id) {
-  var code = _pciVal(id + '-prod'); if (!code) return;
-  var p = null;
-  for (var i = 0; i < _pciProducts.length; i++) { if (String(_pciProducts[i].productCode) === String(code)) { p = _pciProducts[i]; break; } }
-  if (p) {
-    _pciEl(id + '-name').value = p.productName || '';
-    _pciEl(id + '-price').value = Number(p.unitPrice) || 0;
-    _pciEl(id + '-tax').value = String(Number(p.taxRate) || 0);
-    _pciEl(id).dataset.pc = p.productCode;
-  }
-  _pciEl(id + '-prod').value = '';   // 補助ピッカーは選択後に空へ戻す
-  _pciRecalc(id);
 }
 
 function _pciRecalc(id) {
